@@ -3,8 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ./src/index.js"
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "test": "vitest"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "@types/ws": "^8.5.8",
+    "tsx": "^4.0.0",
+    "typescript": "^5.2.0",
+    "vitest": "^0.34.0"
+  }
 }
