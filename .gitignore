@@ -1,0 +1,28 @@
+# General
+.DS_Store
+*.log
+logs/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+
+# macOS / Xcode
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.xcworkspace/xcuserdata/
+DerivedData/
+build/
+
+# VS Code
+.vscode/
+.history/

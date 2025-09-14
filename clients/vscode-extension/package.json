@@ -1,0 +1,9 @@
+{
+  "name": "fadebender-vscode",
+  "publisher": "yourname",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.90.0" },
+  "activationEvents": ["onCommand:fadebender.openPanel"],
+  "contributes": { "commands": [{ "command": "fadebender.openPanel", "title": "Open Fadebender Panel" }] },
+  "main": "./src/extension.js"
+}

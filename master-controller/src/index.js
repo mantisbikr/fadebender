@@ -1,0 +1,1 @@
+// Temporary JS entry so `npm run dev` works before TS setup

@@ -1,0 +1,10 @@
+{
+  "name": "fadebender-controller",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ./src/index.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

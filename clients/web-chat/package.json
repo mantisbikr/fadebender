@@ -1,0 +1,5 @@
+{
+  "name": "fadebender-web-chat",
+  "private": true,
+  "scripts": { "dev": "echo TODO: implement dev server" }
+}
