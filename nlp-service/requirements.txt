@@ -1,1 +1,3 @@
-fastapi\nuvicorn\npydantic\n
+fastapi
+uvicorn
+pydantic
