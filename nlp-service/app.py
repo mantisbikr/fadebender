@@ -6,7 +6,17 @@ from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from intents.parser import DAWIntentParser, fallback_parse
 
-load_dotenv()
+# Load environment-specific configuration
+env = os.getenv('ENV', 'development')
+env_file = f'.env.{env}'
+
+# Try to load environment-specific file first, fallback to .env
+if os.path.exists(env_file):
+    load_dotenv(env_file)
+    print(f"✅ Loaded environment config: {env_file}")
+else:
+    load_dotenv()
+    print("✅ Loaded default .env file")
 
 app = FastAPI(title="Fadebender NLP Service", version="0.1.0")
 

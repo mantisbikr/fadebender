@@ -32,11 +32,17 @@ knowledge/logic-pro-mac-user-guide.pdf
 # Environment files with secrets
 .env
 .env.local
+.env.development
 .env.production
 .env.staging
+.env.test
 *.env
+!.env.example
 
 # API Keys and secrets
 **/.env
+**/.env.*
+!**/.env.example
 **/secrets.json
 **/*-key.json
+**/service-account-*.json
