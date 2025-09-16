@@ -26,4 +26,17 @@ build/
 # VS Code
 .vscode/
 .history/
+# Large files
 knowledge/logic-pro-mac-user-guide.pdf
+
+# Environment files with secrets
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
+# API Keys and secrets
+**/.env
+**/secrets.json
+**/*-key.json
