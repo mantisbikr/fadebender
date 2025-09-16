@@ -1,14 +1,16 @@
 # Fadebender
 
-**Fadebender** is an NLP-driven conductor for your DAW.
-It lets you type or speak natural language commands like:
+**Fadebender** is an intelligent NLP-driven conductor for your DAW that provides expert-level audio engineering advice through natural conversation.
 
-- “set track one volume to minus six dB”
-- “pan track two left 20 percent”
-- “increase reverb wet on bus one by 10 percent”
-- “how do I sidechain the pad to the kick?”
+It lets you type commands like:
+- "I want spaciousness to my vocals" → ChromaVerb Synth Hall preset recommendations
+- "add punch to my drums" → Multipressor settings with professional compression ratios
+- "set track one volume to minus six dB" → Direct parameter control
+- "go back to how track 2 sounded 5 minutes ago" → Complete version control
 
-and have those actions carried out directly inside Logic Pro, Ableton Live, or Cubase.
+**Current Status (Sept 14, 2024)**: Core architecture and professional knowledge base complete. Expert AI system functional with Logic Pro workflows. Intent execution pipeline needs debugging.
+
+Fadebender transforms natural language into professional mixing workflows, making advanced audio engineering techniques accessible through conversation.
 
 ---
 
