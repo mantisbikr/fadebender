@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from typing import Dict, List, Any
+import os
 
 from config.llm_config import get_llm_project_id, get_llm_api_key, get_default_model_name
 
@@ -45,7 +46,7 @@ def _build_daw_prompt(query: str) -> str:
     )
 
 
-def interpret_daw_command(query: str, model_preference: str | None = None) -> Dict[str, Any]:
+def interpret_daw_command(query: str, model_preference: str | None = None, strict: bool | None = None) -> Dict[str, Any]:
     """Interpret user query into DAW commands using Vertex AI if available."""
     # Try Vertex AI SDK path first
     try:
@@ -90,7 +91,12 @@ def interpret_daw_command(query: str, model_preference: str | None = None) -> Di
         return result
 
     except Exception as e:
-        # Fallback to rule-based parsing
+        # If strict mode is enabled, do not fallback
+        if strict is None:
+            strict = os.getenv("LLM_STRICT", "").lower() in ("1", "true", "yes", "on")
+        if strict:
+            raise
+        # Otherwise fallback to rule-based parsing
         return _fallback_daw_parse(query, str(e), model_preference)
 
 
