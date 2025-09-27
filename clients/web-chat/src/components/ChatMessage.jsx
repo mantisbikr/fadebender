@@ -25,8 +25,8 @@ import ClickAwayAccordion from './ClickAwayAccordion.jsx';
 
 export default function ChatMessage({ message, onSuggestedIntent }) {
   const renderHelpResponse = (data) => {
-    const answer = data.intent?.answer || data.summary || data.content;
-    const suggestedIntents = data.intent?.suggested_intents || data.suggested_intents || [];
+    const answer = data.answer || data.intent?.answer || data.summary || data.content;
+    const suggestedIntents = data.suggested_intents || data.intent?.suggested_intents || [];
 
     return (
       <Box>
@@ -71,6 +71,11 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
           ml: 'auto',
           maxWidth: 'sm'
         };
+      case 'intent':
+        return {
+          mr: 'auto',
+          maxWidth: 'lg'
+        };
       case 'success':
         return {
           mr: 'auto',
@@ -102,17 +107,15 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
     switch (message.type) {
       case 'user':
         return <PersonIcon />;
+      case 'intent':
+        return <InfoIcon />;
       case 'success':
-        // Check if it's a help response
-        if (message.data && message.data.summary && !message.data.ok) {
-          return <HelpIcon />;
-        }
         return <SuccessIcon />;
       case 'error':
         return <ErrorIcon />;
       case 'info':
-        // Check if it's a help response
-        if (message.data && message.data.summary && !message.data.ok) {
+        // Help responses route through 'info' with data.answer
+        if (message.data && (message.data.answer || message.data.suggested_intents)) {
           return <HelpIcon />;
         }
         return <BotIcon />;
@@ -127,19 +130,13 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
     switch (message.type) {
       case 'user':
         return 'primary';
+      case 'intent':
+        return 'info';
       case 'success':
-        // Check if it's a help response
-        if (message.data && message.data.summary && !message.data.ok) {
-          return 'info';
-        }
         return 'success';
       case 'error':
         return 'error';
       case 'info':
-        // Check if it's a help response
-        if (message.data && message.data.summary && !message.data.ok) {
-          return 'info';
-        }
         return 'info';
       case 'question':
         return 'secondary';
@@ -149,34 +146,32 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
   };
 
   const formatContent = () => {
-    // Debug: log message structure for help questions
-    if (message.content && message.content.toLowerCase().includes('vocal')) {
-      console.log('Help question message:', message);
-    }
-
-    // Handle success type messages (from /chat endpoint)
-    if (message.type === 'success' && message.data) {
-      // Check if this is an executable intent or help response
-      const isExecutableIntent = message.data.intent && message.data.ok;
-      const isHelpResponse = message.data.summary && (!message.data.ok || !message.data.intent);
+    // Canonical intent card
+    if (message.type === 'intent' && message.data) {
+      const intent = message.data;
+      const trackRef = intent?.target?.track;
+      const trackLabel = trackRef ? (trackRef.by === 'name' ? String(trackRef.value) : `Track ${trackRef.value}`) : 'Track ?';
+      let human = null;
+      try {
+        if (intent.op === 'set_mixer') {
+          const val = intent.value;
+          const valStr = val?.type === 'relative'
+            ? `${val.amount > 0 ? '+' : ''}${val.amount} ${val.unit || ''}`.trim()
+            : `${val.amount} ${val.unit || ''}`.trim();
+          human = `${intent.field} • ${trackLabel} • ${val?.type} ${valStr}`;
+        } else if (intent.op === 'get_track_status') {
+          human = `Get status • ${trackLabel}`;
+        } else if (intent.op === 'get_overview') {
+          human = 'Get overview';
+        }
+      } catch {}
 
       return (
         <Box>
-          {isExecutableIntent && (
-            <Typography variant="body1" fontWeight="medium" sx={{ mb: 1 }}>
-              {message.data.intent.description || message.data.summary}
-            </Typography>
-          )}
-
-          {isHelpResponse && renderHelpResponse(message.data)}
-
-          {!isExecutableIntent && !isHelpResponse && (
-            <Typography variant="body1" fontWeight="medium" gutterBottom>
-              {message.content}
-            </Typography>
-          )}
-
-          <ClickAwayAccordion title="View Details">
+          <Typography variant="body1" fontWeight="medium" gutterBottom>
+            {human || 'Canonical Intent'}
+          </Typography>
+          <ClickAwayAccordion title="View Intent JSON">
             <Box component="pre" sx={{
               fontSize: '0.75rem',
               overflow: 'auto',
@@ -188,9 +183,62 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
               border: '1px solid',
               borderColor: 'divider'
             }}>
-              {JSON.stringify(message.data, null, 2)}
+              {JSON.stringify(intent, null, 2)}
             </Box>
+            {message.raw && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Raw LLM intent
+                </Typography>
+                <Box component="pre" sx={{
+                  fontSize: '0.75rem',
+                  overflow: 'auto',
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                  p: 1,
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  border: '1px solid',
+                  borderColor: 'divider'
+                }}>
+                  {JSON.stringify(message.raw, null, 2)}
+                </Box>
+              </>
+            )}
           </ClickAwayAccordion>
+        </Box>
+      );
+    }
+
+    // Debug: log message structure for help questions
+    if (message.content && message.content.toLowerCase().includes('vocal')) {
+      console.log('Help question message:', message);
+    }
+
+    // Handle success type messages (from /chat endpoint) — show clean summary only
+    if (message.type === 'success' && message.data) {
+      return (
+        <Box>
+          <Typography variant="body1" fontWeight="medium" gutterBottom>
+            {message.content}
+          </Typography>
+          {message.data && (
+            <ClickAwayAccordion title="View Details">
+              <Box component="pre" sx={{
+                fontSize: '0.75rem',
+                overflow: 'auto',
+                bgcolor: 'action.hover',
+                color: 'text.primary',
+                p: 1,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                border: '1px solid',
+                borderColor: 'divider'
+              }}>
+                {JSON.stringify(message.data, null, 2)}
+              </Box>
+            </ClickAwayAccordion>
+          )}
         </Box>
       );
     }
@@ -216,12 +264,13 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
 
     // Handle info type messages (from /help endpoint or other sources)
     if (message.type === 'info' && message.data) {
-      // Debug: log info messages to see what's being filtered
-      console.log('Info message:', message);
+      // Render help responses if present
+      if (message.data.answer || message.data.suggested_intents) {
+        return renderHelpResponse(message.data);
+      }
 
-      // Skip messages with unsupported_intent_for_auto_execute UNLESS they have a summary (help response)
+      // Skip noisy unsupported previews without a clear summary
       if (message.data.reason === 'unsupported_intent_for_auto_execute' && !message.data.summary) {
-        console.log('Hiding unsupported intent message');
         return null;
       }
 
@@ -229,26 +278,18 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
       const isFallback = message.data.meta?.fallback;
       const fallbackReason = message.data.meta?.fallback_reason;
       const confidence = message.data.meta?.confidence;
-
-      // Check if this is a help response (has summary but not ok, or no intent)
-      const isHelpResponse = message.data.summary && (!message.data.ok || !message.data.intent);
-
       return (
         <Box>
-          {isHelpResponse ? (
-            renderHelpResponse(message.data)
-          ) : (
-            <Box>
-              <Typography variant="body1" fontWeight="medium" gutterBottom>
-                {message.content}
+          <Box>
+            <Typography variant="body1" fontWeight="medium" gutterBottom>
+              {message.content}
+            </Typography>
+            {message.data.summary && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {message.data.summary}
               </Typography>
-              {message.data.summary && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {message.data.summary}
-                </Typography>
-              )}
-            </Box>
-          )}
+            )}
+          </Box>
 
           {isFallback && (
             <Alert severity="warning" sx={{ mb: 2 }}>

@@ -47,17 +47,48 @@ export function useDAWControl() {
         return;
       }
 
-      // Execute end-to-end via server /chat (handles NLP -> intent -> UDP)
+      // First: parse to canonical intent for clear UI preview
+      let parsed;
+      try {
+        parsed = await apiService.parseIntent(processed.processed, modelPref, undefined);
+      } catch (e) {
+        addMessage({ type: 'error', content: `Intent parse error: ${e.message}` });
+        return;
+      }
+
+      const rawIntent = parsed?.raw_intent || null;
+
+      // If this looks like a help/conceptual query, route to /help and stop.
+      if (rawIntent && (rawIntent.intent === 'question_response')) {
+        try {
+          const help = await apiService.getHelp(processed.processed);
+          addMessage({ type: 'info', content: help.answer, data: help });
+        } catch (e) {
+          addMessage({ type: 'error', content: `Help error: ${e.message}` });
+        }
+        return;
+      }
+
+      // If clarification is needed, surface question and stop.
+      if (rawIntent && rawIntent.intent === 'clarification_needed' && rawIntent.question) {
+        setConversationContext(rawIntent.context || null);
+        addMessage({ type: 'question', content: rawIntent.question, data: rawIntent });
+        return;
+      }
+
+      // Hold canonical intent for details, but don't render a separate intent card.
+      const canonicalIntent = (parsed && parsed.ok) ? parsed.intent : undefined;
+
+      // Then: execute end-to-end via server /chat (NLP -> intent -> UDP)
       const result = await apiService.chat(processed.processed, true, modelPref);
 
-      // Handle preview-only or unsupported intents
+      // Prefer a clean, chat-like summary; only include details when there is an error
       if (!result.ok) {
         addMessage({
           type: 'info',
-          content: `ℹ️ ${result.reason || 'Preview only'}`,
-          data: result
+          content: result.summary || result.reason || 'Preview only',
+          data: (result.answer || result.suggested_intents) ? result : undefined
         });
-        // If server provided a question, surface it
         if (result.intent && result.intent.intent === 'clarification_needed' && result.intent.question) {
           setConversationContext(result.intent.context || null);
           addMessage({ type: 'question', content: result.intent.question, data: result.intent });
@@ -67,8 +98,9 @@ export function useDAWControl() {
 
       addMessage({
         type: 'success',
-        content: `✅ Executed`,
-        data: result
+        content: result.summary || '✅ Executed',
+        // Include canonical + raw intent for optional details view, but keep chat clean
+        data: canonicalIntent ? { canonical_intent: canonicalIntent, raw_intent: rawIntent } : undefined
       });
       // Clear clarification banner on success
       setConversationContext(null);
@@ -93,10 +125,10 @@ export function useDAWControl() {
       });
 
       const response = await apiService.getHelp(query);
-
       addMessage({
         type: 'info',
-        content: response.answer
+        content: response.answer,
+        data: response
       });
 
     } catch (error) {

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from server.ableton.client_udp import request as udp_request, send as udp_send
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.knowledge import search_knowledge
+from server.services.intent_mapper import map_llm_to_canonical
 
 
 app = FastAPI(title="Fadebender Ableton Server", version="0.1.0")
@@ -37,6 +38,12 @@ class ChatBody(BaseModel):
 
 class HelpBody(BaseModel):
     query: str
+
+
+class IntentParseBody(BaseModel):
+    text: str
+    model: Optional[str] = None
+    strict: Optional[bool] = None
 
 
 @app.get("/ping")
@@ -96,6 +103,24 @@ def chat(body: ChatBody) -> Dict[str, Any]:
 
     intent = interpret_daw_command(body.text, model_preference=body.model, strict=body.strict)
 
+    # Handle help-style responses inline by consulting knowledge base
+    if intent.get("intent") == "question_response":
+        from server.services.knowledge import search_knowledge
+        q = intent.get("meta", {}).get("utterance") or body.text
+        matches = search_knowledge(q)
+        snippets: list[str] = []
+        sources: list[Dict[str, str]] = []
+        for src, title, body_text in matches:
+            sources.append({"source": src, "title": title})
+            snippets.append(f"{title}:\n" + body_text)
+        answer = "\n\n".join(snippets[:2]) if snippets else "Here are general tips: increase the track volume slightly, apply gentle compression (2–4 dB GR), and cut muddiness around 200–400 Hz."
+        suggested = [
+            "increase track 1 volume by 3 dB",
+            "set track 1 volume to -6 dB",
+            "reduce compressor threshold on track 1 by 3 dB",
+        ]
+        return {"ok": False, "summary": answer, "answer": answer, "suggested_intents": suggested, "sources": sources, "intent": intent}
+
     # Very small mapper for MVP: support volume absolute set if provided
     targets = intent.get("targets") or []
     op = intent.get("operation") or {}
@@ -145,13 +170,59 @@ def help_endpoint(body: HelpBody) -> Dict[str, Any]:
     { ok, answer, sources: [{source, title}] }
     """
     matches = search_knowledge(body.query)
-    if not matches:
-        return {"ok": False, "answer": "No relevant notes found. Try rephrasing your question."}
-    # Compose a short answer from top matches
-    snippets = []
-    sources = []
+    # Compose a short answer from top matches if any
+    snippets: list[str] = []
+    sources: list[Dict[str, str]] = []
     for src, title, body_text in matches:
         sources.append({"source": src, "title": title})
         snippets.append(f"{title}:\n" + body_text)
-    answer = "\n\n".join(snippets[:2])
-    return {"ok": True, "answer": answer, "sources": sources}
+
+    # Heuristic suggestions based on common phrases
+    q = (body.query or "").lower()
+    suggested: list[str] = []
+    if any(k in q for k in ["vocal", "vocals", "singer", "voice", "weak", "soft", "quiet"]):
+        suggested.extend([
+            "increase track 1 volume by 3 dB",
+            "set track 1 volume to -6 dB",
+            "reduce compressor threshold on track 1 by 3 dB",
+        ])
+    if any(k in q for k in ["bass", "muddy", "low end", "boom"]):
+        suggested.extend([
+            "cut 200 Hz on track 2 by 3 dB",
+            "enable high-pass filter on track 2 at 80 Hz",
+        ])
+    if any(k in q for k in ["reverb", "space", "spacious", "hall", "room"]):
+        suggested.extend([
+            "increase send A on track 1 by 10%",
+            "set reverb wet on track 1 to 20%",
+        ])
+
+    answer = None
+    if snippets:
+        answer = "\n\n".join(snippets[:2])
+    else:
+        answer = "I couldn't find specific notes, but try adjusting volume, EQ muddiness around 200–400 Hz, or adding gentle compression."
+
+    return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
+
+
+@app.post("/intent/parse")
+def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
+    """Parse NL text to canonical intent JSON (no execution)."""
+    import sys
+    import pathlib
+    nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
+    if nlp_dir.exists() and str(nlp_dir) not in sys.path:
+        sys.path.insert(0, str(nlp_dir))
+    try:
+        from llm_daw import interpret_daw_command  # type: ignore
+    except Exception as e:
+        raise HTTPException(500, f"NLP module not available: {e}")
+
+    raw_intent = interpret_daw_command(body.text, model_preference=body.model, strict=body.strict)
+
+    canonical, errors = map_llm_to_canonical(raw_intent)
+    if canonical is None:
+        return {"ok": False, "errors": errors, "raw_intent": raw_intent}
+
+    return {"ok": True, "intent": canonical.dict(), "raw_intent": raw_intent}

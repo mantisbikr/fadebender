@@ -10,6 +10,19 @@ const API_CONFIG = {
 };
 
 class ApiService {
+  async parseIntent(text, model = undefined, strict = undefined) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, model, strict })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Intent parse failed: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
   async parseCommand(text, context = null, model = 'gemini-flash') {
     const response = await fetch(`${API_CONFIG.NLP_BASE_URL}/parse`, {
       method: 'POST',

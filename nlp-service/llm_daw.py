@@ -147,12 +147,19 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
             }
 
-    # Questions about problems
-    if any(phrase in q for phrase in ["too soft", "too quiet", "can't hear", "how to", "what does"]):
+    # Questions about problems (treat as help-style queries)
+    if any(phrase in q for phrase in [
+        "too soft", "too quiet", "can't hear", "how to", "what does",
+        "weak", "thin", "muddy", "boomy", "harsh", "dull"
+    ]):
         return {
             "intent": "question_response",
-            "answer": "I'm having trouble connecting to the AI service. For audio issues, try: 1) Check track levels, 2) Adjust mixer settings, 3) Verify routing. Please try your command again.",
-            "suggested_intents": ["set track 1 volume to -6 dB", "increase track 1 volume by 6 dB", "set track 2 volume to -12 dB"],
+            "answer": "I'm having trouble connecting to the AI service. For audio issues, try: 1) Check track levels, 2) Apply gentle compression (2–4 dB GR), 3) Use EQ to cut muddiness around 200–400 Hz.",
+            "suggested_intents": [
+                "set track 1 volume to -6 dB",
+                "increase track 1 volume by 3 dB",
+                "reduce compressor threshold on track 1 by 3 dB"
+            ],
             "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
         }
 
