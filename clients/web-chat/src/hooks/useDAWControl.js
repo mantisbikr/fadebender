@@ -24,6 +24,8 @@ export function useDAWControl() {
 
   const processControlCommand = useCallback(async (rawInput) => {
     setIsProcessing(true);
+    // New command resets any prior clarification state
+    setConversationContext(null);
 
     try {
       // Step 1: Process and validate input
@@ -68,6 +70,8 @@ export function useDAWControl() {
         content: `✅ Executed`,
         data: result
       });
+      // Clear clarification banner on success
+      setConversationContext(null);
 
     } catch (error) {
       addMessage({

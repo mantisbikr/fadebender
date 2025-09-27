@@ -26,6 +26,9 @@ export default function ChatMessage({ message }) {
       return (
         <div>
           <div className="font-medium mb-2">{message.content}</div>
+          {message.data.summary && (
+            <div className="mb-2 text-gray-800">{message.data.summary}</div>
+          )}
           <details className="text-sm">
             <summary className="cursor-pointer text-gray-600">View Details</summary>
             <pre className="mt-2 p-2 bg-gray-50 rounded text-xs overflow-auto">
@@ -60,6 +63,9 @@ export default function ChatMessage({ message }) {
       return (
         <div>
           <div className="font-medium mb-2">{message.content}</div>
+          {message.data.summary && (
+            <div className="mb-2 text-gray-800">{message.data.summary}</div>
+          )}
 
           {isFallback && (
             <div className="mb-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-sm">

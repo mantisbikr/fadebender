@@ -54,7 +54,8 @@ class ApiService {
   }
 
   async getHelp(query) {
-    const response = await fetch(`${API_CONFIG.NLP_BASE_URL}/howto`, {
+    // Route help to server which uses local knowledge base
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/help`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })
