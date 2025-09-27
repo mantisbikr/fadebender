@@ -93,11 +93,16 @@ async def howto(request: HowToRequest):
 async def health():
     """Health check endpoint"""
     from config.llm_config import get_llm_project_id, get_llm_api_key
+    project_id = get_llm_project_id()
+    api_key = get_llm_api_key()
+    service_acct = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") is not None
+    ai_available = bool(api_key) or service_acct
 
     return {
         "status": "healthy",
         "llm_system": "lightweight_vertex_ai",
-        "project_id": get_llm_project_id(),
-        "api_key_configured": bool(get_llm_api_key()),
-        "service_account_auth": os.getenv("GOOGLE_APPLICATION_CREDENTIALS") is not None
+        "project_id": project_id,
+        "api_key_configured": bool(api_key),
+        "service_account_auth": service_acct,
+        "ai_parser_available": ai_available,
     }

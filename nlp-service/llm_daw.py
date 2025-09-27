@@ -55,10 +55,11 @@ def interpret_daw_command(query: str, model_preference: str | None = None, stric
         from vertexai.language_models import TextGenerationModel  # type: ignore
 
         project = get_llm_project_id()
+        location = os.getenv("GCP_REGION", "us-central1")
         model_name = get_default_model_name(model_preference)
 
         # Initialize Vertex AI (uses service account if GOOGLE_APPLICATION_CREDENTIALS is set)
-        vertexai.init(project=project, location="us-central1")
+        vertexai.init(project=project, location=location)
 
         prompt = _build_daw_prompt(query)
         response_text = None
@@ -103,6 +104,26 @@ def interpret_daw_command(query: str, model_preference: str | None = None, stric
 def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any]:
     """Simple rule-based fallback parser for basic DAW commands."""
     q = query.lower().strip()
+
+    # Absolute volume set: "set track 1 volume to -6 dB"
+    # Also accept variants like "set the volume of track 1 to -6db"
+    try:
+        import re
+        abs_match = re.search(r"(?:set|make|adjust|change)\s+(?:the\s+)?(?:volume\s+of\s+)?track\s+(\d+)\s+(?:volume\s+)?(?:to|at)\s+(-?\d+(?:\.\d+)?)\s*d\s*b\b", q)
+        if not abs_match:
+            # Variant: "track 1 volume to -6 dB" (missing leading verb)
+            abs_match = re.search(r"track\s+(\d+)\s+volume\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)\s*d\s*b\b", q)
+        if abs_match:
+            track_num = int(abs_match.group(1))
+            value = float(abs_match.group(2))
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "volume"}],
+                "operation": {"type": "absolute", "value": value, "unit": "dB"},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
 
     # Basic volume commands
     if "volume" in q and any(word in q for word in ["increase", "decrease", "up", "down", "louder", "quieter"]):
