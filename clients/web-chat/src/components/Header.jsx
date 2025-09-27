@@ -22,7 +22,8 @@ import {
   LightMode as LightModeIcon,
   Clear as ClearIcon,
   Undo as UndoIcon,
-  Redo as RedoIcon
+  Redo as RedoIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import SystemStatus from './SystemStatus.jsx';
 
@@ -39,12 +40,19 @@ function Header({
   undoLast,
   redoLast,
   clearMessages,
-  historyState
+  historyState,
+  onToggleSidebar
 }) {
   return (
     <AppBar position="static" color="inherit" elevation={1}>
       <Toolbar sx={{ justifyContent: 'space-between', py: 2, minHeight: '80px' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flex: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flex: 1, gap: 1 }}>
+          {/* Mobile menu button for sidebar */}
+          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+            <IconButton onClick={onToggleSidebar} color="inherit" title="Menu">
+              <MenuIcon />
+            </IconButton>
+          </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold" color="text.primary" sx={{ lineHeight: 1.1 }}>
               FADEBENDER

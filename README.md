@@ -46,6 +46,11 @@ Fadebender transforms natural language into professional mixing workflows, makin
    - Load the Remote Script and ensure the UDP bridge is running.
    - Confirm you can ping the script from the server and move Track 1 volume via API.
 
+## 📘 User Onboarding
+
+- For non‑technical users and future cloud releases, see `docs/USER_ONBOARDING.md`.
+- To install the Ableton Remote Script manually during development, see `docs/ABLETON_SETUP.md`.
+
 ---
 
 ## Developer Setup
