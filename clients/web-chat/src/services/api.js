@@ -5,7 +5,8 @@
 
 const API_CONFIG = {
   NLP_BASE_URL: 'http://127.0.0.1:8000',
-  CONTROLLER_BASE_URL: 'http://127.0.0.1:8721'
+  CONTROLLER_BASE_URL: 'http://127.0.0.1:8721',
+  SERVER_BASE_URL: 'http://127.0.0.1:8722'
 };
 
 class ApiService {
@@ -32,6 +33,21 @@ class ApiService {
 
     if (!response.ok) {
       throw new Error(`Intent execution failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async chat(text, confirm = true) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, confirm })
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Chat failed: ${response.status} ${response.statusText} ${detail}`.trim());
     }
 
     return response.json();
