@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub verify-vertex index-knowledge undo all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub verify-vertex index-knowledge undo redo accept all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -20,6 +20,7 @@ help:
 	@echo "  make index-knowledge - list discovered knowledge files/headings"
 	@echo "  make undo            - undo last mixer change via /op/undo_last"
 	@echo "  make redo            - redo last mixer change via /op/redo_last"
+	@echo "  make accept          - run acceptance checks against running services"
 	@echo "  make run-bridge      - reminder for running Swift bridge in Xcode"
 	@echo "  make all             - run NLP + Controller together"
 	@echo "  make clean           - remove Python venv and Node modules"
@@ -99,6 +100,9 @@ undo:
 
 redo:
 	@curl -sS -X POST http://127.0.0.1:$${SERVER_PORT-8722}/op/redo_last | jq .
+
+accept:
+	@bash scripts/acceptance.sh
 
 # ---- Master Controller ----
 run-controller:
