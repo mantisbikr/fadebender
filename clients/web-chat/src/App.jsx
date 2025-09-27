@@ -14,6 +14,8 @@ function App() {
     isProcessing,
     systemStatus,
     conversationContext,
+    modelPref,
+    setModelPref,
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,
@@ -33,7 +35,7 @@ function App() {
             <h1 className="text-xl font-bold text-gray-900">🎛️ Fadebender</h1>
             <p className="text-sm text-gray-600">AI-Powered DAW Control</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <div className={`px-2 py-1 rounded text-xs ${
               systemStatus?.status === 'healthy'
                 ? 'bg-green-100 text-green-800'
@@ -48,6 +50,20 @@ function App() {
                 : 'bg-yellow-100 text-yellow-800'
             }`}>
               AI: {systemStatus?.ai_parser_available ? '🧠 Active' : '⚠️ Fallback'}
+            </div>
+
+            <div className="flex items-center gap-1 text-xs text-gray-700">
+              <span>Model:</span>
+              <select
+                value={modelPref}
+                onChange={(e) => setModelPref(e.target.value)}
+                className="text-xs border rounded px-1 py-1 bg-white"
+                disabled={isProcessing}
+                title="LLM model preference"
+              >
+                <option value="gemini-2.5-flash">Gemini Flash</option>
+                <option value="llama">Llama 8B</option>
+              </select>
             </div>
 
             {conversationContext && (
@@ -97,6 +113,8 @@ function App() {
         onSubmit={processControlCommand}
         onHelp={processHelpQuery}
         disabled={isProcessing}
+        model={modelPref}
+        onModelChange={setModelPref}
       />
     </div>
   );

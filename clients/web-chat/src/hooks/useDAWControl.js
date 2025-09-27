@@ -12,6 +12,7 @@ export function useDAWControl() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [systemStatus, setSystemStatus] = useState(null);
   const [conversationContext, setConversationContext] = useState(null);
+  const [modelPref, setModelPref] = useState('gemini-2.5-flash');
 
   const addMessage = useCallback((message) => {
     setMessages(prev => [...prev, {
@@ -45,7 +46,7 @@ export function useDAWControl() {
       }
 
       // Execute end-to-end via server /chat (handles NLP -> intent -> UDP)
-      const result = await apiService.chat(processed.processed, true);
+      const result = await apiService.chat(processed.processed, true, modelPref);
 
       // Handle preview-only or unsupported intents
       if (!result.ok) {
@@ -131,6 +132,8 @@ export function useDAWControl() {
     isProcessing,
     systemStatus,
     conversationContext,
+    modelPref,
+    setModelPref,
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,

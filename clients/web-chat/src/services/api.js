@@ -38,11 +38,11 @@ class ApiService {
     return response.json();
   }
 
-  async chat(text, confirm = true) {
+  async chat(text, confirm = true, model = undefined) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, confirm })
+      body: JSON.stringify({ text, confirm, model })
     });
 
     if (!response.ok) {

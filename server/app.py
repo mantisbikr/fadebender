@@ -23,6 +23,8 @@ app.add_middleware(
 class ChatBody(BaseModel):
     text: str
     confirm: bool = True
+    model: Optional[str] = None  # e.g., 'gemini-2.5-flash' or 'llama'
+    strict: Optional[bool] = None
 
 
 @app.get("/ping")
@@ -80,7 +82,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(500, f"NLP module not available: {e}")
 
-    intent = interpret_daw_command(body.text)
+    intent = interpret_daw_command(body.text, model_preference=body.model, strict=body.strict)
 
     # Very small mapper for MVP: support volume absolute set if provided
     targets = intent.get("targets") or []

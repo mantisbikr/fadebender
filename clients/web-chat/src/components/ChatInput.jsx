@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 
-export default function ChatInput({ onSubmit, onHelp, disabled }) {
+export default function ChatInput({ onSubmit, onHelp, disabled, model, onModelChange }) {
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('control'); // 'control' or 'help'
 
@@ -31,8 +31,9 @@ export default function ChatInput({ onSubmit, onHelp, disabled }) {
 
   return (
     <div className="border-t bg-white p-4">
-      <div className="flex gap-2 mb-3">
-        <button
+      <div className="flex gap-2 mb-3 items-center justify-between">
+        <div className="flex gap-2">
+          <button
           type="button"
           onClick={() => setMode('control')}
           className={`px-3 py-1 rounded text-sm font-medium ${
@@ -40,10 +41,10 @@ export default function ChatInput({ onSubmit, onHelp, disabled }) {
               ? 'bg-blue-500 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-        >
-          🎛️ Control
-        </button>
-        <button
+          >
+            🎛️ Control
+          </button>
+          <button
           type="button"
           onClick={() => setMode('help')}
           className={`px-3 py-1 rounded text-sm font-medium ${
@@ -51,9 +52,23 @@ export default function ChatInput({ onSubmit, onHelp, disabled }) {
               ? 'bg-green-500 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-        >
-          ❓ Help
-        </button>
+          >
+            ❓ Help
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-gray-700">
+          <span>Model:</span>
+          <select
+            value={model}
+            onChange={(e) => onModelChange?.(e.target.value)}
+            className="text-xs border rounded px-2 py-1 bg-white"
+            disabled={disabled}
+          >
+            <option value="gemini-2.5-flash">Gemini Flash</option>
+            <option value="llama">Llama 8B</option>
+          </select>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
