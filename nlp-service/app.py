@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from intents.parser import DAWIntentParser, fallback_parse
+# Legacy import - keeping for fallback if needed
+# from intents.parser import DAWIntentParser, fallback_parse
 
 # Load environment-specific configuration
 env = os.getenv('ENV', 'development')
@@ -29,19 +30,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize AI parser
-api_key = os.getenv("GOOGLE_API_KEY")
-project_id = os.getenv("PROJECT_ID")
-if not api_key:
-    print("Warning: GOOGLE_API_KEY not set. Using fallback parser only.")
-    parser = None
-else:
-    try:
-        parser = DAWIntentParser(api_key=api_key, model_name="gemini-1.5-flash-latest")
-        print(f"✅ Initialized Gemini parser with Google AI API")
-    except Exception as e:
-        print(f"❌ Failed to initialize AI parser: {e}")
-        parser = None
+# Initialize lightweight LLM system
+from llm_daw import interpret_daw_command
+print("✅ Initialized lightweight LLM DAW interpreter")
 
 class ParseRequest(BaseModel):
     text: str
@@ -72,13 +63,8 @@ async def parse(request: ParseRequest):
                         t["track"] = f"Track {int(parts[1])}"
             return intent_obj
 
-        if parser:
-            # Use AI parser with context
-            intent = parser.parse(request.text, request.context)
-            intent.setdefault("meta", {})["model_used"] = "gemini-1.5-flash"
-        else:
-            intent = fallback_parse(request.text)
-            intent.setdefault("meta", {})["model_used"] = "fallback"
+        # Use lightweight LLM interpreter
+        intent = interpret_daw_command(request.text)
 
         intent = _normalize_tracks(intent)
         return intent
@@ -89,35 +75,29 @@ async def parse(request: ParseRequest):
 @app.post("/howto")
 async def howto(request: HowToRequest):
     """Get help with DAW techniques and workflows"""
-    if parser:
-        try:
-            # Create a help prompt for the AI
-            help_prompt = f"""You are a helpful DAW (Digital Audio Workstation) assistant. The user is asking: "{request.query}"
+    try:
+        # Use the same lightweight LLM system for help queries
+        help_result = interpret_daw_command(f"help: {request.query}")
 
-If this is about what they just did, provide a helpful summary of recent DAW actions.
-If this is a general DAW question, provide clear, actionable advice.
+        # If it returns a question_response, use that answer
+        if help_result.get("intent") == "question_response":
+            return {"answer": help_result.get("answer", "No specific advice available.")}
+        else:
+            # Fallback to generic DAW help
+            return {"answer": f"For '{request.query}': Check your DAW documentation or try being more specific about which track and parameter you want to adjust."}
 
-Examples of good responses:
-- For "what did I just do?": "You increased the reverb on Track 2 by 2%, which adds more spaciousness to that audio channel."
-- For "how to sidechain?": "Sidechaining involves routing one track's signal to control another track's compressor. In most DAWs: 1) Add a compressor to the track you want ducked, 2) Set the sidechain input to the trigger track, 3) Adjust threshold and ratio."
-
-Provide a concise, helpful response:"""
-
-            response = parser.model.generate_content(help_prompt)
-            answer = response.text.strip()
-
-            return {"answer": answer}
-        except Exception as e:
-            return {"answer": f"Sorry, I encountered an error while generating help: {str(e)}"}
-    else:
-        return {"answer": "Help functionality requires AI model. Please check configuration."}
+    except Exception as e:
+        return {"answer": f"Sorry, I encountered an error while generating help: {str(e)}"}
 
 @app.get("/health")
 async def health():
     """Health check endpoint"""
+    from config.llm_config import get_llm_project_id, get_llm_api_key
+
     return {
         "status": "healthy",
-        "ai_parser_available": parser is not None,
-        "api_configured": api_key is not None,
-        "project_id": project_id or "not_configured"
+        "llm_system": "lightweight_vertex_ai",
+        "project_id": get_llm_project_id(),
+        "api_key_configured": bool(get_llm_api_key()),
+        "service_account_auth": os.getenv("GOOGLE_APPLICATION_CREDENTIALS") is not None
     }

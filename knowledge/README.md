@@ -97,7 +97,7 @@ def get_daw_specific_advice(query: str, daw_context: DAWContext):
 ### Expanding DAW Support
 1. Create new DAW directory structure
 2. Document DAW-specific plugins and workflows
-3. Add DAW detection logic to controller service
+3. Add DAW detection capability to controller service
 4. Update system prompt with conditional DAW knowledge
 
 ### Audio Engineering Principles

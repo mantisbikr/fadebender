@@ -103,7 +103,7 @@ fadebender/
   "mappings": [
     {
       "alias": "track1.volume",
-      "logic_target": {"track": "Track 1", "parameter": "volume"},
+      "target": {"track": "Track 1", "parameter": "volume"},
       "midi": {"cc": 20, "channel": 1},
       "scale": {"type": "linear", "in_min": -60, "in_max": 6, "out_min": 0, "out_max": 127},
       "smoothing_ms": 150

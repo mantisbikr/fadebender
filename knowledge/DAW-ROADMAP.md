@@ -7,7 +7,7 @@
 ## Future Architecture Goals
 
 ### DAW Detection & Context
-- **Auto-detection**: Identify connected DAW (Logic Pro, Ableton Live, Cubase)
+- **Auto-detection**: Identify connected DAW (Ableton Live, Cubase)
 - **Context switching**: Provide DAW-specific advice based on active connection
 - **Unified interface**: Same chat experience across all DAWs
 

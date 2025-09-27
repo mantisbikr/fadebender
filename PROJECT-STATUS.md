@@ -59,14 +59,14 @@
 └── .venv/                          # Python virtual environment
 
 /master-controller/
-├── src/index.ts                    # Main controller logic (HAS BUGS)
+├── src/index.ts                    # Main controller core (HAS BUGS)
 ├── package.json                    # Node.js dependencies
 └── configs/mapping.json            # MIDI CC parameter mappings
 
 /clients/web-chat/
 ├── src/
 │   ├── components/ChatInput.jsx    # User input interface
-│   ├── hooks/useDAWControl.js      # Business logic
+│   ├── hooks/useDAWControl.js      # Business rules
 │   └── services/api.js             # Backend communication
 └── package.json                    # React dependencies
 ```
@@ -117,7 +117,7 @@ cd clients/web-chat && npm run dev
 - **Error**: 400 Bad Request when controller tries to execute parsed intents
 - **Debug Steps**:
   1. Check MIDI CC output is actually sending
-  2. Verify parameter mapping logic for plugin parameters
+  2. Verify parameter mapping flow for plugin parameters
   3. Test with simple volume changes vs. effect parameters
 
 ### 2. Parameter Mapping Consistency
