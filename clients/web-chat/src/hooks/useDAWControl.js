@@ -113,19 +113,10 @@ export function useDAWControl() {
     try {
       const health = await apiService.checkHealth();
       setSystemStatus(health);
-
-      addMessage({
-        type: 'info',
-        content: `System status: ${health.status} | AI: ${health.ai_parser_available ? '✅' : '❌'}`
-      });
     } catch (error) {
       setSystemStatus({ status: 'error' });
-      addMessage({
-        type: 'error',
-        content: '❌ Cannot connect to services'
-      });
     }
-  }, [addMessage]);
+  }, []);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

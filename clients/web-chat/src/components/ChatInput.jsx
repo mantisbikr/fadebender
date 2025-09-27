@@ -4,25 +4,33 @@
  */
 
 import { useState } from 'react';
+import {
+  Box,
+  Paper,
+  TextField,
+  IconButton,
+  Typography,
+  Container,
+  InputAdornment
+} from '@mui/material';
+import {
+  Send as SendIcon,
+  SmartToy as AIIcon
+} from '@mui/icons-material';
 
-export default function ChatInput({ onSubmit, onHelp, disabled, model, onModelChange }) {
+export default function ChatInput({ onSubmit, onHelp, disabled }) {
   const [input, setInput] = useState('');
-  const [mode, setMode] = useState('control'); // 'control' or 'help'
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!input.trim() || disabled) return;
 
-    if (mode === 'control') {
-      onSubmit(input.trim());
-    } else {
-      onHelp(input.trim());
-    }
-
+    // Unified handler - the backend will determine if it's a command or help query
+    onSubmit(input.trim());
     setInput('');
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -30,79 +38,58 @@ export default function ChatInput({ onSubmit, onHelp, disabled, model, onModelCh
   };
 
   return (
-    <div className="border-t bg-white p-4">
-      <div className="flex gap-2 mb-3 items-center justify-between">
-        <div className="flex gap-2">
-          <button
-          type="button"
-          onClick={() => setMode('control')}
-          className={`px-3 py-1 rounded text-sm font-medium ${
-            mode === 'control'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-          >
-            🎛️ Control
-          </button>
-          <button
-          type="button"
-          onClick={() => setMode('help')}
-          className={`px-3 py-1 rounded text-sm font-medium ${
-            mode === 'help'
-              ? 'bg-green-500 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-          >
-            ❓ Help
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-gray-700">
-          <span>Model:</span>
-          <select
-            value={model}
-            onChange={(e) => onModelChange?.(e.target.value)}
-            className="text-xs border rounded px-2 py-1 bg-white"
+    <Paper elevation={2} sx={{ borderTop: 1, borderColor: 'divider' }}>
+      <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask questions or send commands: 'set track 1 volume to -6 dB' or 'how to sidechain in Ableton?'"
             disabled={disabled}
+            autoComplete="off"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <AIIcon color="primary" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                pr: 1 // Reduce right padding to align better with button
+              }
+            }}
+          />
+          <IconButton
+            type="submit"
+            disabled={!input.trim() || disabled}
+            color="primary"
+            size="large"
+            sx={{
+              bgcolor: 'primary.main',
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'primary.dark',
+              },
+              '&:disabled': {
+                bgcolor: 'grey.300',
+                color: 'grey.500',
+              },
+              width: 48,
+              height: 48,
+            }}
           >
-            <option value="gemini-2.5-flash">Gemini Flash</option>
-            <option value="llama">Llama 8B</option>
-          </select>
-        </div>
-      </div>
+            <SendIcon />
+          </IconButton>
+        </Box>
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder={
-            mode === 'control'
-              ? 'e.g., "set track 1 volume to -6 dB"'
-              : 'e.g., "how to sidechain in Ableton?"'
-          }
-          disabled={disabled}
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck="false"
-          className="flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || disabled}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-        >
-          {mode === 'control' ? 'Execute' : 'Ask'}
-        </button>
-      </form>
-
-      <div className="text-xs text-gray-500 mt-2">
-        {mode === 'control'
-          ? 'AI will understand your intent • Press Enter to execute'
-          : 'Ask questions about DAW techniques • Press Enter to ask'
-        }
-      </div>
-    </div>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, px: 1, display: 'block' }}>
+          💬 Send commands to control your DAW or ask questions about audio production • Press Enter to send
+        </Typography>
+      </Container>
+    </Paper>
   );
 }

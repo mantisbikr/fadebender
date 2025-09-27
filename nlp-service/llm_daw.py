@@ -28,6 +28,7 @@ def _build_daw_prompt(query: str) -> str:
         "{\n"
         "  \"intent\": \"question_response\",\n"
         "  \"answer\": \"helpful response with actionable suggestions\",\n"
+        "  \"suggested_intents\": [\"set track 1 volume to -12 dB\", \"increase track 2 volume by 3 dB\"],\n"
         "  \"meta\": {\"utterance\": \"original command\", \"confidence\": 0.95}\n"
         "}\n\n"
         "For unclear commands, use:\n"
@@ -39,8 +40,10 @@ def _build_daw_prompt(query: str) -> str:
         "}\n\n"
         "Examples:\n"
         "- \"increase track 2 volume by 3 dB\" → set_parameter with relative change\n"
-        "- \"the vocals are too soft\" → question_response with helpful suggestions\n"
-        "- \"boost vocals\" → clarification_needed asking which track\n\n"
+        "- \"the vocals are too soft\" → question_response with helpful suggestions and suggested_intents like [\"set track 1 volume to -6 dB\", \"increase track 1 volume by 6 dB\"]\n"
+        "- \"boost vocals\" → clarification_needed asking which track\n"
+        "- \"how do I make my drums punchier?\" → question_response with EQ/compression advice and suggested_intents for specific adjustments\n\n"
+        "Important: For question_response, always include 2-4 specific, actionable suggested_intents that users can click to execute.\n\n"
         f"Command: {query}\n"
         "JSON:"
     )
@@ -149,6 +152,7 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
         return {
             "intent": "question_response",
             "answer": "I'm having trouble connecting to the AI service. For audio issues, try: 1) Check track levels, 2) Adjust mixer settings, 3) Verify routing. Please try your command again.",
+            "suggested_intents": ["set track 1 volume to -6 dB", "increase track 1 volume by 6 dB", "set track 2 volume to -12 dB"],
             "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
         }
 
