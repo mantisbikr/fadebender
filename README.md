@@ -8,7 +8,7 @@ It lets you type commands like:
 - "set track one volume to minus six dB" → Direct parameter control
 - "go back to how track 2 sounded 5 minutes ago" → Complete version control
 
-**Current Status (Sept 14, 2024)**: Core architecture and professional knowledge base complete. Expert AI system functional with Logic Pro workflows. Intent execution pipeline needs debugging.
+**Current Status (Sept 14, 2024)**: Core architecture and professional knowledge base complete. Intent execution pipeline needs debugging.
 
 Fadebender transforms natural language into professional mixing workflows, making advanced audio engineering techniques accessible through conversation.
 
@@ -16,14 +16,8 @@ Fadebender transforms natural language into professional mixing workflows, makin
 
 ## 🚀 Project Goals
 
-- **MVP v0.1 (Logic-first):**
-  Control a single track volume and one plugin parameter in Logic via Controller Assignments + MIDI Bridge.
-
-- **MVP v0.2 (Ableton):**
-  Add full state-aware control using Remote Scripts (Python API).
-
-- **MVP v0.3 (Cubase):**
-  Support Cubase 12+ MIDI Remote API for two-way parameter mapping.
+- **MVP v0.1 (Ableton-only):**
+  Add state-aware control using Ableton Remote Scripts (Python API) and a UDP bridge. Control a single track volume and one device parameter end-to-end.
 
 ---
 
@@ -48,13 +42,9 @@ Fadebender transforms natural language into professional mixing workflows, makin
    - Open `native-bridge-mac/BridgeApp.xcodeproj` in Xcode.
    - Run → creates virtual MIDI port "Fadebender Out".
 
-4. In Logic
-   - Open Controller Assignments → Learn → move Track 1 Volume.
-   - Send a test CC from `/scripts/send_test_cc.py`.
-   - Logic maps Track 1 Volume ↔ CC#20.
-
-5. Test End-to-End
-   - POST `"set track one volume to -6 dB"` to NLP → Controller → Bridge → Logic fader moves.
+4. In Ableton
+   - Load the Remote Script and ensure the UDP bridge is running.
+   - Confirm you can ping the script from the server and move Track 1 volume via API.
 
 ---
 
@@ -86,4 +76,3 @@ fadebender/
 ---
 
 © 2025 Fadebender Project
-

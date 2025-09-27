@@ -26,8 +26,8 @@ build/
 # VS Code
 .vscode/
 .history/
-# Large files
-knowledge/logic-pro-mac-user-guide.pdf
+# Large files (place manuals under references/ locally; do not commit)
+references/
 
 # Environment files with secrets
 .env
@@ -46,3 +46,8 @@ knowledge/logic-pro-mac-user-guide.pdf
 **/secrets.json
 **/*-key.json
 **/service-account-*.json
+
+# Credentials directory
+credentials/
+**/credentials/
+**/*-credentials.json

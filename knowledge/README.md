@@ -5,10 +5,7 @@ This directory contains comprehensive audio engineering knowledge, DAW-specific 
 ## Structure
 
 ### 📁 **DAW-Specific Knowledge**
-- **`logic-pro/`** - Logic Pro workflows, plugins, and techniques (✅ Implemented)
-  - `workflows/` - Vocal processing, drum mixing, spatial effects, compression/EQ
-  - `plugins.md` - Complete Logic Pro plugin reference
-- **`ableton-live/`** - Ableton Live devices and workflows (🔄 Planned)
+- **`ableton-live/`** - Ableton Live devices and workflows (✅ Focus)
 - **`cubase/`** - Cubase plugins and workflows (🔄 Planned)
 
 ### 📁 **Universal Knowledge**
@@ -21,15 +18,14 @@ This directory contains comprehensive audio engineering knowledge, DAW-specific 
 - **`VERSIONING-ARCHITECTURE.md`** - Complete undo/redo and snapshot system design
 
 ### 📚 **Reference Materials**
-- **`logic-pro-mac-user-guide.pdf`** - Official Logic Pro documentation (49MB)
+• Place any copyrighted manuals under `references/` locally; do not commit.
 
 ## Current Implementation Status
 
 ### ✅ **Completed**
-- **Logic Pro Knowledge Base**: Comprehensive workflows and plugin documentation
 - **Audio Engineering Principles**: Professional frequency spectrum and compression knowledge
-- **Enhanced System Prompt**: Grounded expert advice with specific Logic Pro recommendations
-- **Multi-DAW Architecture**: Foundation ready for Ableton Live and Cubase expansion
+- **Enhanced System Prompt**: Grounded expert advice with actionable recommendations
+- **Ableton-First Architecture**: Foundation ready for Live integration
 - **Versioning System Design**: Complete specification for change tracking and snapshots
 
 ### 🔄 **Planned Features**
@@ -46,14 +42,11 @@ The system provides professional-grade mixing advice:
 
 ```
 User: "I want spaciousness to my vocals"
-AI: "For vocal spaciousness in Logic Pro, try ChromaVerb's Synth Hall preset
-(15-25% wet), Space Designer Vocal Hall impulse, and gentle high-frequency
-boost at 10-12kHz for air. You can say: 'add reverb to track 2'"
+AI: "For vocal spaciousness, try a hall/plate reverb (15–25% wet), set pre-delay for clarity, and add a gentle high-frequency boost at 10–12kHz. You can say: 'add reverb to track 2'"
 ```
 
 ### 🎛️ **DAW-Specific Recommendations**
-- **Logic Pro**: ChromaVerb, Multipressor, Space Designer, Direction Mixer
-- **Future - Ableton Live**: Reverb device, Multiband Dynamics, Auto Pan
+- **Ableton Live**: Reverb, Multiband Dynamics, Auto Pan
 - **Future - Cubase**: REVerence, VintageVCA, StereoEnhancer
 
 ### 📈 **Version Control Integration**
@@ -80,7 +73,6 @@ Would you like me to apply these settings to the current vocal track?"
 ### System Prompt Enhancement
 The NLP service (`nlp-service/intents/parser.py`) integrates this knowledge to provide:
 - **Grounded Advice**: Based on professional audio engineering principles
-- **Logic Pro Specificity**: Exact plugin names and preset recommendations
 - **Actionable Commands**: Every suggestion includes executable commands
 - **Frequency Knowledge**: Professional understanding of spectrum management
 
@@ -88,8 +80,6 @@ The NLP service (`nlp-service/intents/parser.py`) integrates this knowledge to p
 ```python
 # Future architecture example
 def get_daw_specific_advice(query: str, daw_context: DAWContext):
-    if daw_context.daw_type == "logic-pro":
-        return load_logic_pro_workflows()
     elif daw_context.daw_type == "ableton-live":
         return load_ableton_live_workflows()
     elif daw_context.daw_type == "cubase":

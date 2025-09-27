@@ -1,1 +1,0 @@
-// TODO: Logic adapter via Bridge

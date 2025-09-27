@@ -3,20 +3,15 @@
 > **Project name:** **Fadebender**  
 > **Alt options:** MixPilot, Condukt, BusDriver, FaderPilot, OrchestrAID
 
-**Goal:** Build a minimal, demo-ready system where a user types natural language (or speaks) and DAW parameters change accordingly. Start with **Logic Pro** (your comfort zone), then add **Ableton Live** (best technical fit for product), then **Cubase**.
+**Goal:** Build a minimal, demo-ready system where a user types natural language (or speaks) and DAW parameters change accordingly. Focus on **Ableton Live** first, then consider **Cubase**.
 
 ---
 
 ## 0) High-level Scope
 
-- **MVP v0.1 (Logic-first)**  
-  - Chat: “set Track 1 volume to –6 dB” → Track 1 fader moves.  
-  - Pipeline: NLP → Master Controller → macOS Bridge → Logic Controller Assignments.  
-  - Also include a “How do I…” help chat.
-
-- **MVP v0.2 (Ableton)**  
-  - Same core, but use Remote Scripts API to read/write track/device states.  
-  - Can confirm changes and mirror state.
+- **MVP v0.1 (Ableton)**  
+  - Use Remote Scripts API to read/write track/device states.  
+  - Confirm changes and mirror state.
 
 - **MVP v0.3 (Cubase)**  
   - Use MIDI Remote API (Cubase 12+). Two-way mapping possible.
@@ -46,7 +41,7 @@ fadebender/
       execute.ts
       types.d.ts
       adapters/
-        logic.ts
+        ableton.ts
         ableton.ts
         cubase.ts
     test/
@@ -78,7 +73,7 @@ flowchart LR
     NLP["NLP Service (FastAPI)"]
     CTRL["Master Controller (TypeScript)"]
     BR["Native Bridge (Swift, CoreMIDI)"]
-    LOGIC["Logic Pro (Controller Assignments)"]
+    
     LIVE["Ableton Live (Remote Scripts)"]
     CUBASE["Cubase (MIDI Remote API)"]
     MAPS["Mapping Registry (mapping.json)"]
@@ -86,7 +81,7 @@ flowchart LR
     UI --> NLP --> CTRL
     CTRL <---> MAPS
     CTRL -->|WS JSON| BR
-    BR -->|MIDI| LOGIC
+    
     CTRL --> LIVE
     CTRL --> CUBASE
 ```
@@ -154,13 +149,11 @@ flowchart LR
 
 ---
 
-## 6) Logic Pro Setup (v0.1)
+## 6) Ableton Live Setup (v0.1)
 
-1. Open **Controller Assignments (Expert view)** → click Learn.  
-2. Move **Track 1 Volume**.  
-3. From script, send **CC#20**.  
-4. Logic maps Track 1 Volume ↔ CC20.  
-5. Now NLP → fader move works.
+1. Install the Fadebender Remote Script in your Ableton User Library.  
+2. Ensure the UDP bridge is running and reachable.  
+3. Verify Track 1 volume can be set via the server.
 
 ---
 
@@ -214,8 +207,8 @@ open native-bridge-mac/BridgeApp.xcodeproj
 
 ## 10) Milestones
 
-- **M1 (Day 1–3):** Bridge up, CC test moves Logic fader.  
-- **M2 (Day 4–6):** NLP → Controller → Logic (absolute volume).  
+- **M1 (Day 1–3):** Bridge up, can move volume via Ableton Remote Script.  
+- **M2 (Day 4–6):** NLP → Controller → Ableton (absolute volume).  
 - **M3 (Day 7–10):** Add relative ops, pan, reverb wet.  
 - **M4 (Day 11–14):** Ableton adapter (track vol/pan, device wet).  
 - **M5 (Day 15–18):** Ableton feedback + scenes/macros groundwork.
@@ -228,7 +221,6 @@ open native-bridge-mac/BridgeApp.xcodeproj
 - “make track one two dB louder”  
 - “pan track one left 20%”  
 - “increase reverb wet by 10%”  
-- “how do I sidechain the pad to the kick in Logic?”
+- “how do I sidechain the pad to the kick in Ableton?”
 
 ---
-

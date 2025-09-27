@@ -9,5 +9,4 @@ Track unresolved questions; mark resolved with links to decisions/commits.
 
 ## Resolved
 - NLP provider choice: Use Gemini 1.5 Flash when available; fallback otherwise → DECISION (DECISIONS.md, nlp-service/app.py:23).
-- Logic control path via MIDI CC mapping → DECISION (configs/mapping.json, docs/roadmap.md:6).
-
+- Ableton control path via Remote Script/UDP → DECISION (see docs/roadmap.md).

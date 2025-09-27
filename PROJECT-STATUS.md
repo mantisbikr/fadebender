@@ -11,9 +11,8 @@
 - **MIDI Mapping System**: Complete parameter to MIDI CC mapping (`configs/mapping.json`)
 
 #### Audio Engineering Knowledge Base
-- **Logic Pro Workflows**: Comprehensive vocal processing, drum mixing, spatial effects
 - **Professional Principles**: Frequency spectrum knowledge, compression ratios, EQ techniques
-- **Plugin Documentation**: Complete Logic Pro plugin reference (ChromaVerb, Multipressor, etc.)
+- **Plugin Documentation**: Device references and best practices
 - **Enhanced System Prompt**: AI grounded in professional audio engineering standards
 
 #### Conversational Intelligence
@@ -39,8 +38,8 @@
 ### 🏗️ **ARCHITECTURE READY FOR FUTURE**
 
 #### Multi-DAW Support Foundation
-- **Directory Structure**: `/knowledge/{logic-pro,ableton-live,cubase,shared}/`
-- **DAW-Specific Workflows**: Logic Pro fully documented, others ready for expansion
+- **Directory Structure**: `/knowledge/{ableton-live,cubase,shared}/`
+- **DAW-Specific Workflows**: Ableton in progress; others planned
 - **Unified Interface**: Same chat experience planned across all DAWs
 - **Detection System**: Architecture ready for DAW auto-detection
 
@@ -78,13 +77,11 @@
 ├── PROJECT-STATUS.md               # This status document
 ├── DAW-ROADMAP.md                  # Multi-DAW expansion plan
 ├── VERSIONING-ARCHITECTURE.md     # Complete undo/redo system spec
-├── logic-pro/                     # Logic Pro specific knowledge
-│   ├── workflows/                  # Vocal, drum, spatial, compression workflows
-│   └── plugins.md                  # Complete Logic Pro plugin reference
+├── ableton-live/                  # Ableton Live knowledge (devices/workflows)
 ├── shared/                         # Universal audio engineering knowledge
 │   ├── audio-engineering-principles.md
 │   └── versioning-integration.md
-└── logic-pro-mac-user-guide.pdf   # Official Logic Pro documentation
+└── references/                    # Local-only manuals (not committed)
 ```
 
 ### Configuration
@@ -156,7 +153,7 @@ cd clients/web-chat && npm run dev
 ## 💡 **Technical Notes**
 
 ### Audio Engineering Integration
-- **System Prompt**: Enhanced with professional frequency knowledge and Logic Pro specifics
+- **System Prompt**: Enhanced with professional frequency knowledge
 - **Response Quality**: AI now provides expert-level advice with specific plugin recommendations
 - **Command Suggestions**: Every piece of advice includes executable commands
 - **Grounded Knowledge**: Based on established audio engineering principles
@@ -179,7 +176,7 @@ cd clients/web-chat && npm run dev
 - **Python 3.10+** with virtual environment
 - **Node.js 18+** with npm
 - **Google AI API Key** (Gemini 1.5 Flash)
-- **MIDI-capable DAW** (Logic Pro for current implementation)
+- **MIDI-capable DAW** (Ableton Live for current implementation)
 
 ### Environment Variables
 ```bash

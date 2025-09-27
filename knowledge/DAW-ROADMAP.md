@@ -1,8 +1,8 @@
 # Multi-DAW Architecture Roadmap
 
 ## Current State
-- **Logic Pro**: Fully implemented with specific workflows and plugin knowledge
-- **System**: Single chat interface with Logic Pro-focused advice
+- **Ableton Live**: Primary focus with devices and workflows
+- **System**: Single chat interface with Ableton-focused advice
 
 ## Future Architecture Goals
 
@@ -13,12 +13,7 @@
 
 ### DAW-Specific Knowledge Bases
 
-#### Logic Pro (✅ Implemented)
-- ChromaVerb, Space Designer, Multipressor
-- Direction Mixer, Vintage EQ, Channel EQ
-- Logic-specific routing and workflow patterns
-
-#### Ableton Live (🔄 Planned)
+#### Ableton Live (✅ In Progress)
 - **Reverb**: Reverb device, Echo, Corpus
 - **Compression**: Multiband Dynamics, Compressor, Glue Compressor
 - **Spatial**: Auto Pan, Utility (width), Reverb (freeze)
@@ -35,10 +30,6 @@
 #### Phase 1: Knowledge Base Expansion
 ```
 /knowledge/
-├── logic-pro/
-│   ├── workflows/
-│   ├── plugins.md
-│   └── routing.md
 ├── ableton-live/
 │   ├── workflows/
 │   ├── devices.md
@@ -61,7 +52,7 @@
 ```python
 # Future architecture
 class DAWContext:
-    daw_type: str  # "logic-pro", "ableton-live", "cubase"
+    daw_type: str  # "ableton-live", "cubase"
     version: str
     available_plugins: List[str]
     current_project: Optional[Dict]
@@ -75,19 +66,13 @@ def get_daw_specific_advice(query: str, daw_context: DAWContext):
 #### Phase 4: Execution Engine Updates
 - DAW-specific command translation
 - Plugin parameter mapping per DAW
-- Protocol adapters (Logic: MIDI CC, Ableton: Max4Live, Cubase: Generic Remote)
+- Protocol adapters (Ableton: Remote Script/UDP, Cubase: Generic Remote)
 
 ### Response Format Evolution
 
-#### Current (Logic Pro focused):
-```
-"For vocal spaciousness in Logic Pro, try ChromaVerb's Synth Hall preset..."
-```
-
-#### Future (DAW-aware):
+#### Example (DAW-aware):
 ```
 "For vocal spaciousness:
-- Logic Pro: ChromaVerb Synth Hall preset (15-25% wet)
 - Ableton Live: Reverb device with Hall algorithm, Echo for pre-delay
 - Cubase: REVerence convolution reverb with vocal hall impulse
 
@@ -104,17 +89,16 @@ You can say: 'add reverb to track 2'"
 
 ## Migration Strategy
 
-1. **Preserve Current Logic Pro Implementation**: Continue working setup
-2. **Gradual DAW Addition**: Add Ableton Live and Cubase incrementally
-3. **Backward Compatibility**: Existing Logic Pro users unaffected
+1. **Ableton-First Implementation**: Build robust Ableton integration
+2. **Gradual DAW Addition**: Add Cubase incrementally as needed
+3. **Backward Compatibility**: N/A (Ableton-only focus initially)
 4. **Feature Flags**: Enable multi-DAW features when ready
 
 ## Current Status (September 14, 2024)
 
 ### ✅ Completed
-- **Logic Pro Knowledge Base**: Comprehensive workflows and plugin documentation
 - **Directory Structure**: DAW-specific organization ready for expansion
-- **Enhanced System Prompt**: AI grounded in Logic Pro specifics and audio engineering principles
+- **Enhanced System Prompt**: AI grounded in audio engineering principles
 - **Architecture Foundation**: Multi-DAW support framework established
 
 ### 🔄 Current Issues
@@ -124,8 +108,7 @@ You can say: 'add reverb to track 2'"
 
 ### 📋 Next Steps
 1. **Fix Execution Pipeline**: Debug and resolve 400 errors in controller service
-2. **Validate Logic Pro Implementation**: Ensure end-to-end command execution works
-3. **Add Ableton Live Support**: Create `/knowledge/ableton-live/` workflows
+2. **Add Ableton Live Workflows**: Create `/knowledge/ableton-live/` workflows
 4. **Implement DAW Detection**: Auto-switching between DAW-specific knowledge bases
 
 ## Technical Considerations

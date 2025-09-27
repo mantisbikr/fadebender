@@ -55,7 +55,7 @@ Implement a comprehensive version control system for DAW parameters, allowing us
   },
   "session_id": "session-uuid",
   "project_context": {
-    "daw": "logic-pro",
+    "daw": "ableton-live",
     "project_name": "New Song",
     "tempo": 120
   }
@@ -96,7 +96,7 @@ Implement a comprehensive version control system for DAW parameters, allowing us
     }
   },
   "project_metadata": {
-    "daw": "logic-pro",
+    "daw": "ableton-live",
     "project_name": "New Song",
     "tempo": 120,
     "key": "C Major",
@@ -247,7 +247,7 @@ CREATE INDEX idx_snapshots_name ON snapshots(name);
 - **User Requests**: Manual snapshot creation
 - **Error Recovery**: Before attempting complex operations
 
-### Smart Snapshot Logic
+### Smart Snapshot Rules
 - **Detect Significant Changes**: Don't snapshot minor tweaks
 - **Compress Similar States**: Avoid redundant snapshots
 - **Preserve Important Moments**: Keep user-named snapshots indefinitely

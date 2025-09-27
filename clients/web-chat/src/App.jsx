@@ -75,7 +75,7 @@ function App() {
             <div className="text-sm space-y-1">
               <p><strong>Try:</strong> "set track 1 volume to -6 dB"</p>
               <p><strong>Or:</strong> "pan track 2 left by 20%"</p>
-              <p><strong>Help:</strong> "how to sidechain in Logic?"</p>
+              <p><strong>Help:</strong> "how to sidechain in Ableton?"</p>
             </div>
           </div>
         ) : (

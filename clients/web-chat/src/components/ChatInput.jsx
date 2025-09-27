@@ -65,7 +65,7 @@ export default function ChatInput({ onSubmit, onHelp, disabled }) {
           placeholder={
             mode === 'control'
               ? 'e.g., "set track 1 volume to -6 dB"'
-              : 'e.g., "how to sidechain in Logic?"'
+              : 'e.g., "how to sidechain in Ableton?"'
           }
           disabled={disabled}
           autoCorrect="off"

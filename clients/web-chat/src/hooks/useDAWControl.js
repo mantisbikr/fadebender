@@ -1,6 +1,6 @@
 /**
  * useDAWControl Hook
- * Business logic for DAW command processing
+ * Business rules for DAW command processing
  */
 
 import { useState, useCallback } from 'react';

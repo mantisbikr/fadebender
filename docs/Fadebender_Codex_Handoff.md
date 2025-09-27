@@ -28,7 +28,7 @@ fadebender/
       execute.ts
       types.d.ts
       adapters/
-        logic.ts
+        ableton.ts
         ableton.ts
         cubase.ts
     test/
@@ -113,7 +113,7 @@ fadebender/
 ```
 
 ### 3.2 `/scripts/send_test_cc.py`
-- A Python script that opens a UDP/WebSocket to the Bridge and sends a single `emit_cc` for CC#20, ch1, value 96 (for Logic Learn).
+- A Python script that opens a UDP/WebSocket to the Bridge and sends a single `emit_cc` for CC#20, ch1, value 96 (for MIDI Learn/testing).
 
 ### 3.3 `.env.example`
 ```
@@ -133,13 +133,9 @@ NLP_URL=http://127.0.0.1:8000
    - `uvicorn app:app --reload` (NLP)
    - `npm run dev` (Controller)
    - Build & run **Bridge** in Xcode (creates `Fadebender Out` MIDI port).
-3. **Logic Learn**
-   - In Logic Controller Assignments (Expert), click **Learn** and move Track 1 Volume.
-   - Run `/scripts/send_test_cc.py` (sends CC#20 value 96).
-   - Confirm Logic maps Track 1 Volume ↔ CC#20 ch1.
-4. **E2E Test**
+3. **E2E Test**
    - POST to NLP `/parse` with: `"set track one volume to minus six dB"`.
-   - Feed intent to Controller `/execute-intent` → confirm fader moves in Logic.
+   - Feed intent to Controller `/execute-intent` → confirm fader moves in Ableton.
 
 ---
 
@@ -149,7 +145,7 @@ NLP_URL=http://127.0.0.1:8000
 - NLP parses absolute and relative volume; pan is stubbed (TODO).
 - Controller returns at least one BridgeMessage for parsed intents.
 - Bridge receives JSON and emits MIDI CC to a virtual port named `Fadebender Out`.
-- A Logic mapping can be learned and the fader moves with the Controller path.
+- The Ableton fader moves with the Controller path via Remote Script.
 - `README.md` documents the above quickstart in 10 steps or fewer.
 
 ---
@@ -164,7 +160,6 @@ NLP_URL=http://127.0.0.1:8000
 
 ## 7) Notes to Keep in Mind
 
-- Logic has no general API; rely on Controller Assignments and CC mapping.
+- Keep endpoints localhost only for MVP. Use Ableton Remote Script/UDP for control.
 - Keep all network endpoints **localhost only** for MVP.
 - Log every action to `/logs/YYYY-MM-DD.log` from Controller for traceability.
-
