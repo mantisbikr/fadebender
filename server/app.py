@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict, Optional
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Simple safety state: undo + rate limiting ---
+UNDO_STACK: list[Dict[str, Any]] = []
+REDO_STACK: list[Dict[str, Any]] = []
+LAST_SENT: Dict[str, float] = {}
+LAST_TS: Dict[str, float] = {}
+MIN_INTERVAL_SEC = 0.05  # 50ms per target key
+
+def _key(field: str, track_index: int) -> str:
+    return f"mixer:{field}:{track_index}"
+
+def _rate_limited(field: str, track_index: int) -> bool:
+    k = _key(field, track_index)
+    now = time.time()
+    last = LAST_TS.get(k, 0.0)
+    if now - last < MIN_INTERVAL_SEC:
+        return True
+    LAST_TS[k] = now
+    return False
+
+def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
+    """Try to read previous mixer value from Ableton (if bridge supports it)."""
+    try:
+        resp = udp_request({"op": "get_track_status", "track_index": int(track_index)}, timeout=0.4)
+        if not resp:
+            return None
+        data = resp.get("data") or resp
+        mixer = data.get("mixer") if isinstance(data, dict) else None
+        if not mixer:
+            return None
+        val = mixer.get(field)
+        if val is None:
+            return None
+        return float(val)
+    except Exception:
+        return None
 
 
 class ChatBody(BaseModel):
@@ -143,7 +181,53 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         summary = f"Set Track {track_index} volume to {val:g} dB"
         if not body.confirm:
             return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
+        # Rate limit
+        if _rate_limited("volume", track_index):
+            return {"ok": False, "reason": "rate_limited", "intent": intent, "summary": summary}
+        # Prepare undo entry
+        k = _key("volume", track_index)
+        prev = _get_prev_mixer_value(track_index, "volume")
+        if prev is None:
+            prev = LAST_SENT.get(k)
+        if prev is None:
+            # Default previous volume to mid (0.5) when unknown (useful with UDP stub)
+            prev = 0.5
         resp = udp_request(msg, timeout=1.0)
+        if resp and resp.get("ok", True):
+            UNDO_STACK.append({"key": k, "field": "volume", "track_index": track_index, "prev": prev, "new": msg["value"]})
+            REDO_STACK.clear()
+            LAST_SENT[k] = msg["value"]
+        return {"ok": bool(resp and resp.get("ok", True)), "preview": msg, "resp": resp, "intent": intent, "summary": summary}
+
+    # New: pan absolute set
+    if intent.get("intent") == "set_parameter" and param == "pan" and track_index is not None and op.get("type") == "absolute":
+        # Accept % (-100..100) or direct -1..1
+        raw_val = float(op.get("value", 0))
+        unit = str(op.get("unit") or "").strip().lower()
+        if unit in ("%", "percent", "percentage"):
+            pan = max(-100.0, min(100.0, raw_val)) / 100.0
+        else:
+            # Heuristic: values beyond 1 likely percent
+            pan = raw_val / 100.0 if abs(raw_val) > 1.0 else raw_val
+        pan = max(-1.0, min(1.0, pan))
+        msg = {"op": "set_mixer", "track_index": track_index, "field": "pan", "value": round(pan, 4)}
+        summary = f"Set Track {track_index} pan to {int(round(pan*100))}%"
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
+        if _rate_limited("pan", track_index):
+            return {"ok": False, "reason": "rate_limited", "intent": intent, "summary": summary}
+        k = _key("pan", track_index)
+        prev = _get_prev_mixer_value(track_index, "pan")
+        if prev is None:
+            prev = LAST_SENT.get(k)
+        if prev is None:
+            # Default previous pan to center when unknown
+            prev = 0.0
+        resp = udp_request(msg, timeout=1.0)
+        if resp and resp.get("ok", True):
+            UNDO_STACK.append({"key": k, "field": "pan", "track_index": track_index, "prev": prev, "new": msg["value"]})
+            REDO_STACK.clear()
+            LAST_SENT[k] = msg["value"]
         return {"ok": bool(resp and resp.get("ok", True)), "preview": msg, "resp": resp, "intent": intent, "summary": summary}
 
     # Fallback: return intent for UI to decide
@@ -152,6 +236,61 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         "reason": "unsupported_intent_for_auto_execute",
         "intent": intent,
         "summary": "I can auto-execute only absolute track volume right now."
+    }
+
+
+@app.post("/op/undo_last")
+def undo_last() -> Dict[str, Any]:
+    """Undo the last successful mixer change (volume/pan) if previous value is known."""
+    while UNDO_STACK:
+        entry = UNDO_STACK.pop()
+        prev = entry.get("prev")
+        track_index = entry.get("track_index")
+        field = entry.get("field")
+        if prev is None or track_index is None or field not in ("volume", "pan"):
+            continue
+        msg = {"op": "set_mixer", "track_index": int(track_index), "field": field, "value": float(prev)}
+        resp = udp_request(msg, timeout=1.0)
+        if resp and resp.get("ok", True):
+            LAST_SENT[_key(field, int(track_index))] = float(prev)
+            # push redo entry
+            REDO_STACK.append({"key": entry.get("key"), "field": field, "track_index": track_index, "prev": msg["value"], "new": entry.get("new")})
+            return {"ok": True, "undone": entry, "resp": resp}
+        else:
+            return {"ok": False, "error": "undo_send_failed", "attempt": entry}
+    return {"ok": False, "error": "nothing_to_undo"}
+
+
+@app.post("/op/redo_last")
+def redo_last() -> Dict[str, Any]:
+    """Re-apply the last undone mixer change if available."""
+    while REDO_STACK:
+        entry = REDO_STACK.pop()
+        new_val = entry.get("new")
+        track_index = entry.get("track_index")
+        field = entry.get("field")
+        if new_val is None or track_index is None or field not in ("volume", "pan"):
+            continue
+        msg = {"op": "set_mixer", "track_index": int(track_index), "field": field, "value": float(new_val)}
+        resp = udp_request(msg, timeout=1.0)
+        if resp and resp.get("ok", True):
+            LAST_SENT[_key(field, int(track_index))] = float(new_val)
+            # Add corresponding undo entry so we can undo the redo
+            UNDO_STACK.append({"key": entry.get("key"), "field": field, "track_index": track_index, "prev": entry.get("prev"), "new": new_val})
+            return {"ok": True, "redone": entry, "resp": resp}
+        else:
+            return {"ok": False, "error": "redo_send_failed", "attempt": entry}
+    return {"ok": False, "error": "nothing_to_redo"}
+
+
+@app.get("/op/history_state")
+def history_state() -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "undo_available": bool(UNDO_STACK),
+        "redo_available": bool(REDO_STACK),
+        "undo_depth": len(UNDO_STACK),
+        "redo_depth": len(REDO_STACK),
     }
 
 

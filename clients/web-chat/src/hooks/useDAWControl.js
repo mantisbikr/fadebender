@@ -3,7 +3,7 @@
  * Business rules for DAW command processing
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { apiService } from '../services/api.js';
 import { textProcessor } from '../utils/textProcessor.js';
 
@@ -13,6 +13,8 @@ export function useDAWControl() {
   const [systemStatus, setSystemStatus] = useState(null);
   const [conversationContext, setConversationContext] = useState(null);
   const [modelPref, setModelPref] = useState('gemini-2.5-flash');
+  const [confirmExecute, setConfirmExecute] = useState(true);
+  const [historyState, setHistoryState] = useState({ undo_available: false, redo_available: false });
 
   const addMessage = useCallback((message) => {
     setMessages(prev => [...prev, {
@@ -80,7 +82,7 @@ export function useDAWControl() {
       const canonicalIntent = (parsed && parsed.ok) ? parsed.intent : undefined;
 
       // Then: execute end-to-end via server /chat (NLP -> intent -> UDP)
-      const result = await apiService.chat(processed.processed, true, modelPref);
+      const result = await apiService.chat(processed.processed, confirmExecute, modelPref);
 
       // Prefer a clean, chat-like summary; only include details when there is an error
       if (!result.ok) {
@@ -102,6 +104,8 @@ export function useDAWControl() {
         // Include canonical + raw intent for optional details view, but keep chat clean
         data: canonicalIntent ? { canonical_intent: canonicalIntent, raw_intent: rawIntent } : undefined
       });
+      // Refresh history state after an executed command
+      try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
       // Clear clarification banner on success
       setConversationContext(null);
 
@@ -154,6 +158,41 @@ export function useDAWControl() {
     setMessages([]);
   }, []);
 
+  const undoLast = useCallback(async () => {
+    try {
+      const res = await apiService.undoLast();
+      if (res.ok) {
+        addMessage({ type: 'success', content: 'Undid last change', data: res });
+      } else {
+        addMessage({ type: 'info', content: res.error || 'Nothing to undo', data: res });
+      }
+      try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
+    } catch (e) {
+      addMessage({ type: 'error', content: `Undo error: ${e.message}` });
+    }
+  }, [addMessage]);
+
+  const redoLast = useCallback(async () => {
+    try {
+      const res = await apiService.redoLast();
+      if (res.ok) {
+        addMessage({ type: 'success', content: 'Redid last change', data: res });
+      } else {
+        addMessage({ type: 'info', content: res.error || 'Nothing to redo', data: res });
+      }
+      try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
+    } catch (e) {
+      addMessage({ type: 'error', content: `Redo error: ${e.message}` });
+    }
+  }, [addMessage]);
+
+  // Initialize history state once
+  useEffect(() => {
+    (async () => {
+      try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
+    })();
+  }, []);
+
   return {
     messages,
     isProcessing,
@@ -161,6 +200,11 @@ export function useDAWControl() {
     conversationContext,
     modelPref,
     setModelPref,
+    confirmExecute,
+    setConfirmExecute,
+    undoLast,
+    redoLast,
+    historyState,
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,

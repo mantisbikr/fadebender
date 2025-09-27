@@ -30,6 +30,11 @@ function App() {
     conversationContext,
     modelPref,
     setModelPref,
+    confirmExecute,
+    setConfirmExecute,
+    undoLast,
+    redoLast,
+    historyState,
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,
@@ -57,6 +62,11 @@ function App() {
           isProcessing={isProcessing}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
+          confirmExecute={confirmExecute}
+          setConfirmExecute={setConfirmExecute}
+          undoLast={undoLast}
+          redoLast={redoLast}
+          historyState={historyState}
           clearMessages={clearMessages}
         />
 

@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub verify-vertex index-knowledge all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub verify-vertex index-knowledge undo all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -18,6 +18,8 @@ help:
 	@echo "  make udp-stub        - run local UDP echo on :19845 for testing"
 	@echo "  make verify-vertex   - validate Vertex creds/model access"
 	@echo "  make index-knowledge - list discovered knowledge files/headings"
+	@echo "  make undo            - undo last mixer change via /op/undo_last"
+	@echo "  make redo            - redo last mixer change via /op/redo_last"
 	@echo "  make run-bridge      - reminder for running Swift bridge in Xcode"
 	@echo "  make all             - run NLP + Controller together"
 	@echo "  make clean           - remove Python venv and Node modules"
@@ -90,6 +92,13 @@ verify-vertex:
 # ---- Knowledge index ----
 index-knowledge:
 	@python3 scripts/index_knowledge.py
+
+# ---- Undo last ----
+undo:
+	@curl -sS -X POST http://127.0.0.1:$${SERVER_PORT-8722}/op/undo_last | jq .
+
+redo:
+	@curl -sS -X POST http://127.0.0.1:$${SERVER_PORT-8722}/op/redo_last | jq .
 
 # ---- Master Controller ----
 run-controller:

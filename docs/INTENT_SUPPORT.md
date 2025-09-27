@@ -29,11 +29,12 @@ UI behavior
 What executes today
 
 - Auto‑exec (server `/chat`):
-  - Absolute track volume only (e.g., `set track 1 volume to -6 dB`)
+  - Absolute track volume (e.g., `set track 1 volume to -6 dB`)
+  - Absolute pan (e.g., `set track 2 pan to -20%` or `set track 2 pan to -0.2`)
   - Requires UDP stub/bridge for `ok:true` (use `make udp-stub` to simulate)
 - Preview only:
   - Relative volume (e.g., `increase track 2 volume by 3 dB`)
-  - Pan (mapped to canonical, not yet auto‑executed)
+  - Pan relative (mapped to canonical, not yet auto‑executed)
 
 Examples to test
 
@@ -63,7 +64,11 @@ How to view canonical intents via curl
 
 Next planned (Step 6)
 
-- UI confirm/preview toggle
-- Auto‑exec: pan absolute, relative volume with UDP readback, basic sends
-- Safety: clamping, `/op/undo_last`, rate limiting
+- UI confirm/preview toggle — added
+- Auto‑exec: pan absolute — added; relative volume via UDP readback — pending; basic sends — pending
+- Safety: clamping — in ops; `/op/undo_last` — added; rate limiting — added (50ms/key)
 
+Undo
+
+- Endpoint: `POST /op/undo_last`
+- Undoes the last successful mixer change with a known previous value.

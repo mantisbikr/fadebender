@@ -81,6 +81,28 @@ class ApiService {
     return response.json();
   }
 
+  async undoLast() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/undo_last`, {
+      method: 'POST'
+    });
+    if (!response.ok) throw new Error(`Undo failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async redoLast() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/redo_last`, {
+      method: 'POST'
+    });
+    if (!response.ok) throw new Error(`Redo failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async getHistoryState() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/history_state`);
+    if (!response.ok) throw new Error(`History state failed: ${response.statusText}`);
+    return response.json();
+  }
+
   async checkHealth() {
     const response = await fetch(`${API_CONFIG.NLP_BASE_URL}/health`);
     return response.json();
