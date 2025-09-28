@@ -81,6 +81,28 @@ class ApiService {
     return response.json();
   }
 
+  async getProjectOutline() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/project/outline`);
+    if (!response.ok) throw new Error(`Project outline failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async getTrackStatus(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/status?index=${index}`);
+    if (!response.ok) throw new Error(`Track status failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async selectTrack(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/select_track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_index: index })
+    });
+    if (!response.ok) throw new Error(`Select track failed: ${response.statusText}`);
+    return response.json();
+  }
+
   async undoLast() {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/undo_last`, {
       method: 'POST'

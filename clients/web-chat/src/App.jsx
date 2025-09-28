@@ -25,6 +25,7 @@ function App() {
   const isDesktop = useMediaQuery('(min-width:900px)');
   const [darkMode, setDarkMode] = useState(prefersDarkMode);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [draftInput, setDraftInput] = useState(null);
 
   const {
     messages,
@@ -84,6 +85,7 @@ function App() {
               variant="temporary"
               open={sidebarOpen}
               onClose={() => setSidebarOpen(false)}
+              onSetDraft={(cmd) => setDraftInput({ text: cmd, ts: Date.now() })}
             />
           </Box>
           <Box sx={{ display: { xs: 'none', md: 'block' } }}>
@@ -91,6 +93,7 @@ function App() {
               messages={messages}
               onReplay={(cmd) => processControlCommand(cmd)}
               variant="permanent"
+              onSetDraft={(cmd) => setDraftInput({ text: cmd, ts: Date.now() })}
             />
           </Box>
 
@@ -122,6 +125,7 @@ function App() {
             onSubmit={processControlCommand}
             onHelp={processHelpQuery}
             disabled={isProcessing}
+            draft={draftInput}
           />
         </Box>
       </Box>

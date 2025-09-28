@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 import time
@@ -99,6 +100,31 @@ def status() -> Dict[str, Any]:
     return resp
 
 
+@app.get("/project/outline")
+def project_outline() -> Dict[str, Any]:
+    """Return lightweight project outline (tracks, selected track, scenes)."""
+    resp = udp_request({"op": "get_overview"}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    # Normalize to { ok, data }
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+@app.get("/track/status")
+def track_status(index: int) -> Dict[str, Any]:
+    """Return per-track status (mixer values) for quick diagnostics."""
+    resp = udp_request({"op": "get_track_status", "track_index": int(index)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
 @app.post("/op/mixer")
 def op_mixer(op: MixerOp) -> Dict[str, Any]:
     msg = {"op": "set_mixer", **op.dict()}
@@ -120,6 +146,15 @@ def op_send(op: SendOp) -> Dict[str, Any]:
 @app.post("/op/device/param")
 def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
     msg = {"op": "set_device_param", **op.dict()}
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    return resp
+
+
+@app.post("/op/select_track")
+def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
+    msg = {"op": "select_track", "track_index": int(body.track_index)}
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
@@ -365,3 +400,5 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         return {"ok": False, "errors": errors, "raw_intent": raw_intent}
 
     return {"ok": True, "intent": canonical.dict(), "raw_intent": raw_intent}
+class SelectTrackBody(BaseModel):
+    track_index: int

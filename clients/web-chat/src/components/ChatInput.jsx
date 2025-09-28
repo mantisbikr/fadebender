@@ -3,7 +3,7 @@
  * Handles user input with validation and submission
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -18,8 +18,14 @@ import {
   SmartToy as AIIcon
 } from '@mui/icons-material';
 
-export default function ChatInput({ onSubmit, onHelp, disabled }) {
+export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
   const [input, setInput] = useState('');
+
+  useEffect(() => {
+    if (draft && typeof draft.text === 'string') {
+      setInput(draft.text);
+    }
+  }, [draft?.ts]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

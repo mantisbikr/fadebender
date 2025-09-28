@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub verify-vertex index-knowledge undo redo accept all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub verify-vertex index-knowledge undo redo accept install-remote outline launch-live all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -21,6 +21,9 @@ help:
 	@echo "  make undo            - undo last mixer change via /op/undo_last"
 	@echo "  make redo            - redo last mixer change via /op/redo_last"
 	@echo "  make accept          - run acceptance checks against running services"
+	@echo "  make install-remote  - install Remote Script into Ableton (macOS)"
+	@echo "  make outline         - fetch project outline from server"
+	@echo "  make launch-live     - macOS: launch Ableton Live with UDP enabled"
 	@echo "  make run-bridge      - reminder for running Swift bridge in Xcode"
 	@echo "  make all             - run NLP + Controller together"
 	@echo "  make clean           - remove Python venv and Node modules"
@@ -103,6 +106,15 @@ redo:
 
 accept:
 	@bash scripts/acceptance.sh
+
+install-remote:
+	@python3 scripts/install_remote_script.py
+
+outline:
+	@curl -sS --max-time 3 http://127.0.0.1:$${SERVER_PORT-8722}/project/outline | jq .
+
+launch-live:
+	@python3 scripts/launch_live_mac.py
 
 # ---- Master Controller ----
 run-controller:
