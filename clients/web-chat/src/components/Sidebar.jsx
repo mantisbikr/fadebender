@@ -18,12 +18,20 @@ import {
   Tooltip,
   Button,
   Select as MUISelect,
-  MenuItem
+  MenuItem,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
   History as HistoryIcon,
-  AccountTree as ProjectIcon
+  AccountTree as ProjectIcon,
+  VolumeOff as VolumeOffIcon,
+  Headphones as HeadphonesIcon,
+  VolumeUp as VolumeUpIcon,
+  SurroundSound as PanIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
 
@@ -35,6 +43,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [loadingOutline, setLoadingOutline] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [trackStatus, setTrackStatus] = useState(null);
+  const [rowStatuses, setRowStatuses] = useState({}); // per-track cached status
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [followSelection, setFollowSelection] = useState(true);
@@ -71,12 +80,58 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }
   };
 
+  const ensureRowStatus = async (idx) => {
+    try {
+      if (!idx) return;
+      const existing = rowStatuses[idx];
+      if (existing) return existing;
+      const res = await apiService.getTrackStatus(idx);
+      const data = res.data || null;
+      setRowStatuses((prev) => ({ ...prev, [idx]: data }));
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (tab !== 0) return;
     let mounted = true;
     (async () => { if (mounted) await fetchOutline(); })();
     return () => { mounted = false; };
   }, [tab]);
+
+  // SSE subscription for instant updates on ops
+  useEffect(() => {
+    if (tab !== 0) return;
+    const url = window.location.origin.replace('3000', '8722') + '/events';
+    const es = new EventSource(url);
+    es.onmessage = async (evt) => {
+      try {
+        const payload = eval('(' + evt.data + ')'); // broker sends dict repr; quick parse
+        if (payload && typeof payload === 'object') {
+          if (payload.event === 'mixer_changed' && selectedIndex && payload.track === selectedIndex) {
+            const ts = await apiService.getTrackStatus(selectedIndex);
+            setTrackStatus(ts.data || null);
+            setRowStatuses((prev) => ({ ...prev, [selectedIndex]: ts.data || null }));
+          }
+          if (payload.event === 'selection_changed') {
+            await fetchOutline(false);
+          }
+          if (payload.event === 'mixer_changed' && payload.track) {
+            try {
+              const ts = await apiService.getTrackStatus(payload.track);
+              setRowStatuses((prev) => ({ ...prev, [payload.track]: ts.data || null }));
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+    es.onerror = () => {
+      es.close();
+    };
+    return () => es.close();
+  }, [tab, selectedIndex]);
 
   // Auto-refresh outline and selected track status every 5s when Project tab is active
   useEffect(() => {
@@ -172,6 +227,110 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     key={t.index}
                     selected={selectedIndex === t.index}
                     onClick={() => { setSelectedIndex(t.index); fetchTrackStatus(t.index); }}
+                    onMouseEnter={() => { ensureRowStatus(t.index); }}
+                    secondaryAction={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        {/* Mute toggle */}
+                        <Tooltip title={(() => {
+                          const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                          return ts && ts.mute ? 'Unmute' : 'Mute';
+                        })()}>
+                          <span>
+                            <IconButton size="small" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const sel = selectedIndex === t.index;
+                                if (!sel) { setSelectedIndex(t.index); }
+                                const ts = rowStatuses[t.index] || (sel ? trackStatus : (await apiService.getTrackStatus(t.index)).data);
+                                await apiService.setMixer(t.index, 'mute', ts?.mute ? 0 : 1);
+                                const refreshed = await apiService.getTrackStatus(t.index);
+                                setTrackStatus(refreshed.data || null);
+                                setRowStatuses((prev) => ({ ...prev, [t.index]: refreshed.data || null }));
+                              } catch {}
+                            }}>
+                              <VolumeOffIcon fontSize="small" color={((rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null))?.mute) ? 'warning' : 'inherit'} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        {/* Solo toggle */}
+                        <Tooltip title={(() => {
+                          const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                          return ts && ts.solo ? 'Unsolo' : 'Solo';
+                        })()}>
+                          <span>
+                            <IconButton size="small" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const sel = selectedIndex === t.index;
+                                if (!sel) { setSelectedIndex(t.index); }
+                                const ts = rowStatuses[t.index] || (sel ? trackStatus : (await apiService.getTrackStatus(t.index)).data);
+                                await apiService.setMixer(t.index, 'solo', ts?.solo ? 0 : 1);
+                                const refreshed = await apiService.getTrackStatus(t.index);
+                                setTrackStatus(refreshed.data || null);
+                                setRowStatuses((prev) => ({ ...prev, [t.index]: refreshed.data || null }));
+                              } catch {}
+                            }}>
+                              <HeadphonesIcon fontSize="small" color={((rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null))?.solo) ? 'success' : 'inherit'} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        {/* Volume / Pan indicators */}
+                        <Tooltip title={(() => {
+                          const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                          if (ts && typeof ts.volume_db === 'number') return `${ts.volume_db.toFixed(1)} dB`;
+                          // fallback: approximate from normalized mixer value if present
+                          const v = ts && ts.mixer && typeof ts.mixer.volume === 'number' ? Number(ts.mixer.volume) : null;
+                          if (v != null) {
+                            const approx = Math.max(-60, Math.min(6, ((v - 0.85) / 0.025)));
+                            return `${approx.toFixed(1)} dB`;
+                          }
+                          return '';
+                        })()}>
+                          <Box
+                            sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                              if (ts) {
+                                const v = typeof ts?.volume_db === 'number' ? ts.volume_db.toFixed(1) : '-6';
+                                onSetDraft?.(`set track ${t.index} volume to ${v}`);
+                              }
+                            }}
+                          >
+                            <VolumeUpIcon sx={{ fontSize: 16, mr: 0.25 }} />
+                            <Typography variant="caption">
+                              {(() => {
+                                const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                                return ts && typeof ts.volume_db === 'number' ? `${ts.volume_db.toFixed(1)} dB` : '';
+                              })()}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                        <Tooltip title={(() => {
+                          const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                          if (ts && ts.mixer && ts.mixer.pan != null) {
+                            const lbl = `${Math.round(Math.abs(ts.mixer.pan) * 50)}${ts.mixer.pan < 0 ? 'L' : (ts.mixer.pan > 0 ? 'R' : '')}`;
+                            return lbl;
+                          }
+                          return 'Current pan';
+                        })()}>
+                          <Box
+                            sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                              if (ts && ts.mixer && ts.mixer.pan != null) {
+                                const lbl = `${Math.round(Math.abs(ts.mixer.pan) * 50)}${ts.mixer.pan < 0 ? 'L' : (ts.mixer.pan > 0 ? 'R' : '')}`;
+                                onSetDraft?.(`set track ${t.index} pan to ${lbl}`);
+                              }
+                            }}
+                          >
+                            <PanIcon sx={{ fontSize: 16, mr: 0.25 }} />
+                            {/* Pan value now shown only in tooltip to reduce inline noise */}
+                          </Box>
+                        </Tooltip>
+                      </Box>
+                    }
                     sx={{ cursor: 'pointer' }}
                   >
                     <ListItemText
@@ -198,46 +357,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     {' '}• Pan: {trackStatus.mixer?.pan != null ? `${Math.round(Math.abs(trackStatus.mixer.pan) * 50)}${trackStatus.mixer.pan < 0 ? 'L' : (trackStatus.mixer.pan > 0 ? 'R' : '')}` : '—'}
                   </Typography>
 
-                  <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    <Tooltip title="Volume accepts dB (e.g., -6)">
-                      <Button size="small" variant="text" onClick={() => onSetDraft?.(`set track ${selectedIndex} volume to -6`)}>
-                        Set volume…
-                      </Button>
-                    </Tooltip>
-                    <Tooltip title="Pan accepts −50..50 or Live style 25L/25R">
-                      <Button size="small" variant="text" onClick={() => onSetDraft?.(`set track ${selectedIndex} pan to 20L`)}>
-                        Set pan…
-                      </Button>
-                    </Tooltip>
-                    <Button
-                      size="small"
-                      variant={trackStatus?.mute ? 'contained' : 'outlined'}
-                      color={trackStatus?.mute ? 'warning' : 'inherit'}
-                      onClick={async () => {
-                        try {
-                          await apiService.setMixer(selectedIndex, 'mute', trackStatus?.mute ? 0 : 1);
-                          const ts = await apiService.getTrackStatus(selectedIndex);
-                          setTrackStatus(ts.data || null);
-                        } catch {}
-                      }}
-                    >
-                      {trackStatus?.mute ? 'Unmute' : 'Mute'}
-                    </Button>
-                    <Button
-                      size="small"
-                      variant={trackStatus?.solo ? 'contained' : 'outlined'}
-                      color={trackStatus?.solo ? 'success' : 'inherit'}
-                      onClick={async () => {
-                        try {
-                          await apiService.setMixer(selectedIndex, 'solo', trackStatus?.solo ? 0 : 1);
-                          const ts = await apiService.getTrackStatus(selectedIndex);
-                          setTrackStatus(ts.data || null);
-                        } catch {}
-                      }}
-                    >
-                      {trackStatus?.solo ? 'Unsolo' : 'Solo'}
-                    </Button>
-                  </Box>
+                  {/* Collapsible advanced details placeholder for future sends/plugins */}
+                  {/* We keep this area minimal for now since inline controls cover common actions */}
                 </Box>
               )}
             </>

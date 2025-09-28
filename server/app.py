@@ -2,6 +2,8 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 import time
+import asyncio
+from fastapi.responses import StreamingResponse
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +51,46 @@ def _rate_limited(field: str, track_index: int) -> bool:
         return True
     LAST_TS[k] = now
     return False
+
+# --- Simple SSE event broker ---
+class EventBroker:
+    def __init__(self) -> None:
+        self._subs: list[asyncio.Queue] = []
+        self._lock = asyncio.Lock()
+
+    async def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue()
+        async with self._lock:
+            self._subs.append(q)
+        return q
+
+    async def publish(self, data: Dict[str, Any]) -> None:
+        async with self._lock:
+            for q in list(self._subs):
+                try:
+                    q.put_nowait(data)
+                except Exception:
+                    pass
+
+    async def unsubscribe(self, q: asyncio.Queue) -> None:
+        async with self._lock:
+            if q in self._subs:
+                self._subs.remove(q)
+
+
+broker = EventBroker()
+
+@app.get("/events")
+async def events():
+    q = await broker.subscribe()
+    async def event_gen():
+        try:
+            while True:
+                data = await q.get()
+                yield f"data: {data}\n\n"
+        except asyncio.CancelledError:
+            await broker.unsubscribe(q)
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
     """Try to read previous mixer value from Ableton (if bridge supports it)."""
@@ -136,6 +178,11 @@ def op_mixer(op: MixerOp) -> Dict[str, Any]:
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+    # publish SSE event (fire and forget)
+    try:
+        asyncio.create_task(broker.publish({"event": "mixer_changed", "track": op.track_index, "field": op.field}))
+    except Exception:
+        pass
     return resp
 
 
@@ -145,6 +192,10 @@ def op_send(op: SendOp) -> Dict[str, Any]:
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        asyncio.create_task(broker.publish({"event": "send_changed", "track": op.track_index, "send_index": op.send_index}))
+    except Exception:
+        pass
     return resp
 
 
@@ -154,6 +205,10 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        asyncio.create_task(broker.publish({"event": "device_param_changed", "track": op.track_index, "device": op.device_index, "param": op.param_index}))
+    except Exception:
+        pass
     return resp
 
 
@@ -163,6 +218,10 @@ def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        asyncio.create_task(broker.publish({"event": "mixer_changed", "track": int(body.track_index), "field": "volume"}))
+    except Exception:
+        pass
     return resp
 
 
@@ -172,6 +231,10 @@ def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        asyncio.create_task(broker.publish({"event": "selection_changed", "track": int(body.track_index)}))
+    except Exception:
+        pass
     return resp
 
 
