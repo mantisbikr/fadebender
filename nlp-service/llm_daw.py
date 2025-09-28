@@ -147,6 +147,26 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
             }
 
+    # Pan absolute using Live-style input like '25L' or '25R'
+    try:
+        import re
+        m = re.search(r"\b(\d{1,2}|50)\s*([lr])\b", q)
+        if m:
+            amt = int(m.group(1))
+            side = m.group(2)
+            # map 25L => -25, 25R => +25
+            pan_val = -amt if side == 'l' else amt
+            trk = re.search(r"track\s+(\d+)", q)
+            track_num = int(trk.group(1)) if trk else 1
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "pan"}],
+                "operation": {"type": "absolute", "value": pan_val, "unit": "%"},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
     # Questions about problems (treat as help-style queries)
     if any(phrase in q for phrase in [
         "too soft", "too quiet", "can't hear", "how to", "what does",

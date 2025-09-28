@@ -7,6 +7,7 @@ stub so that the UDP bridge can respond meaningfully.
 from __future__ import annotations
 
 from typing import Dict, Any
+import time
 
 
 _STATE: Dict[str, Any] = {
@@ -78,22 +79,46 @@ def get_track_status(live, track_index: int) -> dict:
             if 1 <= idx <= len(live.tracks):
                 tr = live.tracks[idx - 1]
                 mix = getattr(tr, "mixer_device", None)
-                vol = getattr(getattr(mix, "volume", None), "value", None)
+                vol_param = getattr(mix, "volume", None)
+                vol = getattr(vol_param, "value", None)
                 pan = getattr(getattr(mix, "panning", None), "value", None)
-                mute = getattr(tr, "mute", None)
-                solo = getattr(tr, "solo", None)
+                # Mute via track activator: 1 = active(unmuted), 0 = muted
+                activator = getattr(mix, "track_activator", None)
+                activator_val = getattr(activator, "value", None)
+                mute = None if activator_val is None else (activator_val == 0)
+                # Solo may be on Track.solo
+                solo_prop = getattr(tr, "solo", None)
+                solo = bool(solo_prop) if solo_prop is not None else None
+                # Display dB if available
+                vdb = _parse_db(getattr(vol_param, 'display_value', None)) if vol_param is not None else None
+                if vdb is None and vol is not None:
+                    # Fallback to approximate mapping near 0 dB region
+                    try:
+                        v = float(vol)
+                        vdb = (v - 0.85) / 0.025
+                        if v <= 0.001:
+                            vdb = -60.0
+                        vdb = max(-60.0, min(6.0, vdb))
+                    except Exception:
+                        vdb = None
                 return {
                     "index": idx,
                     "name": str(getattr(tr, "name", f"Track {idx}")),
                     "mixer": {"volume": float(vol) if vol is not None else None, "pan": float(pan) if pan is not None else None},
                     "mute": bool(mute) if mute is not None else None,
                     "solo": bool(solo) if solo is not None else None,
+                    "volume_db": vdb,
                 }
     except Exception:
         pass
     for t in _STATE["tracks"]:
         if t["index"] == int(track_index):
-            return {"index": t["index"], "name": t["name"], "mixer": t["mixer"].copy(), "mute": t.get("mute"), "solo": t.get("solo")}
+            # Approximate dB for stub using inverse of local taper near 0 dB
+            norm = float(t["mixer"]["volume"])
+            approx_db = max(-60.0, min(6.0, (norm - 0.85) / 0.025))
+            if norm <= 0.001:
+                approx_db = -60.0
+            return {"index": t["index"], "name": t["name"], "mixer": t["mixer"].copy(), "mute": t.get("mute"), "solo": t.get("solo"), "volume_db": approx_db}
     return {"error": "track_not_found", "index": track_index}
 
 
@@ -110,6 +135,13 @@ def set_mixer(live, track_index: int, field: str, value: float) -> bool:
                 if field == "pan" and hasattr(mix, "panning"):
                     mix.panning.value = max(-1.0, min(1.0, float(value)))
                     return True
+                if field == "mute" and hasattr(mix, "track_activator"):
+                    # Set activator: 1 = active(unmuted), 0 = muted
+                    mix.track_activator.value = 0 if bool(value) else 1
+                    return True
+                if field == "solo" and hasattr(tr, "solo"):
+                    tr.solo = bool(value)
+                    return True
                 return False
     except Exception:
         pass
@@ -120,6 +152,12 @@ def set_mixer(live, track_index: int, field: str, value: float) -> bool:
                 return True
             if field == "pan":
                 t["mixer"]["pan"] = max(-1.0, min(1.0, float(value)))
+                return True
+            if field == "mute":
+                t["mute"] = bool(value)
+                return True
+            if field == "solo":
+                t["solo"] = bool(value)
                 return True
             return False
     return False
@@ -147,3 +185,69 @@ def select_track(live, track_index: int) -> bool:
         return True
     except Exception:
         return False
+
+
+def _parse_db(display_value) -> float | None:
+    try:
+        s = str(display_value)
+        if 'dB' in s:
+            s = s.replace('dB', '').strip()
+        return float(s)
+    except Exception:
+        return None
+
+
+def set_volume_db(live, track_index: int, target_db: float):
+    """Set volume by dB target. In Live, use quick binary search on parameter value to match display dB.
+
+    Returns dict { ok: bool, achieved_db: float } when Live is available; True/False in stub mode.
+    """
+    target_db = max(-60.0, min(6.0, float(target_db)))
+    # Stub path
+    if live is None:
+        # Map dB -60..+6 to 0..1
+        # Use observed taper: around 0 dB, ~0.85, slope ~0.025 per dB
+        norm = max(0.0, min(1.0, 0.85 + 0.025 * target_db))
+        return set_mixer(None, track_index, 'volume', norm)
+
+    try:
+        idx = int(track_index)
+        if not (1 <= idx <= len(live.tracks)):
+            return {"ok": False}
+        tr = live.tracks[idx - 1]
+        mix = getattr(tr, 'mixer_device', None)
+        vol = getattr(mix, 'volume', None)
+        if vol is None:
+            return {"ok": False}
+        # Start from good initial guess near 0 dB: 0.85 + 0.025*dB
+        guess = max(0.0, min(1.0, 0.85 + 0.025 * target_db))
+        vol.value = guess
+        time.sleep(0.01)
+        dv = _parse_db(getattr(vol, 'display_value', None))
+        if dv is not None and abs(dv - target_db) <= 0.1:
+            return {"ok": True, "achieved_db": dv}
+        # Binary search on .value to reach target display dB
+        lo, hi = (0.0, guess) if (dv is not None and dv > target_db) else (guess, 1.0)
+        achieved = dv
+        for _ in range(24):
+            mid = (lo + hi) / 2.0
+            vol.value = mid
+            time.sleep(0.01)
+            dv = _parse_db(getattr(vol, 'display_value', None))
+            # Handle '-inf dB' cases
+            if dv is None and isinstance(getattr(vol, 'display_value', None), str) and 'inf' in getattr(vol, 'display_value'):
+                dv = -60.0
+            if dv is None:
+                break
+            achieved = dv
+            if abs(dv - target_db) <= 0.1:
+                break
+            if dv < target_db:
+                lo = mid
+            else:
+                hi = mid
+        return {"ok": True, "achieved_db": achieved}
+    except Exception:
+        # Fallback to stub mapping if anything fails
+        norm = max(0.0, min(1.0, 0.85 + 0.025 * target_db))
+        return set_mixer(None, track_index, 'volume', norm)

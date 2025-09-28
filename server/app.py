@@ -85,6 +85,11 @@ class IntentParseBody(BaseModel):
     strict: Optional[bool] = None
 
 
+class VolumeDbBody(BaseModel):
+    track_index: int
+    db: float
+
+
 @app.get("/ping")
 def ping() -> Dict[str, Any]:
     resp = udp_request({"op": "ping"}, timeout=0.5)
@@ -152,6 +157,15 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
     return resp
 
 
+@app.post("/op/volume_db")
+def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
+    msg = {"op": "set_volume_db", "track_index": int(body.track_index), "db": float(body.db)}
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    return resp
+
+
 @app.post("/op/select_track")
 def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
     msg = {"op": "select_track", "track_index": int(body.track_index)}
@@ -169,12 +183,73 @@ def chat(body: ChatBody) -> Dict[str, Any]:
     nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
+    text_lc = body.text.strip()
+    # Pre-parse common direct commands to avoid LLM ambiguity
+    import re
+    m = re.search(r"\b(mute|unmute|solo|unsolo)\s+track\s+(\d+)\b", text_lc, flags=re.I)
+    if m:
+        action = m.group(1).lower()
+        track_index = int(m.group(2))
+        field = 'mute' if 'mute' in action else 'solo'
+        value = 0 if action in ('unmute', 'unsolo') else 1
+        msg = {"op": "set_mixer", "track_index": track_index, "field": field, "value": value}
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "summary": f"{action.title()} Track {track_index}"}
+        resp = udp_request(msg, timeout=1.0)
+        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"{action.title()} Track {track_index}"}
+
+    # Volume without 'dB': treat as dB by default
+    m = re.search(r"\bset\s+track\s+(\d+)\s+vol(?:ume)?\s+to\s+(-?\d+(?:\.\d+)?)\b", text_lc)
+    if m:
+        track_index = int(m.group(1))
+        target = float(m.group(2))
+        target = max(-60.0, min(6.0, target))
+        warn = target > 0.0
+        msg = {"op": "set_volume_db", "track_index": track_index, "db": target}
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} volume to {target:g} dB" + (" (warning: >0 dB may clip)" if warn else "")}
+        resp = udp_request(msg, timeout=1.0)
+        summ = f"Set Track {track_index} volume to {target:g} dB"
+        if isinstance(resp, dict) and resp.get("achieved_db") is not None:
+            summ = f"Set Track {track_index} volume to {float(resp['achieved_db']):.1f} dB"
+        if warn:
+            summ += " (warning: >0 dB may clip)"
+        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": summ}
+
+    # Pan Live-style inputs like '25L'/'25R' (floats allowed)
+    m = re.search(r"\bset\s+track\s+(\d+)\s+pan\s+to\s+((?:\d{1,2}(?:\.\d+)?)|50(?:\.0+)?)\s*([lLrR])\b", text_lc)
+    if m:
+        track_index = int(m.group(1))
+        amt = float(m.group(2))
+        side = m.group(3).lower()
+        pan = (-amt if side == 'l' else amt) / 50.0
+        msg = {"op": "set_mixer", "track_index": track_index, "field": "pan", "value": round(pan, 4)}
+        label = f"{amt}{'L' if side=='l' else 'R'}"
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
+        resp = udp_request(msg, timeout=1.0)
+        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
+
+    # Pan absolute numeric -50..50 (floats)
+    m = re.search(r"\bset\s+track\s+(\d+)\s+pan\s+to\s+(-?\d+(?:\.\d+)?)\b", text_lc)
+    if m:
+        track_index = int(m.group(1))
+        val = float(m.group(2))
+        val = max(-50.0, min(50.0, val))
+        pan = val / 50.0
+        msg = {"op": "set_mixer", "track_index": track_index, "field": "pan", "value": round(pan, 4)}
+        label = f"{int(abs(val))}{'L' if val < 0 else ('R' if val > 0 else '')}"
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
+        resp = udp_request(msg, timeout=1.0)
+        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
+
     try:
         from llm_daw import interpret_daw_command  # type: ignore
     except Exception as e:
         raise HTTPException(500, f"NLP module not available: {e}")
 
-    intent = interpret_daw_command(body.text, model_preference=body.model, strict=body.strict)
+    intent = interpret_daw_command(text_lc, model_preference=body.model, strict=body.strict)
 
     # Handle help-style responses inline by consulting knowledge base
     if intent.get("intent") == "question_response":
@@ -211,9 +286,9 @@ def chat(body: ChatBody) -> Dict[str, Any]:
     if intent.get("intent") == "set_parameter" and param == "volume" and track_index is not None and op.get("type") == "absolute":
         # Map dB -60..+6 to 0..1
         val = float(op.get("value", 0))
-        norm = (max(-60.0, min(6.0, val)) + 60.0) / 66.0
-        msg = {"op": "set_mixer", "track_index": track_index, "field": "volume", "value": round(norm, 4)}
-        summary = f"Set Track {track_index} volume to {val:g} dB"
+        # Prefer precise dB setting via dedicated op (bridge performs internal adjustment)
+        msg = {"op": "set_volume_db", "track_index": track_index, "db": max(-60.0, min(6.0, val))}
+        summary = f"Set Track {track_index} volume to {val:g} dB (target)"
         if not body.confirm:
             return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
         # Rate limit
@@ -229,24 +304,54 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             prev = 0.5
         resp = udp_request(msg, timeout=1.0)
         if resp and resp.get("ok", True):
-            UNDO_STACK.append({"key": k, "field": "volume", "track_index": track_index, "prev": prev, "new": msg["value"]})
+            # We cannot know the exact normalized value here; store None and rely on readback for undo if needed
+            UNDO_STACK.append({"key": k, "field": "volume", "track_index": track_index, "prev": prev, "new": None})
             REDO_STACK.clear()
-            LAST_SENT[k] = msg["value"]
-        return {"ok": bool(resp and resp.get("ok", True)), "preview": msg, "resp": resp, "intent": intent, "summary": summary}
+            # Readback to cache LAST_SENT
+            try:
+                ts = udp_request({"op": "get_track_status", "track_index": track_index}, timeout=0.6)
+                data = (ts or {}).get("data") or {}
+                nv = data.get("mixer", {}).get("volume")
+                if nv is not None:
+                    LAST_SENT[k] = float(nv)
+                # Prefer display dB from status if present
+                vdb = data.get("volume_db")
+                if isinstance(vdb, (int, float)):
+                    summary = f"Set Track {track_index} volume to {float(vdb):.1f} dB"
+            except Exception:
+                pass
+            # If bridge reported achieved_db, surface it
+            achieved = resp.get("achieved_db") if isinstance(resp, dict) else None
+            if achieved is not None:
+                summary = f"Set Track {track_index} volume to {float(achieved):.1f} dB"
+            return {"ok": True, "preview": msg, "resp": resp, "intent": intent, "summary": summary}
+        # Fallback to linear mapping if precise op failed
+        norm = (max(-60.0, min(6.0, val)) + 60.0) / 66.0
+        fallback_msg = {"op": "set_mixer", "track_index": track_index, "field": "volume", "value": round(norm, 4)}
+        fb_resp = udp_request(fallback_msg, timeout=1.0)
+        ok = bool(fb_resp and fb_resp.get("ok", True))
+        if ok:
+            UNDO_STACK.append({"key": k, "field": "volume", "track_index": track_index, "prev": prev, "new": fallback_msg["value"]})
+            REDO_STACK.clear()
+            LAST_SENT[k] = fallback_msg["value"]
+        return {"ok": ok, "preview": fallback_msg, "resp": fb_resp, "intent": intent, "summary": summary + (" (fallback)" if ok else "")}
 
     # New: pan absolute set
     if intent.get("intent") == "set_parameter" and param == "pan" and track_index is not None and op.get("type") == "absolute":
-        # Accept % (-100..100) or direct -1..1
+        # Accept % (-100..100) or direct -1..1; map user % to Live's scale where 50L/R == 1.0/-1.0
         raw_val = float(op.get("value", 0))
         unit = str(op.get("unit") or "").strip().lower()
         if unit in ("%", "percent", "percentage"):
-            pan = max(-100.0, min(100.0, raw_val)) / 100.0
+            # User expects -50% to show 50L in Live => map percent to [-1..1] with 50 -> 1.0
+            pan = max(-50.0, min(50.0, raw_val)) / 50.0
         else:
             # Heuristic: values beyond 1 likely percent
-            pan = raw_val / 100.0 if abs(raw_val) > 1.0 else raw_val
+            pan = (raw_val / 50.0) if abs(raw_val) > 1.0 else raw_val
         pan = max(-1.0, min(1.0, pan))
         msg = {"op": "set_mixer", "track_index": track_index, "field": "pan", "value": round(pan, 4)}
-        summary = f"Set Track {track_index} pan to {int(round(pan*100))}%"
+        # Live displays 50L/50R at extremes; compute label accordingly
+        label = f"{int(abs(pan)*50)}" + ("L" if pan < 0 else ("R" if pan > 0 else ""))
+        summary = f"Set Track {track_index} pan to {label}"
         if not body.confirm:
             return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
         if _rate_limited("pan", track_index):

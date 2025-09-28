@@ -69,6 +69,15 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_device_param(live_ctx, track_index, device_index, param_index, value)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "set_volume_db":
+                track_index = int(msg.get("track_index", 0))
+                db = float(msg.get("db", 0.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                result = lom_ops.set_volume_db(live_ctx, track_index, db)
+                if isinstance(result, dict):
+                    resp = {"ok": bool(result.get("ok", False)), "op": op, **result}
+                else:
+                    resp = {"ok": bool(result), "op": op}
             elif op == "select_track":
                 track_index = int(msg.get("track_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None

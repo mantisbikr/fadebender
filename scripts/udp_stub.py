@@ -52,12 +52,15 @@ def main():
             field = str(msg.get('field'))
             value = float(msg.get('value', 0.0))
             found = next((t for t in STATE['tracks'] if t['index'] == ti), None)
-            if found and field in ('volume', 'pan'):
+            if found and field in ('volume', 'pan', 'mute', 'solo'):
                 if field == 'volume':
                     value = max(0.0, min(1.0, value))
                 if field == 'pan':
                     value = max(-1.0, min(1.0, value))
-                found['mixer'][field] = value
+                if field in ('volume', 'pan'):
+                    found['mixer'][field] = value
+                else:
+                    found[field] = bool(value)
                 reply_obj = {'ok': True, 'op': op}
             else:
                 reply_obj = {'ok': False, 'error': 'bad_args'}

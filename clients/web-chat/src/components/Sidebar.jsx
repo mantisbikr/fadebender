@@ -16,7 +16,9 @@ import {
   IconButton,
   Divider,
   Tooltip,
-  Button
+  Button,
+  Select as MUISelect,
+  MenuItem
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -34,6 +36,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [trackStatus, setTrackStatus] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(5000);
   const [followSelection, setFollowSelection] = useState(true);
   const prevOutlineRef = useRef('');
 
@@ -83,9 +86,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (selectedIndex) {
         apiService.getTrackStatus(selectedIndex).then((ts) => setTrackStatus(ts.data || null)).catch(() => {});
       }
-    }, 5000);
+    }, refreshInterval);
     return () => clearInterval(id);
-  }, [tab, autoRefresh, selectedIndex, followSelection]);
+  }, [tab, autoRefresh, selectedIndex, followSelection, refreshInterval]);
 
   // When outline is fetched the first time, set selected to outline.selected_track if present
   useEffect(() => {
@@ -133,17 +136,25 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         <Box sx={{ p: 2, overflow: 'auto' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="subtitle1">Project</Typography>
-            <Button size="small" variant="outlined" onClick={() => fetchOutline(true)} disabled={loadingOutline}>
+            <Button size="small" variant="outlined" onClick={() => fetchOutline(true)} disabled={loadingOutline}
+              sx={{ minHeight: 28, px: 1.25, py: 0.25 }}>
               {loadingOutline ? 'Refreshing…' : 'Refresh'}
             </Button>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-            <Button size="small" variant={autoRefresh ? 'contained' : 'outlined'} onClick={() => setAutoRefresh((v) => !v)}>
-              {autoRefresh ? 'Auto‑refresh: On' : 'Auto‑refresh: Off'}
-            </Button>
-            <Button size="small" variant={followSelection ? 'contained' : 'outlined'} onClick={() => setFollowSelection((v) => !v)}>
-              {followSelection ? 'Follow selection: On' : 'Follow selection: Off'}
-            </Button>
+          <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">Refresh every</Typography>
+            <MUISelect
+              size="small"
+              value={refreshInterval}
+              onChange={(e) => setRefreshInterval(Number(e.target.value))}
+              sx={{ minHeight: 28, '& .MuiSelect-select': { py: 0.5, pr: 3, pl: 1.25 } }}
+              title="Auto-refresh interval"
+            >
+              <MenuItem value={3000}>3s</MenuItem>
+              <MenuItem value={5000}>5s</MenuItem>
+              <MenuItem value={10000}>10s</MenuItem>
+              <MenuItem value={30000}>30s</MenuItem>
+            </MUISelect>
           </Box>
           {loadingOutline && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
@@ -178,34 +189,53 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Volume: {
-                      trackStatus.mixer?.volume != null
-                        ? (
-                            <>
-                              {Math.round(trackStatus.mixer.volume * 100)}%
-                              {' '}(
-                              {((trackStatus.mixer.volume * 66) - 60).toFixed(1)} dB)
-                            </>
-                          )
-                        : '—'
+                      typeof trackStatus.volume_db === 'number'
+                        ? `${trackStatus.volume_db.toFixed(1)} dB`
+                        : (trackStatus.mixer?.volume != null
+                            ? `${(Math.max(-60, Math.min(6, ((Number(trackStatus.mixer.volume) - 0.85) / 0.025))).toFixed(1))} dB`
+                            : '—')
                     }
-                    {' '}• Pan: {
-                      trackStatus.mixer?.pan != null
-                        ? (
-                            <>
-                              {Math.round(trackStatus.mixer.pan * 100)}%
-                              {' '}({trackStatus.mixer.pan.toFixed(2)})
-                            </>
-                          )
-                        : '—'
-                    }
+                    {' '}• Pan: {trackStatus.mixer?.pan != null ? `${Math.round(Math.abs(trackStatus.mixer.pan) * 50)}${trackStatus.mixer.pan < 0 ? 'L' : (trackStatus.mixer.pan > 0 ? 'R' : '')}` : '—'}
                   </Typography>
 
-                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                    <Button size="small" variant="outlined" onClick={() => onSetDraft?.(`set track ${selectedIndex} volume to -6 dB`)}>
-                      Set volume…
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                    <Tooltip title="Volume accepts dB (e.g., -6)">
+                      <Button size="small" variant="text" onClick={() => onSetDraft?.(`set track ${selectedIndex} volume to -6`)}>
+                        Set volume…
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="Pan accepts −50..50 or Live style 25L/25R">
+                      <Button size="small" variant="text" onClick={() => onSetDraft?.(`set track ${selectedIndex} pan to 20L`)}>
+                        Set pan…
+                      </Button>
+                    </Tooltip>
+                    <Button
+                      size="small"
+                      variant={trackStatus?.mute ? 'contained' : 'outlined'}
+                      color={trackStatus?.mute ? 'warning' : 'inherit'}
+                      onClick={async () => {
+                        try {
+                          await apiService.setMixer(selectedIndex, 'mute', trackStatus?.mute ? 0 : 1);
+                          const ts = await apiService.getTrackStatus(selectedIndex);
+                          setTrackStatus(ts.data || null);
+                        } catch {}
+                      }}
+                    >
+                      {trackStatus?.mute ? 'Unmute' : 'Mute'}
                     </Button>
-                    <Button size="small" variant="outlined" onClick={() => onSetDraft?.(`set track ${selectedIndex} pan to -20%`)}>
-                      Set pan…
+                    <Button
+                      size="small"
+                      variant={trackStatus?.solo ? 'contained' : 'outlined'}
+                      color={trackStatus?.solo ? 'success' : 'inherit'}
+                      onClick={async () => {
+                        try {
+                          await apiService.setMixer(selectedIndex, 'solo', trackStatus?.solo ? 0 : 1);
+                          const ts = await apiService.getTrackStatus(selectedIndex);
+                          setTrackStatus(ts.data || null);
+                        } catch {}
+                      }}
+                    >
+                      {trackStatus?.solo ? 'Unsolo' : 'Solo'}
                     </Button>
                   </Box>
                 </Box>

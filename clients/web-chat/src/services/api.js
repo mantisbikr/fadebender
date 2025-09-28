@@ -103,6 +103,16 @@ class ApiService {
     return response.json();
   }
 
+  async setMixer(track_index, field, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/mixer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_index, field, value })
+    });
+    if (!response.ok) throw new Error(`Mixer op failed: ${response.statusText}`);
+    return response.json();
+  }
+
   async undoLast() {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/undo_last`, {
       method: 'POST'
