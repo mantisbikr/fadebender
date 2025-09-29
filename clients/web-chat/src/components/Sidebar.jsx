@@ -279,17 +279,33 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                           </span>
                         </Tooltip>
                         {/* Volume / Pan indicators */}
-                        <Tooltip title={(() => {
-                          const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
-                          if (ts && typeof ts.volume_db === 'number') return `${ts.volume_db.toFixed(1)}`;
-                          // fallback: convert from normalized mixer value if present
-                          const v = ts && ts.mixer && typeof ts.mixer.volume === 'number' ? Number(ts.mixer.volume) : null;
-                          if (v != null) {
-                            const dbValue = liveFloatToDb(v);
-                            return `${dbValue.toFixed(1)}`;
-                          }
-                          return '';
-                        })()}>
+                        <Tooltip
+                          key={(() => {
+                            const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                            const v = ts && ts.mixer && typeof ts.mixer.volume === 'number' ? Number(ts.mixer.volume) : null;
+                            const dbText = v != null ? liveFloatToDb(v).toFixed(1) : (ts && typeof ts.volume_db === 'number' ? ts.volume_db.toFixed(1) : 'na');
+                            return `vol-${t.index}-${dbText}`;
+                          })()}
+                          onOpen={async () => {
+                            try {
+                              const res = await apiService.getTrackStatus(t.index);
+                              const data = res.data || null;
+                              setRowStatuses((prev) => ({ ...prev, [t.index]: data }));
+                              if (selectedIndex === t.index) setTrackStatus(data);
+                            } catch {}
+                          }}
+                          title={(() => {
+                            const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                            // Prefer computing from normalized mixer value, fallback to volume_db
+                            const v = ts && ts.mixer && typeof ts.mixer.volume === 'number' ? Number(ts.mixer.volume) : null;
+                            if (v != null) {
+                              const dbValue = liveFloatToDb(v);
+                              return `${dbValue.toFixed(1)}`;
+                            }
+                            if (ts && typeof ts.volume_db === 'number') return `${ts.volume_db.toFixed(1)}`;
+                            return '';
+                          })()}
+                        >
                           <Box
                             sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', cursor: 'pointer' }}
                             onClick={(e) => {
@@ -304,14 +320,30 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                             <VolumeUpIcon sx={{ fontSize: 16 }} />
                           </Box>
                         </Tooltip>
-                        <Tooltip title={(() => {
-                          const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
-                          if (ts && ts.mixer && ts.mixer.pan != null) {
-                            const lbl = `${Math.round(Math.abs(ts.mixer.pan) * 50)}${ts.mixer.pan < 0 ? 'L' : (ts.mixer.pan > 0 ? 'R' : '')}`;
-                            return lbl;
-                          }
-                          return 'Current pan';
-                        })()}>
+                        <Tooltip
+                          key={(() => {
+                            const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                            const p = ts && ts.mixer && ts.mixer.pan != null ? Number(ts.mixer.pan) : null;
+                            const lbl = p != null ? `${Math.round(Math.abs(p) * 50)}${p < 0 ? 'L' : (p > 0 ? 'R' : '')}` : 'na';
+                            return `pan-${t.index}-${lbl}`;
+                          })()}
+                          onOpen={async () => {
+                            try {
+                              const res = await apiService.getTrackStatus(t.index);
+                              const data = res.data || null;
+                              setRowStatuses((prev) => ({ ...prev, [t.index]: data }));
+                              if (selectedIndex === t.index) setTrackStatus(data);
+                            } catch {}
+                          }}
+                          title={(() => {
+                            const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
+                            if (ts && ts.mixer && ts.mixer.pan != null) {
+                              const lbl = `${Math.round(Math.abs(ts.mixer.pan) * 50)}${ts.mixer.pan < 0 ? 'L' : (ts.mixer.pan > 0 ? 'R' : '')}`;
+                              return lbl;
+                            }
+                            return 'Current pan';
+                          })()}
+                        >
                           <Box
                             sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', cursor: 'pointer' }}
                             onClick={(e) => {

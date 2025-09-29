@@ -279,6 +279,11 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         if not body.confirm:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} volume to {target:g} dB" + (" (warning: >0 dB may clip)" if warn else "")}
         resp = udp_request(msg, timeout=1.0)
+        # Publish SSE so UI tooltips/details refresh immediately
+        try:
+            asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "volume"}))
+        except Exception:
+            pass
         summ = f"Set Track {track_index} volume to {target:g} dB"
         if warn:
             summ += " (warning: >0 dB may clip)"
@@ -296,6 +301,10 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         if not body.confirm:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
         resp = udp_request(msg, timeout=1.0)
+        try:
+            asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "pan"}))
+        except Exception:
+            pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
 
     # Pan absolute numeric -50..50 (floats)
@@ -310,6 +319,10 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         if not body.confirm:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
         resp = udp_request(msg, timeout=1.0)
+        try:
+            asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "pan"}))
+        except Exception:
+            pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
 
     try:
@@ -391,6 +404,11 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             achieved = resp.get("achieved_db") if isinstance(resp, dict) else None
             if achieved is not None:
                 summary = f"Set Track {track_index} volume to {float(achieved):.1f} dB"
+            # Publish SSE for freshness
+            try:
+                asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "volume"}))
+            except Exception:
+                pass
             return {"ok": True, "preview": msg, "resp": resp, "intent": intent, "summary": summary}
         # Fallback to linear mapping if precise op failed
         norm = (max(-60.0, min(6.0, val)) + 60.0) / 66.0
