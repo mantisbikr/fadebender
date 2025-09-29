@@ -24,6 +24,7 @@ import {
   AccordionDetails,
   Slider
 } from '@mui/material';
+import TextField from '@mui/material/TextField';
 import {
   PlayArrow as PlayIcon,
   History as HistoryIcon,
@@ -46,6 +47,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [rowStatuses, setRowStatuses] = useState({}); // per-track cached status
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(5000);
+  const [sendsFastRefreshMs, setSendsFastRefreshMs] = useState(800);
+  const [sseThrottleMs, setSseThrottleMs] = useState(150);
   const [followSelection, setFollowSelection] = useState(true);
   const [sends, setSends] = useState(null);
   const [loadingSends, setLoadingSends] = useState(false);
@@ -84,6 +87,23 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (manual) setLoadingOutline(false);
     }
   };
+
+  // Load app config once to initialize UI timings
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const cfg = await apiService.getAppConfig();
+        const ui = cfg?.ui || {};
+        if (mounted) {
+          if (ui.refresh_ms) setRefreshInterval(Number(ui.refresh_ms));
+          if (ui.sends_open_refresh_ms) setSendsFastRefreshMs(Number(ui.sends_open_refresh_ms));
+          if (ui.sse_throttle_ms) setSseThrottleMs(Number(ui.sse_throttle_ms));
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const fetchSends = async (idx, opts = {}) => {
     const silent = !!opts.silent;
@@ -157,10 +177,10 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const refreshTrackThrottled = useCallback(async (idx) => {
     const now = Date.now();
     const last = lastRefreshRef.current[idx] || 0;
-    if (now - last < 150) return null;
+    if (now - last < sseThrottleMs) return null;
     lastRefreshRef.current[idx] = now;
     return refreshTrack(idx);
-  }, [refreshTrack]);
+  }, [refreshTrack, sseThrottleMs]);
 
   // Subscribe to mixer events via hook
   useMixerEvents(
@@ -197,9 +217,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     if (tab !== 0 || !sendsOpen || !selectedIndex) return;
     const id = setInterval(() => {
       fetchSends(selectedIndex, { silent: true });
-    }, 800);
+    }, sendsFastRefreshMs);
     return () => clearInterval(id);
-  }, [tab, sendsOpen, selectedIndex]);
+  }, [tab, sendsOpen, selectedIndex, sendsFastRefreshMs]);
 
   // When outline is fetched the first time, set selected to outline.selected_track if present
   useEffect(() => {
@@ -267,6 +287,54 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
               <MenuItem value={30000}>30s</MenuItem>
             </MUISelect>
           </Box>
+          {/* Settings (from server config) */}
+          <Accordion disableGutters elevation={0} sx={{ mb: 1, border: '1px dashed', borderColor: 'divider', '&:before': { display: 'none' } }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="subtitle2">Settings</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                <TextField
+                  label="Refresh (ms)"
+                  type="number"
+                  size="small"
+                  value={refreshInterval}
+                  onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                  sx={{ width: 140 }}
+                />
+                <TextField
+                  label="Sends Open (ms)"
+                  type="number"
+                  size="small"
+                  value={sendsFastRefreshMs}
+                  onChange={(e) => setSendsFastRefreshMs(Number(e.target.value))}
+                  sx={{ width: 160 }}
+                />
+                <TextField
+                  label="SSE Throttle (ms)"
+                  type="number"
+                  size="small"
+                  value={sseThrottleMs}
+                  onChange={(e) => setSseThrottleMs(Number(e.target.value))}
+                  sx={{ width: 160 }}
+                />
+                <Button size="small" variant="outlined" onClick={async () => {
+                  try {
+                    await apiService.updateAppConfig({ ui: { refresh_ms: refreshInterval, sends_open_refresh_ms: sendsFastRefreshMs, sse_throttle_ms: sseThrottleMs } });
+                  } catch {}
+                }}>Save</Button>
+                <Button size="small" onClick={async () => {
+                  try {
+                    const cfg = await apiService.getAppConfig();
+                    const ui = cfg?.ui || {};
+                    if (ui.refresh_ms) setRefreshInterval(Number(ui.refresh_ms));
+                    if (ui.sends_open_refresh_ms) setSendsFastRefreshMs(Number(ui.sends_open_refresh_ms));
+                    if (ui.sse_throttle_ms) setSseThrottleMs(Number(ui.sse_throttle_ms));
+                  } catch {}
+                }}>Reload</Button>
+              </Box>
+            </AccordionDetails>
+          </Accordion>
           {loadingOutline && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}

@@ -1,0 +1,17 @@
+{
+  "ui": {
+    "refresh_ms": 5000,
+    "sends_open_refresh_ms": 800,
+    "sse_throttle_ms": 150
+  },
+  "server": {
+    "send_aliases": {
+      "reverb": 0,
+      "verb": 0,
+      "hall": 0,
+      "room": 0,
+      "delay": 1,
+      "echo": 1
+    }
+  }
+}

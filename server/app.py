@@ -15,6 +15,15 @@ from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.knowledge import search_knowledge
 from server.services.intent_mapper import map_llm_to_canonical
 from server.volume_utils import db_to_live_float, live_float_to_db, db_to_live_float_send, live_float_to_db_send
+from server.config.app_config import (
+    get_app_config,
+    get_send_aliases,
+    get_ui_settings,
+    set_ui_settings,
+    set_send_aliases,
+    reload_config as cfg_reload,
+    save_config as cfg_save,
+)
 from server.volume_parser import parse_volume_command
 
 
@@ -98,6 +107,30 @@ async def events():
         except asyncio.CancelledError:
             await broker.unsubscribe(q)
     return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+@app.get("/config")
+def app_config() -> Dict[str, Any]:
+    """Expose a subset of app config to clients (UI + aliases)."""
+    ui = get_ui_settings()
+    aliases = get_send_aliases()
+    return {"ok": True, "ui": ui, "aliases": {"sends": aliases}}
+
+
+@app.post("/config/update")
+def app_config_update(body: Dict[str, Any]) -> Dict[str, Any]:
+    ui_in = (body or {}).get("ui") or {}
+    aliases_in = ((body or {}).get("aliases") or {}).get("sends") or {}
+    ui = set_ui_settings(ui_in) if ui_in else get_ui_settings()
+    aliases = set_send_aliases(aliases_in) if aliases_in else get_send_aliases()
+    saved = cfg_save()
+    return {"ok": True, "saved": saved, "ui": ui, "aliases": {"sends": aliases}}
+
+
+@app.post("/config/reload")
+def app_config_reload() -> Dict[str, Any]:
+    cfg = cfg_reload()
+    return {"ok": True, "config": cfg}
 
 def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
     """Try to read previous mixer value from Ableton (if bridge supports it)."""
@@ -335,10 +368,10 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             except Exception:
                 pass
         if si is None:
-            # Fallback alias mapping
-            aliases = {"reverb": 0, "verb": 0, "hall": 0, "room": 0, "delay": 1, "echo": 1}
+            # Fallback alias mapping from config
+            aliases = get_send_aliases()
             if sl in aliases:
-                si = aliases[sl]
+                si = int(aliases[sl])
         if si is None:
             raise HTTPException(400, f"unknown_send:{send_label}")
         # Compute target float
@@ -385,9 +418,9 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             except Exception:
                 pass
         if si is None:
-            aliases = {"reverb": 0, "verb": 0, "hall": 0, "room": 0, "delay": 1, "echo": 1}
+            aliases = get_send_aliases()
             if sl in aliases:
-                si = aliases[sl]
+                si = int(aliases[sl])
         if si is None:
             raise HTTPException(400, f"unknown_send:{send_label}")
         # Read current

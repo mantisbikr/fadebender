@@ -13,6 +13,27 @@ class ApiService {
   getEventsURL() {
     return `${API_CONFIG.SERVER_BASE_URL}/events`;
   }
+  async getAppConfig() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config`);
+    if (!response.ok) throw new Error(`Config fetch failed: ${response.statusText}`);
+    return response.json();
+  }
+  async updateAppConfig(payload) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    if (!response.ok) throw new Error(`Config update failed: ${response.statusText}`);
+    return response.json();
+  }
+  async reloadAppConfig() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config/reload`, {
+      method: 'POST'
+    });
+    if (!response.ok) throw new Error(`Config reload failed: ${response.statusText}`);
+    return response.json();
+  }
   async parseIntent(text, model = undefined, strict = undefined) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/parse`, {
       method: 'POST',
