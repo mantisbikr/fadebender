@@ -10,6 +10,9 @@ const API_CONFIG = {
 };
 
 class ApiService {
+  getEventsURL() {
+    return `${API_CONFIG.SERVER_BASE_URL}/events`;
+  }
   async parseIntent(text, model = undefined, strict = undefined) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/parse`, {
       method: 'POST',

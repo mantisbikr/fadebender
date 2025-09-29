@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 import time
 import asyncio
 from fastapi.responses import StreamingResponse
+import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -89,7 +90,11 @@ async def events():
         try:
             while True:
                 data = await q.get()
-                yield f"data: {data}\n\n"
+                try:
+                    payload = json.dumps(data)
+                except Exception:
+                    payload = json.dumps({"malformed": True, "repr": str(data)})
+                yield "data: " + payload + "\n\n"
         except asyncio.CancelledError:
             await broker.unsubscribe(q)
     return StreamingResponse(event_gen(), media_type="text/event-stream")
