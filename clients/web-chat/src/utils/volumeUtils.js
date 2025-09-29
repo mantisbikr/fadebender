@@ -14,15 +14,58 @@
  * @param {number} dbValue - dB value (typically -60 to +6)
  * @returns {number} Float value for Live API (0.0 to 1.0)
  */
+// Empirical mapping captured from Live in 3 dB steps
+// Format: [dB, float]
+const VOLUME_MAP = [
+  [-70, 0.0],
+  [-63, 0.021345632150769234],
+  [-60, 0.03462362661957741],
+  [-57, 0.05101150646805763],
+  [-54, 0.06778648495674133],
+  [-51, 0.08523604273796082],
+  [-48, 0.10353590548038483],
+  [-45, 0.12271705269813538],
+  [-42, 0.1428816020488739],
+  [-39, 0.16421939432621002],
+  [-36, 0.18703696131706238],
+  [-33, 0.2116302251815796],
+  [-30, 0.23843887448310852],
+  [-27, 0.2682555615901947],
+  [-24, 0.302414208650589],
+  [-21, 0.3436638116836548],
+  [-18, 0.39999979734420776],
+  [-15, 0.47494229674339294],
+  [-12, 0.5499998927116394],
+  [-9, 0.624942421913147],
+  [-6, 0.699999988079071],
+  [-3, 0.7749424576759338],
+  [0, 0.8500000238418579],
+  [3, 0.9249424338340759],
+  [6, 1.0],
+];
+
+function interp(y, pts) {
+  if (!pts || pts.length === 0) return 0;
+  if (y <= pts[0][0]) return pts[0][1];
+  if (y >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  let lo = 0, hi = pts.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (pts[mid][0] < y) lo = mid + 1; else hi = mid - 1;
+  }
+  const i1 = Math.max(0, hi);
+  const i2 = Math.min(pts.length - 1, lo);
+  const [x1, y1] = pts[i1];
+  const [x2, y2] = pts[i2];
+  if (x2 === x1) return y1;
+  const t = (y - x1) / (x2 - x1);
+  return y1 + t * (y2 - y1);
+}
+
 export function dbToLiveFloat(dbValue) {
-  // Clamp dB to valid range
   const dbClamped = Math.max(-60.0, Math.min(6.0, parseFloat(dbValue)));
-
-  // Apply the formula: X ≈ 0.85 - (0.025 × |dB_target|)
-  const floatValue = 0.85 - (0.025 * Math.abs(dbClamped));
-
-  // Clamp to valid Live range
-  return Math.max(0.0, Math.min(1.0, floatValue));
+  // Interpolate from empirical map
+  return Math.max(0.0, Math.min(1.0, interp(dbClamped, VOLUME_MAP)));
 }
 
 /**
@@ -34,20 +77,14 @@ export function dbToLiveFloat(dbValue) {
  * @returns {number} dB value (typically -60 to +6)
  */
 export function liveFloatToDb(floatValue) {
-  // Clamp float to valid range
   const floatClamped = Math.max(0.0, Math.min(1.0, parseFloat(floatValue)));
-
-  // Handle special case for very low values (essentially -infinity dB)
-  if (floatClamped <= 0.001) {
-    return -60.0;
+  if (floatClamped <= 0.001) return -60.0;
+  // Build inverse points (float, db) once
+  if (!liveFloatToDb._inv) {
+    liveFloatToDb._inv = VOLUME_MAP.map(([db, f]) => [f, db]).sort((a, b) => a[0] - b[0]);
   }
-
-  // Apply inverse formula: dB = -(0.85 - X) / 0.025
-  // This gives us negative dB values as expected
-  const dbValue = -(0.85 - floatClamped) / 0.025;
-
-  // Clamp to reasonable dB range
-  return Math.max(-60.0, Math.min(6.0, dbValue));
+  const inv = liveFloatToDb._inv;
+  return Math.max(-60.0, Math.min(6.0, interp(floatClamped, inv)));
 }
 
 /**
