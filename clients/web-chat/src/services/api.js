@@ -95,6 +95,20 @@ class ApiService {
     if (!response.ok) throw new Error(`Track status failed: ${response.statusText}`);
     return response.json();
   }
+  async getTrackSends(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/sends?index=${index}`);
+    if (!response.ok) throw new Error(`Track sends failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setSend(track_index, send_index, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_index, send_index, value })
+    });
+    if (!response.ok) throw new Error(`Send op failed: ${response.statusText}`);
+    return response.json();
+  }
 
   async selectTrack(index) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/select_track`, {

@@ -12,8 +12,8 @@ import time
 
 _STATE: Dict[str, Any] = {
     "tracks": [
-        {"index": 1, "name": "Track 1", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False},
-        {"index": 2, "name": "Track 2", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False},
+        {"index": 1, "name": "Track 1", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0]},
+        {"index": 2, "name": "Track 2", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0]},
     ],
     "selected_track": 1,
     "scenes": 1,
@@ -164,8 +164,65 @@ def set_mixer(live, track_index: int, field: str, value: float) -> bool:
 
 
 def set_send(live, track_index: int, send_index: int, value: float) -> bool:  # noqa: ARG001
-    # Sends not modeled in stub; accept and return true for now
-    return True
+    try:
+        if live is not None:
+            idx = int(track_index)
+            if 1 <= idx <= len(live.tracks):
+                tr = live.tracks[idx - 1]
+                mix = getattr(tr, "mixer_device", None)
+                sends = getattr(mix, "sends", None)
+                if sends is not None and 0 <= int(send_index) < len(sends):
+                    sends[int(send_index)].value = max(0.0, min(1.0, float(value)))
+                    return True
+    except Exception:
+        pass
+    for t in _STATE["tracks"]:
+        if t["index"] == int(track_index):
+            arr = t.setdefault("sends", [0.0, 0.0])
+            si = int(send_index)
+            if 0 <= si < len(arr):
+                arr[si] = max(0.0, min(1.0, float(value)))
+                return True
+    return False
+
+def get_track_sends(live, track_index: int) -> dict:
+    """Return a list of sends for a track: [{index, name, value, db?}]"""
+    try:
+        if live is not None:
+            idx = int(track_index)
+            if 1 <= idx <= len(live.tracks):
+                tr = live.tracks[idx - 1]
+                mix = getattr(tr, "mixer_device", None)
+                sends = getattr(mix, "sends", []) or []
+                out = []
+                for i, p in enumerate(sends):
+                    try:
+                        val = float(getattr(p, 'value', 0.0))
+                    except Exception:
+                        val = 0.0
+                    # name best-effort: use corresponding return track name if available
+                    name = f"Send {i}"
+                    try:
+                        returns = getattr(getattr(tr.canonical_parent, 'return_tracks', []), '__iter__', None)
+                        if returns:
+                            rts = list(tr.canonical_parent.return_tracks)
+                            if 0 <= i < len(rts):
+                                name = str(getattr(rts[i], 'name', name))
+                    except Exception:
+                        pass
+                    out.append({"index": i, "name": name, "value": val})
+                return {"index": idx, "sends": out}
+    except Exception:
+        pass
+    for t in _STATE["tracks"]:
+        if t["index"] == int(track_index):
+            arr = t.setdefault("sends", [0.0, 0.0])
+            out = []
+            labels = ["A", "B", "C", "D"]
+            for i, v in enumerate(arr):
+                out.append({"index": i, "name": labels[i] if i < len(labels) else f"Send {i}", "value": float(v)})
+            return {"index": t["index"], "sends": out}
+    return {"error": "track_not_found", "index": track_index}
 
 
 def set_device_param(live, track_index: int, device_index: int, param_index: int, value: float) -> bool:  # noqa: ARG001

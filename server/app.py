@@ -14,7 +14,7 @@ from server.ableton.client_udp import request as udp_request, send as udp_send
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.knowledge import search_knowledge
 from server.services.intent_mapper import map_llm_to_canonical
-from server.volume_utils import db_to_live_float, live_float_to_db
+from server.volume_utils import db_to_live_float, live_float_to_db, db_to_live_float_send, live_float_to_db_send
 from server.volume_parser import parse_volume_command
 
 
@@ -179,6 +179,18 @@ def track_status(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+@app.get("/track/sends")
+def track_sends(index: int) -> Dict[str, Any]:
+    """Return sends for a track as { index, sends: [{index, name, value}] }"""
+    resp = udp_request({"op": "get_track_sends", "track_index": int(index)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
 @app.post("/op/mixer")
 def op_mixer(op: MixerOp) -> Dict[str, Any]:
     msg = {"op": "set_mixer", **op.dict()}
@@ -255,9 +267,11 @@ def chat(body: ChatBody) -> Dict[str, Any]:
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
     text_lc = body.text.strip()
-    # Pre-parse common direct commands to avoid LLM ambiguity
+    # Normalize variants like "-10db" → "-10 dB" to make regex matching robust
     import re
-    m = re.search(r"\b(mute|unmute|solo|unsolo)\s+track\s+(\d+)\b", text_lc, flags=re.I)
+    text_norm = re.sub(r'(-?\d+(?:\.\d+)?)(?:db|dB)\b', r'\1 dB', text_lc, flags=re.I)
+    # Pre-parse common direct commands to avoid LLM ambiguity
+    m = re.search(r"\b(mute|unmute|solo|unsolo)\s+track\s+(\d+)\b", text_norm, flags=re.I)
     if m:
         action = m.group(1).lower()
         track_index = int(m.group(2))
@@ -270,7 +284,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"{action.title()} Track {track_index}"}
 
     # Parse volume commands using helper function
-    volume_cmd = parse_volume_command(text_lc)
+    volume_cmd = parse_volume_command(text_norm)
     if volume_cmd:
         track_index = volume_cmd["track_index"]
         target = volume_cmd["db_value"]
@@ -294,8 +308,117 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             summ += " (warning: >0 dB may clip)"
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": summ}
 
+    # --- Send controls ---
+    # Absolute: set track N send <idx|name> to X [dB|%]
+    m = re.search(r"\bset\s+track\s+(\d+)\s+(?:send\s+)?([\w\s]+?)\s+to\s+(-?\d+(?:\.\d+)?)\s*(db|dB|%|percent|percentage)?\b", text_norm, flags=re.I)
+    if m:
+        track_index = int(m.group(1))
+        send_label = (m.group(2) or '').strip()
+        raw_val = float(m.group(3))
+        unit = (m.group(4) or '').lower()
+        # Resolve send index by label (A/B/0/1 or name)
+        si = None
+        sl = send_label.lower()
+        if sl in ('a','b','c','d'):
+            si = ord(sl) - ord('a')
+        elif sl.isdigit():
+            si = int(sl)
+        else:
+            try:
+                ts = udp_request({"op": "get_track_sends", "track_index": track_index}, timeout=0.8)
+                sends = ((ts or {}).get('data') or {}).get('sends') or []
+                for s in sends:
+                    nm = str(s.get('name','')).strip().lower()
+                    if nm and sl in nm:
+                        si = int(s.get('index', 0))
+                        break
+            except Exception:
+                pass
+        if si is None:
+            # Fallback alias mapping
+            aliases = {"reverb": 0, "verb": 0, "hall": 0, "room": 0, "delay": 1, "echo": 1}
+            if sl in aliases:
+                si = aliases[sl]
+        if si is None:
+            raise HTTPException(400, f"unknown_send:{send_label}")
+        # Compute target float
+        if unit in ('%','percent','percentage'):
+            target_float = max(0.0, min(1.0, raw_val / 100.0))
+        else:
+            target_db = max(-60.0, min(6.0, raw_val))
+            target_float = db_to_live_float_send(target_db)
+        msg = {"op": "set_send", "track_index": track_index, "send_index": si, "value": round(float(target_float), 6)}
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
+        resp = udp_request(msg, timeout=1.0)
+        try:
+            asyncio.create_task(broker.publish({"event": "send_changed", "track": track_index, "send_index": si}))
+        except Exception:
+            pass
+        return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
+
+    # Relative: increase/decrease send <name> on track N by X [dB|%]
+    m = re.search(r"\b(increase|decrease|reduce|lower|raise)\s+(?:send\s+)?([\w\s]+?)\s+(?:on|for)?\s*track\s+(\d+)\s+by\s+(\d+(?:\.\d+)?)\s*(db|dB|%|percent|percentage)?\b", text_norm, flags=re.I)
+    if m:
+        action = m.group(1).lower()
+        send_label = (m.group(2) or '').strip()
+        track_index = int(m.group(3))
+        amt = float(m.group(4))
+        unit = (m.group(5) or '').lower()
+        delta_sign = -1.0 if action in ('decrease','reduce','lower') else 1.0
+        # Resolve send index
+        si = None
+        sl = send_label.lower()
+        if sl in ('a','b','c','d'):
+            si = ord(sl) - ord('a')
+        elif sl.isdigit():
+            si = int(sl)
+        else:
+            try:
+                ts = udp_request({"op": "get_track_sends", "track_index": track_index}, timeout=0.8)
+                sends = ((ts or {}).get('data') or {}).get('sends') or []
+                for s in sends:
+                    nm = str(s.get('name','')).strip().lower()
+                    if nm and sl in nm:
+                        si = int(s.get('index', 0))
+                        break
+            except Exception:
+                pass
+        if si is None:
+            aliases = {"reverb": 0, "verb": 0, "hall": 0, "room": 0, "delay": 1, "echo": 1}
+            if sl in aliases:
+                si = aliases[sl]
+        if si is None:
+            raise HTTPException(400, f"unknown_send:{send_label}")
+        # Read current
+        cur = 0.0
+        try:
+            ts = udp_request({"op": "get_track_sends", "track_index": track_index}, timeout=0.8)
+            sends = ((ts or {}).get('data') or {}).get('sends') or []
+            for s in sends:
+                if int(s.get('index', -1)) == si:
+                    cur = float(s.get('value', 0.0))
+                    break
+        except Exception:
+            pass
+        if unit in ('%','percent','percentage'):
+            target_float = max(0.0, min(1.0, cur + delta_sign * (amt/100.0)))
+        else:
+            cur_db = live_float_to_db_send(cur)
+            target_db = max(-60.0, min(6.0, cur_db + delta_sign * amt))
+            target_float = db_to_live_float_send(target_db)
+        msg = {"op": "set_send", "track_index": track_index, "send_index": si, "value": round(float(target_float), 6)}
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "summary": f"{action.title()} Track {track_index} send {send_label} by {amt:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
+        resp = udp_request(msg, timeout=1.0)
+        try:
+            asyncio.create_task(broker.publish({"event": "send_changed", "track": track_index, "send_index": si}))
+        except Exception:
+            pass
+        return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"{action.title()} Track {track_index} send {send_label} by {amt:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
+
     # Pan Live-style inputs like '25L'/'25R' (floats allowed)
-    m = re.search(r"\bset\s+track\s+(\d+)\s+pan\s+to\s+((?:\d{1,2}(?:\.\d+)?)|50(?:\.0+)?)\s*([lLrR])\b", text_lc)
+    m = re.search(r"\bset\s+track\s+(\d+)\s+pan\s+to\s+((?:\d{1,2}(?:\.\d+)?)|50(?:\.0+)?)\s*([lLrR])\b", text_norm)
     if m:
         track_index = int(m.group(1))
         amt = float(m.group(2))
@@ -313,7 +436,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
 
     # Pan absolute numeric -50..50 (floats)
-    m = re.search(r"\bset\s+track\s+(\d+)\s+pan\s+to\s+(-?\d+(?:\.\d+)?)\b", text_lc)
+    m = re.search(r"\bset\s+track\s+(\d+)\s+pan\s+to\s+(-?\d+(?:\.\d+)?)\b", text_norm)
     if m:
         track_index = int(m.group(1))
         val = float(m.group(2))

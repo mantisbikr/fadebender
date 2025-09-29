@@ -21,7 +21,8 @@ import {
   MenuItem,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Slider
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -30,7 +31,7 @@ import {
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
-import { liveFloatToDb, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
+import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
 
@@ -46,6 +47,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [followSelection, setFollowSelection] = useState(true);
+  const [sends, setSends] = useState(null);
+  const [loadingSends, setLoadingSends] = useState(false);
+  const [sendsOpen, setSendsOpen] = useState(false);
   const prevOutlineRef = useRef('');
 
   const userCommands = useMemo(() => {
@@ -69,6 +73,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           setSelectedIndex(data.selected_track);
           // Also refresh track status when following selection
           try { const ts = await apiService.getTrackStatus(data.selected_track); setTrackStatus(ts.data || null); } catch {}
+          // clear sends cache on selection change; fetch on demand when accordion expands
+          setSends(null);
         }
       }
     } catch (e) {
@@ -76,6 +82,31 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (manual) setOutline(null);
     } finally {
       if (manual) setLoadingOutline(false);
+    }
+  };
+
+  const fetchSends = async (idx, opts = {}) => {
+    const silent = !!opts.silent;
+    try {
+      if (!silent) setLoadingSends(true);
+      const res = await apiService.getTrackSends(idx);
+      const next = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      setSends((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) return next;
+        const byIdx = new Map(next.map((x) => [x.index, x]));
+        const merged = prev.map((p) => {
+          const n = byIdx.get(p.index);
+          if (!n) return p;
+          const same = p.value === n.value && (p.name || '') === (n.name || '');
+          return same ? p : { ...p, value: n.value, name: n.name };
+        });
+        next.forEach((n) => { if (!merged.find((m) => m.index === n.index)) merged.push(n); });
+        return merged;
+      });
+    } catch {
+      if (!silent) setSends([]);
+    } finally {
+      if (!silent) setLoadingSends(false);
     }
   };
 
@@ -133,7 +164,15 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 
   // Subscribe to mixer events via hook
   useMixerEvents(
-    (payload) => { if (tab === 0 && payload?.track) { refreshTrackThrottled(payload.track); } },
+    (payload) => {
+      if (tab !== 0 || !payload?.track) return;
+      // Always refresh basic track status
+      refreshTrackThrottled(payload.track);
+      // If sends accordion is open for the selected track and a send changed, refresh sends too
+      if (payload.event === 'send_changed' && sendsOpen && selectedIndex === payload.track) {
+        fetchSends(selectedIndex, { silent: true });
+      }
+    },
     () => { if (tab === 0) { fetchOutline(false); } },
     tab === 0
   );
@@ -145,10 +184,22 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       fetchOutline(false);
       if (selectedIndex) {
         apiService.getTrackStatus(selectedIndex).then((ts) => setTrackStatus(ts.data || null)).catch(() => {});
+        if (sendsOpen) {
+          fetchSends(selectedIndex, { silent: true });
+        }
       }
     }, refreshInterval);
     return () => clearInterval(id);
-  }, [tab, autoRefresh, selectedIndex, followSelection, refreshInterval]);
+  }, [tab, autoRefresh, selectedIndex, followSelection, refreshInterval, sendsOpen]);
+
+  // Faster, low-jitter refresh loop for sends while accordion is open
+  useEffect(() => {
+    if (tab !== 0 || !sendsOpen || !selectedIndex) return;
+    const id = setInterval(() => {
+      fetchSends(selectedIndex, { silent: true });
+    }, 800);
+    return () => clearInterval(id);
+  }, [tab, sendsOpen, selectedIndex]);
 
   // When outline is fetched the first time, set selected to outline.selected_track if present
   useEffect(() => {
@@ -257,8 +308,70 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     {' '}• Pan: {trackStatus.mixer?.pan != null ? `${Math.round(Math.abs(trackStatus.mixer.pan) * 50)}${trackStatus.mixer.pan < 0 ? 'L' : (trackStatus.mixer.pan > 0 ? 'R' : '')}` : '—'}
                   </Typography>
 
-                  {/* Collapsible advanced details placeholder for future sends/plugins */}
-                  {/* We keep this area minimal for now since inline controls cover common actions */}
+                  {/* Sends Accordion */}
+                  <Accordion
+                    disableGutters
+                    elevation={0}
+                    onChange={(_, expanded) => {
+                      setSendsOpen(!!expanded);
+                      if (expanded && selectedIndex) fetchSends(selectedIndex);
+                    }}
+                    sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle2">Sends</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {loadingSends && sends === null && (
+                        <Typography variant="body2" color="text.secondary">Loading…</Typography>
+                      )}
+                      {!loadingSends && (!sends || sends.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">No sends</Typography>
+                      )}
+                      {!loadingSends && sends && sends.length > 0 && (
+                        <List dense>
+                          {sends.map((s, i) => (
+                            <ListItem key={s.index} disableGutters>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                <Typography variant="body2" sx={{ minWidth: 80 }}>
+                                  {s.name || `Send ${s.index}`}
+                                </Typography>
+                                <Slider
+                                  size="small"
+                                  value={typeof s.value === 'number' ? s.value : 0}
+                                  min={0}
+                                  max={1}
+                                  step={0.005}
+                                  valueLabelDisplay="auto"
+                                  valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
+                                  onChange={(_, val) => {
+                                    const v = Array.isArray(val) ? val[0] : val;
+                                    setSends(prev => {
+                                      const next = [...(prev || [])];
+                                      next[i] = { ...next[i], value: Number(v) };
+                                      return next;
+                                    });
+                                  }}
+                                  onChangeCommitted={async (_, val) => {
+                                    const v = Array.isArray(val) ? val[0] : val;
+                                    try {
+                                      await apiService.setSend(selectedIndex, s.index, Number(v));
+                                    } catch {}
+                                  }}
+                                  sx={{ flex: 1, maxWidth: '60%' }}
+                                />
+                                <Tooltip title={`${liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB`}>
+                                  <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
+                                    {liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB
+                                  </Typography>
+                                </Tooltip>
+                              </Box>
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+                  </AccordionDetails>
+                  </Accordion>
                 </Box>
               )}
             </>

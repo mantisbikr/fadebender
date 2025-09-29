@@ -10,7 +10,7 @@ export function useMixerEvents(onMixerChanged, onSelectionChanged, enabled = tru
       try {
         const payload = JSON.parse(evt.data);
         if (!payload || typeof payload !== 'object') return;
-        if (payload.event === 'mixer_changed' && payload.track) {
+        if ((payload.event === 'mixer_changed' || payload.event === 'send_changed') && payload.track) {
           onMixerChanged && onMixerChanged(payload);
         } else if (payload.event === 'selection_changed') {
           onSelectionChanged && onSelectionChanged(payload);
@@ -25,4 +25,3 @@ export function useMixerEvents(onMixerChanged, onSelectionChanged, enabled = tru
     return () => { try { es.close(); } catch {} };
   }, [onMixerChanged, onSelectionChanged, enabled]);
 }
-

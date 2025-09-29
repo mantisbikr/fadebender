@@ -87,6 +87,17 @@ export function liveFloatToDb(floatValue) {
   return Math.max(-60.0, Math.min(6.0, interp(floatClamped, inv)));
 }
 
+// Sends appear to be offset by +6 dB relative to track volume mapping in Live's display.
+// To display sends correctly, subtract 6 dB from the computed dB; to set, add 6 dB.
+export function dbToLiveFloatSend(dbValue) {
+  const adjusted = Number(dbValue) + 6.0;
+  return dbToLiveFloat(adjusted);
+}
+
+export function liveFloatToDbSend(floatValue) {
+  return liveFloatToDb(floatValue) - 6.0;
+}
+
 /**
  * Safely compute dB from a track status object.
  * Prefers normalized mixer volume when available; falls back to status.volume_db.

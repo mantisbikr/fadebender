@@ -159,6 +159,16 @@ def live_float_to_db(float_value: float) -> float:
     return max(-60.0, min(6.0, db_value))
 
 
+# Sends mapping appears offset in Live by ~+6 dB relative to track volume mapping.
+# Provide convenience functions that apply the offset to reuse core mapping.
+def db_to_live_float_send(db_value: float) -> float:
+    return db_to_live_float(float(db_value) + 6.0)
+
+
+def live_float_to_db_send(float_value: float) -> float:
+    return live_float_to_db(float_value) - 6.0
+
+
 # Test the conversion functions
 if __name__ == "__main__":
     # Quick smoke test using either mapping or fallback
