@@ -205,9 +205,8 @@ def set_volume_db(live, track_index: int, target_db: float):
     target_db = max(-60.0, min(6.0, float(target_db)))
     # Stub path
     if live is None:
-        # Map dB -60..+6 to 0..1
-        # Use observed taper: around 0 dB, ~0.85, slope ~0.025 per dB
-        norm = max(0.0, min(1.0, 0.85 + 0.025 * target_db))
+        # Use correct formula: X ≈ 0.85 - (0.025 × |dB_target|)
+        norm = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
         return set_mixer(None, track_index, 'volume', norm)
 
     try:
@@ -219,8 +218,8 @@ def set_volume_db(live, track_index: int, target_db: float):
         vol = getattr(mix, 'volume', None)
         if vol is None:
             return {"ok": False}
-        # Start from good initial guess near 0 dB: 0.85 + 0.025*dB
-        guess = max(0.0, min(1.0, 0.85 + 0.025 * target_db))
+        # Start from good initial guess using correct formula: X ≈ 0.85 - (0.025 × |dB_target|)
+        guess = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
         vol.value = guess
         time.sleep(0.01)
         dv = _parse_db(getattr(vol, 'display_value', None))
@@ -248,6 +247,6 @@ def set_volume_db(live, track_index: int, target_db: float):
                 hi = mid
         return {"ok": True, "achieved_db": achieved}
     except Exception:
-        # Fallback to stub mapping if anything fails
-        norm = max(0.0, min(1.0, 0.85 + 0.025 * target_db))
+        # Fallback to stub mapping if anything fails using correct formula
+        norm = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
         return set_mixer(None, track_index, 'volume', norm)

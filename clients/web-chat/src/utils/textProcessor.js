@@ -53,7 +53,8 @@ class TextProcessor {
     return text
       .trim()
       .replace(/\s+/g, ' ') // Multiple spaces to single space
-      .replace(/[^\w\s%-]/g, '') // Remove special chars except %, -, space
+      // Keep digits, letters, space, %, -, and decimal point for dB values
+      .replace(/[^\w\s%.-]/g, '')
       .toLowerCase();
   }
 

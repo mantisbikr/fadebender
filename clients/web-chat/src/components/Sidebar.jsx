@@ -34,6 +34,7 @@ import {
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
+import { liveFloatToDb } from '../utils/volumeUtils.js';
 
 const DRAWER_WIDTH = 320;
 
@@ -110,19 +111,22 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       try {
         const payload = eval('(' + evt.data + ')'); // broker sends dict repr; quick parse
         if (payload && typeof payload === 'object') {
-          if (payload.event === 'mixer_changed' && selectedIndex && payload.track === selectedIndex) {
-            const ts = await apiService.getTrackStatus(selectedIndex);
-            setTrackStatus(ts.data || null);
-            setRowStatuses((prev) => ({ ...prev, [selectedIndex]: ts.data || null }));
-          }
           if (payload.event === 'selection_changed') {
             await fetchOutline(false);
           }
           if (payload.event === 'mixer_changed' && payload.track) {
             try {
+              console.log('SSE mixer_changed event for track', payload.track, 'field', payload.field);
               const ts = await apiService.getTrackStatus(payload.track);
+              console.log('Updated track status:', ts.data);
               setRowStatuses((prev) => ({ ...prev, [payload.track]: ts.data || null }));
-            } catch {}
+              // Also update trackStatus if this is the selected track
+              if (selectedIndex === payload.track) {
+                setTrackStatus(ts.data || null);
+              }
+            } catch (error) {
+              console.error('Error updating track status:', error);
+            }
           }
         }
       } catch {}
@@ -277,12 +281,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                         {/* Volume / Pan indicators */}
                         <Tooltip title={(() => {
                           const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
-                          if (ts && typeof ts.volume_db === 'number') return `${ts.volume_db.toFixed(1)} dB`;
-                          // fallback: approximate from normalized mixer value if present
+                          if (ts && typeof ts.volume_db === 'number') return `${ts.volume_db.toFixed(1)}`;
+                          // fallback: convert from normalized mixer value if present
                           const v = ts && ts.mixer && typeof ts.mixer.volume === 'number' ? Number(ts.mixer.volume) : null;
                           if (v != null) {
-                            const approx = Math.max(-60, Math.min(6, ((v - 0.85) / 0.025)));
-                            return `${approx.toFixed(1)} dB`;
+                            const dbValue = liveFloatToDb(v);
+                            return `${dbValue.toFixed(1)}`;
                           }
                           return '';
                         })()}>
@@ -297,13 +301,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                               }
                             }}
                           >
-                            <VolumeUpIcon sx={{ fontSize: 16, mr: 0.25 }} />
-                            <Typography variant="caption">
-                              {(() => {
-                                const ts = rowStatuses[t.index] || (selectedIndex === t.index ? trackStatus : null);
-                                return ts && typeof ts.volume_db === 'number' ? `${ts.volume_db.toFixed(1)} dB` : '';
-                              })()}
-                            </Typography>
+                            <VolumeUpIcon sx={{ fontSize: 16 }} />
                           </Box>
                         </Tooltip>
                         <Tooltip title={(() => {
@@ -351,7 +349,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                       typeof trackStatus.volume_db === 'number'
                         ? `${trackStatus.volume_db.toFixed(1)} dB`
                         : (trackStatus.mixer?.volume != null
-                            ? `${(Math.max(-60, Math.min(6, ((Number(trackStatus.mixer.volume) - 0.85) / 0.025))).toFixed(1))} dB`
+                            ? `${liveFloatToDb(Number(trackStatus.mixer.volume)).toFixed(1)} dB`
                             : '—')
                     }
                     {' '}• Pan: {trackStatus.mixer?.pan != null ? `${Math.round(Math.abs(trackStatus.mixer.pan) * 50)}${trackStatus.mixer.pan < 0 ? 'L' : (trackStatus.mixer.pan > 0 ? 'R' : '')}` : '—'}

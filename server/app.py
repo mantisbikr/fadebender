@@ -13,6 +13,8 @@ from server.ableton.client_udp import request as udp_request, send as udp_send
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.knowledge import search_knowledge
 from server.services.intent_mapper import map_llm_to_canonical
+from server.volume_utils import db_to_live_float, live_float_to_db
+from server.volume_parser import parse_volume_command
 
 
 app = FastAPI(title="Fadebender Ableton Server", version="0.1.0")
@@ -214,7 +216,8 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
 
 @app.post("/op/volume_db")
 def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
-    msg = {"op": "set_volume_db", "track_index": int(body.track_index), "db": float(body.db)}
+    float_value = db_to_live_float(body.db)
+    msg = {"op": "set_mixer", "track_index": int(body.track_index), "field": "volume", "value": float_value}
     resp = udp_request(msg, timeout=1.0)
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
@@ -261,20 +264,22 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         resp = udp_request(msg, timeout=1.0)
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"{action.title()} Track {track_index}"}
 
-    # Volume without 'dB': treat as dB by default
-    m = re.search(r"\bset\s+track\s+(\d+)\s+vol(?:ume)?\s+to\s+(-?\d+(?:\.\d+)?)\b", text_lc)
-    if m:
-        track_index = int(m.group(1))
-        target = float(m.group(2))
-        target = max(-60.0, min(6.0, target))
-        warn = target > 0.0
-        msg = {"op": "set_volume_db", "track_index": track_index, "db": target}
+    # Parse volume commands using helper function
+    volume_cmd = parse_volume_command(text_lc)
+    if volume_cmd:
+        track_index = volume_cmd["track_index"]
+        target = volume_cmd["db_value"]
+        float_value = volume_cmd["live_float"]
+        warn = volume_cmd["warning"]
+
+        print(f"DEBUG: Parsed volume command - track={track_index}, target={target}, raw='{volume_cmd['raw_value']}'")
+        print(f"DEBUG: Converted {target} dB to Live float {float_value}")
+
+        msg = {"op": "set_mixer", "track_index": track_index, "field": "volume", "value": float_value}
         if not body.confirm:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} volume to {target:g} dB" + (" (warning: >0 dB may clip)" if warn else "")}
         resp = udp_request(msg, timeout=1.0)
         summ = f"Set Track {track_index} volume to {target:g} dB"
-        if isinstance(resp, dict) and resp.get("achieved_db") is not None:
-            summ = f"Set Track {track_index} volume to {float(resp['achieved_db']):.1f} dB"
         if warn:
             summ += " (warning: >0 dB may clip)"
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": summ}
@@ -347,10 +352,9 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             track_index = None
 
     if intent.get("intent") == "set_parameter" and param == "volume" and track_index is not None and op.get("type") == "absolute":
-        # Map dB -60..+6 to 0..1
         val = float(op.get("value", 0))
-        # Prefer precise dB setting via dedicated op (bridge performs internal adjustment)
-        msg = {"op": "set_volume_db", "track_index": track_index, "db": max(-60.0, min(6.0, val))}
+        float_value = db_to_live_float(val)
+        msg = {"op": "set_mixer", "track_index": track_index, "field": "volume", "value": float_value}
         summary = f"Set Track {track_index} volume to {val:g} dB (target)"
         if not body.confirm:
             return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
