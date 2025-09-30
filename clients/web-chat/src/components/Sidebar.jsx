@@ -24,6 +24,7 @@ import {
   AccordionDetails,
   Slider
 } from '@mui/material';
+import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
 import {
   PlayArrow as PlayIcon,
@@ -35,6 +36,7 @@ import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
+import ClickAwayAccordion from './ClickAwayAccordion.jsx';
 
 const DRAWER_WIDTH = 320;
 
@@ -57,7 +59,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [loadingReturns, setLoadingReturns] = useState(false);
   const [openReturn, setOpenReturn] = useState(null);
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
-  const [returnParams, setReturnParams] = useState({}); // { `${ri}:${di}`: params[] }
+  const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
   const prevOutlineRef = useRef('');
 
   const userCommands = useMemo(() => {
@@ -152,14 +154,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       const res = await apiService.getReturnDevices(ri);
       const devs = (res && res.data && Array.isArray(res.data.devices)) ? res.data.devices : [];
       setReturnDevices(prev => ({ ...prev, [ri]: devs }));
-    } catch {}
-  };
-
-  const fetchReturnParams = async (ri, di) => {
-    try {
-      const res = await apiService.getReturnDeviceParams(ri, di);
-      const params = (res && res.data && Array.isArray(res.data.params)) ? res.data.params : [];
-      setReturnParams(prev => ({ ...prev, [`${ri}:${di}`]: params }));
+      // Check learned status for each device
+      devs.forEach(async (d) => {
+        try {
+          const mr = await apiService.getReturnDeviceMap(ri, d.index);
+          setLearnedMap(prev => ({ ...prev, [`${ri}:${d.index}`]: !!(mr && mr.exists) }));
+        } catch {}
+      });
     } catch {}
   };
 
@@ -399,11 +400,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     <List dense>
                       {returns.map((r) => (
                         <ListItem key={r.index} sx={{ display: 'block' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="body2">{r.name || `Return ${r.index}`}</Typography>
-                            <Button size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) await fetchReturnDevices(next); }}>
-                              {openReturn === r.index ? 'Hide' : 'Show'} Devices
-                            </Button>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                            <Typography variant="body2" noWrap>{r.name || `Return ${r.index}`}</Typography>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <Button size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) await fetchReturnDevices(next); }}>
+                                {openReturn === r.index ? 'Hide' : 'Show'} Devices
+                              </Button>
+                            </Box>
                           </Box>
                           {openReturn === r.index && (
                             <Box sx={{ mt: 1, pl: 1 }}>
@@ -414,8 +417,20 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                                 <Typography variant="caption" color="text.secondary">No devices</Typography>
                               )}
                               {returnDevices[r.index] && returnDevices[r.index].map((d) => (
-                                <Box key={d.index} sx={{ mb: 0.5 }}>
-                                  <Typography variant="body2">{d.name || `Device ${d.index}`}</Typography>
+                                <Box key={d.index} sx={{ mb: 0.5, pl: 1, pr: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 320 }}>
+                                    <Typography variant="body2" noWrap>{d.name || `Device ${d.index}`}</Typography>
+                                    {learnedMap[`${r.index}:${d.index}`]
+                                      ? <Chip size="small" label="Learned" color="success" variant="outlined" />
+                                      : <Button size="small" variant="outlined" onClick={async () => {
+                                          try {
+                                            const res = await apiService.learnReturnDevice(r.index, d.index, 21, 25);
+                                            if (res && res.ok) {
+                                              setLearnedMap(prev => ({ ...prev, [`${r.index}:${d.index}`]: true }));
+                                            }
+                                          } catch {}
+                                        }}>Learn</Button>}
+                                  </Box>
                                 </Box>
                               ))}
                             </Box>

@@ -24,6 +24,8 @@ from server.config.app_config import (
     reload_config as cfg_reload,
     save_config as cfg_save,
 )
+from server.services.mapping_store import MappingStore
+import hashlib
 from server.volume_parser import parse_volume_command
 
 
@@ -91,6 +93,7 @@ class EventBroker:
 
 
 broker = EventBroker()
+STORE = MappingStore()
 
 @app.get("/events")
 async def events():
@@ -257,6 +260,31 @@ def get_return_device_params(index: int, device: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+@app.get("/return/device/map")
+def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
+    """Return whether a learned mapping exists for this return device (by signature)."""
+    # Fetch device name and params to compute signature
+    devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+    devices = ((devs or {}).get("data") or {}).get("devices") or []
+    dname = None
+    for d in devices:
+        if int(d.get("index", -1)) == int(device):
+            dname = str(d.get("name", f"Device {device}"))
+            break
+    if dname is None:
+        return {"ok": False, "error": "device_not_found"}
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+    params = ((params_resp or {}).get("data") or {}).get("params") or []
+    signature = _make_device_signature(dname, params)
+    exists = False
+    backend = STORE.backend
+    try:
+        exists = bool(STORE.get_device_map(signature)) if STORE.enabled else False
+    except Exception:
+        exists = False
+    return {"ok": True, "exists": exists, "signature": signature, "backend": backend}
+
+
 class ReturnDeviceParamBody(BaseModel):
     return_index: int
     device_index: int
@@ -275,6 +303,116 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
     except Exception:
         pass
     return resp
+
+
+class LearnDeviceBody(BaseModel):
+    return_index: int
+    device_index: int
+    resolution: int = 21
+    sleep_ms: int = 25
+
+
+def _make_device_signature(name: str, params: list[dict]) -> str:
+    param_names = ",".join([str(p.get("name", "")) for p in params])
+    base = f"{name}|{len(params)}|{param_names}"
+    return hashlib.sha1(base.encode("utf-8")).hexdigest()
+
+
+@app.post("/return/device/learn")
+def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
+    """Sweep device params to build value->display mapping and store in Firestore.
+
+    For each parameter, samples 'resolution' points between min..max, reading display_value.
+    Restores the original value after sampling.
+    """
+    import time
+
+    ri = int(body.return_index)
+    di = int(body.device_index)
+    res = max(3, int(body.resolution))
+    delay = max(0, int(body.sleep_ms)) / 1000.0
+
+    # Fetch device name and params
+    devs = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
+    devices = ((devs or {}).get("data") or {}).get("devices") or []
+    dname = None
+    for d in devices:
+        if int(d.get("index", -1)) == di:
+            dname = str(d.get("name", f"Device {di}"))
+            break
+    if dname is None:
+        raise HTTPException(404, "device_not_found")
+
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    params = ((params_resp or {}).get("data") or {}).get("params") or []
+    if not params:
+        return {"ok": False, "reason": "no_params"}
+
+    signature = _make_device_signature(dname, params)
+
+    learned_params: list[dict] = []
+
+    for p in params:
+        idx = int(p.get("index", 0))
+        name = str(p.get("name", f"Param {idx}"))
+        vmin = float(p.get("min", 0.0))
+        vmax = float(p.get("max", 1.0))
+        v0 = float(p.get("value", 0.0))
+        samples: list[dict] = []
+
+        # Guard: avoid zero-length spans
+        span = vmax - vmin if vmax != vmin else 1.0
+        for i in range(res):
+            t = i / float(res - 1)
+            val = vmin + span * t
+            # set param
+            udp_request({
+                "op": "set_return_device_param",
+                "return_index": ri,
+                "device_index": di,
+                "param_index": idx,
+                "value": float(val)
+            }, timeout=0.6)
+            if delay:
+                time.sleep(delay)
+            # readback
+            rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+            rparams = ((rd or {}).get("data") or {}).get("params") or []
+            dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+            if dp is None:
+                continue
+            disp = str(dp.get("display_value", ""))
+            disp_num = None
+            # Try parse numeric from display if present
+            try:
+                import re
+                m = re.search(r"-?\d+(?:\.\d+)?", disp)
+                if m:
+                    disp_num = float(m.group(0))
+            except Exception:
+                disp_num = None
+            samples.append({"value": float(val), "display": disp, "display_num": disp_num})
+
+        # restore
+        udp_request({
+            "op": "set_return_device_param",
+            "return_index": ri,
+            "device_index": di,
+            "param_index": idx,
+            "value": float(v0)
+        }, timeout=0.6)
+
+        learned_params.append({
+            "index": idx,
+            "name": name,
+            "min": vmin,
+            "max": vmax,
+            "samples": samples,
+        })
+
+    # Save to mapping store (Firestore)
+    saved = STORE.save_device_map(signature, {"name": dname}, learned_params)
+    return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
 
 
 @app.post("/op/mixer")

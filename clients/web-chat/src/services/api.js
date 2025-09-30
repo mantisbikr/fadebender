@@ -167,6 +167,11 @@ class ApiService {
     if (!response.ok) throw new Error(`Return device params failed: ${response.statusText}`);
     return response.json();
   }
+  async getReturnDeviceMap(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/map?index=${index}&device=${device}`);
+    if (!response.ok) throw new Error(`Return device map failed: ${response.statusText}`);
+    return response.json();
+  }
   async setReturnDeviceParam(return_index, device_index, param_index, value) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/return/device/param`, {
       method: 'POST',
@@ -174,6 +179,16 @@ class ApiService {
       body: JSON.stringify({ return_index, device_index, param_index, value })
     });
     if (!response.ok) throw new Error(`Set return param failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async learnReturnDevice(return_index, device_index, resolution = 21, sleep_ms = 25) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/learn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, device_index, resolution, sleep_ms })
+    });
+    if (!response.ok) throw new Error(`Return device learn failed: ${response.statusText}`);
     return response.json();
   }
 
