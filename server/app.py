@@ -224,6 +224,59 @@ def track_sends(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+@app.get("/returns")
+def get_returns() -> Dict[str, Any]:
+    resp = udp_request({"op": "get_return_tracks"}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+@app.get("/return/devices")
+def get_return_devices(index: int) -> Dict[str, Any]:
+    resp = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+@app.get("/return/device/params")
+def get_return_device_params(index: int, device: int) -> Dict[str, Any]:
+    resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+class ReturnDeviceParamBody(BaseModel):
+    return_index: int
+    device_index: int
+    param_index: int
+    value: float
+
+
+@app.post("/op/return/device/param")
+def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
+    msg = {"op": "set_return_device_param", **op.dict()}
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        asyncio.create_task(broker.publish({"event": "return_device_param_changed", "return": op.return_index, "device": op.device_index, "param": op.param_index}))
+    except Exception:
+        pass
+    return resp
+
+
 @app.post("/op/mixer")
 def op_mixer(op: MixerOp) -> Dict[str, Any]:
     msg = {"op": "set_mixer", **op.dict()}

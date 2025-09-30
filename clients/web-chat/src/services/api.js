@@ -151,6 +151,32 @@ class ApiService {
     return response.json();
   }
 
+  // Return tracks API
+  async getReturnTracks() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/returns`);
+    if (!response.ok) throw new Error(`Return tracks failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getReturnDevices(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/devices?index=${index}`);
+    if (!response.ok) throw new Error(`Return devices failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getReturnDeviceParams(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/params?index=${index}&device=${device}`);
+    if (!response.ok) throw new Error(`Return device params failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setReturnDeviceParam(return_index, device_index, param_index, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/return/device/param`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, device_index, param_index, value })
+    });
+    if (!response.ok) throw new Error(`Set return param failed: ${response.statusText}`);
+    return response.json();
+  }
+
   async undoLast() {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/undo_last`, {
       method: 'POST'

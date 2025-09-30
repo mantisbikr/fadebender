@@ -17,6 +17,36 @@ _STATE: Dict[str, Any] = {
     ],
     "selected_track": 1,
     "scenes": 1,
+    "returns": [
+        {
+            "index": 0,
+            "name": "A Reverb",
+            "devices": [
+                {
+                    "index": 0,
+                    "name": "Reverb",
+                    "params": [
+                        {"index": 0, "name": "Wet", "value": 0.25, "min": 0.0, "max": 1.0},
+                        {"index": 1, "name": "Decay", "value": 0.5, "min": 0.0, "max": 1.0},
+                    ],
+                }
+            ],
+        },
+        {
+            "index": 1,
+            "name": "B Delay",
+            "devices": [
+                {
+                    "index": 0,
+                    "name": "Delay",
+                    "params": [
+                        {"index": 0, "name": "Wet", "value": 0.2, "min": 0.0, "max": 1.0},
+                        {"index": 1, "name": "Feedback", "value": 0.35, "min": 0.0, "max": 1.0},
+                    ],
+                }
+            ],
+        }
+    ],
 }
 
 
@@ -228,6 +258,117 @@ def get_track_sends(live, track_index: int) -> dict:
 def set_device_param(live, track_index: int, device_index: int, param_index: int, value: float) -> bool:  # noqa: ARG001
     # Device params not modeled in stub; accept and return true for now
     return True
+
+
+def get_return_tracks(live) -> dict:
+    try:
+        if live is not None:
+            returns = getattr(live, "return_tracks", []) or []
+            out = []
+            for idx, tr in enumerate(returns):
+                out.append({"index": idx, "name": str(getattr(tr, "name", f"Return {idx}"))})
+            return {"returns": out}
+    except Exception:
+        pass
+    # Stub
+    out = []
+    for r in _STATE.get("returns", []):
+        out.append({"index": r["index"], "name": r["name"]})
+    return {"returns": out}
+
+
+def get_return_devices(live, return_index: int) -> dict:
+    try:
+        if live is not None:
+            ri = int(return_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                devs = getattr(returns[ri], "devices", []) or []
+                out = []
+                for di, dv in enumerate(devs):
+                    out.append({"index": di, "name": str(getattr(dv, "name", f"Device {di}"))})
+                return {"index": ri, "devices": out}
+    except Exception:
+        pass
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            out = []
+            for d in r.get("devices", []):
+                out.append({"index": d["index"], "name": d["name"]})
+            return {"index": r["index"], "devices": out}
+    return {"error": "return_not_found", "index": return_index}
+
+
+def get_return_device_params(live, return_index: int, device_index: int) -> dict:
+    try:
+        if live is not None:
+            ri = int(return_index)
+            di = int(device_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                devs = getattr(returns[ri], "devices", []) or []
+                if 0 <= di < len(devs):
+                    device = devs[di]
+                    params = getattr(device, "parameters", []) or []
+                    out = []
+                    for pi, p in enumerate(params):
+                        try:
+                            out.append({
+                                "index": pi,
+                                "name": str(getattr(p, "name", f"Param {pi}")),
+                                "value": float(getattr(p, "value", 0.0)),
+                                "min": float(getattr(p, "min", 0.0)) if hasattr(p, 'min') else 0.0,
+                                "max": float(getattr(p, "max", 1.0)) if hasattr(p, 'max') else 1.0,
+                                "display_value": str(getattr(p, "display_value", "")),
+                            })
+                        except Exception:
+                            pass
+                    return {"return_index": ri, "device_index": di, "params": out}
+    except Exception:
+        pass
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            for d in r.get("devices", []):
+                if d["index"] == int(device_index):
+                    out = []
+                    for p in d.get("params", []):
+                        out.append({
+                            "index": p["index"],
+                            "name": p["name"],
+                            "value": float(p["value"]),
+                            "min": float(p.get("min", 0.0)),
+                            "max": float(p.get("max", 1.0)),
+                            "display_value": None,
+                        })
+                    return {"return_index": r["index"], "device_index": d["index"], "params": out}
+    return {"error": "device_not_found", "return_index": return_index, "device_index": device_index}
+
+
+def set_return_device_param(live, return_index: int, device_index: int, param_index: int, value: float) -> bool:
+    try:
+        if live is not None:
+            ri = int(return_index)
+            di = int(device_index)
+            pi = int(param_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                devs = getattr(returns[ri], "devices", []) or []
+                if 0 <= di < len(devs):
+                    params = getattr(devs[di], "parameters", []) or []
+                    if 0 <= pi < len(params):
+                        params[pi].value = float(value)
+                        return True
+    except Exception:
+        pass
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            for d in r.get("devices", []):
+                if d["index"] == int(device_index):
+                    for p in d.get("params", []):
+                        if p["index"] == int(param_index):
+                            p["value"] = max(p.get("min", 0.0), min(p.get("max", 1.0), float(value)))
+                            return True
+    return False
 
 
 def select_track(live, track_index: int) -> bool:

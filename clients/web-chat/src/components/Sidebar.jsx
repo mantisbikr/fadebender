@@ -53,6 +53,11 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [sends, setSends] = useState(null);
   const [loadingSends, setLoadingSends] = useState(false);
   const [sendsOpen, setSendsOpen] = useState(false);
+  const [returns, setReturns] = useState(null);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [openReturn, setOpenReturn] = useState(null);
+  const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
+  const [returnParams, setReturnParams] = useState({}); // { `${ri}:${di}`: params[] }
   const prevOutlineRef = useRef('');
 
   const userCommands = useMemo(() => {
@@ -128,6 +133,34 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     } finally {
       if (!silent) setLoadingSends(false);
     }
+  };
+
+  const fetchReturns = async () => {
+    try {
+      setLoadingReturns(true);
+      const res = await apiService.getReturnTracks();
+      setReturns((res && res.data && Array.isArray(res.data.returns)) ? res.data.returns : []);
+    } catch {
+      setReturns([]);
+    } finally {
+      setLoadingReturns(false);
+    }
+  };
+
+  const fetchReturnDevices = async (ri) => {
+    try {
+      const res = await apiService.getReturnDevices(ri);
+      const devs = (res && res.data && Array.isArray(res.data.devices)) ? res.data.devices : [];
+      setReturnDevices(prev => ({ ...prev, [ri]: devs }));
+    } catch {}
+  };
+
+  const fetchReturnParams = async (ri, di) => {
+    try {
+      const res = await apiService.getReturnDeviceParams(ri, di);
+      const params = (res && res.data && Array.isArray(res.data.params)) ? res.data.params : [];
+      setReturnParams(prev => ({ ...prev, [`${ri}:${di}`]: params }));
+    } catch {}
   };
 
   const ensureRowStatus = async (idx) => {
@@ -345,6 +378,55 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           )}
           {!loadingOutline && outline && outline.tracks && outline.tracks.length > 0 && (
             <>
+              {/* Return Tracks come first, like Live's layout */}
+              <Accordion
+                disableGutters
+                elevation={0}
+                onChange={(_, expanded) => { if (expanded) fetchReturns(); }}
+                sx={{ mb: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle2">Return Tracks</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {loadingReturns && (
+                    <Typography variant="body2" color="text.secondary">Loading…</Typography>
+                  )}
+                  {!loadingReturns && (!returns || returns.length === 0) && (
+                    <Typography variant="body2" color="text.secondary">No returns</Typography>
+                  )}
+                  {!loadingReturns && returns && returns.length > 0 && (
+                    <List dense>
+                      {returns.map((r) => (
+                        <ListItem key={r.index} sx={{ display: 'block' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="body2">{r.name || `Return ${r.index}`}</Typography>
+                            <Button size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) await fetchReturnDevices(next); }}>
+                              {openReturn === r.index ? 'Hide' : 'Show'} Devices
+                            </Button>
+                          </Box>
+                          {openReturn === r.index && (
+                            <Box sx={{ mt: 1, pl: 1 }}>
+                              {!returnDevices[r.index] && (
+                                <Typography variant="caption" color="text.secondary">Loading devices…</Typography>
+                              )}
+                              {returnDevices[r.index] && returnDevices[r.index].length === 0 && (
+                                <Typography variant="caption" color="text.secondary">No devices</Typography>
+                              )}
+                              {returnDevices[r.index] && returnDevices[r.index].map((d) => (
+                                <Box key={d.index} sx={{ mb: 0.5 }}>
+                                  <Typography variant="body2">{d.name || `Device ${d.index}`}</Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          )}
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
               <List dense>
                 {outline.tracks.map((t) => (
                   <TrackRow
@@ -440,6 +522,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                       )}
                   </AccordionDetails>
                   </Accordion>
+
                 </Box>
               )}
             </>
