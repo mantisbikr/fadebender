@@ -26,6 +26,7 @@ from server.config.app_config import (
 )
 from server.services.mapping_store import MappingStore
 import hashlib
+import math
 from server.volume_parser import parse_volume_command
 
 
@@ -94,6 +95,7 @@ class EventBroker:
 
 broker = EventBroker()
 STORE = MappingStore()
+LEARN_JOBS: dict[str, dict] = {}
 
 @app.get("/events")
 async def events():
@@ -276,13 +278,80 @@ def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
     params = ((params_resp or {}).get("data") or {}).get("params") or []
     signature = _make_device_signature(dname, params)
-    exists = False
     backend = STORE.backend
+    exists = False
     try:
-        exists = bool(STORE.get_device_map(signature)) if STORE.enabled else False
+        m = STORE.get_device_map(signature) if STORE.enabled else None
+        if m and isinstance(m.get("params"), list):
+            # Consider learned only if at least one param has >= 3 samples
+            for p in m["params"]:
+                sm = p.get("samples") or []
+                if isinstance(sm, list) and len(sm) >= 3:
+                    exists = True
+                    break
     except Exception:
         exists = False
     return {"ok": True, "exists": exists, "signature": signature, "backend": backend}
+
+
+@app.get("/return/device/map_summary")
+def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
+    """Return a summary of a learned mapping: param names and sample counts."""
+    devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+    devices = ((devs or {}).get("data") or {}).get("devices") or []
+    dname = None
+    for d in devices:
+        if int(d.get("index", -1)) == int(device):
+            dname = str(d.get("name", f"Device {device}"))
+            break
+    if dname is None:
+        return {"ok": False, "error": "device_not_found"}
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+    params = ((params_resp or {}).get("data") or {}).get("params") or []
+    signature = _make_device_signature(dname, params)
+    backend = STORE.backend
+    data = None
+    try:
+        m = STORE.get_device_map(signature) if STORE.enabled else None
+        if m:
+            plist = []
+            for p in m.get("params", []) or []:
+                plist.append({
+                    "name": p.get("name"),
+                    "index": p.get("index"),
+                    "sample_count": len(p.get("samples") or []),
+                    "quantized": bool(p.get("quantized", False)),
+                    "min": p.get("min"),
+                    "max": p.get("max"),
+                })
+            data = {"device_name": m.get("device_name") or dname, "signature": signature, "params": plist}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "backend": backend}
+    return {"ok": True, "backend": backend, "signature": signature, "data": data}
+
+
+class MapDeleteBody(BaseModel):
+    return_index: int
+    device_index: int
+
+
+@app.post("/return/device/map_delete")
+def delete_return_device_map(body: MapDeleteBody) -> Dict[str, Any]:
+    # Compute signature
+    devs = udp_request({"op": "get_return_devices", "return_index": int(body.return_index)}, timeout=1.0)
+    devices = ((devs or {}).get("data") or {}).get("devices") or []
+    dname = None
+    for d in devices:
+        if int(d.get("index", -1)) == int(body.device_index):
+            dname = str(d.get("name", f"Device {body.device_index}"))
+            break
+    if dname is None:
+        raise HTTPException(404, "device_not_found")
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(body.return_index), "device_index": int(body.device_index)}, timeout=1.2)
+    params = ((params_resp or {}).get("data") or {}).get("params") or []
+    signature = _make_device_signature(dname, params)
+    ok = STORE.delete_device_map(signature) if STORE.enabled else False
+    return {"ok": ok, "signature": signature, "backend": STORE.backend}
 
 
 class ReturnDeviceParamBody(BaseModel):
@@ -413,6 +482,425 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
     # Save to mapping store (Firestore)
     saved = STORE.save_device_map(signature, {"name": dname}, learned_params)
     return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
+
+
+class LearnStartBody(BaseModel):
+    return_index: int
+    device_index: int
+    resolution: int = 41
+    sleep_ms: int = 20
+
+
+@app.post("/return/device/learn_start")
+async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
+    import asyncio
+    import uuid
+
+    job_id = str(uuid.uuid4())
+    LEARN_JOBS[job_id] = {
+        "state": "queued",
+        "progress": 0,
+        "total": 1,
+        "message": "Starting",
+    }
+
+    async def run():
+        try:
+            ri = int(body.return_index)
+            di = int(body.device_index)
+            res = max(3, int(body.resolution))
+            delay = max(0, int(body.sleep_ms)) / 1000.0
+
+            # Fetch device + params
+            devs = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
+            devices = ((devs or {}).get("data") or {}).get("devices") or []
+            dname = None
+            for d in devices:
+                if int(d.get("index", -1)) == di:
+                    dname = str(d.get("name", f"Device {di}"))
+                    break
+            params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+            params = ((params_resp or {}).get("data") or {}).get("params") or []
+            signature = _make_device_signature(dname or f"Device {di}", params)
+            total_steps = max(1, len(params) * res)
+            LEARN_JOBS[job_id].update({"state": "running", "progress": 0, "total": total_steps, "signature": signature})
+
+            learned_params: list[dict] = []
+            step = 0
+            for p in params:
+                idx = int(p.get("index", 0))
+                name = str(p.get("name", f"Param {idx}"))
+                vmin = float(p.get("min", 0.0))
+                vmax = float(p.get("max", 1.0))
+                v0 = float(p.get("value", 0.0))
+
+                # Coarse check for quantization using 9 points
+                import time as _t
+                labels = set()
+                coarse = 9
+                span = vmax - vmin if vmax != vmin else 1.0
+                for i in range(coarse):
+                    t = i / float(coarse - 1)
+                    val = vmin + span * t
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+                    if delay: _t.sleep(delay)
+                    rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                    rparams = ((rd or {}).get("data") or {}).get("params") or []
+                    dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+                    if dp is not None:
+                        labels.add(str(dp.get("display_value", "")))
+
+                # If few unique labels and not numeric -> treat as enum/binary
+                from re import search as _re_search
+                numeric_count = 0
+                for lab in labels:
+                    if _re_search(r"-?\d+(?:\.\d+)?", lab):
+                        numeric_count += 1
+                is_enum = (len(labels) <= 6 and numeric_count < len(labels)) or (len(labels) <= 2)
+
+                samples: list[dict] = []
+                if is_enum:
+                    # Sweep fine until labels stop changing
+                    seen = set()
+                    for i in range(res):
+                        t = i / float(res - 1)
+                        val = vmin + span * t
+                        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+                        if delay: _t.sleep(delay)
+                        rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                        rparams = ((rd or {}).get("data") or {}).get("params") or []
+                        dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+                        if dp is None: continue
+                        disp = str(dp.get("display_value", ""))
+                        if disp in seen: continue
+                        seen.add(disp)
+                        samples.append({"value": float(val), "display": disp, "display_num": None})
+                        step += 1
+                        LEARN_JOBS[job_id].update({"progress": min(step, total_steps), "message": f"{name}: {len(samples)} labels"})
+                else:
+                    # Continuous: numeric parse & store
+                    for i in range(res):
+                        t = i / float(res - 1)
+                        val = vmin + span * t
+                        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+                        if delay: _t.sleep(delay)
+                        rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                        rparams = ((rd or {}).get("data") or {}).get("params") or []
+                        dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+                        if dp is None: continue
+                        disp = str(dp.get("display_value", ""))
+                        disp_num = None
+                        try:
+                            m = _re_search(r"-?\d+(?:\.\d+)?", disp)
+                            if m: disp_num = float(m.group(0))
+                        except Exception:
+                            disp_num = None
+                        samples.append({"value": float(val), "display": disp, "display_num": disp_num})
+                        step += 1
+                        LEARN_JOBS[job_id].update({"progress": min(step, total_steps), "message": f"{name}: {i+1}/{res}"})
+
+                # restore
+                udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(v0)}, timeout=0.6)
+                learned_params.append({
+                    "index": idx,
+                    "name": name,
+                    "min": vmin,
+                    "max": vmax,
+                    "samples": samples,
+                    "quantized": is_enum,
+                })
+
+            # Always save locally to avoid losing long scans
+            local_saved = STORE.save_device_map_local(signature, {"name": dname}, learned_params)
+            saved = STORE.save_device_map(signature, {"name": dname}, learned_params)
+            LEARN_JOBS[job_id].update({"state": "done", "saved": saved, "local_saved": local_saved})
+        except Exception as e:
+            LEARN_JOBS[job_id].update({"state": "error", "error": str(e)})
+
+    asyncio.create_task(run())
+    return {"ok": True, "job_id": job_id}
+
+
+@app.post("/mappings/push_local")
+def push_local_mappings(signature: Optional[str] = None) -> Dict[str, Any]:
+    if signature:
+        ok = STORE.push_local_to_firestore(signature)
+        return {"ok": ok, "signature": signature, "backend": STORE.backend}
+    count = STORE.push_all_local()
+    return {"ok": True, "pushed": count, "backend": STORE.backend}
+
+
+def _compute_signature_for(index: int, device: int) -> str:
+    devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+    devices = ((devs or {}).get("data") or {}).get("devices") or []
+    dname = None
+    for d in devices:
+        if int(d.get("index", -1)) == int(device):
+            dname = str(d.get("name", f"Device {device}"))
+            break
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+    params = ((params_resp or {}).get("data") or {}).get("params") or []
+    return _make_device_signature(dname or f"Device {device}", params)
+
+
+def _fit_models(samples: list[dict]) -> dict | None:
+    # Use numeric samples only
+    pts = [(float(s["value"]), float(s["display_num"])) for s in samples if s.get("display_num") is not None]
+    pts = [(x, y) for x, y in pts if math.isfinite(x) and math.isfinite(y)]
+    if len(pts) < 3:
+        return None
+    pts.sort(key=lambda t: t[0])
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    def lin_fit(u, v):
+        n = len(u)
+        sx = sum(u); sy = sum(v)
+        sxx = sum(a*a for a in u); sxy = sum(a*b for a,b in zip(u,v))
+        den = n*sxx - sx*sx
+        if den == 0: return None
+        a = (n*sxy - sx*sy) / den  # slope
+        b = (sy - a*sx)/n
+        # R^2
+        yhat = [a*t + b for t in u]
+        ss_res = sum((vi - hi)**2 for vi, hi in zip(v, yhat))
+        ymean = sy/n
+        ss_tot = sum((vi - ymean)**2 for vi in v) or 1.0
+        r2 = 1.0 - ss_res/ss_tot
+        return {"type": "linear", "a": a, "b": b, "r2": r2}
+    def log_fit(u, v):
+        u2 = [math.log(max(1e-9, t)) for t in u]
+        return lin_fit(u2, v) and {**lin_fit(u2, v), "type": "log", "x_transform": "ln(x)"}
+    def exp_fit(u, v):
+        # Fit ln(y) = a*x + b -> y = exp(b)*exp(a*x)
+        if any(val <= 0 for val in v):
+            return None
+        v2 = [math.log(val) for val in v]
+        fit = lin_fit(u, v2)
+        if not fit: return None
+        a = fit["a"]; b = fit["b"]; r2 = fit["r2"]
+        return {"type": "exp", "a": a, "b": b, "r2": r2}
+    cands = []
+    f1 = lin_fit(xs, ys)
+    if f1: cands.append(f1)
+    f2 = log_fit(xs, ys)
+    if f2: cands.append(f2)
+    f3 = exp_fit(xs, ys)
+    if f3: cands.append(f3)
+    best = max(cands, key=lambda d: d["r2"]) if cands else None
+    if best and best["r2"] >= 0.9:
+        return best
+    # Fallback: piecewise linear segments (store sorted sample pairs)
+    return {"type": "piecewise", "r2": best["r2"] if best else 0.0, "points": [{"x": x, "y": y} for x,y in pts]}
+
+
+@app.post("/mappings/fit")
+def fit_mapping(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
+    """Fit models for a learned local mapping and update the local file.
+
+    Provide either (index, device) to compute signature from Live, or a signature directly.
+    """
+    if not signature:
+        if index is None or device is None:
+            raise HTTPException(400, "index_device_or_signature_required")
+        signature = _compute_signature_for(int(index), int(device))
+    data = STORE.get_device_map_local(signature)
+    if not data:
+        return {"ok": False, "error": "no_local_map", "signature": signature}
+    params = data.get("params") or []
+    updated = 0
+    for p in params:
+        samples = p.get("samples") or []
+        fit = _fit_models(samples)
+        if fit:
+            p["fit"] = fit
+            updated += 1
+    ok = STORE.save_device_map_local(signature, {"name": data.get("device_name")}, params)
+    return {"ok": ok, "signature": signature, "updated": updated}
+
+
+class ReturnParamByNameBody(BaseModel):
+    return_ref: str  # e.g., "A", "0", or name substring
+    device_ref: str  # device name substring
+    param_ref: str   # parameter name substring (as shown by Live)
+    target_display: Optional[str] = None  # e.g., "25 ms", "20%", "High"
+    target_value: Optional[float] = None  # optional numeric y for continuous
+    mode: Optional[str] = "absolute"
+
+
+def _resolve_return_index(ref: str) -> int:
+    # Try A/B/C → 0/1/2
+    r = ref.strip().lower()
+    if len(r) == 1 and r in "abcd":
+        return ord(r) - ord('a')
+    if r.isdigit():
+        return int(r)
+    # Fallback: scan names
+    resp = udp_request({"op": "get_return_tracks"}, timeout=1.0)
+    returns = ((resp or {}).get("data") or {}).get("returns") or []
+    for rt in returns:
+        nm = str(rt.get("name", "")).lower()
+        if r in nm:
+            return int(rt.get("index", 0))
+    raise HTTPException(404, f"return_not_found:{ref}")
+
+
+def _resolve_device_index(ri: int, ref: str) -> int:
+    resp = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
+    devices = ((resp or {}).get("data") or {}).get("devices") or []
+    r = ref.strip().lower()
+    if r.isdigit():
+        return int(r)
+    for d in devices:
+        nm = str(d.get("name", "")).lower()
+        if r in nm:
+            return int(d.get("index", 0))
+    raise HTTPException(404, f"device_not_found:{ref}")
+
+
+def _resolve_param_index(ri: int, di: int, ref: str) -> int:
+    resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+    params = ((resp or {}).get("data") or {}).get("params") or []
+    r = ref.strip().lower()
+    if r.isdigit():
+        return int(r)
+    for p in params:
+        nm = str(p.get("name", "")).lower()
+        if r in nm:
+            return int(p.get("index", 0))
+    raise HTTPException(404, f"param_not_found:{ref}")
+
+
+def _invert_fit_to_value(fit: dict, target_y: float, vmin: float, vmax: float) -> float:
+    t = (lambda a, b, y: (y - b) / a)
+    ftype = fit.get("type")
+    if ftype == "linear":
+        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        x = t(a, b, target_y)
+    elif ftype == "log":
+        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        # y = a*ln(x)+b -> x = exp((y-b)/a)
+        x = math.exp((target_y - b)/a) if a != 0 else vmin
+    elif ftype == "exp":
+        # ln(y) = a*x + b -> x = (ln(y)-b)/a
+        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        if target_y <= 0:
+            x = vmin
+        else:
+            x = (math.log(target_y) - b)/a if a != 0 else vmin
+    else:
+        # piecewise
+        pts = fit.get("points") or []
+        pts = sorted([(float(p.get("y")), float(p.get("x"))) for p in pts if p.get("x") is not None and p.get("y") is not None])
+        if not pts:
+            return vmin
+        # find neighbors
+        lo = None; hi = None
+        for y, x in pts:
+            if y <= target_y:
+                lo = (y, x)
+            if y >= target_y and hi is None:
+                hi = (y, x)
+        if lo and hi and hi[0] != lo[0]:
+            # interpolate
+            y1, x1 = lo; y2, x2 = hi
+            tfrac = (target_y - y1) / (y2 - y1)
+            x = x1 + tfrac * (x2 - x1)
+        else:
+            # clamp to nearest
+            x = lo[1] if lo else hi[1]
+    return max(vmin, min(vmax, float(x)))
+
+
+def _parse_target_display(s: str) -> Optional[float]:
+    try:
+        import re
+        m = re.search(r"-?\d+(?:\.\d+)?", str(s))
+        if not m: return None
+        return float(m.group(0))
+    except Exception:
+        return None
+
+
+@app.post("/op/return/param_by_name")
+def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
+    # Resolve indices
+    ri = _resolve_return_index(body.return_ref)
+    di = _resolve_device_index(ri, body.device_ref)
+    pi = _resolve_param_index(ri, di, body.param_ref)
+
+    # Fetch current params and signature
+    p_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    p_list = ((p_resp or {}).get("data") or {}).get("params") or []
+    cur = next((p for p in p_list if int(p.get("index", -1)) == pi), None)
+    if not cur:
+        raise HTTPException(404, "param_state_not_found")
+    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
+
+    # Build signature and fetch learned map (Firestore then local)
+    signature = _compute_signature_for(ri, di)
+    mapping = STORE.get_device_map(signature) if STORE.enabled else None
+    if not mapping:
+        mapping = STORE.get_device_map_local(signature)
+    # Try exact param match by name
+    param_name = str(cur.get("name", ""))
+    learned = None
+    if mapping and isinstance(mapping.get("params"), list):
+        for mp in mapping["params"]:
+            if str(mp.get("name", "")).lower() == param_name.lower():
+                learned = mp
+                break
+
+    # Determine target
+    target_y = None
+    label = None
+    if body.target_display:
+        y = _parse_target_display(body.target_display)
+        if y is not None:
+            target_y = y
+        else:
+            label = body.target_display.strip()
+    elif body.target_value is not None:
+        target_y = float(body.target_value)
+
+    # Compute candidate value in [vmin..vmax]
+    x = vmin
+    if label and learned:
+        # find sample matching label (case-insensitive)
+        for s in learned.get("samples", []) or []:
+            if str(s.get("display", "")).strip().lower() == label.lower():
+                x = float(s.get("value", vmin))
+                break
+    elif target_y is not None and learned:
+        fit = learned.get("fit")
+        if fit:
+            x = _invert_fit_to_value(fit, target_y, vmin, vmax)
+        else:
+            # fallback: nearest sample
+            best = None; bestd = 1e9
+            for s in learned.get("samples", []) or []:
+                dy = s.get("display_num")
+                if dy is None: continue
+                d = abs(float(dy) - target_y)
+                if d < bestd:
+                    bestd = d; best = s
+            if best:
+                x = float(best.get("value", vmin))
+
+    # Send set + quick refine step
+    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
+    # Readback
+    rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+    rps = ((rb or {}).get("data") or {}).get("params") or []
+    newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+    return {"ok": True, "signature": signature, "applied": {"value": x, "display": newp.get("display_value") if newp else None}}
+
+
+@app.get("/return/device/learn_status")
+def learn_return_device_status(id: str) -> Dict[str, Any]:
+    job = LEARN_JOBS.get(id)
+    if not job:
+        return {"ok": False, "error": "unknown_job"}
+    return {"ok": True, **job}
 
 
 @app.post("/op/mixer")

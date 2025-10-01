@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -44,8 +44,12 @@ run-nlp:
 	cd nlp-service && . .venv/bin/activate && uvicorn app:app --reload --port 8000
 
 # ---- Python Backend Server ----
+# Default local map directory (can override: make LOCAL_MAP_DIR=/path run-server)
+LOCAL_MAP_DIR ?= $(HOME)/.fadebender/param_maps
+
 run-server:
-	. nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
+		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR)"
+		FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
 
 # ---- Web Chat UI ----
 run-chat:
@@ -158,6 +162,24 @@ dev-returns:
 dev-live:
 	@echo "Starting Server + Chat and launching Live (ensure 'make install-remote' ran once)"
 	@$(MAKE) -j3 run-server run-chat launch-live
+
+# ---- Migrate local learned maps out of the repo to avoid dev reloads ----
+migrate-local-maps:
+	@echo "Moving any configs/param_maps/*.json to $(LOCAL_MAP_DIR) ..."
+	@mkdir -p $(LOCAL_MAP_DIR)
+	@if ls configs/param_maps/*.json >/dev/null 2>&1; then \
+	  for f in configs/param_maps/*.json; do \
+	    base=$$(basename $$f); \
+	    echo " -> $$base"; \
+	    mv -f "$$f" "$(LOCAL_MAP_DIR)/$$base"; \
+	  done; \
+	else \
+	  echo "No local maps found under configs/param_maps"; \
+	fi
+	@echo "Done. Server will read FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR)"
+
+list-local-maps:
+	@echo "Listing local maps in $(LOCAL_MAP_DIR)" && ls -la $(LOCAL_MAP_DIR) 2>/dev/null || echo "(none)"
 
 # ---- Master Controller ----
 run-controller:

@@ -191,6 +191,29 @@ class ApiService {
     if (!response.ok) throw new Error(`Return device learn failed: ${response.statusText}`);
     return response.json();
   }
+  async learnReturnDeviceStart(return_index, device_index, resolution = 41, sleep_ms = 20) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/learn_start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, device_index, resolution, sleep_ms })
+    });
+    if (!response.ok) throw new Error(`Return device learn start failed: ${response.statusText}`);
+    return response.json();
+  }
+  async learnReturnDeviceStatus(job_id) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/learn_status?id=${encodeURIComponent(job_id)}`);
+    if (!response.ok) throw new Error(`Return device learn status failed: ${response.statusText}`);
+    return response.json();
+  }
+  async deleteReturnDeviceMap(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/map_delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index: index, device_index: device })
+    });
+    if (!response.ok) throw new Error(`Return device map delete failed: ${response.statusText}`);
+    return response.json();
+  }
 
   async undoLast() {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/undo_last`, {

@@ -60,6 +60,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [openReturn, setOpenReturn] = useState(null);
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
   const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
+  const [learnJobs, setLearnJobs] = useState({}); // { `${ri}:${di}`: { jobId, progress, total, state } }
   const prevOutlineRef = useRef('');
 
   const userCommands = useMemo(() => {
@@ -422,14 +423,42 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                                     <Typography variant="body2" noWrap>{d.name || `Device ${d.index}`}</Typography>
                                     {learnedMap[`${r.index}:${d.index}`]
                                       ? <Chip size="small" label="Learned" color="success" variant="outlined" />
-                                      : <Button size="small" variant="outlined" onClick={async () => {
-                                          try {
-                                            const res = await apiService.learnReturnDevice(r.index, d.index, 21, 25);
-                                            if (res && res.ok) {
-                                              setLearnedMap(prev => ({ ...prev, [`${r.index}:${d.index}`]: true }));
-                                            }
-                                          } catch {}
-                                        }}>Learn</Button>}
+                                      : (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          {learnJobs[`${r.index}:${d.index}`]?.state === 'running' && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                              <Typography variant="caption" color="text.secondary">
+                                                {Math.round((learnJobs[`${r.index}:${d.index}`].progress / Math.max(1, learnJobs[`${r.index}:${d.index}`].total)) * 100)}%
+                                              </Typography>
+                                            </Box>
+                                          )}
+                                          <Button size="small" variant="outlined" onClick={async () => {
+                                            try {
+                                              const st = await apiService.learnReturnDeviceStart(r.index, d.index, 41, 20);
+                                              const jobId = st?.job_id;
+                                              if (!jobId) return;
+                                              setLearnJobs(prev => ({ ...prev, [`${r.index}:${d.index}`]: { jobId, state: 'running', progress: 0, total: 1 } }));
+                                              // Poll status
+                                              const key = `${r.index}:${d.index}`;
+                                              const poll = async () => {
+                                                try {
+                                                  const s = await apiService.learnReturnDeviceStatus(jobId);
+                                                  setLearnJobs(prev => ({ ...prev, [key]: { ...(prev[key]||{}), ...s, jobId } }));
+                                                  if (s && s.state === 'done') {
+                                                    setLearnedMap(prev => ({ ...prev, [key]: true }));
+                                                    return;
+                                                  }
+                                                  if (s && s.state === 'error') return;
+                                                  setTimeout(poll, 400);
+                                                } catch {
+                                                  setTimeout(poll, 600);
+                                                }
+                                              };
+                                              poll();
+                                            } catch {}
+                                          }}>Learn</Button>
+                                        </Box>
+                                      )}
                                   </Box>
                                 </Box>
                               ))}
