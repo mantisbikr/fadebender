@@ -29,6 +29,123 @@ import hashlib
 import math
 from server.volume_parser import parse_volume_command
 
+# --------- Param classification & grouping helpers ---------
+import re as _re
+
+def _parse_unit_from_display(disp: str) -> str | None:
+    if not disp:
+        return None
+    s = str(disp).strip()
+    # Common units: ms, s, Hz, kHz, %, dB, °
+    # Try suffix tokens
+    if "dB" in s or _re.search(r"\bdB\b", s):
+        return "dB"
+    if "%" in s:
+        return "%"
+    if "kHz" in s:
+        return "kHz"
+    if _re.search(r"\bHz\b", s):
+        return "Hz"
+    if _re.search(r"\bms\b", s):
+        return "ms"
+    if _re.search(r"\bs\b", s):
+        return "s"
+    if "°" in s:
+        return "deg"
+    return None
+
+def _classify_control_type(samples: list[dict], vmin: float, vmax: float) -> tuple[str, list[str]]:
+    # Return (control_type, labels)
+    if not samples:
+        # fallback on range heuristic
+        return ("continuous", [])
+    labels = list({str(s.get("display", "")) for s in samples if s.get("display") is not None})
+    # Count numeric-like labels
+    numeric_like = 0
+    for lab in labels:
+        if _re.search(r"-?\d+(?:\.\d+)?", lab):
+            numeric_like += 1
+    # Binary if <=2 labels and not mostly numeric
+    if len(labels) <= 2 and numeric_like < len(labels):
+        return ("binary", labels)
+    # Quantized if small label set and not numeric
+    if len(labels) > 0 and len(labels) <= 12 and numeric_like < len(labels):
+        return ("quantized", labels)
+    return ("continuous", [])
+
+def _group_role_for_reverb_param(pname: str) -> tuple[str | None, str | None, str | None]:
+    """Return (group_name, role, master_name) for Ableton Reverb param name.
+    role in {master, dependent, None}. master_name populated for dependents.
+    """
+    n = (pname or "").strip()
+    nlc = n.lower()
+    # Chorus
+    if nlc == "chorus on":
+        return ("Chorus", "master", None)
+    if nlc in ("chorus rate", "chorus amount"):
+        return ("Chorus", "dependent", "Chorus On")
+    # ER Spin (Early)
+    if nlc == "er spin on":
+        return ("Early", "master", None)
+    if nlc in ("er spin rate", "er spin amount"):
+        return ("Early", "dependent", "ER Spin On")
+    # Shelves / Filters (Tail)
+    if nlc in ("lowshelf on", "low shelf on", "low shelf enabled"):
+        return ("Tail", "master", None)
+    if nlc.startswith("lowshelf ") or nlc.startswith("low shelf "):
+        if nlc not in ("low shelf on", "lowshelf on"):
+            return ("Tail", "dependent", "LowShelf On")
+    if nlc in ("hishelf on", "high shelf on", "high shelf enabled"):
+        return ("Tail", "master", None)
+    if nlc.startswith("hishelf ") or nlc.startswith("high shelf "):
+        if nlc not in ("hishelf on", "high shelf on"):
+            return ("Tail", "dependent", "HiShelf On")
+    if nlc == "hifilter on":
+        return ("Tail", "master", None)
+    if nlc.startswith("hifilter "):
+        if nlc != "hifilter on":
+            return ("Tail", "dependent", "HiFilter On")
+    # Freeze (Global). Handle carefully: do NOT auto-enable master implicitly.
+    if nlc == "freeze on":
+        return ("Global", "master", None)
+    if nlc in ("flat on", "cut on"):
+        return ("Global", "dependent", "Freeze On")
+    # Input / Output / Global catch-alls based on names
+    if nlc in ("dry/wet", "dry wet", "reflect level", "diffuse level"):
+        return ("Output", None, None)
+    if nlc in ("predelay", "decay", "size", "stereo image", "density", "size smoothing", "scale", "diffusion"):
+        return ("Global", None, None)
+    # Input filters sometimes appear as "In HighCut On/Freq" etc.
+    if nlc.startswith("in ") or nlc.startswith("input "):
+        if nlc.endswith(" on"):
+            return ("Input", "master", None)
+        return ("Input", "dependent", None)
+    return (None, None, None)
+
+def _group_role_for_device(device_name: str | None, param_name: str) -> tuple[str | None, str | None, str | None]:
+    dn = (device_name or "").strip().lower()
+    # Dispatch by known device names; default to None
+    if "reverb" in dn:
+        return _group_role_for_reverb_param(param_name)
+    return (None, None, None)
+
+def _build_groups_from_params(params: list[dict], device_name: str | None) -> list[dict]:
+    groups: dict[str, dict] = {}
+    # Map by name for quick lookup
+    by_name = {str(p.get("name", "")): p for p in params}
+    for p in params:
+        name = str(p.get("name", ""))
+        gname, role, master_name = _group_role_for_device(device_name, name)
+        if not gname:
+            continue
+        if gname not in groups:
+            groups[gname] = {"name": gname, "master": None, "dependents": []}
+        if role == "master":
+            groups[gname]["master"] = {"name": name, "index": int(p.get("index", 0))}
+        elif role == "dependent":
+            groups[gname]["dependents"].append({"name": name, "index": int(p.get("index", 0)), "master": master_name})
+    return list(groups.values())
+
 
 app = FastAPI(title="Fadebender Ableton Server", version="0.1.0")
 
@@ -321,10 +438,21 @@ def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
                     "index": p.get("index"),
                     "sample_count": len(p.get("samples") or []),
                     "quantized": bool(p.get("quantized", False)),
+                    "control_type": p.get("control_type"),
+                    "unit": p.get("unit"),
+                    "group": p.get("group"),
+                    "role": p.get("role"),
+                    "labels": p.get("labels") or [],
+                    "label_map": p.get("label_map"),
                     "min": p.get("min"),
                     "max": p.get("max"),
                 })
-            data = {"device_name": m.get("device_name") or dname, "signature": signature, "params": plist}
+            data = {
+                "device_name": m.get("device_name") or dname,
+                "signature": signature,
+                "groups": m.get("groups") or [],
+                "params": plist,
+            }
     except Exception as e:
         return {"ok": False, "error": str(e), "backend": backend}
     return {"ok": True, "backend": backend, "signature": signature, "data": data}
@@ -428,6 +556,7 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
         vmax = float(p.get("max", 1.0))
         v0 = float(p.get("value", 0.0))
         samples: list[dict] = []
+        unit: str | None = None
 
         # Guard: avoid zero-length spans
         span = vmax - vmin if vmax != vmin else 1.0
@@ -458,6 +587,9 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
                 m = re.search(r"-?\d+(?:\.\d+)?", disp)
                 if m:
                     disp_num = float(m.group(0))
+                if unit is None:
+                    # crude unit detection
+                    unit = _parse_unit_from_display(disp)
             except Exception:
                 disp_num = None
             samples.append({"value": float(val), "display": disp, "display_num": disp_num})
@@ -471,16 +603,35 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
             "value": float(v0)
         }, timeout=0.6)
 
+        # Classify control type and labels if any
+        ctype, labels = _classify_control_type(samples, vmin, vmax)
+        gname, role, _m = _group_role_for_device(dname, name)
+        fit = _fit_models(samples) if ctype == "continuous" else None
+        label_map = None
+        if ctype in ("binary", "quantized"):
+            label_map = {}
+            for s in samples:
+                lab = str(s.get("display", ""))
+                if lab not in label_map:
+                    label_map[lab] = float(s.get("value", vmin))
         learned_params.append({
             "index": idx,
             "name": name,
             "min": vmin,
             "max": vmax,
             "samples": samples,
+            "control_type": ctype,
+            "unit": unit,
+            "labels": labels,
+            "label_map": label_map,
+            "fit": fit,
+            "group": gname,
+            "role": role,
         })
 
     # Save to mapping store (Firestore)
-    saved = STORE.save_device_map(signature, {"name": dname}, learned_params)
+    groups_meta = _build_groups_from_params(learned_params, dname)
+    saved = STORE.save_device_map(signature, {"name": dname, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
 
 
@@ -559,9 +710,29 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                 is_enum = (len(labels) <= 6 and numeric_count < len(labels)) or (len(labels) <= 2)
 
                 samples: list[dict] = []
+                unit: str | None = None
+                control_type = "continuous"
+                labels_list: list[str] = []
+                label_map: dict[str, float] | None = None
+                fit: dict | None = None
+
                 if is_enum:
                     # Sweep fine until labels stop changing
                     seen = set()
+                    # Ensure attempt at both ends for binary/switches
+                    for val in [vmin, vmax]:
+                        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+                        if delay: _t.sleep(delay)
+                        rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                        rparams = ((rd or {}).get("data") or {}).get("params") or []
+                        dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+                        if dp is None: continue
+                        disp = str(dp.get("display_value", ""))
+                        if disp in seen: continue
+                        seen.add(disp)
+                        samples.append({"value": float(val), "display": disp, "display_num": None})
+                        step += 1
+                        LEARN_JOBS[job_id].update({"progress": min(step, total_steps), "message": f"{name}: {len(samples)} labels"})
                     for i in range(res):
                         t = i / float(res - 1)
                         val = vmin + span * t
@@ -577,6 +748,14 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                         samples.append({"value": float(val), "display": disp, "display_num": None})
                         step += 1
                         LEARN_JOBS[job_id].update({"progress": min(step, total_steps), "message": f"{name}: {len(samples)} labels"})
+                    labels_list = [str(s.get("display", "")) for s in samples]
+                    control_type = "binary" if len(labels_list) <= 2 else "quantized"
+                    # Build label->value map using first-seen sample for each label
+                    label_map = {}
+                    for s in samples:
+                        lab = str(s.get("display", ""))
+                        if lab not in label_map:
+                            label_map[lab] = float(s.get("value", vmin))
                 else:
                     # Continuous: numeric parse & store
                     for i in range(res):
@@ -589,6 +768,8 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                         dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
                         if dp is None: continue
                         disp = str(dp.get("display_value", ""))
+                        if unit is None:
+                            unit = _parse_unit_from_display(disp)
                         disp_num = None
                         try:
                             m = _re_search(r"-?\d+(?:\.\d+)?", disp)
@@ -598,9 +779,13 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                         samples.append({"value": float(val), "display": disp, "display_num": disp_num})
                         step += 1
                         LEARN_JOBS[job_id].update({"progress": min(step, total_steps), "message": f"{name}: {i+1}/{res}"})
+                    control_type = "continuous"
+                    fit = _fit_models(samples) or None
 
                 # restore
                 udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(v0)}, timeout=0.6)
+                # Group/role annotation
+                gname, role, _m = _group_role_for_device(dname, name)
                 learned_params.append({
                     "index": idx,
                     "name": name,
@@ -608,11 +793,20 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                     "max": vmax,
                     "samples": samples,
                     "quantized": is_enum,
+                    "control_type": control_type,
+                    "unit": unit,
+                    "labels": labels_list,
+                    "label_map": label_map,
+                    "fit": fit,
+                    "group": gname,
+                    "role": role,
                 })
 
+            # Build groups metadata from learned params
+            groups_meta = _build_groups_from_params(learned_params, dname)
             # Always save locally to avoid losing long scans
-            local_saved = STORE.save_device_map_local(signature, {"name": dname}, learned_params)
-            saved = STORE.save_device_map(signature, {"name": dname}, learned_params)
+            local_saved = STORE.save_device_map_local(signature, {"name": dname, "groups": groups_meta}, learned_params)
+            saved = STORE.save_device_map(signature, {"name": dname, "groups": groups_meta}, learned_params)
             LEARN_JOBS[job_id].update({"state": "done", "saved": saved, "local_saved": local_saved})
         except Exception as e:
             LEARN_JOBS[job_id].update({"state": "error", "error": str(e)})
@@ -628,6 +822,55 @@ def push_local_mappings(signature: Optional[str] = None) -> Dict[str, Any]:
         return {"ok": ok, "signature": signature, "backend": STORE.backend}
     count = STORE.push_all_local()
     return {"ok": True, "pushed": count, "backend": STORE.backend}
+
+
+@app.post("/mappings/migrate_schema")
+def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
+    """Backfill control_type/unit/labels/groups on an existing map and save locally; also push to Firestore if available.
+
+    Provide either (index, device) to compute signature from Live, or a signature directly.
+    """
+    if not signature:
+        if index is None or device is None:
+            raise HTTPException(400, "index_device_or_signature_required")
+        signature = _compute_signature_for(int(index), int(device))
+    data = STORE.get_device_map_local(signature)
+    if not data and STORE.enabled:
+        data = STORE.get_device_map(signature)
+    if not data:
+        return {"ok": False, "error": "map_not_found", "signature": signature}
+    params = data.get("params") or []
+    updated_params: list[dict] = []
+    for p in params:
+        name = str(p.get("name", ""))
+        vmin = float(p.get("min", 0.0))
+        vmax = float(p.get("max", 1.0))
+        samples = p.get("samples") or []
+        unit = p.get("unit") or ( _parse_unit_from_display(str(samples[0].get("display", ""))) if samples else None )
+        ctype, labels = _classify_control_type(samples, vmin, vmax)
+        gname, role, _m = _group_role_for_device(data.get("device_name"), name)
+        label_map = p.get("label_map")
+        if ctype in ("binary", "quantized") and not label_map:
+            label_map = {}
+            for s in samples:
+                lab = str(s.get("display", ""))
+                if lab not in label_map:
+                    label_map[lab] = float(s.get("value", vmin))
+        fit = p.get("fit") or (_fit_models(samples) if ctype == "continuous" else None)
+        p.update({
+            "control_type": ctype,
+            "unit": unit,
+            "labels": labels,
+            "label_map": label_map,
+            "fit": fit,
+            "group": gname,
+            "role": role,
+        })
+        updated_params.append(p)
+    groups_meta = _build_groups_from_params(updated_params, data.get("device_name"))
+    ok_local = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "groups": groups_meta}, updated_params)
+    ok_fs = STORE.save_device_map(signature, {"name": data.get("device_name"), "groups": groups_meta}, updated_params)
+    return {"ok": True, "signature": signature, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
 
 
 def _compute_signature_for(index: int, device: int) -> str:
@@ -862,6 +1105,48 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     elif body.target_value is not None:
         target_y = float(body.target_value)
 
+    # Relative mode: interpret numeric as delta in display units
+    if (body.mode or "absolute").lower() == "relative":
+        try:
+            cur_disp = str(cur.get("display_value", ""))
+            cur_num = _parse_target_display(cur_disp)
+            if cur_num is not None and target_y is not None:
+                target_y = cur_num + float(target_y)
+        except Exception:
+            pass
+
+    # Auto-enable group masters for dependents (except Freeze)
+    try:
+        if learned:
+            role = (learned.get("role") or "").lower()
+            gname = (learned.get("group") or "").lower()
+            if role == "dependent" and gname not in ("global", "output") and "freeze" not in gname:
+                # Find group master name
+                groups = (mapping.get("groups") or []) if mapping else []
+                master_name = None
+                for g in groups:
+                    deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
+                    if any(param_name.lower() == dn.lower() for dn in deps):
+                        mref = g.get("master") or {}
+                        master_name = str(mref.get("name")) if mref else None
+                        break
+                if not master_name:
+                    # Heuristic fallback (prefix until last space + ' On')
+                    if " " in param_name:
+                        master_name = param_name.rsplit(" ", 1)[0] + " On"
+                if master_name:
+                    # Resolve master's index from current param list
+                    master_idx = None
+                    for p in p_list:
+                        if str(p.get("name","")) .lower()== master_name.lower():
+                            master_idx = int(p.get("index", 0))
+                            mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
+                            mval = mmax if mmax >= 1.0 else 1.0
+                            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
+                            break
+    except Exception:
+        pass
+
     # Compute candidate value in [vmin..vmax]
     x = vmin
     if label and learned:
@@ -886,13 +1171,39 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
             if best:
                 x = float(best.get("value", vmin))
 
-    # Send set + quick refine step
+    # Send set + refine steps (up to 2)
     udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
     # Readback
     rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
     rps = ((rb or {}).get("data") or {}).get("params") or []
     newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
-    return {"ok": True, "signature": signature, "applied": {"value": x, "display": newp.get("display_value") if newp else None}}
+    applied_disp = newp.get("display_value") if newp else None
+    # Up to two corrective nudges if continuous and numeric target provided
+    try:
+        if learned and learned.get("control_type") == "continuous" and target_y is not None and newp is not None:
+            fit = learned.get("fit")
+            if fit:
+                for _ in range(2):
+                    actual_num = _parse_target_display(str(applied_disp))
+                    if actual_num is None:
+                        break
+                    err = target_y - actual_num
+                    # 2% relative threshold (or 1 unit when near zero)
+                    thresh = 0.02 * (abs(target_y) if target_y != 0 else 1.0)
+                    if abs(err) <= thresh:
+                        break
+                    x2 = _invert_fit_to_value(fit, target_y, vmin, vmax)
+                    if abs(x2 - x) <= 1e-6:
+                        break
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x2)}, timeout=1.0)
+                    x = x2
+                    rb2 = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                    rps2 = ((rb2 or {}).get("data") or {}).get("params") or []
+                    newp = next((p for p in rps2 if int(p.get("index", -1)) == pi), None)
+                    applied_disp = newp.get("display_value") if newp else applied_disp
+    except Exception:
+        pass
+    return {"ok": True, "signature": signature, "applied": {"value": x, "display": applied_disp}}
 
 
 @app.get("/return/device/learn_status")

@@ -54,7 +54,7 @@ Local map cache directory
   - `curl -s "http://127.0.0.1:8722/return/device/map?index=0&device=0" | jq .`
   - Expect `backend: "firestore"` and `exists: true` if saved in cloud
 - Summary (param names + sample counts):
-  - `curl -s "http://127.0.0.1:8722/return/device/map_summary?index=0&device=0" | jq .`
+ - `curl -s "http://127.0.0.1:8722/return/device/map_summary?index=0&device=0" | jq .`
 
 6) Precise set by name/display (easy testing)
 - Endpoint: `POST /op/return/param_by_name`
@@ -77,9 +77,27 @@ Example (quantized/labels)
 - Set Density to High:
   - `curl -s -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"A","device_ref":"Reverb","param_ref":"Density","target_display":"High"}' | jq .`
 
+Examples (binary)
+- Toggle Freeze On:
+  - `curl -s -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"A","device_ref":"Reverb","param_ref":"Freeze On","target_display":"On"}' | jq .`
+- Enable Chorus (auto-enables for dependents):
+  - `curl -s -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"A","device_ref":"Reverb","param_ref":"Chorus Rate","target_value":0.6}' | jq .`
+
+Relative mode (continuous)
+- Increase Dry/Wet by 3 percentage points:
+  - `curl -s -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"A","device_ref":"Reverb","param_ref":"Dry/Wet","target_value":3,"mode":"relative"}' | jq .`
+- Add 0.5 s to Decay:
+  - `curl -s -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"A","device_ref":"Reverb","param_ref":"Decay","target_value":0.5,"mode":"relative"}' | jq .`
+
 Verify readback
 - Inspect display values to confirm:
   - `curl -s "http://127.0.0.1:8722/return/device/params?index=0&device=0" | jq '.data.params | map({name, display_value})'`
+
+Schema migration (backfill control_type/unit/labels/groups)
+- By indices:
+  - `curl -s -X POST "http://127.0.0.1:8722/mappings/migrate_schema?index=0&device=0" | jq .`
+- By signature:
+  - `curl -s -X POST "http://127.0.0.1:8722/mappings/migrate_schema?signature=SIGNATURE" | jq .`
 
 Cleanup / Re‑learn
 - Delete mapping (by indices):
@@ -91,4 +109,3 @@ Troubleshooting
 - Server restarts during learn: ensure local map dir is outside repo (default: `~/.fadebender/param_maps`).
 - Firestore writes fail (`saved: false`): install `google-cloud-firestore` in the server venv and export `GOOGLE_APPLICATION_CREDENTIALS` before `make run-server`.
 - `exists: true` but old/no samples: delete the mapping via `map_delete` and re‑learn.
-

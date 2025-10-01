@@ -57,6 +57,8 @@ class MappingStore:
                 "param_names": [p.get("name") for p in params],
                 "signature": signature,
                 "tags": device_meta.get("tags", []),
+                # Optional: persist grouping metadata when provided
+                "groups": device_meta.get("groups", []),
             }
             doc.set(meta, merge=True)
             # params subcollection
@@ -70,8 +72,15 @@ class MappingStore:
                     "min": float(p.get("min", 0.0)),
                     "max": float(p.get("max", 1.0)),
                     "samples": p.get("samples", []),  # list of {value, display, display_num}
+                    # New schema fields
                     "quantized": bool(p.get("quantized", False)),
+                    "control_type": p.get("control_type"),  # binary | quantized | continuous
                     "unit": p.get("unit"),
+                    "labels": p.get("labels", []),
+                    "label_map": p.get("label_map"),  # dict label -> value
+                    "fit": p.get("fit"),
+                    "group": p.get("group"),
+                    "role": p.get("role"),  # master | dependent | None
                 }
                 doc.collection("params").document(doc_id).set(pdata, merge=True)
             return True
@@ -131,6 +140,8 @@ class MappingStore:
                 "device_name": device_meta.get("name"),
                 "signature": signature,
                 "params": params,
+                # Include groups metadata if present
+                "groups": device_meta.get("groups", []),
             }
             with open(p, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
