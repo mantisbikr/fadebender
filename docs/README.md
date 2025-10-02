@@ -2,6 +2,8 @@
 
 Welcome to the Fadebender documentation. This guide helps you navigate all available docs organized by purpose.
 
+**📊 [STATUS.md](STATUS.md)** - **START HERE** - Current status, completed features, and roadmap
+
 ## 📂 Documentation Structure
 
 ### 🚀 [setup/](setup/)
@@ -20,10 +22,9 @@ Test plans and results for parameter control:
 
 ### 🔧 [technical/](technical/)
 Technical specifications and implementation details:
-- **[PARAMETER_FITTING_METHODS.md](technical/PARAMETER_FITTING_METHODS.md)** - Parameter fitting algorithms
-- **[PARAM_CONTROL_PLAN.md](technical/PARAM_CONTROL_PLAN.md)** - Parameter control implementation plan
-- **[PARAM_CONTROL_IMPROVEMENTS.md](technical/PARAM_CONTROL_IMPROVEMENTS.md)** - Issues and enhancements
-- **[INTENT_SUPPORT.md](technical/INTENT_SUPPORT.md)** - Intent feature specifications
+- **[NEXT_FEATURES.md](technical/NEXT_FEATURES.md)** - Prioritized next features and enhancements
+- **[PARAMETER_FITTING_METHODS.md](technical/PARAMETER_FITTING_METHODS.md)** - Parameter fitting algorithms reference
+- **[INTENT_SUPPORT.md](technical/INTENT_SUPPORT.md)** - Intent feature tracking (Step 5/6)
 
 ### 🏗️ [architecture/](architecture/)
 System architecture and design:
@@ -31,12 +32,16 @@ System architecture and design:
 - **[volume_map.csv](architecture/volume_map.csv)** - Volume mapping reference data
 
 ### 📦 [archive/](archive/)
-Historical and obsolete documentation (kept for reference):
+Historical and completed planning docs (kept for reference):
 - Codex scaffold instructions
 - Early MVP and roadmap documents
-- Initial execution plans
+- Completed parameter control plans
+- Initial organization analysis
 
 ## 🎯 Quick Navigation
+
+**What's done? What's next?**
+→ See [STATUS.md](STATUS.md) for current state and roadmap
 
 **New to Fadebender?**
 → Start with [setup/QUICKSTART.md](setup/QUICKSTART.md)
@@ -44,11 +49,8 @@ Historical and obsolete documentation (kept for reference):
 **Setting up Ableton?**
 → See [setup/ABLETON_SETUP.md](setup/ABLETON_SETUP.md)
 
-**Testing parameter control?**
-→ Check [testing/](testing/) folder
-
-**Understanding the architecture?**
-→ Review [technical/](technical/) and [architecture/](architecture/) folders
+**Planning next features?**
+→ Check [technical/NEXT_FEATURES.md](technical/NEXT_FEATURES.md)
 
 ## 📝 Contributing to Docs
 
@@ -58,6 +60,6 @@ When adding new documentation:
 3. Use clear, descriptive filenames in UPPER_SNAKE_CASE.md
 4. Include the date in test results docs (e.g., `DEVICE_TEST_RESULTS_2025_10_01.md`)
 
-## 🗂️ Organization Notes
+## 🗂️ Organization History
 
-See [DOCS_ORGANIZATION_ANALYSIS.md](DOCS_ORGANIZATION_ANALYSIS.md) for details on the reorganization completed on 2025-10-01.
+See [archive/DOCS_ORGANIZATION_ANALYSIS.md](archive/DOCS_ORGANIZATION_ANALYSIS.md) for details on the reorganization completed on 2025-10-01.
