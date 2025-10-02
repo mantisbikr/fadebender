@@ -38,7 +38,7 @@
 │   ├── workflows/
 │   ├── plugins.md
 │   └── expression-maps.md
-└── shared/
+└── audio-fundamentals/
     ├── audio-engineering-principles.md
     └── cross-daw-concepts.md
 ```
@@ -115,7 +115,7 @@ You can say: 'add reverb to track 2'"
 - **Local Manual Integration (Private)**: Allow placing extracted Ableton Live manual sections under `knowledge/references/ableton-live-manual/` (kept out of git) and include them in-app search with `KNOWLEDGE_INCLUDE_REFERENCES=1`.
 - **Retriever Improvements**: Auto-scan all `knowledge/**/*.md` (done), add better ranking (headings weight, recency), and per-section summaries.
 - **Ingest Helper**: Script to split large Markdown/text into chunked `.md` files by heading and save under `knowledge/references/` for indexing.
-- **Curation First**: Maintain concise curated notes under `knowledge/ableton-live/` and `knowledge/shared/`; use references to fill gaps.
+- **Curation First**: Maintain concise curated notes under `knowledge/ableton-live/` and `knowledge/audio-fundamentals/`; use references to fill gaps.
 
 ## Technical Considerations
 

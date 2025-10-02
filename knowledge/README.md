@@ -13,10 +13,9 @@ This directory contains audio engineering knowledge and DAW device documentation
   - Enables knowledge-backed help system
 
 ### 📁 **Universal Audio Knowledge**
-- **`shared/`** - Cross-DAW audio engineering principles
+- **`audio-fundamentals/`** - Cross-DAW audio engineering principles
   - `audio-engineering-principles.md` - Frequency spectrum, compression, EQ fundamentals
-  - `audio_concepts.md` - Audio concepts reference
-  - `versioning-integration.md` - Version control design
+  - `audio_concepts.md` - Gain staging, EQ, reverb, compression basics
 
 ### 📚 **Reference Materials**
 - **`references/`** - Local reference files (not committed)
@@ -57,8 +56,8 @@ Each device .md file includes:
 3. Include professional audio engineering context
 4. Reference from index file if needed
 
-### Updating Audio Principles
-1. Edit `shared/audio-engineering-principles.md`
+### Updating Audio Fundamentals
+1. Edit files in `audio-fundamentals/`
 2. Ensure cross-DAW applicability
 3. Include frequency ranges, ratios, professional standards
 
