@@ -446,18 +446,41 @@ def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     signature = _make_device_signature(dname, params)
     backend = STORE.backend
     exists = False
+    device_type = _detect_device_type(params)
+
     try:
-        m = STORE.get_device_map(signature) if STORE.enabled else None
+        # Check Firestore first (primary source), fall back to local cache
+        if STORE.enabled:
+            m = STORE.get_device_map(signature)
+        else:
+            m = STORE.get_device_map_local(signature)
+
+        print(f"[DEBUG] get_device_map returned: {type(m)}, is_none: {m is None}")
+        if m:
+            params = m.get("params")
+            print(f"[DEBUG] params: type={type(params)}, len={len(params) if isinstance(params, list) else 'N/A'}")
+
         if m and isinstance(m.get("params"), list):
             # Consider learned only if at least one param has >= 3 samples
             for p in m["params"]:
                 sm = p.get("samples") or []
                 if isinstance(sm, list) and len(sm) >= 3:
                     exists = True
+                    print(f"[DEBUG] Found learned param: {p.get('name')} with {len(sm)} samples")
                     break
-    except Exception:
+        print(f"[DEBUG] Final exists: {exists}")
+    except Exception as e:
+        print(f"[DEBUG] Exception: {e}")
         exists = False
-    return {"ok": True, "exists": exists, "signature": signature, "backend": backend}
+
+    return {
+        "ok": True,
+        "exists": exists,
+        "signature": signature,
+        "backend": backend,
+        "device_type": device_type,
+        "device_name": dname,
+    }
 
 
 @app.get("/return/device/map_summary")
@@ -478,7 +501,11 @@ def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
     backend = STORE.backend
     data = None
     try:
-        m = STORE.get_device_map(signature) if STORE.enabled else None
+        # Check Firestore first (primary source), fall back to local cache
+        if STORE.enabled:
+            m = STORE.get_device_map(signature)
+        else:
+            m = STORE.get_device_map_local(signature)
         if m:
             plist = []
             for p in m.get("params", []) or []:
@@ -558,9 +585,66 @@ class LearnDeviceBody(BaseModel):
     sleep_ms: int = 25
 
 
+def _detect_device_type(params: list[dict]) -> str:
+    """Detect device type from parameter fingerprints.
+
+    Uses characteristic parameter names to identify device types.
+    Enables storing structures by type (reverb, delay, etc.) rather than
+    by device name.
+
+    Args:
+        params: List of parameter dictionaries with 'name' field
+
+    Returns:
+        Device type string (reverb, delay, compressor, eq, etc.) or "unknown"
+    """
+    param_set = set(p.get("name", "") for p in params)
+
+    # Ableton Reverb signature parameters
+    if {"ER Spin On", "Freeze On", "Chorus On", "Diffusion"}.issubset(param_set):
+        return "reverb"
+
+    # Ableton Delay signature parameters
+    if {"L Time", "R Time", "Ping Pong", "Feedback"}.issubset(param_set):
+        return "delay"
+
+    # Ableton Compressor signature parameters
+    if {"Threshold", "Ratio", "Attack", "Release", "Knee"}.issubset(param_set):
+        return "compressor"
+
+    # Ableton EQ Eight signature parameters
+    if {"1 Frequency A", "2 Frequency A", "3 Frequency A"}.issubset(param_set):
+        return "eq8"
+
+    # Ableton Auto Filter
+    if {"Filter Type", "Frequency", "Resonance", "LFO Amount"}.issubset(param_set):
+        return "autofilter"
+
+    # Ableton Saturator
+    if {"Drive", "Dry/Wet", "Color", "Type"}.issubset(param_set):
+        return "saturator"
+
+    return "unknown"
+
+
 def _make_device_signature(name: str, params: list[dict]) -> str:
+    """Generate structure-based signature (excludes device name).
+
+    All Ableton Reverb presets (Arena Tail, Vocal Hall, etc.) share the same
+    parameter structure, so they get the same signature. This enables:
+    - Learning structure once, reusing for all presets
+    - Fast preset loading (just apply parameter values)
+    - Separating structure from preset variations
+
+    Args:
+        name: Device name (NOT USED in signature, kept for compatibility)
+        params: List of parameter dictionaries with 'name' field
+
+    Returns:
+        SHA1 hash of param_count|param_names (no device name)
+    """
     param_names = ",".join([str(p.get("name", "")) for p in params])
-    base = f"{name}|{len(params)}|{param_names}"
+    base = f"{len(params)}|{param_names}"  # REMOVED device name
     return hashlib.sha1(base.encode("utf-8")).hexdigest()
 
 
@@ -680,7 +764,8 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
 
     # Save to mapping store (Firestore)
     groups_meta = _build_groups_from_params(learned_params, dname)
-    saved = STORE.save_device_map(signature, {"name": dname, "groups": groups_meta}, learned_params)
+    device_type = _detect_device_type(params)
+    saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
 
 
@@ -854,9 +939,10 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
 
             # Build groups metadata from learned params
             groups_meta = _build_groups_from_params(learned_params, dname)
+            device_type = _detect_device_type(params)
             # Always save locally to avoid losing long scans
-            local_saved = STORE.save_device_map_local(signature, {"name": dname, "groups": groups_meta}, learned_params)
-            saved = STORE.save_device_map(signature, {"name": dname, "groups": groups_meta}, learned_params)
+            local_saved = STORE.save_device_map_local(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
+            saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
             LEARN_JOBS[job_id].update({"state": "done", "saved": saved, "local_saved": local_saved})
         except Exception as e:
             LEARN_JOBS[job_id].update({"state": "error", "error": str(e)})
@@ -1004,8 +1090,9 @@ def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
         })
 
     groups_meta = _build_groups_from_params(learned_params, dname)
-    local_ok = STORE.save_device_map_local(signature, {"name": dname, "groups": groups_meta}, learned_params)
-    fs_ok = STORE.save_device_map(signature, {"name": dname, "groups": groups_meta}, learned_params)
+    device_type = _detect_device_type(params)
+    local_ok = STORE.save_device_map_local(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
+    fs_ok = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "local_saved": local_ok, "saved": fs_ok, "param_count": len(learned_params)}
 
 
@@ -1062,8 +1149,9 @@ def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = 
         })
         updated_params.append(p)
     groups_meta = _build_groups_from_params(updated_params, data.get("device_name"))
-    ok_local = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "groups": groups_meta}, updated_params)
-    ok_fs = STORE.save_device_map(signature, {"name": data.get("device_name"), "groups": groups_meta}, updated_params)
+    device_type = _detect_device_type(updated_params)
+    ok_local = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
+    ok_fs = STORE.save_device_map(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
     return {"ok": True, "signature": signature, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
 
 
@@ -1151,8 +1239,230 @@ def fit_mapping(index: Optional[int] = None, device: Optional[int] = None, signa
         if fit:
             p["fit"] = fit
             updated += 1
-    ok = STORE.save_device_map_local(signature, {"name": data.get("device_name")}, params)
+    device_type = _detect_device_type(params)
+    ok = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type}, params)
     return {"ok": ok, "signature": signature, "updated": updated}
+
+
+# ==================== Preset Endpoints ====================
+
+class CapturePresetBody(BaseModel):
+    return_index: int
+    device_index: int
+    preset_name: str
+    category: str = "stock"  # stock | user
+    description: Optional[str] = None
+
+
+@app.post("/return/device/capture_preset")
+def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
+    """Capture current device parameter values as a preset.
+
+    Does NOT learn the device structure - only captures parameter values.
+    Device must already be learned (structure signature must exist).
+    """
+    ret_idx = body.return_index
+    dev_idx = body.device_index
+
+    # Get device info
+    devs = udp_request({"op": "get_return_devices", "return_index": ret_idx}, timeout=1.0)
+    if not devs or "devices" not in devs:
+        raise HTTPException(status_code=404, detail="Return track not found")
+
+    devices = devs.get("devices", [])
+    if dev_idx >= len(devices):
+        raise HTTPException(status_code=404, detail=f"Device index {dev_idx} out of range")
+
+    device = devices[dev_idx]
+    device_name = device.get("name", "Unknown")
+
+    # Get parameters
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": ret_idx, "device_index": dev_idx}, timeout=1.0)
+    if not params_resp or "params" not in params_resp:
+        raise HTTPException(status_code=500, detail="Failed to get device parameters")
+
+    params = params_resp.get("params", [])
+
+    # Compute signature
+    signature = _make_device_signature(device_name, params)
+
+    # Check if structure is learned
+    mapping = STORE.get_device_map_local(signature)
+    if not mapping and STORE.enabled:
+        mapping = STORE.get_device_map(signature)
+
+    if not mapping:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Device structure not learned. Please learn device first (signature: {signature})"
+        )
+
+    # Extract current parameter values
+    parameter_values = {}
+    for p in params:
+        param_name = p.get("name")
+        param_value = p.get("value")
+        if param_name and param_value is not None:
+            parameter_values[param_name] = float(param_value)
+
+    # Detect device type
+    device_type = _detect_device_type(params)
+
+    # Create preset data (minimal version - can be enhanced with metadata later)
+    preset_id = f"{device_type}_{body.preset_name.lower().replace(' ', '_')}"
+    preset_data = {
+        "name": body.preset_name,
+        "device_name": device_name,
+        "manufacturer": "Ableton",  # Can be enhanced to detect
+        "daw": "Ableton Live",
+        "structure_signature": signature,
+        "category": device_type,
+        "preset_type": body.category,
+        "parameter_values": parameter_values,
+    }
+
+    if body.description:
+        preset_data["description"] = {"what": body.description}
+
+    # Save preset (Firestore + local)
+    saved = STORE.save_preset(preset_id, preset_data, local_only=(body.category == "user"))
+
+    return {
+        "ok": saved,
+        "preset_id": preset_id,
+        "device_name": device_name,
+        "device_type": device_type,
+        "signature": signature,
+        "param_count": len(parameter_values),
+    }
+
+
+class ApplyPresetBody(BaseModel):
+    return_index: int
+    device_index: int
+    preset_id: str
+
+
+@app.post("/return/device/apply_preset")
+def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
+    """Apply preset parameter values to a device.
+
+    Device must have matching structure signature (same parameter layout).
+    """
+    ret_idx = body.return_index
+    dev_idx = body.device_index
+    preset_id = body.preset_id
+
+    # Get preset data
+    preset = STORE.get_preset(preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
+
+    # Get current device info
+    devs = udp_request({"op": "get_return_devices", "return_index": ret_idx}, timeout=1.0)
+    if not devs or "devices" not in devs:
+        raise HTTPException(status_code=404, detail="Return track not found")
+
+    devices = devs.get("devices", [])
+    if dev_idx >= len(devices):
+        raise HTTPException(status_code=404, detail=f"Device index {dev_idx} out of range")
+
+    device = devices[dev_idx]
+    device_name = device.get("name", "Unknown")
+
+    # Get current parameters
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": ret_idx, "device_index": dev_idx}, timeout=1.0)
+    if not params_resp or "params" not in params_resp:
+        raise HTTPException(status_code=500, detail="Failed to get device parameters")
+
+    params = params_resp.get("params", [])
+    current_signature = _make_device_signature(device_name, params)
+    preset_signature = preset.get("structure_signature")
+
+    # Verify signature match
+    if current_signature != preset_signature:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Device structure mismatch. Current: {current_signature}, Preset: {preset_signature}"
+        )
+
+    # Apply parameter values
+    parameter_values = preset.get("parameter_values", {})
+    applied = 0
+    errors = []
+
+    for param_name, target_value in parameter_values.items():
+        try:
+            # Find parameter by name
+            param = next((p for p in params if p.get("name") == param_name), None)
+            if not param:
+                errors.append(f"Parameter not found: {param_name}")
+                continue
+
+            param_index = param.get("index")
+
+            # Set parameter
+            result = udp_request({
+                "op": "set_return_device_param",
+                "return_index": ret_idx,
+                "device_index": dev_idx,
+                "param_index": param_index,
+                "value": float(target_value),
+            }, timeout=0.5)
+
+            if result and result.get("ok"):
+                applied += 1
+            else:
+                errors.append(f"Failed to set {param_name}")
+
+        except Exception as e:
+            errors.append(f"Error setting {param_name}: {str(e)}")
+
+    return {
+        "ok": applied > 0,
+        "preset_name": preset.get("name"),
+        "device_name": device_name,
+        "applied": applied,
+        "total": len(parameter_values),
+        "errors": errors if errors else None,
+    }
+
+
+@app.get("/presets")
+def list_presets(
+    device_type: Optional[str] = None,
+    structure_signature: Optional[str] = None,
+    preset_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List available presets with optional filtering."""
+    presets = STORE.list_presets(device_type, structure_signature, preset_type)
+    return {
+        "presets": presets,
+        "count": len(presets),
+    }
+
+
+@app.get("/presets/{preset_id}")
+def get_preset_detail(preset_id: str) -> Dict[str, Any]:
+    """Get full preset details including metadata and parameter values."""
+    preset = STORE.get_preset(preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
+    return preset
+
+
+@app.delete("/presets/{preset_id}")
+def delete_preset_endpoint(preset_id: str) -> Dict[str, Any]:
+    """Delete a preset (user presets only)."""
+    preset = STORE.get_preset(preset_id)
+    if preset and preset.get("preset_type") == "stock":
+        raise HTTPException(status_code=403, detail="Cannot delete stock presets")
+
+    deleted = STORE.delete_preset(preset_id)
+    return {"ok": deleted, "preset_id": preset_id}
+
+
+# ==================== End Preset Endpoints ====================
 
 
 class ReturnParamByNameBody(BaseModel):

@@ -1,0 +1,295 @@
+{
+  "name": "Arena Tail",
+  "device_name": "Reverb",
+  "manufacturer": "Ableton",
+  "daw": "Ableton Live",
+  "structure_signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+  "category": "reverb",
+  "subcategory": "hall",
+  "preset_type": "stock",
+
+  "description": {
+    "what": "Large hall reverb with extended decay (4+ seconds) and bright, spacious character designed for dramatic impact",
+    "when": [
+      "lead vocals in arena rock or stadium anthems",
+      "electric guitar solos requiring epic space",
+      "synth leads in EDM builds and drops",
+      "dramatic ballad vocals",
+      "cinematic moments requiring large-scale ambience"
+    ],
+    "why": "Long decay time (4.0-4.5s) creates the perception of a massive enclosed space like an arena or concert hall. Bright high-frequency shelf (+2dB @ 7kHz) adds air and excitement, mimicking the reflective surfaces of large venues. Wide stereo image (110-120°) maximizes spaciousness and envelopment. Moderate predelay (20-25ms) maintains source clarity while establishing natural distance cues consistent with large room acoustics."
+  },
+
+  "audio_engineering": {
+    "space_type": "large hall / arena",
+    "size": "75 (large)",
+    "decay_time": "4.0s (long, RT60-style)",
+    "predelay": "20ms (natural for large space)",
+    "frequency_character": "bright (+2dB high shelf @ 7kHz)",
+    "stereo_width": "115° (very wide)",
+    "diffusion": "high (smooth, dense tail)",
+    "use_cases": [
+      {
+        "source": "lead vocal",
+        "context": "arena rock, stadium anthems, dramatic ballads",
+        "send_level": "15-25%",
+        "send_level_rationale": "Moderate amount allows space to breathe around vocal without drowning intelligibility",
+        "eq_prep": "HPF @ 180-220 Hz before send",
+        "eq_rationale": "Removes low-end rumble that would build up excessively in long tail",
+        "notes": "Predelay 20-25ms keeps consonants clear. Consider sidechain ducking reverb send during verses, open up in choruses. Bright character can emphasize sibilance—use de-esser before send if needed."
+      },
+      {
+        "source": "electric guitar solo",
+        "context": "rock, metal, epic instrumental moments",
+        "send_level": "20-30%",
+        "send_level_rationale": "Higher amount creates sustain and width without muddying rhythm section",
+        "eq_prep": "HPF @ 120-150 Hz",
+        "eq_rationale": "Tightens low-mids while preserving guitar body",
+        "notes": "Bright tail emphasizes pick attack and harmonics. Long decay fills gaps between notes, creating sustain similar to natural room acoustics."
+      },
+      {
+        "source": "synth lead",
+        "context": "EDM builds, cinematic production, ambient passages",
+        "send_level": "25-40%",
+        "send_level_rationale": "Synthetic sources can handle more wetness; creates evolving texture",
+        "eq_prep": "HPF @ 200 Hz, optional LPF @ 8-10 kHz",
+        "eq_rationale": "HPF prevents sub buildup; LPF can tame excessive brightness on already-bright synths",
+        "notes": "Automate send level during builds (low to high). Consider freezing tail during breakdowns for textural pads."
+      },
+      {
+        "source": "snare (special effect)",
+        "context": "dramatic fills, breakdown transitions",
+        "send_level": "40-60% (parallel send, not main verb)",
+        "send_level_rationale": "Use as special effect, not primary snare verb",
+        "eq_prep": "HPF @ 200-300 Hz",
+        "eq_rationale": "Keeps focus on snare body and crack, removes sub rumble",
+        "notes": "Typically automated—open send on final hit of fill. Not for every snare hit. Consider gating the return."
+      }
+    ]
+  },
+
+  "key_parameters": {
+    "predelay": {
+      "value": 20.0,
+      "unit": "ms",
+      "rationale": "Natural predelay for large spaces. Path length difference ≈ 6.9m (20ms × 0.343 m/ms), consistent with arena-sized room. Maintains vocal/source clarity by separating direct sound from reverb onset (Haas/precedence effect)."
+    },
+    "size": {
+      "value": 75.0,
+      "range": "0-100",
+      "rationale": "Large virtual room volume simulates arena/concert hall scale. Increases early reflection spacing and tail density growth rate."
+    },
+    "decay": {
+      "value": 4.0,
+      "unit": "s",
+      "rationale": "RT60-style decay time. 4.0s creates emotional impact and drama. Typical for reverberant concert halls (3-4s) and arenas (3-5s depending on treatment)."
+    },
+    "high_shelf_gain": {
+      "value": 2.0,
+      "unit": "dB",
+      "rationale": "Bright character (+2dB @ 7kHz). Mimics reflective surfaces in large venues (glass, metal, hard walls). Adds air and excitement. Can emphasize sibilance—monitor and adjust."
+    },
+    "high_shelf_freq": {
+      "value": 7000.0,
+      "unit": "Hz",
+      "rationale": "Shelf frequency at 7kHz boosts presence and air without excessive harshness. Above fundamental vocal/guitar range, affects harmonics and sparkle."
+    },
+    "low_shelf_gain": {
+      "value": -2.0,
+      "unit": "dB",
+      "rationale": "Cuts low frequencies to prevent muddy buildup in long tail. Simulates natural HF/LF decay differential (soft surfaces absorb lows faster)."
+    },
+    "low_shelf_freq": {
+      "value": 160.0,
+      "unit": "Hz",
+      "rationale": "Shelf at 160Hz tightens low-mids without thinning the reverb excessively. Keeps tail clean while preserving body."
+    },
+    "stereo_image": {
+      "value": 115.0,
+      "unit": "degrees",
+      "range": "0-120",
+      "rationale": "Very wide stereo image (115°) creates spaciousness and envelopment. Near-maximum width for dramatic stereo field. Check mono compatibility."
+    },
+    "diffuse_level": {
+      "value": 2.0,
+      "unit": "dB",
+      "rationale": "Emphasizes tail over early reflections (+2dB). Creates distant, ambient character rather than proximity. Pushes source 'back' in mix depth."
+    },
+    "reflect_level": {
+      "value": 0.0,
+      "unit": "dB",
+      "rationale": "Neutral early reflection level. Tail-dominant preset—early reflections present but not emphasized."
+    },
+    "diffusion": {
+      "value": 80.0,
+      "range": "0-100",
+      "rationale": "High diffusion creates smooth, dense tail without metallic flutter. Avoids grainy artifacts common in lower diffusion settings."
+    }
+  },
+
+  "natural_language_controls": {
+    "tighter": {
+      "params": {
+        "decay": -1.0,
+        "size": -15.0
+      },
+      "explanation": "Shortens decay to 3.0s and reduces room size to 60 for more controlled, less overwhelming space. Retains character while fitting denser mixes."
+    },
+    "looser": {
+      "params": {
+        "decay": 0.5,
+        "size": 10.0
+      },
+      "explanation": "Extends decay to 4.5s and increases size to 85 for maximum drama and spaciousness. Use sparingly—can wash out mix."
+    },
+    "warmer": {
+      "params": {
+        "high_shelf_gain": -2.0
+      },
+      "explanation": "Reduces high shelf to 0dB (flat) for warmer, less bright tail. Reduces sibilance emphasis, creates vintage/darker character."
+    },
+    "brighter": {
+      "params": {
+        "high_shelf_gain": 1.0
+      },
+      "explanation": "Increases high shelf to +3dB for extra air and sparkle. Use carefully—can over-emphasize sibilance and cymbals."
+    },
+    "closer": {
+      "params": {
+        "predelay": -10.0,
+        "reflect_level": 2.0,
+        "diffuse_level": -1.0
+      },
+      "explanation": "Reduces predelay to 10ms, boosts early reflections +2dB, cuts tail -1dB. Brings source forward in mix depth while retaining tail character."
+    },
+    "further": {
+      "params": {
+        "predelay": 5.0,
+        "reflect_level": -1.5,
+        "diffuse_level": 1.5
+      },
+      "explanation": "Increases predelay to 25ms, reduces early reflections, emphasizes tail. Pushes source deeper into mix space."
+    },
+    "wider": {
+      "params": {
+        "stereo_image": 5.0,
+        "chorus_amount": 10.0
+      },
+      "explanation": "Increases stereo width to 120° (maximum) and adds subtle chorus modulation for enhanced spaciousness. Check mono compatibility."
+    },
+    "narrower": {
+      "params": {
+        "stereo_image": -25.0,
+        "chorus_amount": -10.0
+      },
+      "explanation": "Reduces stereo to 90° and removes chorus for more focused, mono-compatible image. Retains space without extreme width."
+    },
+    "cleaner": {
+      "params": {
+        "low_shelf_gain": -2.0,
+        "input_hp_freq": 40.0
+      },
+      "explanation": "Further cuts low shelf to -4dB and raises input HPF to clean up low-end buildup. Tightens tail for clarity in dense mixes."
+    },
+    "fuller": {
+      "params": {
+        "low_shelf_gain": 1.5,
+        "diffusion": 5.0
+      },
+      "explanation": "Reduces low shelf cut to -0.5dB and increases diffusion to 85 for richer, denser tail. Adds body and smoothness."
+    },
+    "more_dramatic": {
+      "params": {
+        "decay": 0.5,
+        "diffuse_level": 1.0,
+        "high_shelf_gain": 1.0
+      },
+      "explanation": "Extends decay to 4.5s, boosts tail +3dB, increases brightness +3dB for maximum impact. Use for climactic moments."
+    },
+    "subtle": {
+      "params": {
+        "decay": -1.5,
+        "diffuse_level": -1.5,
+        "high_shelf_gain": -1.0
+      },
+      "explanation": "Shortens decay to 2.5s, reduces tail level +0.5dB, warms to +1dB for understated ambience. Background glue vs featured effect."
+    }
+  },
+
+  "warnings": {
+    "mono_compatibility": "Stereo width of 115° is very wide. In mono playback, phase cancellation may reduce reverb presence. Test mono fold-down for broadcast/streaming compatibility.",
+    "cpu_usage": "Long decay (4.0s) + large size (75) + high diffusion (80) = moderate-to-high CPU usage. Reduce Density parameter if experiencing performance issues.",
+    "mix_context": "Overwhelming in dense mixes with multiple reverb sends. Use sparingly—typically 1-2 featured elements (lead vocal, solo). Consider automating send levels (low in verses, high in choruses).",
+    "frequency_buildup": "Bright high shelf (+2dB @ 7kHz) can emphasize vocal sibilance (5-8kHz) and cymbal wash. Use de-esser before send or reduce high shelf if tail becomes harsh.",
+    "low_end_accumulation": "4.0s decay allows low frequencies to build up even with -2dB low shelf. Add HPF @ 180-220Hz before send on all sources except kick/bass."
+  },
+
+  "similar_presets": [
+    "Vocal Hall",
+    "Cathedral",
+    "Large Concert Hall"
+  ],
+
+  "contrast_presets": [
+    "Tight Room",
+    "Drum Plate",
+    "Small Chamber",
+    "Vocal Plate"
+  ],
+
+  "genre_tags": [
+    "rock",
+    "metal",
+    "ballad",
+    "EDM",
+    "cinematic",
+    "ambient",
+    "pop-rock"
+  ],
+
+  "technical_specs": {
+    "algorithm": "diffusion network",
+    "early_reflections": "enabled",
+    "modulation": "chorus optional",
+    "cpu_load": "medium-high",
+    "latency": "negligible (algorithmic)"
+  },
+
+  "parameter_values": {
+    "Device On": 1.0,
+    "Predelay": 20.0,
+    "In Filter On": 1.0,
+    "HighPass": 80.0,
+    "LowPass": 12000.0,
+    "ER Spin On": 1.0,
+    "ER Spin Amount": 15.0,
+    "ER Spin Rate": 0.5,
+    "Size": 75.0,
+    "Decay Time": 4.0,
+    "Freeze": 0.0,
+    "Freeze Mode": 0.0,
+    "Room Size": 75.0,
+    "Stereo Image": 115.0,
+    "ER Level": 0.0,
+    "Diffuse Level": 2.0,
+    "In High Shelf On": 0.0,
+    "In High Shelf Gain": 0.0,
+    "In High Shelf Freq": 3000.0,
+    "In Low Shelf On": 0.0,
+    "In Low Shelf Gain": 0.0,
+    "In Low Shelf Freq": 600.0,
+    "High Shelf On": 1.0,
+    "High Shelf Gain": 2.0,
+    "High Shelf Freq": 7000.0,
+    "Low Shelf On": 1.0,
+    "Low Shelf Gain": -2.0,
+    "Low Shelf Freq": 160.0,
+    "Chorus On": 0.0,
+    "Chorus Amount": 0.0,
+    "Chorus Rate": 0.6,
+    "Scale": 100.0,
+    "Diffusion": 80.0,
+    "Density": 0.75,
+    "Dry/Wet": 100.0
+  }
+}
