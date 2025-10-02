@@ -2,6 +2,11 @@
 
 ## How Fadebender Recognizes Learned Devices
 
+> **Key Concept:** Device signatures are based on **parameter structure** (count, names, order), NOT parameter values.
+>
+> - ✅ Same device with different preset **values** = SAME signature (reuses mapping)
+> - ❌ Same device with different **parameter structure** = DIFFERENT signature (needs re-learning)
+
 ### Device Signature Generation
 
 When you learn a device, Fadebender creates a unique "signature" based on:
@@ -82,19 +87,41 @@ GET /return/device/map?index=1&device=2
 - Reverb vs. Delay → Different names → Different signatures
 - **Action:** Learn separately
 
-### 2. Same Device, Different Preset/State
-- ⚠️ **Important:** If device has parameter count changes based on mode
-- Example: Some devices add/remove parameters dynamically
-- **Result:** Different param count → Different signature → Re-learn needed
+### 2. Same Device Name, Different Parameters
+⚠️ **Important:** Signature is based on parameter **structure**, not values
+
+**Example - Reverb with Different Parameter Sets:**
+```
+Scenario A: Reverb in "Economy" mode
+- Parameters: 20 params ["Dry/Wet", "Predelay", "DecayTime", ...]
+- Signature: abc123...
+
+Scenario B: Same Reverb in "High Quality" mode (adds more params)
+- Parameters: 25 params ["Dry/Wet", "Predelay", "DecayTime", "FilterType", ...]
+- Signature: xyz789... (DIFFERENT!)
+- Result: ❌ Treated as different device, needs re-learning
+```
+
+**When this happens:**
+- Device has modes that add/remove parameters dynamically
+- Same device, different parameter count or names
+- Plugin presets that change parameter structure (rare)
+
+**Good news:** Most Ableton stock devices have **fixed parameter lists**
+- Parameter *values* can change freely (won't affect signature)
+- Only parameter *structure* matters (count, names, order)
+- Same Reverb preset across different projects = same signature ✅
 
 ### 3. Different Ableton Version
 - Rare: If Ableton adds/removes parameters in updates
-- Parameter names change → Different signature
-- **Action:** Re-learn after Ableton update
+- Example: Ableton 11 Reverb (23 params) vs Ableton 12 Reverb (25 params)
+- Parameter names/count change → Different signature
+- **Action:** Re-learn after Ableton update if params changed
 
 ### 4. Third-Party Plugins
 - Different plugin versions may have different parameters
-- **Action:** Learn once per version
+- Example: "Valhalla VintageVerb v1" vs "v2" with new params
+- **Action:** Learn once per version/parameter structure
 
 ## Storage & Caching
 
@@ -122,8 +149,11 @@ GET /return/device/map?index=1&device=2
 | Same Reverb, different return | ✅ YES | Uses existing mapping |
 | Same Reverb, same return, deleted & re-added | ✅ YES | Uses existing mapping |
 | Reverb vs. Delay | ❌ NO | Different devices, learn separately |
-| Reverb preset A vs. preset B (same param structure) | ✅ YES | Same signature if params identical |
-| Reverb after Ableton update (params changed) | ❌ NO | Re-learn if params changed |
+| Same Reverb, different **preset values** (params unchanged) | ✅ YES | Values don't affect signature |
+| Same Reverb, different **parameter structure** (count/names) | ❌ NO | Different signature, re-learn needed |
+| Reverb "Economy" mode vs "High Quality" mode (if params differ) | ❌ NO | Different param structure = re-learn |
+| Reverb after Ableton update (params changed) | ❌ NO | Re-learn if param structure changed |
+| Third-party plugin, different versions (params changed) | ❌ NO | Re-learn per version if structure differs |
 
 ## Checking Device Mapping
 
