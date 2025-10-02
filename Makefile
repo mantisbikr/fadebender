@@ -51,6 +51,10 @@ run-server:
 		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR)"
 		FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
 
+run-server-noreload:
+		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) (no-reload)"
+		FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --host 127.0.0.1 --port $${SERVER_PORT-8722}
+
 # ---- Web Chat UI ----
 run-chat:
 	cd clients/web-chat && npm install && npm run dev

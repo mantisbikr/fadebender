@@ -24,6 +24,12 @@ from server.config.app_config import (
     reload_config as cfg_reload,
     save_config as cfg_save,
 )
+from server.config.param_learn_config import (
+    get_param_learn_config,
+    set_param_learn_config,
+    reload_param_learn_config,
+    save_param_learn_config,
+)
 from server.services.mapping_store import MappingStore
 import hashlib
 import math
@@ -124,7 +130,36 @@ def _group_role_for_reverb_param(pname: str) -> tuple[str | None, str | None, st
 
 def _group_role_for_device(device_name: str | None, param_name: str) -> tuple[str | None, str | None, str | None]:
     dn = (device_name or "").strip().lower()
-    # Dispatch by known device names; default to None
+    pn = (param_name or "").strip()
+    # Config-driven first
+    try:
+        PLC = get_param_learn_config()
+        grp = PLC.get("grouping", {}) or {}
+        match_key = None
+        for key in grp.keys():
+            kl = str(key).lower()
+            if kl == "default":
+                continue
+            if kl in dn:
+                match_key = key
+                break
+        if match_key is None:
+            match_key = "default"
+        rules = grp.get(match_key) or {}
+        # Check dependents mapping exact/regex via pipes
+        deps = rules.get("dependents") or {}
+        for dep_name, master_name in deps.items():
+            # dep_name may be exact or partial; use case-insensitive contains
+            if str(dep_name).lower() == pn.lower():
+                return (match_key.title() if match_key != 'default' else None, "dependent", str(master_name))
+        # For masters list, allow "A|B|C" alternatives
+        for m in (rules.get("masters") or []):
+            alts = [s.strip() for s in str(m).split("|")]
+            if any(pn.lower() == a.lower() for a in alts):
+                return (match_key.title() if match_key != 'default' else None, "master", None)
+    except Exception:
+        pass
+    # Built-in fallbacks
     if "reverb" in dn:
         return _group_role_for_reverb_param(param_name)
     return (None, None, None)
@@ -252,7 +287,20 @@ def app_config_update(body: Dict[str, Any]) -> Dict[str, Any]:
 @app.post("/config/reload")
 def app_config_reload() -> Dict[str, Any]:
     cfg = cfg_reload()
-    return {"ok": True, "config": cfg}
+    plc = reload_param_learn_config()
+    return {"ok": True, "config": cfg, "param_learn": plc}
+
+
+@app.get("/param_learn/config")
+def get_param_learn_cfg() -> Dict[str, Any]:
+    return {"ok": True, "config": get_param_learn_config()}
+
+
+@app.post("/param_learn/config")
+def set_param_learn_cfg(body: Dict[str, Any]) -> Dict[str, Any]:
+    cfg = set_param_learn_config(body or {})
+    saved = save_param_learn_config()
+    return {"ok": True, "saved": saved, "config": cfg}
 
 def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
     """Try to read previous mixer value from Ableton (if bridge supports it)."""
@@ -640,6 +688,7 @@ class LearnStartBody(BaseModel):
     device_index: int
     resolution: int = 41
     sleep_ms: int = 20
+    mode: Optional[str] = "quick"  # quick | exhaustive
 
 
 @app.post("/return/device/learn_start")
@@ -813,6 +862,150 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
 
     asyncio.create_task(run())
     return {"ok": True, "job_id": job_id}
+
+
+class LearnQuickBody(BaseModel):
+    return_index: int
+    device_index: int
+
+
+@app.post("/return/device/learn_quick")
+def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
+    """Fast learning using minimal anchors + heuristics. Saves locally + Firestore.
+    Intended to complete in seconds for stock devices.
+    """
+    import time as _t
+    PLC = get_param_learn_config()
+    delay = max(0, int(PLC.get("defaults", {}).get("sleep_ms_quick", 10))) / 1000.0
+    r2_accept = float(PLC.get("defaults", {}).get("r2_accept_quick", 0.99))
+    max_extra = int(PLC.get("defaults", {}).get("max_extra_points_quick", 2))
+
+    ri = int(body.return_index)
+    di = int(body.device_index)
+    # Fetch device + params
+    devs = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
+    devices = ((devs or {}).get("data") or {}).get("devices") or []
+    dname = None
+    for d in devices:
+        if int(d.get("index", -1)) == di:
+            dname = str(d.get("name", f"Device {di}"))
+            break
+    if dname is None:
+        raise HTTPException(404, "device_not_found")
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    params = ((params_resp or {}).get("data") or {}).get("params") or []
+    signature = _make_device_signature(dname or f"Device {di}", params)
+
+    H = PLC.get("heuristics", {})
+    lin_units = [str(u).lower() for u in (H.get("linear_units") or [])]
+    exp_units = [str(u).lower() for u in (H.get("exp_units") or [])]
+    linear_names = [str(n).lower() for n in (H.get("linear_names") or [])]
+    exp_names = [str(n).lower() for n in (H.get("exp_names") or [])]
+    SampC = (PLC.get("sampling", {}).get("continuous") or {})
+    anchors_linear = SampC.get("linear") or [0.0, 0.5, 1.0]
+    anchors_exp = SampC.get("exp") or [0.05, 0.5, 0.95]
+    extra_anchors = SampC.get("fallback_extra") or [0.25, 0.75]
+
+    learned_params: list[dict] = []
+    for p in params:
+        idx = int(p.get("index", 0)); name = str(p.get("name", f"Param {idx}"))
+        vmin = float(p.get("min", 0.0)); vmax = float(p.get("max", 1.0))
+        v0 = float(p.get("value", 0.0))
+        span = vmax - vmin if vmax != vmin else 1.0
+        unit_guess = _parse_unit_from_display(str(p.get("display_value", "")))
+
+        # Quick enum detection
+        labels = set()
+        for t in [0.0, 0.5, 1.0]:
+            val = vmin + span * t
+            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+            if delay: _t.sleep(delay)
+            rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+            rparams = ((rd or {}).get("data") or {}).get("params") or []
+            dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+            if dp is not None:
+                labels.add(str(dp.get("display_value", "")))
+
+        from re import search as _re_search
+        numeric_count = sum(1 for lab in labels if _re_search(r"-?\d+(?:\.\d+)?", lab))
+        is_enum = (len(labels) <= 6 and numeric_count < len(labels)) or (len(labels) <= 2)
+
+        samples: list[dict] = []
+        label_map: dict[str, float] | None = None
+        fit = None
+        unit = unit_guess
+        if is_enum:
+            # Ends + a mid probe
+            seen = set()
+            for t in [0.0, 0.5, 1.0]:
+                val = vmin + span * t
+                udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+                if delay: _t.sleep(delay)
+                rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                rparams = ((rd or {}).get("data") or {}).get("params") or []
+                dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+                if dp is None: continue
+                disp = str(dp.get("display_value", ""))
+                if disp in seen: continue
+                seen.add(disp)
+                samples.append({"value": float(val), "display": disp, "display_num": None})
+            label_map = {}
+            for s in samples:
+                lab = str(s.get("display", ""))
+                if lab not in label_map:
+                    label_map[lab] = float(s.get("value", vmin))
+        else:
+            # Continuous quick anchors by heuristic
+            nm = name.lower(); ustr = (unit_guess or "").lower()
+            anchors = anchors_exp if (ustr in exp_units or any(k in nm for k in exp_names)) else anchors_linear
+            def probe(tfrac: float):
+                val = vmin + span * max(0.0, min(1.0, tfrac))
+                udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(val)}, timeout=0.6)
+                if delay: _t.sleep(delay)
+                rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                rparams = ((rd or {}).get("data") or {}).get("params") or []
+                dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
+                if dp is None: return
+                disp = str(dp.get("display_value", ""))
+                dnum = None
+                try:
+                    m = _re_search(r"-?\d+(?:\.\d+)?", disp)
+                    if m: dnum = float(m.group(0))
+                except Exception:
+                    dnum = None
+                samples.append({"value": float(val), "display": disp, "display_num": dnum})
+            for t in anchors:
+                probe(float(t))
+            fit = _fit_models(samples)
+            if not fit or float(fit.get("r2", 0.0)) < r2_accept:
+                for t in extra_anchors[:max_extra]:
+                    probe(float(t))
+                fit = _fit_models(samples)
+
+        # restore
+        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(v0)}, timeout=0.6)
+
+        ctype, labels_list = _classify_control_type(samples, vmin, vmax)
+        gname, role, _m = _group_role_for_device(dname, name)
+        learned_params.append({
+            "index": idx,
+            "name": name,
+            "min": vmin,
+            "max": vmax,
+            "samples": samples,
+            "control_type": ctype,
+            "unit": unit,
+            "labels": labels_list,
+            "label_map": label_map,
+            "fit": fit if ctype == "continuous" else None,
+            "group": gname,
+            "role": role,
+        })
+
+    groups_meta = _build_groups_from_params(learned_params, dname)
+    local_ok = STORE.save_device_map_local(signature, {"name": dname, "groups": groups_meta}, learned_params)
+    fs_ok = STORE.save_device_map(signature, {"name": dname, "groups": groups_meta}, learned_params)
+    return {"ok": True, "signature": signature, "local_saved": local_ok, "saved": fs_ok, "param_count": len(learned_params)}
 
 
 @app.post("/mappings/push_local")
@@ -1121,7 +1314,7 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
             role = (learned.get("role") or "").lower()
             gname = (learned.get("group") or "").lower()
             if role == "dependent" and gname not in ("global", "output") and "freeze" not in gname:
-                # Find group master name
+                # Resolve master name from stored groups
                 groups = (mapping.get("groups") or []) if mapping else []
                 master_name = None
                 for g in groups:
@@ -1130,18 +1323,34 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                         mref = g.get("master") or {}
                         master_name = str(mref.get("name")) if mref else None
                         break
-                if not master_name:
-                    # Heuristic fallback (prefix until last space + ' On')
-                    if " " in param_name:
-                        master_name = param_name.rsplit(" ", 1)[0] + " On"
+                if not master_name and " " in param_name:
+                    master_name = param_name.rsplit(" ", 1)[0] + " On"
+                # Config override: allow dependent-specific master target value
+                desired_val = None
+                try:
+                    dname = (mapping.get("device_name") or "").lower()
+                    PLC = get_param_learn_config()
+                    grp = PLC.get("grouping", {}) or {}
+                    match_key = None
+                    for key in grp.keys():
+                        kl = str(key).lower()
+                        if kl == "default":
+                            continue
+                        if kl in dname:
+                            match_key = key
+                            break
+                    rules = grp.get(match_key or "default") or {}
+                    dm = rules.get("dependent_master_values") or {}
+                    if param_name in dm:
+                        desired_val = float(dm[param_name])
+                except Exception:
+                    desired_val = None
                 if master_name:
-                    # Resolve master's index from current param list
-                    master_idx = None
                     for p in p_list:
                         if str(p.get("name","")) .lower()== master_name.lower():
                             master_idx = int(p.get("index", 0))
                             mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
-                            mval = mmax if mmax >= 1.0 else 1.0
+                            mval = desired_val if desired_val is not None else (mmax if mmax >= 1.0 else 1.0)
                             udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
                             break
     except Exception:
@@ -1194,13 +1403,57 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                         break
                     x2 = _invert_fit_to_value(fit, target_y, vmin, vmax)
                     if abs(x2 - x) <= 1e-6:
-                        break
+                        # fallback: nearest sample by display_num
+                        best = None; bestd = 1e9
+                        for s in learned.get("samples", []) or []:
+                            dy = s.get("display_num")
+                            if dy is None: continue
+                            d = abs(float(dy) - target_y)
+                            if d < bestd:
+                                bestd = d; best = s
+                        if best:
+                            x2 = float(best.get("value", vmin))
+                        else:
+                            # last resort: proportional nudge in x space
+                            direction = -1.0 if err < 0 else 1.0  # if actual > target, decrease x
+                            step = 0.1 * (vmax - vmin)
+                            x2 = max(vmin, min(vmax, x + direction * step))
                     udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x2)}, timeout=1.0)
                     x = x2
                     rb2 = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
                     rps2 = ((rb2 or {}).get("data") or {}).get("params") or []
                     newp = next((p for p in rps2 if int(p.get("index", -1)) == pi), None)
                     applied_disp = newp.get("display_value") if newp else applied_disp
+            # If still not within threshold, attempt a brief monotonic bisection on x
+            actual_num2 = _parse_target_display(str(applied_disp))
+            if actual_num2 is not None:
+                err2 = target_y - actual_num2
+                thresh2 = 0.02 * (abs(target_y) if target_y != 0 else 1.0)
+                if abs(err2) > thresh2:
+                    lo = vmin; hi = vmax; curx = x
+                    # Initialize bounds by nudging one side based on error direction
+                    if err2 < 0:  # actual > target -> decrease x
+                        hi = curx
+                    else:
+                        lo = curx
+                    for _ in range(8):
+                        mid = (lo + hi) / 2.0
+                        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(mid)}, timeout=1.0)
+                        rb3 = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                        rps3 = ((rb3 or {}).get("data") or {}).get("params") or []
+                        newp3 = next((p for p in rps3 if int(p.get("index", -1)) == pi), None)
+                        applied_disp = newp3.get("display_value") if newp3 else applied_disp
+                        act = _parse_target_display(str(applied_disp))
+                        if act is None:
+                            break
+                        if abs(act - target_y) <= thresh2:
+                            x = mid
+                            break
+                        if act > target_y:
+                            hi = mid
+                        else:
+                            lo = mid
+                        x = mid
     except Exception:
         pass
     return {"ok": True, "signature": signature, "applied": {"value": x, "display": applied_disp}}

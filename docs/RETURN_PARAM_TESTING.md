@@ -107,5 +107,12 @@ Cleanup / Re‑learn
 
 Troubleshooting
 - Server restarts during learn: ensure local map dir is outside repo (default: `~/.fadebender/param_maps`).
+- Also run the server without auto-reload: `make run-server-noreload`.
 - Firestore writes fail (`saved: false`): install `google-cloud-firestore` in the server venv and export `GOOGLE_APPLICATION_CREDENTIALS` before `make run-server`.
 - `exists: true` but old/no samples: delete the mapping via `map_delete` and re‑learn.
+
+See also
+- Delay device quick testing: docs/DELAY_PARAM_TESTING.md
+Note on server reloads during long learns
+- For long learns, prefer: `make run-server-noreload` to avoid uvicorn auto-reload interrupting jobs.
+- Ensure local map cache is outside the repo (default: `~/.fadebender/param_maps`).
