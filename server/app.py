@@ -71,10 +71,11 @@ def _classify_control_type(samples: list[dict], vmin: float, vmax: float) -> tup
     for lab in labels:
         if _re.search(r"-?\d+(?:\.\d+)?", lab):
             numeric_like += 1
-    # Binary if <=2 labels and not mostly numeric
-    if len(labels) <= 2 and numeric_like < len(labels):
+    # Binary if there are two or fewer distinct labels (even if numeric-like)
+    # This captures toggles that display "0.0"/"1.0" and were misclassified as continuous.
+    if len(labels) <= 2:
         return ("binary", labels)
-    # Quantized if small label set and not numeric
+    # Quantized if small label set and not mostly numeric
     if len(labels) > 0 and len(labels) <= 12 and numeric_like < len(labels):
         return ("quantized", labels)
     return ("continuous", [])
@@ -1308,48 +1309,77 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # Auto-enable group masters for dependents (except Freeze)
+    # Auto-enable group masters for dependents (except configured skips)
     try:
         if learned:
             role = (learned.get("role") or "").lower()
             gname = (learned.get("group") or "").lower()
-            if role == "dependent" and gname not in ("global", "output") and "freeze" not in gname:
-                # Resolve master name from stored groups
-                groups = (mapping.get("groups") or []) if mapping else []
-                master_name = None
-                for g in groups:
-                    deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
-                    if any(param_name.lower() == dn.lower() for dn in deps):
-                        mref = g.get("master") or {}
-                        master_name = str(mref.get("name")) if mref else None
+            if role == "dependent" and gname not in ("global", "output"):
+                # Load grouping rules for this device to determine the correct master
+                dname = (mapping.get("device_name") or "").lower()
+                PLC = get_param_learn_config()
+                grp = PLC.get("grouping", {}) or {}
+                match_key = None
+                for key in grp.keys():
+                    kl = str(key).lower()
+                    if kl == "default":
+                        continue
+                    if kl in dname:
+                        match_key = key
                         break
+                rules = grp.get(match_key or "default") or {}
+                # Respect per-device skip list (e.g., Freeze On)
+                skip_list = [str(x).lower() for x in (rules.get("skip_auto_enable") or [])]
+                if any(s in param_name.lower() for s in skip_list) or ("freeze" in param_name.lower()):
+                    raise Exception("skip_auto_enable")
+
+                # First preference: config dependents mapping (exact or case-insensitive)
+                master_name: str | None = None
+                deps_map = rules.get("dependents") or {}
+                for dn, mn in deps_map.items():
+                    if str(dn).lower() == param_name.lower():
+                        master_name = str(mn)
+                        break
+                # If master name uses alternatives (A|B|C), choose the first available in current params
+                if master_name and "|" in master_name:
+                    alts = [s.strip() for s in master_name.split("|") if s.strip()]
+                    chosen = None
+                    for alt in alts:
+                        if any(str(pp.get("name","" )).lower() == alt.lower() for pp in p_list):
+                            chosen = alt
+                            break
+                    master_name = chosen or alts[0]
+
+                # Fallback: infer from stored groups metadata
+                if not master_name:
+                    groups = (mapping.get("groups") or []) if mapping else []
+                    for g in groups:
+                        deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
+                        if any(param_name.lower() == dn.lower() for dn in deps):
+                            mref = g.get("master") or {}
+                            master_name = str(mref.get("name")) if mref else None
+                            break
+                # Last resort: construct "<Base> On" switch
                 if not master_name and " " in param_name:
                     master_name = param_name.rsplit(" ", 1)[0] + " On"
-                # Config override: allow dependent-specific master target value
+
+                # Use per-dependent desired master value when provided
                 desired_val = None
-                try:
-                    dname = (mapping.get("device_name") or "").lower()
-                    PLC = get_param_learn_config()
-                    grp = PLC.get("grouping", {}) or {}
-                    match_key = None
-                    for key in grp.keys():
-                        kl = str(key).lower()
-                        if kl == "default":
-                            continue
-                        if kl in dname:
-                            match_key = key
-                            break
-                    rules = grp.get(match_key or "default") or {}
-                    dm = rules.get("dependent_master_values") or {}
-                    if param_name in dm:
-                        desired_val = float(dm[param_name])
-                except Exception:
-                    desired_val = None
+                dm = rules.get("dependent_master_values") or {}
+                for k, v in dm.items():
+                    if str(k).lower() == param_name.lower():
+                        try:
+                            desired_val = float(v)
+                        except Exception:
+                            desired_val = None
+                        break
+
                 if master_name:
                     for p in p_list:
                         if str(p.get("name","")) .lower()== master_name.lower():
                             master_idx = int(p.get("index", 0))
                             mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
+                            # Binary toggles usually 0..1; prefer explicit desired_val else max/1.0
                             mval = desired_val if desired_val is not None else (mmax if mmax >= 1.0 else 1.0)
                             udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
                             break
@@ -1358,12 +1388,41 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
 
     # Compute candidate value in [vmin..vmax]
     x = vmin
+    # Helper for binary/toggle mapping
+    def _is_binary(ln: Optional[dict]) -> bool:
+        if not ln:
+            return False
+        if str(ln.get("control_type","")) == "binary":
+            return True
+        # If learned shows two or fewer label samples, treat as binary
+        labs = list({str(s.get("display","")) for s in (ln.get("samples") or []) if s.get("display") is not None})
+        return len(labs) <= 2
+
+    # Handle explicit label first (including On/Off synonyms)
     if label and learned:
-        # find sample matching label (case-insensitive)
+        # Try exact label match from samples
+        found = False
         for s in learned.get("samples", []) or []:
             if str(s.get("display", "")).strip().lower() == label.lower():
                 x = float(s.get("value", vmin))
+                found = True
                 break
+        if not found and _is_binary(learned):
+            l = label.strip().lower()
+            on_words = {"on","enable","enabled","true","1","yes"}
+            off_words = {"off","disable","disabled","false","0","no"}
+            if l in on_words:
+                x = vmax
+            elif l in off_words:
+                x = vmin
+            else:
+                # If label_map is present, try keys like "1.0"/"0.0"
+                lm = learned.get("label_map") or {}
+                for k, v in lm.items():
+                    if str(k).strip().lower() == l:
+                        x = float(v)
+                        found = True
+                        break
     elif target_y is not None and learned:
         fit = learned.get("fit")
         if fit:
@@ -1379,6 +1438,9 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                     bestd = d; best = s
             if best:
                 x = float(best.get("value", vmin))
+        # If this is effectively binary, snap to edges based on threshold
+        if _is_binary(learned):
+            x = vmax if float(target_y) >= 0.5 else vmin
 
     # Send set + refine steps (up to 2)
     udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
