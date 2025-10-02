@@ -421,18 +421,23 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                                 <Box key={d.index} sx={{ mb: 0.5, pl: 1, pr: 1 }}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 320 }}>
                                     <Typography variant="body2" noWrap>{d.name || `Device ${d.index}`}</Typography>
-                                    {learnedMap[`${r.index}:${d.index}`]
-                                      ? <Chip size="small" label="Learned" color="success" variant="outlined" />
-                                      : (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                          {learnJobs[`${r.index}:${d.index}`]?.state === 'running' && (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                              <Typography variant="caption" color="text.secondary">
-                                                {Math.round((learnJobs[`${r.index}:${d.index}`].progress / Math.max(1, learnJobs[`${r.index}:${d.index}`].total)) * 100)}%
-                                              </Typography>
-                                            </Box>
-                                          )}
-                                          <Button size="small" variant="outlined" onClick={async () => {
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      {learnJobs[`${r.index}:${d.index}`]?.state === 'running' && (
+                                        <Typography variant="caption" color="text.secondary">
+                                          {Math.round((learnJobs[`${r.index}:${d.index}`].progress / Math.max(1, learnJobs[`${r.index}:${d.index}`].total)) * 100)}%
+                                        </Typography>
+                                      )}
+                                      <Tooltip
+                                        title={
+                                          learnedMap[`${r.index}:${d.index}`]
+                                            ? "Device learned - ready for control"
+                                            : "Click to learn device parameters"
+                                        }
+                                        placement="left"
+                                      >
+                                        <Box
+                                          onClick={async () => {
+                                            if (learnedMap[`${r.index}:${d.index}`]) return; // Don't re-learn
                                             try {
                                               const st = await apiService.learnReturnDeviceStart(r.index, d.index, 41, 20);
                                               const jobId = st?.job_id;
@@ -456,9 +461,22 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                                               };
                                               poll();
                                             } catch {}
-                                          }}>Learn</Button>
-                                        </Box>
-                                      )}
+                                          }}
+                                          sx={{
+                                            width: 12,
+                                            height: 12,
+                                            borderRadius: '50%',
+                                            backgroundColor: learnedMap[`${r.index}:${d.index}`] ? '#4caf50' : '#f44336',
+                                            cursor: learnedMap[`${r.index}:${d.index}`] ? 'default' : 'pointer',
+                                            transition: 'all 0.2s',
+                                            '&:hover': learnedMap[`${r.index}:${d.index}`] ? {} : {
+                                              transform: 'scale(1.3)',
+                                              boxShadow: '0 0 8px rgba(244, 67, 54, 0.6)',
+                                            }
+                                          }}
+                                        />
+                                      </Tooltip>
+                                    </Box>
                                   </Box>
                                 </Box>
                               ))}

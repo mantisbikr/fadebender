@@ -187,9 +187,6 @@ class MappingStore:
     def get_device_map_local(self, signature: str) -> Optional[Dict[str, Any]]:
         """Get device structure mapping from local storage.
 
-        Checks structures/ subdirectory first (new format), then falls back to
-        legacy root location for backward compatibility.
-
         Args:
             signature: Structure-based signature
 
@@ -198,45 +195,26 @@ class MappingStore:
         """
         try:
             import json
-            # Try new structures/ location first
             p = self._local_path(signature, subdir="structures")
             if p and p.exists():
                 with open(p, "r", encoding="utf-8") as f:
                     return json.load(f)
-
-            # Fall back to legacy root location
-            p_legacy = self._local_path(signature)
-            if p_legacy and p_legacy.exists():
-                with open(p_legacy, "r", encoding="utf-8") as f:
-                    return json.load(f)
-
             return None
         except Exception:
             return None
 
     def list_local_maps(self) -> List[str]:
-        """List all local mapping signatures.
-
-        Checks structures/ subdirectory (new format), then root (legacy).
-        """
+        """List all local mapping signatures from structures/ directory."""
         try:
             import pathlib
             if not self._local_dir:
                 return []
-            sigs: List[str] = []
 
-            # Check structures/ subdirectory first (new format)
             structures_dir = pathlib.Path(self._local_dir) / "structures"
-            if structures_dir.exists():
-                for fp in structures_dir.glob("*.json"):
-                    sigs.append(fp.stem)
+            if not structures_dir.exists():
+                return []
 
-            # Also check root for legacy files
-            for fp in pathlib.Path(self._local_dir).glob("*.json"):
-                if fp.stem not in sigs:  # Avoid duplicates
-                    sigs.append(fp.stem)
-
-            return sigs
+            return [fp.stem for fp in structures_dir.glob("*.json")]
         except Exception:
             return []
 
