@@ -16,6 +16,8 @@ This directory contains audio engineering knowledge and DAW device documentation
 - **`audio-fundamentals/`** - Cross-DAW audio engineering principles
   - `audio-engineering-principles.md` - Frequency spectrum, compression, EQ fundamentals
   - `audio_concepts.md` - Gain staging, EQ, reverb, compression basics
+  - `deep_audio_engineering_reverb.md` - Complete reverb guide (psychoacoustics, recipes, troubleshooting)
+  - `deep_audio_engineering_delay.md` - Complete delay guide (types, musical use, recipes)
 
 ### 📚 **Reference Materials**
 - **`references/`** - Local reference files (not committed)
