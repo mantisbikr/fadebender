@@ -31,6 +31,7 @@ from server.config.param_learn_config import (
     save_param_learn_config,
 )
 from server.services.mapping_store import MappingStore
+from server.cloud.enrich_queue import enqueue_preset_enrich
 import hashlib
 import math
 from server.volume_parser import parse_volume_command
@@ -1424,6 +1425,11 @@ async def _auto_capture_preset(
                 })
             except Exception:
                 pass
+            # Enqueue cloud enrichment (Pub/Sub) if configured
+            try:
+                enqueue_preset_enrich(preset_id, metadata_version=1)
+            except Exception:
+                pass
             # Post-save verification and optional retry for empty values
             try:
                 asyncio.create_task(_verify_and_retry_preset(preset_id, return_index, device_index))
@@ -2554,6 +2560,11 @@ async def backfill_preset_metadata(body: BackfillBody) -> Dict[str, Any]:
                             skipped += 1
                         completed += 1
                         await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": status, "updated_fields": list(updates.keys())})
+                        # Enqueue cloud enrichment for richer RAG if configured
+                        try:
+                            enqueue_preset_enrich(pid, metadata_version=1)
+                        except Exception:
+                            pass
                     except Exception as e:
                         errors += 1; completed += 1
                         await broker.publish({"event": "preset_backfill_item", "preset_id": item.get("id"), "status": "error", "error": str(e)})

@@ -229,6 +229,19 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       }
     },
     () => { if (tab === 0) { fetchOutline(false); } },
+    async (payload) => {
+      if (tab !== 0) return;
+      // For preset events, refresh the open return's device list and learned map
+      if (payload?.event && (payload.event.startsWith('preset_') || payload.event === 'return_device_param_changed')) {
+        try {
+          if (typeof payload.return === 'number') {
+            await fetchReturnDevices(payload.return);
+          } else if (openReturn != null) {
+            await fetchReturnDevices(openReturn);
+          }
+        } catch {}
+      }
+    },
     tab === 0
   );
 
