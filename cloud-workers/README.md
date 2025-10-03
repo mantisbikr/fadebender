@@ -225,14 +225,54 @@ curl $SERVICE_URL/health
 
 ## Updating Knowledge Base
 
-The worker loads markdown files from GCS. To update:
+The worker loads markdown files from GCS. Your local `knowledge/` directory is the source of truth.
+
+### One-Time Sync (After Editing)
 
 ```bash
-# Upload updated knowledge base
-gsutil -m rsync -r ./knowledge gs://fadebender-kb/
-
-# Worker will use new KB immediately (no redeploy needed)
+cd /Users/sunils/ai-projects/fadebender/cloud-workers
+./sync-kb.sh fadebender
 ```
+
+This syncs `knowledge/` → `gs://fadebender-kb/` (only uploads new/changed files).
+
+### Ongoing Workflow
+
+1. **Edit KB locally**
+   ```bash
+   cd /Users/sunils/ai-projects/fadebender
+   vim knowledge/ableton-live/audio-effects/reverb.md
+   ```
+
+2. **Sync to GCS**
+   ```bash
+   cd cloud-workers
+   ./sync-kb.sh
+   ```
+
+3. **Cloud workers use updated KB immediately** (no redeploy!)
+
+### Automated Sync (Optional)
+
+Add to your Makefile:
+
+```makefile
+sync-kb:
+	cd cloud-workers && ./sync-kb.sh fadebender
+
+# Run after KB changes
+update-kb: sync-kb
+	@echo "✅ Knowledge base updated in cloud"
+```
+
+Then: `make sync-kb` after editing KB files.
+
+### What Gets Synced?
+
+- `knowledge/ableton-live/audio-effects/*.md`
+- `knowledge/audio-fundamentals/*.md`
+- All subdirectories preserved
+- `.DS_Store` and other hidden files ignored (can add `.gsutilignore` if needed)
 
 ---
 
@@ -313,6 +353,7 @@ gsutil ls -r gs://fadebender-kb/
 cloud-workers/
 ├── README.md                     # This file
 ├── setup-gcp.sh                  # Infrastructure setup script
+├── sync-kb.sh                    # Sync local KB to GCS
 └── preset-enricher/
     ├── main.py                   # Cloud Run worker (Flask app)
     ├── requirements.txt          # Python dependencies

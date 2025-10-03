@@ -1383,13 +1383,24 @@ async def _auto_capture_preset(
 
         print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
 
-        # Generate metadata using LLM
-        print(f"[AUTO-CAPTURE] Generating metadata via LLM...")
-        metadata = await _generate_preset_metadata_llm(
-            device_name=device_name,
-            device_type=device_type,
-            parameter_values=parameter_values,
-        )
+        # Check if we should skip local metadata generation (faster captures)
+        skip_local_llm = os.getenv("SKIP_LOCAL_METADATA_GENERATION", "").lower() in ("1", "true", "yes")
+
+        if skip_local_llm:
+            print(f"[AUTO-CAPTURE] Skipping local LLM (will enqueue for cloud enrichment)")
+            metadata = {
+                "description": {"what": f"{device_name} preset for {device_type}"},
+                "subcategory": "unknown",
+                "metadata_status": "pending_enrichment",
+            }
+        else:
+            # Generate metadata using LLM
+            print(f"[AUTO-CAPTURE] Generating metadata via LLM...")
+            metadata = await _generate_preset_metadata_llm(
+                device_name=device_name,
+                device_type=device_type,
+                parameter_values=parameter_values,
+            )
 
         # Create preset data
         import time as _time
@@ -1427,9 +1438,13 @@ async def _auto_capture_preset(
                 pass
             # Enqueue cloud enrichment (Pub/Sub) if configured
             try:
-                enqueue_preset_enrich(preset_id, metadata_version=1)
-            except Exception:
-                pass
+                enqueued = enqueue_preset_enrich(preset_id, metadata_version=1)
+                if enqueued:
+                    print(f"[PUBSUB] ✓ Enqueued preset_enrich_requested for {preset_id}")
+                else:
+                    print(f"[PUBSUB] ⊘ Pub/Sub not configured (set PUBSUB_TOPIC in .env)")
+            except Exception as e:
+                print(f"[PUBSUB] ✗ Failed to enqueue: {e}")
             # Post-save verification and optional retry for empty values
             try:
                 asyncio.create_task(_verify_and_retry_preset(preset_id, return_index, device_index))
