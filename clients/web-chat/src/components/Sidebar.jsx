@@ -405,7 +405,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                             <Typography variant="body2" noWrap>{r.name || `Return ${r.index}`}</Typography>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                               <Button size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) await fetchReturnDevices(next); }}>
-                                {openReturn === r.index ? 'Hide' : 'Show'} Devices
+                                {openReturn === r.index ? 'Hide' : 'Show'}
                               </Button>
                             </Box>
                           </Box>
