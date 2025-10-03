@@ -742,23 +742,129 @@ except Exception as e:
 
 ### Test Results
 
-**Test: Load "Ambience Medium" preset**
+**Test 1: Load "Ambience Medium" preset (initial test)**
 ```
 ✅ Structure detected (green dot appears)
 ✅ Auto-capture triggered
 ⚠️  0 parameter values extracted
-⚠️  LLM failed (404 model not found)
+⚠️  LLM failed (404 model not found - hardcoded gemini-1.5-flash)
 ✅ Fallback metadata used
 ✅ Preset saved to Firestore (reverb_ambience_medium)
 ```
 
+**Test 2: After fixing hardcoded model (using gemini-2.5-flash from .env)**
+```
+✅ Structure detected (green dot immediate)
+✅ Auto-capture triggered in background
+✅ LLM model working (gemini-2.5-flash from .env)
+⚠️  0 parameter values extracted (still broken)
+⚠️  LLM generated invalid JSON (empty params → bad metadata)
+✅ Fallback metadata applied
+✅ Preset saved to Firestore (but empty parameter_values)
+```
+
+**Test 3: Verify stored presets in Firestore**
+```bash
+# Checked actual preset data
+reverb_ambience:        parameter_values: {} (0 params) ⚠️
+reverb_ambience_medium: parameter_values: {} (0 params) ⚠️
+reverb_arena_tail:      parameter_values: {35 params} ✅ (manual creation)
+```
+
+### Root Cause Analysis
+
+**The Bug:** Parameter extraction returns 0 values
+
+**Location:** `server/app.py:478` - We're passing the wrong `params` to auto-capture
+
+**The Problem:**
+```python
+# Line 445 - Get live params from device (HAS "value" field)
+params_resp = udp_request({"op": "get_return_device_params", ...})
+params = ((params_resp or {}).get("data") or {}).get("params") or []
+
+# ... other code ...
+
+# Line 460 - OVERWRITES params with mapping params (NO "value" field)
+if m:
+    params = m.get("params")  # ❌ Destroys live params!
+
+# ... other code ...
+
+# Line 478 - Passes wrong params to auto-capture
+asyncio.create_task(_auto_capture_preset(
+    index, device, dname, device_type, signature, params  # ❌ mapping params, not live
+))
+```
+
+**Data Structure Mismatch:**
+
+Live params (from UDP, has values):
+```python
+{
+    "name": "Predelay",
+    "value": 20.0,      # ✅ Current value
+    "min": 0.0,
+    "max": 100.0
+}
+```
+
+Mapping params (from Firestore, has samples):
+```python
+{
+    "name": "Predelay",
+    "index": 0,
+    "min": 0.0,
+    "max": 100.0,
+    "samples": [        # ✅ Learned samples
+        {"value": 0.0, "display": "0.00 ms"},
+        {"value": 20.0, "display": "20.0 ms"}
+    ]
+    # ❌ NO "value" field
+}
+```
+
+**Auto-capture expects "value":**
+```python
+# Line 843 - Tries to extract value
+for p in params:
+    param_value = p.get("value")  # Returns None for mapping params!
+    if param_name and param_value is not None:
+        parameter_values[param_name] = float(param_value)
+# Result: 0 parameters extracted
+```
+
+**Fix Required:**
+Save original live params before line 460 overwrites them, then pass the live params to auto-capture instead.
+
+**Issue 4: UI Doesn't Auto-Update After Preset Capture** ⚠️
+
+When a device/preset is loaded in Ableton:
+1. Server detects structure is learned → returns `exists: true`
+2. UI shows green dot immediately
+3. Background task captures preset to Firestore
+4. ❌ **UI doesn't refresh** - green dot stays but no preset info appears
+5. User must manually hide/show return track to see preset data
+
+**Root Cause:**
+- Auto-capture runs in background on server
+- No WebSocket/SSE event sent to UI when capture completes
+- UI only fetches device info on initial load or manual refresh
+
+**Fix Required:**
+- Add event broker notification when preset capture completes
+- UI listens for `preset_captured` event
+- Refresh device list when event received
+- OR: Poll `/return/device/map` again after green dot appears
+
 ### Next Steps (Deferred)
 
-1. **Fix parameter extraction** - Debug why values are None
-2. **Update LLM model** - Use gemini-2.0-flash-exp or enable in project
-3. **Test with working LLM** - Verify metadata generation quality
+1. **Fix parameter extraction** - Pass live params (not mapping params) to auto-capture
+2. **Add UI auto-refresh** - Update UI when preset capture completes (event or polling)
+3. **Test with working params** - Verify LLM generates good metadata with real values
 4. **Add retry logic** - Handle transient LLM failures
-5. **Monitoring** - Log preset capture success/failure rates
+5. **JSON validation** - Better error handling for invalid LLM responses
+6. **Monitoring** - Log preset capture success/failure rates
 
 ---
 

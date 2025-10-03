@@ -324,13 +324,21 @@ class MappingStore:
         if self._enabled and self._client:
             try:
                 query = self._client.collection("presets")
+                # Prefer keyword 'filter' to avoid deprecation warning
+                try:
+                    from google.cloud.firestore_v1.base_query import FieldFilter  # type: ignore
+                    def _where(q, field, op, val):
+                        return q.where(filter=FieldFilter(field, op, val))
+                except Exception:
+                    def _where(q, field, op, val):
+                        return q.where(field, op, val)
 
                 if device_type:
-                    query = query.where("category", "==", device_type)
+                    query = _where(query, "category", "==", device_type)
                 if structure_signature:
-                    query = query.where("structure_signature", "==", structure_signature)
+                    query = _where(query, "structure_signature", "==", structure_signature)
                 if preset_type:
-                    query = query.where("preset_type", "==", preset_type)
+                    query = _where(query, "preset_type", "==", preset_type)
 
                 for doc in query.stream():
                     data = doc.to_dict()

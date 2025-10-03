@@ -34,8 +34,13 @@ def get_default_model_name(preference: str | None = None) -> str:
         preference = os.getenv("LLM_MODEL_PREFERENCE", "gemini-2.5-flash").lower()
     pref = preference.lower()
     if pref in ("gemini", "gemini-flash", "flash", "gemini-2.5-flash"):
-        # Default to the latest/compatible Gemini Flash
-        return os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002")
+        # Check multiple env var names for model selection
+        return (
+            os.getenv("VERTEX_MODEL")
+            or os.getenv("LLM_MODEL")
+            or os.getenv("GEMINI_MODEL")
+            or "gemini-1.5-flash-002"
+        )
     if pref in ("llama", "llama-8b", "llama-3.1-8b-instruct", "llama-8b-mass"):
         # Name used for non-Vertex llama endpoints; caller can use LLAMA_* env
         return os.getenv("LLAMA_MODEL", "meta-llama/Llama-3.1-8B-Instruct")

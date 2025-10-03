@@ -192,6 +192,176 @@ try:  # optional dependency
 except Exception:
     pass
 
+# Initialize Vertex AI (if env configured)
+try:
+    import vertexai  # type: ignore
+    _VERTEX_INITED = False
+    def _vertex_init_once() -> None:
+        global _VERTEX_INITED
+        if _VERTEX_INITED:
+            return
+        project = os.getenv("VERTEX_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
+        location = os.getenv("VERTEX_LOCATION") or "us-central1"
+        if project:
+            try:
+                vertexai.init(project=project, location=location)
+                _VERTEX_INITED = True
+            except Exception:
+                # Defer errors to first model call
+                _VERTEX_INITED = False
+except Exception:
+    def _vertex_init_once() -> None:
+        return
+
+
+def _json_lenient_parse(text: str) -> Optional[Dict[str, Any]]:
+    """Try to parse JSON with light repairs for common LLM artifacts.
+
+    Repairs:
+    - Strip markdown code fences
+    - Normalize smart quotes to ASCII
+    - Remove trailing commas before } or ]
+    - Try largest-brace substring
+    - As last resort, convert single quotes to double quotes (heuristic)
+    """
+    import re as _r
+    t = str(text or "")
+    if not t:
+        return None
+    # Strip code fences
+    if t.strip().startswith("```"):
+        parts = t.split("```")
+        if len(parts) >= 3:
+            t = parts[1] if parts[0].strip() == "" else parts[1]
+    # Normalize quotes
+    t = t.replace("“", '"').replace("”", '"').replace("‟", '"').replace("’", "'").replace("‘", "'")
+    # Remove trailing commas
+    t = _r.sub(r",\s*(\}|\])", r"\1", t)
+    # Try direct parse
+    try:
+        import json as _json
+        return _json.loads(t)
+    except Exception:
+        pass
+    # Try largest brace substring
+    i, j = t.find("{"), t.rfind("}")
+    if i >= 0 and j > i:
+        s = t[i:j+1]
+        s = _r.sub(r",\s*(\}|\])", r"\1", s)
+        try:
+            import json as _json
+            return _json.loads(s)
+        except Exception:
+            pass
+    # Heuristic: convert single quotes to double quotes (may over-correct)
+    t2 = t
+    if t2.count('"') < 2 and t2.count("'") >= 4:
+        t2 = t2.replace("'", '"')
+        t2 = _r.sub(r",\s*(\}|\])", r"\1", t2)
+        try:
+            import json as _json
+            return _json.loads(t2)
+        except Exception:
+            return None
+    return None
+
+
+def _preset_metadata_schema() -> Dict[str, Any]:
+    """JSON schema for LLM response to enforce strict JSON output."""
+    return {
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "object",
+                "properties": {
+                    "what": {"type": "string"},
+                    "when": {"type": "array", "items": {"type": "string"}},
+                    "why": {"type": "string"},
+                },
+                "required": ["what"],
+                "additionalProperties": True,
+            },
+            "audio_engineering": {"type": "object"},
+            "natural_language_controls": {"type": "object"},
+            "warnings": {"type": "object"},
+            "genre_tags": {"type": "array", "items": {"type": "string"}},
+            "subcategory": {"type": "string"},
+        },
+        "additionalProperties": True,
+    }
+
+
+def _basic_metadata_fallback(device_name: str, device_type: str, parameter_values: Dict[str, float]) -> Dict[str, Any]:
+    """Heuristic fallback metadata when LLM JSON is unavailable."""
+    desc = {
+        "what": f"{device_name} preset for {device_type}",
+        "when": ["general purpose", "subtle ambience"],
+        "why": "Automatically generated fallback without LLM."
+    }
+    # Try to pull a short rationale from local KB to extend the 'why' section
+    def _kb_excerpt(dtype: str) -> str:
+        try:
+            import pathlib
+            base = pathlib.Path(os.getcwd()) / "knowledge" / "audio-fundamentals"
+            fname = None
+            if dtype.lower() == "reverb":
+                fname = base / "deep_audio_engineering_reverb.md"
+            elif dtype.lower() == "delay":
+                fname = base / "deep_audio_engineering_delay.md"
+            if fname and fname.exists():
+                txt = fname.read_text(encoding="utf-8", errors="ignore")
+                return txt.strip().replace("\n", " ")[:600]
+        except Exception:
+            pass
+        return "This preset leverages time-domain processing and frequency-domain shaping to achieve the desired psychoacoustic perception in a mix."
+
+    ae: Dict[str, Any] = {}
+    if device_type == "reverb":
+        decay = None
+        # Try common names
+        for k in ("Decay", "Decay Time", "DecayTime"):
+            if k in parameter_values:
+                decay = float(parameter_values[k]); break
+        predelay = None
+        for k in ("Predelay", "PreDelay", "Pre-Delay"):
+            if k in parameter_values:
+                predelay = float(parameter_values[k]); break
+        ae = {
+            "space_type": "hall" if (decay or 0) >= 3.5 else "room",
+            "decay_time": f"~{decay:.2f}s" if decay is not None else None,
+            "predelay": f"~{predelay:.0f} ms" if predelay is not None else None,
+            "frequency_character": "neutral",
+            "stereo_width": "wide",
+            "diffusion": "smooth",
+            "use_cases": [
+                {"source": "vocal", "context": "ballad", "send_level": "15-25%", "notes": "Fallback guidance"}
+            ],
+        }
+    # Build at least 4 generic use cases when LLM metadata is unavailable
+    default_use_cases = [
+        {"source": "lead vocal", "context": "ballad", "send_level": "15-25%", "send_level_rationale": "maintain intelligibility while adding space", "eq_prep": "HPF 100 Hz, gentle de-ess", "eq_rationale": "reduce mud and sibilance feeding the reverb", "notes": "consider a pre-delay of 20-40 ms to preserve consonants"},
+        {"source": "electric guitar", "context": "solo", "send_level": "10-20%", "send_level_rationale": "share space without washing transients", "eq_prep": "HPF 120 Hz, tilt -1 dB @ 4 kHz", "eq_rationale": "avoid low-end buildup and harshness", "notes": "wider stereo helpful for size, beware mono collapse"},
+        {"source": "synth pad", "context": "ambient", "send_level": "25-40%", "send_level_rationale": "embrace tail for texture", "eq_prep": "HPF 80 Hz", "eq_rationale": "protect low-end clarity", "notes": "increase diffusion for smoother tail"},
+        {"source": "drums", "context": "room enhancement", "send_level": "5-12%", "send_level_rationale": "enhance room sense without blurring hits", "eq_prep": "HPF 150 Hz, notch 500 Hz", "eq_rationale": "control boxiness", "notes": "short decay <1.2s for punch"},
+    ]
+
+    return {
+        "description": desc,
+        "audio_engineering": {
+            **ae,
+            "use_cases": default_use_cases if device_type == "reverb" else default_use_cases[:4],
+        },
+        "natural_language_controls": {},
+        "warnings": {},
+        "genre_tags": [],
+        "subcategory": ae.get("space_type") if isinstance(ae, dict) else "unknown",
+        # Expand 'why' with KB excerpt to meet minimum richness
+        "description": {
+            **desc,
+            "why": (desc.get("why") or "") + " " + _kb_excerpt(device_type)
+        }
+    }
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -199,6 +369,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/llm/health")
+def llm_health() -> Dict[str, Any]:
+    """Quick LLM health: show resolved model/project/location and a JSON echo test.
+
+    Does not consume many tokens; intended for debugging env issues.
+    """
+    import traceback
+    model_name = os.getenv("LLM_MODEL") or os.getenv("VERTEX_MODEL") or "gemini-2.5-flash"
+    project = os.getenv("VERTEX_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("VERTEX_LOCATION") or "us-central1"
+    ok = False
+    error = None
+    tried = None
+    try:
+        _vertex_init_once()
+        from vertexai.generative_models import GenerativeModel  # type: ignore
+        m = GenerativeModel(model_name)
+        prompt = "Return a JSON object: {\"ok\": true, \"note\": \"healthcheck\"}"
+        r = m.generate_content(prompt, generation_config={"response_mime_type": "application/json", "max_output_tokens": 64, "temperature": 0.0})
+        txt = getattr(r, "text", "")
+        tried = bool(txt)
+        if txt:
+            import json as _json
+            data = _json.loads(txt)
+            if isinstance(data, dict) and data.get("ok") is True:
+                ok = True
+        if not ok:
+            error = "unexpected_response"
+    except Exception as e:
+        error = f"{e}\n{traceback.format_exc()}"
+    return {"ok": ok, "model": model_name, "project": project, "location": location, "tried_text": tried, "error": error}
 
 
 # --- Simple safety state: undo + rate limiting ---
@@ -249,6 +452,7 @@ class EventBroker:
 broker = EventBroker()
 STORE = MappingStore()
 LEARN_JOBS: dict[str, dict] = {}
+BACKFILL_JOBS: dict[str, dict] = {}
 
 @app.get("/events")
 async def events():
@@ -442,11 +646,11 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     if dname is None:
         return {"ok": False, "error": "device_not_found"}
     params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = _make_device_signature(dname, params)
+    live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+    signature = _make_device_signature(dname, live_params)
     backend = STORE.backend
     exists = False
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(live_params)
 
     try:
         # Check Firestore first (primary source), fall back to local cache
@@ -456,13 +660,10 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
             m = STORE.get_device_map_local(signature)
 
         print(f"[DEBUG] get_device_map returned: {type(m)}, is_none: {m is None}")
-        if m:
-            params = m.get("params")
-            print(f"[DEBUG] params: type={type(params)}, len={len(params) if isinstance(params, list) else 'N/A'}")
-
-        if m and isinstance(m.get("params"), list):
+        learned_params = (m.get("params") or []) if m else []
+        if isinstance(learned_params, list):
             # Consider learned only if at least one param has >= 3 samples
-            for p in m["params"]:
+            for p in learned_params:
                 sm = p.get("samples") or []
                 if isinstance(sm, list) and len(sm) >= 3:
                     exists = True
@@ -475,7 +676,8 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
 
     # If structure is learned, auto-capture preset in background (non-blocking)
     if exists and device_type and dname:
-        asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
+        # IMPORTANT: pass live_params (with 'value' fields), not learned mapping
+        asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, live_params))
 
     return {
         "ok": True,
@@ -684,10 +886,11 @@ async def _generate_preset_metadata_llm(
     try:
         import vertexai
         from vertexai.generative_models import GenerativeModel
-        from config.llm_config import get_llm_project_id
+        from config.llm_config import get_llm_project_id, get_default_model_name
 
         project = get_llm_project_id()
         location = os.getenv("GCP_REGION", "us-central1")
+        model_name = get_default_model_name()  # Use configured model from .env
 
         vertexai.init(project=project, location=location)
 
@@ -760,25 +963,354 @@ Generate a comprehensive metadata JSON with this structure:
 Return ONLY valid JSON. Be specific and technical. Use actual parameter values to inform your analysis.
 """
 
-        model = GenerativeModel("gemini-1.5-flash")
-        resp = model.generate_content(prompt, generation_config={
-            "temperature": 0.3,
-            "max_output_tokens": 2048,
-            "top_p": 0.9,
-        })
+        # Ensure Vertex is initialized
+        _vertex_init_once()
+        # Use env/config model with JSON-only response for robust parsing
+        # Resolve model name with sensible defaults
+        model_name = os.getenv("LLM_MODEL") or os.getenv("VERTEX_MODEL") or "gemini-2.5-flash"
+        # Encourage strict JSON via system instruction
+        # Load local KB context to enrich outputs
+        def _load_kb_for(dtype: str) -> str:
+            try:
+                import pathlib
+                base = pathlib.Path(os.getcwd()) / "knowledge" / "audio-fundamentals"
+                fname = None
+                if dtype.lower() == "reverb":
+                    fname = base / "deep_audio_engineering_reverb.md"
+                elif dtype.lower() == "delay":
+                    fname = base / "deep_audio_engineering_delay.md"
+                if fname and fname.exists():
+                    text = fname.read_text(encoding="utf-8", errors="ignore")
+                    # Trim to a sane size to keep prompt within context window
+                    return text[:20000]
+            except Exception:
+                pass
+            return ""
 
+        kb = _load_kb_for(device_type)
+
+        model = GenerativeModel(
+            model_name,
+            system_instruction=(
+                "You are an expert audio engineer. Respond with STRICT JSON only."
+            ),
+        )
+        try:
+            # First attempt: JSON-only MIME type
+            # Build enriched prompt with KB context and stricter content requirements
+            enriched_prompt = f"""
+You are generating authoritative audio engineering metadata for a {device_type} preset.
+
+KB Context (verbatim excerpts from internal knowledge):
+---
+{kb}
+---
+
+Preset Name: {device_name}
+Parameter Values:
+{json.dumps(parameter_values, indent=2)}
+
+Requirements:
+- Output STRICT JSON only (no prose).
+- Provide a deeply technical description and rationale grounded in the KB Context and parameter values.
+- audio_engineering.use_cases MUST include at least 4 detailed entries with send_level, eq_prep, and rationale fields.
+- natural_language_controls MUST include all listed controls with parameter suggestions and explanations grounded in psychoacoustics.
+- Prefer precise numeric guidance when possible.
+
+JSON schema/layout to follow:
+{{
+  "description": {{
+    "what": "1–2 sentence sonic character",
+    "when": ["Use case 1", "Use case 2", "Use case 3", "Use case 4"],
+    "why": "3–6 sentence technical explanation grounded in KB"
+  }},
+  "audio_engineering": {{
+    "space_type": "hall|room|plate|chamber|spring|convolution",
+    "size": "qualitative + numeric if known",
+    "decay_time": "RT60-like description",
+    "predelay": "ms with spatial reasoning",
+    "frequency_character": "bright|dark|neutral with EQ hints",
+    "stereo_width": "narrow|moderate|wide with angle if applicable",
+    "diffusion": "smooth|grainy|dense",
+    "use_cases": [
+      {{
+        "source": "e.g., vocal, guitar, synth",
+        "context": "mix context",
+        "send_level": "recommended % range",
+        "send_level_rationale": "why this send",
+        "eq_prep": "pre-send EQ moves",
+        "eq_rationale": "why those EQ moves",
+        "notes": "extra tips"
+      }}
+    ]
+  }},
+  "natural_language_controls": {{
+    "tighter": {{"params": {{}} , "explanation": "..."}},
+    "looser": {{"params": {{}} , "explanation": "..."}},
+    "warmer": {{"params": {{}} , "explanation": "..."}},
+    "brighter": {{"params": {{}} , "explanation": "..."}},
+    "closer": {{"params": {{}} , "explanation": "..."}},
+    "further": {{"params": {{}} , "explanation": "..."}},
+    "wider": {{"params": {{}} , "explanation": "..."}},
+    "narrower": {{"params": {{}} , "explanation": "..."}}
+  }},
+  "subcategory": "specific reverb subtype",
+  "warnings": {{
+    "mono_compatibility": "...",
+    "cpu_usage": "...",
+    "mix_context": "...",
+    "frequency_buildup": "...",
+    "low_end_accumulation": "..."
+  }},
+  "genre_tags": ["genre1", "genre2", "genre3"]
+}}
+
+Return ONLY valid JSON.
+"""
+
+            resp = model.generate_content(
+                enriched_prompt,
+                generation_config={
+                    "temperature": 0.0,
+                    "max_output_tokens": 4096,
+                    "top_p": 0.9,
+                    "response_mime_type": "application/json",
+                },
+            )
+        except Exception:
+            # Fallback: no special JSON constraint (some SDKs don't support response_mime_type)
+            resp = model.generate_content(
+                enriched_prompt,
+                generation_config={
+                    "temperature": 0.0,
+                    "max_output_tokens": 4096,
+                    "top_p": 0.9,
+                },
+            )
+
+        # Quality helpers
+        def _quality_ok(d: Dict[str, Any]) -> bool:
+            try:
+                why = str(((d or {}).get("description") or {}).get("why") or "")
+                ucs = ((d or {}).get("audio_engineering") or {}).get("use_cases") or []
+                return (len(why) >= 200) and (isinstance(ucs, list) and len(ucs) >= 4)
+            except Exception:
+                return False
+
+        def _try_enrich(meta_in: Dict[str, Any]) -> Dict[str, Any]:
+            try:
+                enrich_prompt = f"""
+You are enriching existing preset metadata using the KB Context.
+KB Context:
+---
+{kb}
+---
+Original Metadata JSON:
+{json.dumps(meta_in, indent=2)}
+
+Improve it to meet these minimums:
+- description.why >= 200 characters with deeper technical reasoning
+- audio_engineering.use_cases must contain at least 4 detailed entries (with send_level, eq_prep, and clear rationale)
+Return STRICT JSON only with the same keys expanded.
+"""
+                resp2 = model.generate_content(
+                    enrich_prompt,
+                    generation_config={
+                        "temperature": 0.2,
+                        "max_output_tokens": 4096,
+                        "top_p": 0.9,
+                        "response_mime_type": "application/json",
+                    },
+                )
+                txt2 = getattr(resp2, "text", None)
+                if txt2:
+                    meta2 = json.loads(txt2)
+                    if _quality_ok(meta2):
+                        return meta2
+                    # merge if partial improvement
+                    try:
+                        m = dict(meta_in)
+                        m.update(meta2)
+                        return m
+                    except Exception:
+                        return meta_in
+            except Exception:
+                return meta_in
+            return meta_in
+
+        # Prefer direct JSON text when available (JSON mode)
         response_text = getattr(resp, "text", None)
-        if not response_text:
-            raise RuntimeError("Empty LLM response")
+        if response_text:
+            try:
+                meta = _json_lenient_parse(response_text) or json.loads(response_text)
+                if not _quality_ok(meta):
+                    meta = _try_enrich(meta)
+                return meta
+            except Exception:
+                pass
 
-        # Extract JSON from response
-        text = response_text.strip()
-        start, end = text.find("{"), text.rfind("}")
-        if start < 0 or end <= start:
-            raise ValueError("No JSON found in LLM response")
+        # Vertex SDK variants: try candidates/parts
+        try:
+            cands = getattr(resp, "candidates", []) or []
+            for c in cands:
+                content = getattr(c, "content", None)
+                parts = getattr(content, "parts", []) if content else []
+                for p in parts:
+                    t = getattr(p, "text", None)
+                    if t:
+                        try:
+                            meta = _json_lenient_parse(t) or json.loads(t)
+                            if not _quality_ok(meta):
+                                meta = _try_enrich(meta)
+                            return meta
+                        except Exception:
+                            # Try brace extraction from part text
+                            s = str(t)
+                            i, j = s.find("{"), s.rfind("}")
+                            if i >= 0 and j > i:
+                                meta = _json_lenient_parse(s[i:j+1]) or json.loads(s[i:j+1])
+                                if not _quality_ok(meta):
+                                    meta = _try_enrich(meta)
+                                return meta
+        except Exception:
+            pass
 
-        metadata = json.loads(text[start:end + 1])
-        return metadata
+        # to_dict traversal (SDK variant)
+        try:
+            td = getattr(resp, "to_dict", None)
+            if callable(td):
+                d = td()
+                # Search recursively for JSON-like string
+                def _find_json_like(obj):
+                    if isinstance(obj, str) and obj.strip().startswith("{") and obj.strip().endswith("}"):
+                        try:
+                            return json.loads(obj)
+                        except Exception:
+                            # try brace extraction
+                            s = obj; i, j = s.find("{"), s.rfind("}")
+                            if i >= 0 and j > i:
+                                return json.loads(s[i:j+1])
+                    if isinstance(obj, dict):
+                        for v in obj.values():
+                            r = _find_json_like(v)
+                            if r is not None:
+                                return r
+                    if isinstance(obj, list):
+                        for it in obj:
+                            r = _find_json_like(it)
+                            if r is not None:
+                                return r
+                    return None
+                found = _find_json_like(d)
+                if found is not None:
+                    meta = found
+                    if not _quality_ok(meta):
+                        meta = _try_enrich(meta)
+                    return meta
+        except Exception:
+            pass
+
+        # Fallback extractor for raw text
+        raw = str(response_text or "").strip()
+        i, j = raw.find("{"), raw.rfind("}")
+        if i >= 0 and j > i:
+            try:
+                meta = _json_lenient_parse(raw[i:j + 1]) or json.loads(raw[i:j + 1])
+                if not _quality_ok(meta):
+                    meta = _try_enrich(meta)
+                return meta
+            except Exception:
+                pass
+
+        # Sectional generation fallback: generate smaller JSON chunks and merge
+        try:
+            def _gen_section(title: str, tpl: str) -> Dict[str, Any] | None:
+                p = f"""
+You are generating STRICT JSON for the '{title}' section only. No prose, no markdown.
+KB Context (may help):
+---
+{kb}
+---
+Preset: {device_name} ({device_type})
+Parameter Values:
+{json.dumps(parameter_values, indent=2)}
+
+Expected JSON skeleton to fill (return exactly this object with content populated):
+{tpl}
+"""
+                r = model.generate_content(p, generation_config={
+                    "temperature": 0.0,
+                    "max_output_tokens": 2048,
+                    "top_p": 0.9,
+                    "response_mime_type": "application/json",
+                })
+                txt = getattr(r, "text", None)
+                if not txt:
+                    return None
+                return _json_lenient_parse(txt) or json.loads(txt)
+
+            desc = _gen_section(
+                "description",
+                json.dumps({
+                    "description": {
+                        "what": "",
+                        "when": ["", "", "", ""],
+                        "why": ""
+                    }
+                }, indent=2),
+            ) or {}
+
+            eng = _gen_section(
+                "audio_engineering",
+                json.dumps({
+                    "audio_engineering": {
+                        "space_type": "",
+                        "size": "",
+                        "decay_time": "",
+                        "predelay": "",
+                        "frequency_character": "",
+                        "stereo_width": "",
+                        "diffusion": "",
+                        "use_cases": [
+                            {"source": "", "context": "", "send_level": "", "send_level_rationale": "", "eq_prep": "", "eq_rationale": "", "notes": ""}
+                        ]
+                    }
+                }, indent=2),
+            ) or {}
+
+            nlc = _gen_section(
+                "natural_language_controls",
+                json.dumps({
+                    "natural_language_controls": {
+                        "tighter": {"params": {}, "explanation": ""},
+                        "looser": {"params": {}, "explanation": ""},
+                        "warmer": {"params": {}, "explanation": ""},
+                        "brighter": {"params": {}, "explanation": ""},
+                        "closer": {"params": {}, "explanation": ""},
+                        "further": {"params": {}, "explanation": ""},
+                        "wider": {"params": {}, "explanation": ""},
+                        "narrower": {"params": {}, "explanation": ""}
+                    }
+                }, indent=2),
+            ) or {}
+
+            merged: Dict[str, Any] = {}
+            for part in (desc, eng, nlc):
+                try:
+                    for k, v in (part or {}).items():
+                        merged[k] = v
+                except Exception:
+                    continue
+            if merged:
+                # Ensure minimum quality via enrichment if needed
+                if not _quality_ok(merged):
+                    merged = _try_enrich(merged)
+                return merged
+        except Exception:
+            pass
+
+        # If we still could not parse, return structured fallback
+        return _basic_metadata_fallback(device_name, device_type, parameter_values)
 
     except Exception as e:
         print(f"[LLM] Failed to generate metadata: {e}")
@@ -820,13 +1352,25 @@ async def _auto_capture_preset(
         # Format: devicetype_presetname (e.g., reverb_ambience_medium)
         preset_id = f"{device_type}_{device_name.lower().replace(' ', '_')}"
 
-        # Check if preset already exists
+        # Check if preset already exists; if it exists but has empty/partial values, refresh it
         existing = STORE.get_preset(preset_id)
         if existing:
-            print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
-            return
+            pv = existing.get("parameter_values") or {}
+            # Treat presets with too-few values as incomplete and refresh them in-place
+            if isinstance(pv, dict) and len(pv) >= 5:
+                print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
+                return
+            else:
+                print(f"[AUTO-CAPTURE] Preset {preset_id} exists but has {len(pv) if isinstance(pv, dict) else 0} values; refreshing")
 
         print(f"[AUTO-CAPTURE] Capturing new preset: {preset_id}")
+
+        # DEBUG: Check what params structure we're receiving
+        if params and len(params) > 0:
+            sample_param = params[0]
+            print(f"[AUTO-CAPTURE] DEBUG - First param keys: {list(sample_param.keys())}")
+            print(f"[AUTO-CAPTURE] DEBUG - Has 'value'? {'value' in sample_param}")
+            print(f"[AUTO-CAPTURE] DEBUG - Sample param: {sample_param}")
 
         # Extract parameter values from provided params
         parameter_values = {}
@@ -847,6 +1391,7 @@ async def _auto_capture_preset(
         )
 
         # Create preset data
+        import time as _time
         preset_data = {
             "name": device_name,
             "device_name": device_name.split()[0] if ' ' in device_name else device_name,
@@ -856,6 +1401,8 @@ async def _auto_capture_preset(
             "category": device_type,
             "preset_type": "stock",
             "parameter_values": parameter_values,
+            "values_status": "ok" if len(parameter_values) >= 5 else "pending",
+            "updated_at": int(_time.time()),
             **metadata  # LLM-generated: description, audio_engineering, etc.
         }
 
@@ -864,6 +1411,24 @@ async def _auto_capture_preset(
 
         if saved:
             print(f"[AUTO-CAPTURE] ✓ Saved preset {preset_id} to Firestore")
+            try:
+                # Notify UI via SSE so it can refresh preset listings/state
+                await broker.publish({
+                    "event": "preset_captured",
+                    "return": return_index,
+                    "device": device_index,
+                    "preset_id": preset_id,
+                    "device_type": device_type,
+                    "device_name": device_name,
+                    "signature": structure_signature,
+                })
+            except Exception:
+                pass
+            # Post-save verification and optional retry for empty values
+            try:
+                asyncio.create_task(_verify_and_retry_preset(preset_id, return_index, device_index))
+            except Exception:
+                pass
         else:
             print(f"[AUTO-CAPTURE] ✗ Failed to save preset {preset_id}")
 
@@ -871,6 +1436,100 @@ async def _auto_capture_preset(
         print(f"[AUTO-CAPTURE] Error capturing preset: {e}")
         import traceback
         traceback.print_exc()
+
+
+async def _verify_and_retry_preset(
+    preset_id: str,
+    return_index: int,
+    device_index: int,
+    *,
+    min_params: int = 5,
+    max_retries: int = 3,
+    attempt: int = 0,
+) -> None:
+    """Verify preset parameter_values persisted; if not, retry capture with backoff.
+
+    Uses live device indices to re-read values. Emits SSE events for progress.
+    """
+    try:
+        import asyncio as _asyncio
+        import time as _time
+        preset = STORE.get_preset(preset_id)
+        count = len((preset or {}).get("parameter_values") or {})
+        if count >= min_params:
+            # success
+            try:
+                await broker.publish({
+                    "event": "preset_verified",
+                    "preset_id": preset_id,
+                    "values_ok": True,
+                    "count": count,
+                })
+            except Exception:
+                pass
+            return
+
+        if attempt >= max_retries:
+            # give up
+            try:
+                await broker.publish({
+                    "event": "preset_verify_failed",
+                    "preset_id": preset_id,
+                    "values_ok": False,
+                    "count": count,
+                })
+            except Exception:
+                pass
+            return
+
+        # backoff: 1s, 3s, 10s
+        backoffs = [1.0, 3.0, 10.0]
+        delay = backoffs[min(attempt, len(backoffs)-1)]
+        await _asyncio.sleep(delay)
+
+        # Re-read live params and update preset values
+        rd = udp_request({
+            "op": "get_return_device_params",
+            "return_index": int(return_index),
+            "device_index": int(device_index),
+        }, timeout=1.2)
+        rparams = ((rd or {}).get("data") or {}).get("params") or []
+        live_vals: Dict[str, float] = {}
+        for p in rparams:
+            nm = p.get("name")
+            val = p.get("value")
+            if nm is not None and val is not None:
+                live_vals[str(nm)] = float(val)
+
+        if live_vals:
+            # merge into preset doc
+            preset = preset or {}
+            preset["parameter_values"] = live_vals
+            preset["values_status"] = "ok" if len(live_vals) >= min_params else "pending"
+            preset["updated_at"] = int(_time.time())
+            STORE.save_preset(preset_id, preset, local_only=False)
+
+        try:
+            await broker.publish({
+                "event": "preset_retry",
+                "preset_id": preset_id,
+                "attempt": attempt + 1,
+                "count": len(live_vals),
+            })
+        except Exception:
+            pass
+
+        # Recurse for next verify
+        await _verify_and_retry_preset(
+            preset_id,
+            return_index,
+            device_index,
+            min_params=min_params,
+            max_retries=max_retries,
+            attempt=attempt + 1,
+        )
+    except Exception:
+        pass
 
 
 @app.post("/return/device/learn")
@@ -1688,6 +2347,235 @@ def delete_preset_endpoint(preset_id: str) -> Dict[str, Any]:
 
 
 # ==================== End Preset Endpoints ====================
+
+
+class RefreshPresetBody(BaseModel):
+    preset_id: str
+    update_values_from_live: Optional[bool] = False
+    return_index: Optional[int] = None
+    device_index: Optional[int] = None
+    fields_allowlist: Optional[list[str]] = None
+
+
+@app.post("/presets/refresh_metadata")
+async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
+    """Regenerate preset metadata via LLM and optionally refresh values from live device.
+
+    - Resolves preset by `preset_id` (e.g., reverb_arena_tail)
+    - If `update_values_from_live` and indices provided, reads current param values
+    - Calls LLM to generate metadata; merges selected fields
+    - Saves back to storage and emits `preset_updated` SSE event
+    """
+    preset_id = body.preset_id.strip()
+    preset = STORE.get_preset(preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
+
+    device_type = preset.get("category") or preset.get("device_type") or "unknown"
+    device_name = preset.get("name") or preset.get("device_name") or preset_id
+    parameter_values = dict(preset.get("parameter_values") or {})
+
+    # Optionally refresh parameter values from live device
+    if body.update_values_from_live and body.return_index is not None and body.device_index is not None:
+        try:
+            rd = udp_request({
+                "op": "get_return_device_params",
+                "return_index": int(body.return_index),
+                "device_index": int(body.device_index),
+            }, timeout=1.2)
+            rparams = ((rd or {}).get("data") or {}).get("params") or []
+            live_vals = {}
+            for p in rparams:
+                nm = p.get("name")
+                val = p.get("value")
+                if nm is not None and val is not None:
+                    live_vals[str(nm)] = float(val)
+            if live_vals:
+                parameter_values = live_vals
+        except Exception:
+            # keep existing values if live read fails
+            pass
+
+    # Generate new metadata (with fallback handled inside the function)
+    metadata = await _generate_preset_metadata_llm(
+        device_name=device_name,
+        device_type=device_type,
+        parameter_values=parameter_values,
+    )
+
+    # Allowed metadata keys to merge
+    allowed_keys = {
+        "description",
+        "audio_engineering",
+        "natural_language_controls",
+        "warnings",
+        "genre_tags",
+        "subcategory",
+    }
+    if body.fields_allowlist:
+        allowed_keys = allowed_keys.intersection({k for k in body.fields_allowlist})
+
+    updates: Dict[str, Any] = {}
+    if isinstance(metadata, dict):
+        for k in allowed_keys:
+            if k in metadata:
+                updates[k] = metadata[k]
+
+    # Apply updates to preset
+    preset.update(updates)
+    preset["parameter_values"] = parameter_values
+
+    saved = STORE.save_preset(preset_id, preset, local_only=False)
+    try:
+        await broker.publish({
+            "event": "preset_updated",
+            "preset_id": preset_id,
+            "device_type": device_type,
+            "device_name": device_name,
+            "updated_fields": list(updates.keys()),
+        })
+    except Exception:
+        pass
+
+    return {"ok": bool(saved), "preset_id": preset_id, "updated_fields": list(updates.keys()), "values_refreshed": bool(parameter_values)}
+
+
+# ==================== Preset Metadata Backfill ====================
+
+class BackfillBody(BaseModel):
+    device_type: Optional[str] = None
+    preset_type: Optional[str] = None  # stock | user
+    structure_signature: Optional[str] = None
+    dry_run: Optional[bool] = False
+    limit: Optional[int] = None
+    fields_allowlist: Optional[list[str]] = None
+    concurrency: Optional[int] = 3
+
+
+def _needs_metadata(p: dict) -> bool:
+    if not isinstance(p, dict):
+        return True
+    # If any key is missing/empty, needs backfill
+    for k in ("description", "audio_engineering", "natural_language_controls"):
+        if k not in p or not p.get(k):
+            return True
+    # Quality threshold: require sufficiently rich content
+    try:
+        why = str(((p.get("description") or {}).get("why")) or "")
+        ucs = ((p.get("audio_engineering") or {}).get("use_cases")) or []
+        if len(why) < 200 or not isinstance(ucs, list) or len(ucs) < 4:
+            return True
+    except Exception:
+        return True
+    return False
+
+
+@app.post("/presets/backfill_metadata")
+async def backfill_preset_metadata(body: BackfillBody) -> Dict[str, Any]:
+    """Batch-enrich preset metadata in the background and stream SSE progress.
+
+    Filters: device_type, preset_type, structure_signature. Use `dry_run` to preview.
+    Concurrency is capped to avoid overwhelming the LLM API.
+    """
+    device_type = (body.device_type or "").strip() or None
+    preset_type = (body.preset_type or "").strip() or None
+    signature = (body.structure_signature or "").strip() or None
+    dry_run = bool(body.dry_run)
+    limit = int(body.limit) if body.limit else None
+    fields_allow = list(body.fields_allowlist or [])
+    concurrency = max(1, int(body.concurrency or 3))
+
+    # Snapshot list of presets to process
+    presets = STORE.list_presets(device_type=device_type, structure_signature=signature, preset_type=preset_type)
+    if limit is not None:
+        presets = presets[:limit]
+
+    job_id = f"bf_{int(time.time())}_{len(presets)}"
+    BACKFILL_JOBS[job_id] = {"state": "queued", "total": len(presets), "completed": 0, "updated": 0, "skipped": 0, "errors": 0}
+
+    async def run():
+        BACKFILL_JOBS[job_id].update({"state": "running"})
+        try:
+            sem = asyncio.Semaphore(concurrency)
+            updated = 0
+            skipped = 0
+            errors = 0
+            completed = 0
+
+            async def process(item: dict):
+                nonlocal updated, skipped, errors, completed
+                pid = item.get("id")
+                if not pid:
+                    skipped += 1; completed += 1
+                    await broker.publish({"event": "preset_backfill_item", "preset_id": None, "status": "skipped", "reason": "no_id"})
+                    return
+                async with sem:
+                    try:
+                        preset = STORE.get_preset(pid) or {}
+                        if not _needs_metadata(preset):
+                            skipped += 1; completed += 1
+                            await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": "skipped"})
+                            return
+                        if dry_run:
+                            completed += 1
+                            await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": "dry_run"})
+                            return
+
+                        dname = preset.get("name") or preset.get("device_name") or pid
+                        dtype = preset.get("category") or preset.get("device_type") or (device_type or "unknown")
+                        pvals = dict(preset.get("parameter_values") or {})
+
+                        metadata = await _generate_preset_metadata_llm(
+                            device_name=dname,
+                            device_type=dtype,
+                            parameter_values=pvals,
+                        )
+                        allowed = {"description", "audio_engineering", "natural_language_controls", "warnings", "genre_tags", "subcategory"}
+                        if fields_allow:
+                            allowed = allowed.intersection(set(fields_allow))
+                        updates: Dict[str, Any] = {}
+                        if isinstance(metadata, dict):
+                            for k in allowed:
+                                if k in metadata:
+                                    updates[k] = metadata[k]
+                        # Merge + save
+                        if updates:
+                            preset.update(updates)
+                            preset.setdefault("updated_at", int(time.time()))
+                            preset.setdefault("metadata_status", "ok")
+                            ok = STORE.save_preset(pid, preset, local_only=False)
+                            status = "updated" if ok else "error"
+                            if ok:
+                                updated += 1
+                            else:
+                                errors += 1
+                        else:
+                            status = "no_changes"
+                            skipped += 1
+                        completed += 1
+                        await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": status, "updated_fields": list(updates.keys())})
+                    except Exception as e:
+                        errors += 1; completed += 1
+                        await broker.publish({"event": "preset_backfill_item", "preset_id": item.get("id"), "status": "error", "error": str(e)})
+                    finally:
+                        BACKFILL_JOBS[job_id].update({"completed": completed, "updated": updated, "skipped": skipped, "errors": errors})
+                        await broker.publish({"event": "preset_backfill_progress", "job_id": job_id, "completed": completed, "total": len(presets), "updated": updated, "skipped": skipped, "errors": errors})
+
+            await broker.publish({"event": "preset_backfill_start", "job_id": job_id, "total": len(presets)})
+            # Launch with bounded concurrency
+            tasks = [process(p) for p in presets]
+            await asyncio.gather(*tasks)
+            BACKFILL_JOBS[job_id].update({"state": "done"})
+            await broker.publish({"event": "preset_backfill_done", "job_id": job_id, "summary": BACKFILL_JOBS[job_id]})
+        except Exception as e:
+            BACKFILL_JOBS[job_id].update({"state": "error", "error": str(e)})
+            try:
+                await broker.publish({"event": "preset_backfill_done", "job_id": job_id, "summary": BACKFILL_JOBS[job_id]})
+            except Exception:
+                pass
+
+    asyncio.create_task(run())
+    return {"ok": True, "job_id": job_id, "queued": BACKFILL_JOBS[job_id]["total"], "dry_run": dry_run}
 
 
 class ReturnParamByNameBody(BaseModel):
