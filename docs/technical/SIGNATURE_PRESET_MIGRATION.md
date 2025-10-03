@@ -615,10 +615,159 @@ If issues arise, rollback is straightforward:
 
 ---
 
+## Auto-Capture Preset Workflow (Phase 2)
+
+**Date:** October 2, 2025
+**Status:** 🔄 Partial Implementation
+
+### Goal
+
+Automatically capture preset parameter values and generate metadata when loading devices with learned structures.
+
+### Implementation
+
+**Workflow:**
+1. User loads device (e.g., "Reverb Ambience Medium")
+2. UI calls `GET /return/device/map`
+3. Server detects structure is learned → green dot appears immediately
+4. Background task auto-captures preset (non-blocking)
+5. LLM generates metadata
+6. Saves to Firestore `presets` collection
+
+**Code Changes:**
+
+```python
+# server/app.py:478 - Trigger auto-capture in background
+@app.get("/return/device/map")
+async def get_return_device_map(index: int, device: int):
+    # ... check if learned ...
+    if exists and device_type and dname:
+        asyncio.create_task(_auto_capture_preset(
+            index, device, dname, device_type, signature, params
+        ))
+    return {"exists": exists, ...}
+
+# server/app.py:793-884 - Auto-capture function
+async def _auto_capture_preset(
+    return_index, device_index, device_name,
+    device_type, structure_signature, params
+):
+    preset_id = f"{device_type}_{device_name.lower().replace(' ', '_')}"
+    if STORE.get_preset(preset_id):
+        return  # Already captured
+
+    # Extract parameter values
+    parameter_values = {p["name"]: float(p["value"]) for p in params}
+
+    # Generate metadata via LLM
+    metadata = await _generate_preset_metadata_llm(
+        device_name, device_type, parameter_values
+    )
+
+    # Save to Firestore
+    STORE.save_preset(preset_id, {
+        "name": device_name,
+        "structure_signature": structure_signature,
+        "parameter_values": parameter_values,
+        **metadata
+    })
+```
+
+**LLM Metadata Generation:**
+
+```python
+# server/app.py:655-790 - LLM metadata generator
+async def _generate_preset_metadata_llm(device_name, device_type, parameter_values):
+    """Uses Vertex AI Gemini to generate:
+    - description (what, when, why)
+    - audio_engineering (space_type, decay, use_cases)
+    - natural_language_controls (tighter, warmer, etc.)
+    - warnings (mono compatibility, CPU, frequency buildup)
+    - genre_tags
+    """
+    prompt = f"""You are an expert audio engineer analyzing a {device_type} preset.
+
+    Preset Name: {device_name}
+    Parameter Values: {json.dumps(parameter_values, indent=2)}
+
+    Generate comprehensive metadata JSON with audio engineering context...
+    """
+
+    model = GenerativeModel("gemini-1.5-flash")
+    resp = model.generate_content(prompt, ...)
+    return json.loads(extract_json(resp.text))
+```
+
+### Current Status: Partial Success ✅⚠️
+
+**What Works:**
+- ✅ Endpoint converted to async (line 432)
+- ✅ Auto-capture task spawns in background
+- ✅ Preset deduplication (checks if exists)
+- ✅ Preset saved to Firestore
+- ✅ Non-blocking (UI responsive)
+
+**Known Issues:**
+
+**Issue 1: Parameter Values Not Extracted** ⚠️
+```
+[AUTO-CAPTURE] Extracted 0 parameter values
+```
+- Params list passed to function but values not extracted
+- Root cause: `p.get("value")` returns None
+- Likely issue: params from mapping vs live params structure mismatch
+
+**Issue 2: LLM Model Not Found** ⚠️
+```
+[LLM] Failed to generate metadata: 404 Publisher Model
+`projects/fadebender/locations/us-central1/publishers/google/models/gemini-1.5-flash`
+was not found or your project does not have access to it.
+```
+- Gemini 1.5 Flash not available in fadebender project
+- SDK deprecation warning (feature deprecated June 24, 2025)
+- Need to: Update model name or enable API in project
+
+**Issue 3: Fallback Metadata Used** ✅
+```python
+# server/app.py:786-790 - Fallback works correctly
+except Exception as e:
+    return {
+        "description": {"what": f"{device_name} preset for {device_type}"},
+        "subcategory": "unknown",
+        "genre_tags": [],
+    }
+```
+- Minimal metadata saved when LLM fails
+- Preset still captured, just without rich metadata
+
+### Test Results
+
+**Test: Load "Ambience Medium" preset**
+```
+✅ Structure detected (green dot appears)
+✅ Auto-capture triggered
+⚠️  0 parameter values extracted
+⚠️  LLM failed (404 model not found)
+✅ Fallback metadata used
+✅ Preset saved to Firestore (reverb_ambience_medium)
+```
+
+### Next Steps (Deferred)
+
+1. **Fix parameter extraction** - Debug why values are None
+2. **Update LLM model** - Use gemini-2.0-flash-exp or enable in project
+3. **Test with working LLM** - Verify metadata generation quality
+4. **Add retry logic** - Handle transient LLM failures
+5. **Monitoring** - Log preset capture success/failure rates
+
+---
+
 ## Conclusion
 
 Successfully migrated from device-name-based to structure-based signatures, enabling preset support and eliminating redundant learning. Firestore established as single source of truth with local caching. Foundation laid for preset library, natural language control, and multi-user collaboration.
 
-**Status:** ✅ Production Ready
+**Auto-capture workflow** implemented with background task spawning and LLM integration. Partial functionality working (preset capture + deduplication), metadata generation needs troubleshooting.
+
+**Status:** ✅ Core Migration Complete | 🔄 Auto-capture Partial
 **Impact:** 🎯 Major feature unlock - preset system now possible
 **Risk:** ✅ Low - backward compatible, rollback available

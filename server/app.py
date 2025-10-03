@@ -429,7 +429,7 @@ def get_return_device_params(index: int, device: int) -> Dict[str, Any]:
 
 
 @app.get("/return/device/map")
-def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
+async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     """Return whether a learned mapping exists for this return device (by signature)."""
     # Fetch device name and params to compute signature
     devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
@@ -472,6 +472,10 @@ def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     except Exception as e:
         print(f"[DEBUG] Exception: {e}")
         exists = False
+
+    # If structure is learned, auto-capture preset in background (non-blocking)
+    if exists and device_type and dname:
+        asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
 
     return {
         "ok": True,
@@ -646,6 +650,227 @@ def _make_device_signature(name: str, params: list[dict]) -> str:
     param_names = ",".join([str(p.get("name", "")) for p in params])
     base = f"{len(params)}|{param_names}"  # REMOVED device name
     return hashlib.sha1(base.encode("utf-8")).hexdigest()
+
+
+async def _generate_preset_metadata_llm(
+    device_name: str,
+    device_type: str,
+    parameter_values: Dict[str, float],
+) -> Dict[str, Any]:
+    """Generate preset metadata using LLM analysis.
+
+    Uses Vertex AI LLM to analyze parameter values and generate:
+    - Description (what, when, why)
+    - Audio engineering explanation
+    - Natural language controls
+    - Use cases and rationale
+
+    Args:
+        device_name: Preset name (e.g., "Arena Tail", "Vocal Hall")
+        device_type: Device category (reverb, delay, etc.)
+        parameter_values: Dict of param_name -> value
+
+    Returns:
+        Dict with description, audio_engineering, natural_language_controls, etc.
+    """
+    import sys
+    import pathlib
+
+    # Import LLM utilities from nlp-service
+    nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
+    if nlp_dir.exists() and str(nlp_dir) not in sys.path:
+        sys.path.insert(0, str(nlp_dir))
+
+    try:
+        import vertexai
+        from vertexai.generative_models import GenerativeModel
+        from config.llm_config import get_llm_project_id
+
+        project = get_llm_project_id()
+        location = os.getenv("GCP_REGION", "us-central1")
+
+        vertexai.init(project=project, location=location)
+
+        # Build context-aware prompt
+        prompt = f"""You are an expert audio engineer analyzing a {device_type} preset.
+
+Preset Name: {device_name}
+Device Type: {device_type}
+
+Parameter Values:
+{json.dumps(parameter_values, indent=2)}
+
+Audio Engineering Context:
+- Analyze the parameter values to understand the preset's character
+- Consider psychoacoustic principles and typical use cases
+- Reference standard audio engineering practices
+
+Generate a comprehensive metadata JSON with this structure:
+
+{{
+  "description": {{
+    "what": "Concise technical description of the preset's sonic character (1-2 sentences)",
+    "when": ["Use case 1", "Use case 2", "Use case 3", "Use case 4"],
+    "why": "Deep audio engineering explanation covering: decay characteristics, frequency response, stereo imaging, psychoacoustic perception (3-4 sentences)"
+  }},
+  "audio_engineering": {{
+    "space_type": "Type of space being simulated (e.g., hall, room, plate)",
+    "size": "Size descriptor with numeric reference if applicable",
+    "decay_time": "RT60-style decay description",
+    "predelay": "Predelay amount and spatial reasoning",
+    "frequency_character": "Frequency response description (bright/dark/neutral + EQ)",
+    "stereo_width": "Stereo width description with angle if applicable",
+    "diffusion": "Diffusion character (smooth/grainy/dense)",
+    "use_cases": [
+      {{
+        "source": "Audio source type",
+        "context": "Musical context",
+        "send_level": "Recommended send level (e.g., 15-25%)",
+        "send_level_rationale": "Why this send level",
+        "eq_prep": "Pre-send EQ recommendations",
+        "eq_rationale": "Why this EQ treatment",
+        "notes": "Additional mixing tips"
+      }}
+    ]
+  }},
+  "natural_language_controls": {{
+    "tighter": {{
+      "params": {{"param_name": relative_change_value}},
+      "explanation": "What happens and why"
+    }},
+    "looser": {{"params": {{}}, "explanation": "..."}},
+    "warmer": {{"params": {{}}, "explanation": "..."}},
+    "brighter": {{"params": {{}}, "explanation": "..."}},
+    "closer": {{"params": {{}}, "explanation": "..."}},
+    "further": {{"params": {{}}, "explanation": "..."}},
+    "wider": {{"params": {{}}, "explanation": "..."}},
+    "narrower": {{"params": {{}}, "explanation": "..."}}
+  }},
+  "subcategory": "Specific category (e.g., hall, room, plate for reverb)",
+  "warnings": {{
+    "mono_compatibility": "Mono playback considerations if stereo width is wide",
+    "cpu_usage": "CPU usage notes if complex settings",
+    "mix_context": "Mixing context warnings",
+    "frequency_buildup": "Frequency accumulation warnings",
+    "low_end_accumulation": "Low-end buildup warnings"
+  }},
+  "genre_tags": ["genre1", "genre2", "genre3"]
+}}
+
+Return ONLY valid JSON. Be specific and technical. Use actual parameter values to inform your analysis.
+"""
+
+        model = GenerativeModel("gemini-1.5-flash")
+        resp = model.generate_content(prompt, generation_config={
+            "temperature": 0.3,
+            "max_output_tokens": 2048,
+            "top_p": 0.9,
+        })
+
+        response_text = getattr(resp, "text", None)
+        if not response_text:
+            raise RuntimeError("Empty LLM response")
+
+        # Extract JSON from response
+        text = response_text.strip()
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("No JSON found in LLM response")
+
+        metadata = json.loads(text[start:end + 1])
+        return metadata
+
+    except Exception as e:
+        print(f"[LLM] Failed to generate metadata: {e}")
+        # Return minimal fallback metadata
+        return {
+            "description": {"what": f"{device_name} preset for {device_type}"},
+            "subcategory": "unknown",
+            "genre_tags": [],
+        }
+
+
+async def _auto_capture_preset(
+    return_index: int,
+    device_index: int,
+    device_name: str,
+    device_type: str,
+    structure_signature: str,
+    params: list[dict],
+) -> None:
+    """Auto-capture preset in background when device with learned structure is loaded.
+
+    Workflow:
+    1. Generate preset_id from device_type + device_name
+    2. Check if preset already exists in Firestore (skip if exists)
+    3. Extract parameter values from provided params
+    4. Call LLM to generate comprehensive metadata
+    5. Save to Firestore presets collection
+
+    Args:
+        return_index: Return track index
+        device_index: Device index on return track
+        device_name: Full device name (e.g., "Reverb Ambience Medium")
+        device_type: Detected device type (reverb, delay, etc.)
+        structure_signature: Structure-based signature
+        params: List of parameter dicts with 'name' and 'value'
+    """
+    try:
+        # Generate preset_id from device name
+        # Format: devicetype_presetname (e.g., reverb_ambience_medium)
+        preset_id = f"{device_type}_{device_name.lower().replace(' ', '_')}"
+
+        # Check if preset already exists
+        existing = STORE.get_preset(preset_id)
+        if existing:
+            print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
+            return
+
+        print(f"[AUTO-CAPTURE] Capturing new preset: {preset_id}")
+
+        # Extract parameter values from provided params
+        parameter_values = {}
+        for p in params:
+            param_name = p.get("name")
+            param_value = p.get("value")
+            if param_name and param_value is not None:
+                parameter_values[param_name] = float(param_value)
+
+        print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
+
+        # Generate metadata using LLM
+        print(f"[AUTO-CAPTURE] Generating metadata via LLM...")
+        metadata = await _generate_preset_metadata_llm(
+            device_name=device_name,
+            device_type=device_type,
+            parameter_values=parameter_values,
+        )
+
+        # Create preset data
+        preset_data = {
+            "name": device_name,
+            "device_name": device_name.split()[0] if ' ' in device_name else device_name,
+            "manufacturer": "Ableton",
+            "daw": "Ableton Live",
+            "structure_signature": structure_signature,
+            "category": device_type,
+            "preset_type": "stock",
+            "parameter_values": parameter_values,
+            **metadata  # LLM-generated: description, audio_engineering, etc.
+        }
+
+        # Save to Firestore (and local cache)
+        saved = STORE.save_preset(preset_id, preset_data, local_only=False)
+
+        if saved:
+            print(f"[AUTO-CAPTURE] ✓ Saved preset {preset_id} to Firestore")
+        else:
+            print(f"[AUTO-CAPTURE] ✗ Failed to save preset {preset_id}")
+
+    except Exception as e:
+        print(f"[AUTO-CAPTURE] Error capturing preset: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 @app.post("/return/device/learn")
