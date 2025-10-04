@@ -223,6 +223,19 @@ curl $SERVICE_URL/health
 
 ---
 
+## Chunked Mode (Robust JSON)
+
+To improve reliability with large knowledge base prompts, the worker supports chunked generation: it asks the LLM for each section separately and merges the results. This avoids many JSON formatting issues.
+
+- Enable/disable via env var on the service:
+  - `LLM_CHUNKED_ONLY=1` to force chunked mode (default)
+  - `LLM_CHUNKED_ONLY=0` to try single-shot first, then fallback to chunked
+- Logs show when chunked mode is used: `"[LLM] Chunked mode enabled ..."` or `"Falling back to chunked"`.
+
+Cost note: Chunked mode can increase token usage because context is repeated per section. We will revisit cost optimizations later (e.g., shared context, shorter KB, or strict structured output with newer SDKs).
+
+---
+
 ## Updating Knowledge Base
 
 The worker loads markdown files from GCS. Your local `knowledge/` directory is the source of truth.

@@ -1357,9 +1357,26 @@ async def _auto_capture_preset(
         existing = STORE.get_preset(preset_id)
         if existing:
             pv = existing.get("parameter_values") or {}
-            # Treat presets with too-few values as incomplete and refresh them in-place
+            status = str(existing.get("metadata_status") or "").lower()
+            version = int(existing.get("metadata_version") or 0)
+            # If this exists only locally, ensure it is present in Firestore
+            try:
+                saved_remote = STORE.save_preset(preset_id, existing, local_only=False)
+                if saved_remote:
+                    print(f"[AUTO-CAPTURE] Ensured preset {preset_id} saved to Firestore")
+            except Exception:
+                pass
+            # If values are sufficient, do not re-capture, but enqueue enrichment if not enriched yet
             if isinstance(pv, dict) and len(pv) >= 5:
-                print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
+                # Enqueue cloud enrichment when not enriched
+                if status != "enriched" and version < 2:
+                    try:
+                        ok = enqueue_preset_enrich(preset_id, metadata_version=1)
+                        print(f"[AUTO-CAPTURE] Preset {preset_id} already exists; enqueued={ok}")
+                    except Exception:
+                        print(f"[AUTO-CAPTURE] Preset {preset_id} already exists; enqueue failed")
+                else:
+                    print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping (enriched)")
                 return
             else:
                 print(f"[AUTO-CAPTURE] Preset {preset_id} exists but has {len(pv) if isinstance(pv, dict) else 0} values; refreshing")
@@ -1383,18 +1400,13 @@ async def _auto_capture_preset(
 
         print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
 
-        # Check if we should skip local metadata generation (faster captures)
-        skip_local_llm = os.getenv("SKIP_LOCAL_METADATA_GENERATION", "").lower() in ("1", "true", "yes")
-
-        if skip_local_llm:
-            print(f"[AUTO-CAPTURE] Skipping local LLM (will enqueue for cloud enrichment)")
-            metadata = {
-                "description": {"what": f"{device_name} preset for {device_type}"},
-                "subcategory": "unknown",
-                "metadata_status": "pending_enrichment",
-            }
+        # Generate metadata (fast-path optional)
+        metadata = {}
+        fast_path = str(os.getenv("SKIP_LOCAL_METADATA_GENERATION", "")).lower() in ("1","true","yes","on")
+        if fast_path:
+            print("[AUTO-CAPTURE] Fast-path: skipping local metadata; marking pending_enrichment")
+            metadata = {"metadata_status": "pending_enrichment"}
         else:
-            # Generate metadata using LLM
             print(f"[AUTO-CAPTURE] Generating metadata via LLM...")
             metadata = await _generate_preset_metadata_llm(
                 device_name=device_name,
@@ -1415,7 +1427,7 @@ async def _auto_capture_preset(
             "parameter_values": parameter_values,
             "values_status": "ok" if len(parameter_values) >= 5 else "pending",
             "updated_at": int(_time.time()),
-            **metadata  # LLM-generated: description, audio_engineering, etc.
+            **metadata  # LLM-generated or pending_enrichment flag
         }
 
         # Save to Firestore (and local cache)
