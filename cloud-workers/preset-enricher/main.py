@@ -458,99 +458,113 @@ Output formatting rules:
                         # Provide debug snippet to help diagnose
                         dbg = recovered[:1600] if isinstance(recovered, str) else str(recovered)[:1600]
                         raise ValueError(f"Failed to parse LLM JSON: {e2}") from e2
-        # If API key is provided, use google-generativeai with response_schema for stricter JSON
+        # If API key is provided, try google-generativeai with response_schema for stricter JSON
+        genai_failed = False
         if GENAI_API_KEY:
-            import google.generativeai as genai  # type: ignore
-            genai.configure(api_key=GENAI_API_KEY)
-            gmodel = genai.GenerativeModel(MODEL_NAME)
-
-            def gcall(prompt_text: str, schema: dict) -> str:
-                cfg = {
-                    "temperature": 0.0,
-                    "top_p": 0.9,
-                    "max_output_tokens": 4096,
-                    "response_mime_type": "application/json",
-                    "response_schema": schema,
-                }
-                resp = gmodel.generate_content(prompt_text, generation_config=cfg)
-                return (resp.text or "").strip()
-
-            # Always use chunked mode for robustness
-            base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
-
-            metadata: Dict[str, Any] = {}
-            dbg_text = None
-
-            # description schema
-            desc_schema = response_schema_dict["properties"]["description"]
-            desc_prompt = (
-                "Generate only the 'description' object. Return ONLY JSON."
-            )
             try:
-                t = gcall(base_context + "\n# Task\n" + desc_prompt, desc_schema)
-                metadata["description"], _ = parse_llm_json(t)
+                import google.generativeai as genai  # type: ignore
+                genai.configure(api_key=GENAI_API_KEY)
+                gmodel = genai.GenerativeModel(MODEL_NAME)
+
+                def gcall(prompt_text: str, schema: dict) -> str:
+                    cfg = {
+                        "temperature": 0.0,
+                        "top_p": 0.9,
+                        "max_output_tokens": 4096,
+                        "response_mime_type": "application/json",
+                        "response_schema": schema,
+                    }
+                    resp = gmodel.generate_content(prompt_text, generation_config=cfg)
+                    return (resp.text or "").strip()
+
+                # Always use chunked mode for robustness
+                base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
+
+                metadata: Dict[str, Any] = {}
+                dbg_text = None
+
+                # description schema
+                desc_schema = response_schema_dict["properties"]["description"]
+                desc_prompt = (
+                    "Generate only the 'description' object. Return ONLY JSON."
+                )
+                try:
+                    t = gcall(base_context + "\n# Task\n" + desc_prompt, desc_schema)
+                    metadata["description"], _ = parse_llm_json(t)
+                except Exception as e:
+                    print(f"[LLM] GENAI description parse failed: {e}")
+
+                # audio_engineering
+                ae_schema = response_schema_dict["properties"]["audio_engineering"]
+                ae_prompt = (
+                    "Generate only the 'audio_engineering' object. Return ONLY JSON."
+                )
+                try:
+                    t = gcall(base_context + "\n# Task\n" + ae_prompt, ae_schema)
+                    metadata["audio_engineering"], _ = parse_llm_json(t)
+                except Exception as e:
+                    print(f"[LLM] GENAI audio_engineering parse failed: {e}")
+
+                # natural_language_controls
+                nlc_schema = response_schema_dict["properties"]["natural_language_controls"]
+                nlc_prompt = (
+                    "Generate only the 'natural_language_controls' object. Return ONLY JSON."
+                )
+                try:
+                    t = gcall(base_context + "\n# Task\n" + nlc_prompt, nlc_schema)
+                    metadata["natural_language_controls"], _ = parse_llm_json(t)
+                except Exception as e:
+                    print(f"[LLM] GENAI natural_language_controls parse failed: {e}")
+
+                # subcategory
+                sub_schema = {"type": "object", "properties": {"subcategory": {"type": "string"}}, "required": ["subcategory"]}
+                sub_prompt = "Return only: {\"subcategory\": <string>}"
+                try:
+                    t = gcall(base_context + "\n# Task\n" + sub_prompt, sub_schema)
+                    sub_obj, _ = parse_llm_json(t)
+                    if isinstance(sub_obj, dict) and "subcategory" in sub_obj:
+                        metadata["subcategory"] = sub_obj["subcategory"]
+                except Exception as e:
+                    print(f"[LLM] GENAI subcategory parse failed: {e}")
+
+                # warnings
+                warn_schema = response_schema_dict["properties"]["warnings"]
+                warn_prompt = "Generate only the 'warnings' object. Return ONLY JSON."
+                try:
+                    t = gcall(base_context + "\n# Task\n" + warn_prompt, warn_schema)
+                    metadata["warnings"], _ = parse_llm_json(t)
+                except Exception as e:
+                    print(f"[LLM] GENAI warnings parse failed: {e}")
+
+                # genre_tags
+                genre_schema = {"type": "object", "properties": {"genre_tags": {"type": "array", "items": {"type": "string"}}}, "required": ["genre_tags"]}
+                genre_prompt = "Return only: {\"genre_tags\": [<string>, <string>, <string>, <string>]}"
+                try:
+                    t = gcall(base_context + "\n# Task\n" + genre_prompt, genre_schema)
+                    gobj, _ = parse_llm_json(t)
+                    if isinstance(gobj, dict) and "genre_tags" in gobj:
+                        metadata["genre_tags"] = gobj["genre_tags"]
+                except Exception as e:
+                    print(f"[LLM] GENAI genre_tags parse failed: {e}")
+
+                required_top = {"description", "audio_engineering", "natural_language_controls", "subcategory", "warnings", "genre_tags"}
+                ok = isinstance(metadata, dict) and required_top.issubset(set(metadata.keys()))
+                print(f"[LLM] GENAI chunked assembled; ok={ok}")
+
+                # If we got all required fields, return success
+                if ok:
+                    return metadata, ok, None, dbg_text
+                else:
+                    print(f"[LLM] GENAI incomplete metadata (missing fields), falling back to Vertex AI")
+                    genai_failed = True
+
             except Exception as e:
-                print(f"[LLM] GENAI description parse failed: {e}")
+                print(f"[LLM] GENAI completely failed, falling back to Vertex AI: {e}")
+                import traceback
+                traceback.print_exc()
+                genai_failed = True
 
-            # audio_engineering
-            ae_schema = response_schema_dict["properties"]["audio_engineering"]
-            ae_prompt = (
-                "Generate only the 'audio_engineering' object. Return ONLY JSON."
-            )
-            try:
-                t = gcall(base_context + "\n# Task\n" + ae_prompt, ae_schema)
-                metadata["audio_engineering"], _ = parse_llm_json(t)
-            except Exception as e:
-                print(f"[LLM] GENAI audio_engineering parse failed: {e}")
-
-            # natural_language_controls
-            nlc_schema = response_schema_dict["properties"]["natural_language_controls"]
-            nlc_prompt = (
-                "Generate only the 'natural_language_controls' object. Return ONLY JSON."
-            )
-            try:
-                t = gcall(base_context + "\n# Task\n" + nlc_prompt, nlc_schema)
-                metadata["natural_language_controls"], _ = parse_llm_json(t)
-            except Exception as e:
-                print(f"[LLM] GENAI natural_language_controls parse failed: {e}")
-
-            # subcategory
-            sub_schema = {"type": "object", "properties": {"subcategory": {"type": "string"}}, "required": ["subcategory"]}
-            sub_prompt = "Return only: {\"subcategory\": <string>}"
-            try:
-                t = gcall(base_context + "\n# Task\n" + sub_prompt, sub_schema)
-                sub_obj, _ = parse_llm_json(t)
-                if isinstance(sub_obj, dict) and "subcategory" in sub_obj:
-                    metadata["subcategory"] = sub_obj["subcategory"]
-            except Exception as e:
-                print(f"[LLM] GENAI subcategory parse failed: {e}")
-
-            # warnings
-            warn_schema = response_schema_dict["properties"]["warnings"]
-            warn_prompt = "Generate only the 'warnings' object. Return ONLY JSON."
-            try:
-                t = gcall(base_context + "\n# Task\n" + warn_prompt, warn_schema)
-                metadata["warnings"], _ = parse_llm_json(t)
-            except Exception as e:
-                print(f"[LLM] GENAI warnings parse failed: {e}")
-
-            # genre_tags
-            genre_schema = {"type": "object", "properties": {"genre_tags": {"type": "array", "items": {"type": "string"}}}, "required": ["genre_tags"]}
-            genre_prompt = "Return only: {\"genre_tags\": [<string>, <string>, <string>, <string>]}"
-            try:
-                t = gcall(base_context + "\n# Task\n" + genre_prompt, genre_schema)
-                gobj, _ = parse_llm_json(t)
-                if isinstance(gobj, dict) and "genre_tags" in gobj:
-                    metadata["genre_tags"] = gobj["genre_tags"]
-            except Exception as e:
-                print(f"[LLM] GENAI genre_tags parse failed: {e}")
-
-            required_top = {"description", "audio_engineering", "natural_language_controls", "subcategory", "warnings", "genre_tags"}
-            ok = isinstance(metadata, dict) and required_top.issubset(set(metadata.keys()))
-            print(f"[LLM] GENAI chunked assembled; ok={ok}")
-            return metadata, ok, None, dbg_text
-
-        # Otherwise use Vertex path (as implemented previously)
+        # Use Vertex AI path (fallback if GENAI failed, or primary if no API key)
         import vertexai
         from vertexai.generative_models import (
             GenerativeModel,
@@ -904,6 +918,7 @@ def health():
         "project": PROJECT_ID,
         "location": LOCATION,
         "model": MODEL_NAME,
+        "provider": "genai" if GENAI_API_KEY else "vertex",
     }
 
 
