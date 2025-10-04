@@ -23,9 +23,12 @@ import {
   Clear as ClearIcon,
   Undo as UndoIcon,
   Redo as RedoIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import SystemStatus from './SystemStatus.jsx';
+import { useState } from 'react';
+import SettingsModal from './SettingsModal.jsx';
 
 function Header({
   modelPref,
@@ -43,6 +46,7 @@ function Header({
   historyState,
   onToggleSidebar
 }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   return (
     <AppBar position="static" color="inherit" elevation={1}>
       <Toolbar sx={{ justifyContent: 'space-between', py: 2, minHeight: '80px' }}>
@@ -64,35 +68,7 @@ function Header({
         </Box>
 
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={confirmExecute}
-                onChange={(e) => setConfirmExecute(e.target.checked)}
-                color="primary"
-                disabled={isProcessing}
-              />
-            }
-            label={confirmExecute ? 'Execute' : 'Preview only'}
-          />
-
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Model</InputLabel>
-            <Select
-              value={modelPref}
-              onChange={(e) => setModelPref(e.target.value)}
-              disabled={isProcessing}
-              label="Model"
-            >
-              <MenuItem value="gemini-2.5-flash">Gemini Flash</MenuItem>
-              <MenuItem value="llama">Llama 8B</MenuItem>
-            </Select>
-          </FormControl>
-
-          <SystemStatus
-            systemStatus={systemStatus}
-            conversationContext={conversationContext}
-          />
+          {/* Moved Execute/Model/System to Settings modal */}
 
           <IconButton
             onClick={undoLast}
@@ -120,6 +96,14 @@ function Header({
             {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
 
+          <IconButton
+            onClick={() => setSettingsOpen(true)}
+            color="inherit"
+            title="Settings"
+          >
+            <SettingsIcon />
+          </IconButton>
+
           <Button
             onClick={clearMessages}
             startIcon={<ClearIcon />}
@@ -130,6 +114,13 @@ function Header({
           </Button>
         </Box>
       </Toolbar>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        confirmExecute={confirmExecute}
+        setConfirmExecute={setConfirmExecute}
+        systemStatus={systemStatus}
+      />
     </AppBar>
   );
 }

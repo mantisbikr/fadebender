@@ -1,4 +1,9 @@
 {
+  "debug": {
+    "auto_capture": false,
+    "firestore": false,
+    "sse": false
+  },
   "server": {
     "send_aliases": {
       "delay": 1,
@@ -10,8 +15,10 @@
     }
   },
   "ui": {
+    "default_sidebar_tab": "tracks",
     "refresh_ms": 30000,
     "sends_open_refresh_ms": 800,
+    "sidebar_width_px": 345,
     "sse_throttle_ms": 150
   }
 }

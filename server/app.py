@@ -476,6 +476,12 @@ async def events():
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
+@app.get("/health")
+def server_health() -> Dict[str, Any]:
+    """Simple controller health endpoint for UI status."""
+    return {"status": "healthy", "service": "controller"}
+
+
 @app.get("/config")
 def app_config() -> Dict[str, Any]:
     """Expose a subset of app config to clients (UI + aliases)."""

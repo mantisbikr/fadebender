@@ -261,7 +261,7 @@ class ApiService {
   }
 
   async checkHealth() {
-    const response = await fetch(`${API_CONFIG.NLP_BASE_URL}/health`);
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/health`);
     return response.json();
   }
 }

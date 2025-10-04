@@ -38,9 +38,7 @@ import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
 import ClickAwayAccordion from './ClickAwayAccordion.jsx';
 
-const DRAWER_WIDTH = 320;
-
-export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanent', onSetDraft }) {
+export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanent', onSetDraft, widthPx = 360 }) {
   const [tab, setTab] = useState(0); // 0: Project, 1: History
   const [outline, setOutline] = useState(null);
   const [loadingOutline, setLoadingOutline] = useState(false);
@@ -111,6 +109,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       } catch {}
     })();
     return () => { mounted = false; };
+  }, []);
+
+  // Listen for global refresh requests (from Settings modal)
+  useEffect(() => {
+    const handler = () => fetchOutline(true);
+    window.addEventListener('fb:refresh-project', handler);
+    return () => window.removeEventListener('fb:refresh-project', handler);
   }, []);
 
   const fetchSends = async (idx, opts = {}) => {
@@ -240,6 +245,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     return () => { mounted = false; };
   }, [tab]);
 
+  // Load returns list when navigating to Returns tab
+  useEffect(() => {
+    if (tab === 1) {
+      fetchReturns();
+    }
+  }, [tab]);
+
   // Throttled refresh for SSE bursts
   const lastRefreshRef = useRef({});
   const refreshTrackThrottled = useCallback(async (idx) => {
@@ -334,15 +346,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }
   };
 
-  return (
-    <Drawer
-      variant={variant}
-      open={variant === 'temporary' ? open : undefined}
-      onClose={variant === 'temporary' ? onClose : undefined}
-      anchor="left"
-      ModalProps={{ keepMounted: true }}
-      PaperProps={{ sx: { width: DRAWER_WIDTH, boxSizing: 'border-box' } }}
-    >
+  const content = (
+    <>
       <Box sx={{ p: 1 }}>
         <Tabs
           value={tab}
@@ -350,8 +355,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           variant="fullWidth"
           size="small"
         >
-          <Tab icon={<ProjectIcon fontSize="small" />} iconPosition="start" label="Project" />
-          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="History" />
+          <Tab icon={<ProjectIcon fontSize="small" />} iconPosition="start" label="Tracks" />
+          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Returns" />
+          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Master" />
         </Tabs>
       </Box>
       <Divider />
@@ -359,76 +365,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       {/* Project Tab */}
       {tab === 0 && (
         <Box sx={{ p: 2, overflow: 'auto' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="subtitle1">Project</Typography>
-            <Button size="small" variant="outlined" onClick={() => fetchOutline(true)} disabled={loadingOutline}
-              sx={{ minHeight: 28, px: 1.25, py: 0.25 }}>
-              {loadingOutline ? 'Refreshing…' : 'Refresh'}
-            </Button>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary">Refresh every</Typography>
-            <MUISelect
-              size="small"
-              value={refreshInterval}
-              onChange={(e) => setRefreshInterval(Number(e.target.value))}
-              sx={{ minHeight: 28, '& .MuiSelect-select': { py: 0.5, pr: 3, pl: 1.25 } }}
-              title="Auto-refresh interval"
-            >
-              <MenuItem value={3000}>3s</MenuItem>
-              <MenuItem value={5000}>5s</MenuItem>
-              <MenuItem value={10000}>10s</MenuItem>
-              <MenuItem value={30000}>30s</MenuItem>
-            </MUISelect>
-          </Box>
-          {/* Settings (from server config) */}
-          <Accordion disableGutters elevation={0} sx={{ mb: 1, border: '1px dashed', borderColor: 'divider', '&:before': { display: 'none' } }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle2">Settings</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                <TextField
-                  label="Refresh (ms)"
-                  type="number"
-                  size="small"
-                  value={refreshInterval}
-                  onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                  sx={{ width: 140 }}
-                />
-                <TextField
-                  label="Sends Open (ms)"
-                  type="number"
-                  size="small"
-                  value={sendsFastRefreshMs}
-                  onChange={(e) => setSendsFastRefreshMs(Number(e.target.value))}
-                  sx={{ width: 160 }}
-                />
-                <TextField
-                  label="SSE Throttle (ms)"
-                  type="number"
-                  size="small"
-                  value={sseThrottleMs}
-                  onChange={(e) => setSseThrottleMs(Number(e.target.value))}
-                  sx={{ width: 160 }}
-                />
-                <Button size="small" variant="outlined" onClick={async () => {
-                  try {
-                    await apiService.updateAppConfig({ ui: { refresh_ms: refreshInterval, sends_open_refresh_ms: sendsFastRefreshMs, sse_throttle_ms: sseThrottleMs } });
-                  } catch {}
-                }}>Save</Button>
-                <Button size="small" onClick={async () => {
-                  try {
-                    const cfg = await apiService.getAppConfig();
-                    const ui = cfg?.ui || {};
-                    if (ui.refresh_ms) setRefreshInterval(Number(ui.refresh_ms));
-                    if (ui.sends_open_refresh_ms) setSendsFastRefreshMs(Number(ui.sends_open_refresh_ms));
-                    if (ui.sse_throttle_ms) setSseThrottleMs(Number(ui.sse_throttle_ms));
-                  } catch {}
-                }}>Reload</Button>
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Tracks</Typography>
           {loadingOutline && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}
@@ -439,7 +376,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           )}
           {!loadingOutline && outline && outline.tracks && outline.tracks.length > 0 && (
             <>
-              {/* Return Tracks come first, like Live's layout */}
+              {/* Return Tracks removed from Tracks tab; see Returns tab */}
+              {false && (
               <Accordion
                 disableGutters
                 elevation={0}
@@ -575,6 +513,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                   )}
                 </AccordionDetails>
               </Accordion>
+              )}
 
               <List dense>
                 {outline.tracks.map((t) => (
@@ -679,42 +618,148 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         </Box>
       )}
 
-      {/* History Tab */}
+      {/* Returns Tab */}
       {tab === 1 && (
-        <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Typography variant="subtitle1" sx={{ px: 1, pb: 1 }}>
-            Recent Commands
-          </Typography>
-          <List dense sx={{ overflow: 'auto' }}>
-            {userCommands.length === 0 && (
-              <ListItem>
-                <ListItemText primary="No commands yet" secondary="Type a control or ask for help" />
-              </ListItem>
-            )}
-            {userCommands.map((m) => (
-              <ListItem key={m.id}
-                secondaryAction={
-                  <Tooltip title="Replay">
-                    <span>
-                      <IconButton edge="end" aria-label="replay" size="small" onClick={() => onReplay?.(m.content)}>
-                        <PlayIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                }
-              >
-                <ListItemText
-                  primary={m.content}
-                  secondary={new Date(m.timestamp).toLocaleTimeString()}
-                  primaryTypographyProps={{ noWrap: true }}
-                />
-              </ListItem>
-            ))}
-          </List>
+        <Box sx={{ p: 2, overflow: 'auto' }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Return Tracks</Typography>
+          {loadingReturns && (
+            <Typography variant="body2" color="text.secondary">Loading…</Typography>
+          )}
+          {!loadingReturns && (!returns || returns.length === 0) && (
+            <Typography variant="body2" color="text.secondary">No returns</Typography>
+          )}
+          {!loadingReturns && returns && returns.length > 0 && (
+            <List dense>
+              {returns.map((r) => (
+                <ListItem key={r.index} sx={{ display: 'block' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                    <Typography variant="body2" noWrap>{r.name || `Return ${r.index}`}</Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) await fetchReturnDevices(next); }}>
+                        {openReturn === r.index ? 'Hide' : 'Show'}
+                      </Button>
+                    </Box>
+                  </Box>
+                  {openReturn === r.index && (
+                    <Box sx={{ mt: 1, pl: 1 }}>
+                      {!returnDevices[r.index] && (
+                        <Typography variant="caption" color="text.secondary">Loading devices…</Typography>
+                      )}
+                      {returnDevices[r.index] && returnDevices[r.index].length === 0 && (
+                        <Typography variant="caption" color="text.secondary">No devices</Typography>
+                      )}
+                      {returnDevices[r.index] && returnDevices[r.index].map((d) => (
+                        <Box key={d.index} sx={{ mb: 0.5, pl: 1, pr: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 360 }}>
+                            {/* Left cluster: bypass + name */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                              <Tooltip title={d.isOn ? 'On' : 'Off'} placement="top">
+                                <input
+                                  type="checkbox"
+                                  checked={!!d.isOn}
+                                  onChange={async (e) => {
+                                    const nextOn = e.target.checked;
+                                    setReturnDevices(prev => {
+                                      const list = prev[r.index] || [];
+                                      const nextList = list.map(x => (x.index === d.index ? { ...x, isOn: nextOn } : x));
+                                      return { ...prev, [r.index]: nextList };
+                                    });
+                                    try { await apiService.bypassReturnDevice(r.index, d.index, nextOn); } catch {}
+                                  }}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </Tooltip>
+                              <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
+                                {d.name || `Device ${d.index}`}
+                              </Typography>
+                            </Box>
+                            {/* Right cluster: learned LED */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Tooltip
+                                title={
+                                  learnedMap[`${r.index}:${d.index}`]
+                                    ? "Device learned - ready for control"
+                                    : "Click to learn device parameters"
+                                }
+                                placement="left"
+                              >
+                                <Box
+                                  onClick={async () => {
+                                    if (learnedMap[`${r.index}:${d.index}`]) return; // Don't re-learn
+                                    try {
+                                      const st = await apiService.learnReturnDeviceStart(r.index, d.index, 41, 20);
+                                      const jobId = st?.job_id;
+                                      if (!jobId) return;
+                                      setLearnJobs(prev => ({ ...prev, [`${r.index}:${d.index}`]: { jobId, state: 'running', progress: 0, total: 1 } }));
+                                      // Poll status
+                                      const key = `${r.index}:${d.index}`;
+                                      const poll = async () => {
+                                        try {
+                                          const s = await apiService.learnReturnDeviceStatus(jobId);
+                                          setLearnJobs(prev => ({ ...prev, [key]: { ...(prev[key]||{}), ...s, jobId } }));
+                                          if (s && s.state === 'done') {
+                                            setLearnedMap(prev => ({ ...prev, [key]: true }));
+                                            return;
+                                          }
+                                          if (s && s.state === 'error') return;
+                                          setTimeout(poll, 400);
+                                        } catch {
+                                          setTimeout(poll, 600);
+                                        }
+                                      };
+                                      poll();
+                                    } catch {}
+                                  }}
+                                  sx={{
+                                    width: 12,
+                                    height: 12,
+                                    borderRadius: '50%',
+                                    backgroundColor: learnedMap[`${r.index}:${d.index}`] ? '#4caf50' : '#f44336',
+                                    cursor: learnedMap[`${r.index}:${d.index}`] ? 'default' : 'pointer'
+                                  }}
+                                />
+                              </Tooltip>
+                            </Box>
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          )}
         </Box>
       )}
+
+      {/* Master Tab */}
+      {tab === 2 && (
+        <Box sx={{ p: 2 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Master</Typography>
+          <Typography variant="body2" color="text.secondary">Master controls coming soon.</Typography>
+        </Box>
+      )}
+    </>
+  );
+
+  if (variant === 'permanent') {
+    return (
+      <Box sx={{ width: widthPx, height: '100%', display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', overflow: 'hidden' }}>
+        {content}
+      </Box>
+    );
+  }
+
+  return (
+    <Drawer
+      variant="temporary"
+      open={open}
+      onClose={onClose}
+      anchor="left"
+      ModalProps={{ keepMounted: true }}
+      PaperProps={{ sx: { width: widthPx, boxSizing: 'border-box' } }}
+    >
+      {content}
     </Drawer>
   );
 }
-
-export const SIDEBAR_WIDTH = DRAWER_WIDTH;

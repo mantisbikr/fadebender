@@ -24,6 +24,8 @@ def _load() -> Dict[str, Any]:
             "refresh_ms": 5000,
             "sends_open_refresh_ms": 800,
             "sse_throttle_ms": 150,
+            "sidebar_width_px": 360,
+            "default_sidebar_tab": "tracks",
         },
         "server": {
             "send_aliases": {
@@ -74,7 +76,18 @@ def set_ui_settings(ui: Dict[str, Any]) -> Dict[str, Any]:
     cfg = _load()
     if not isinstance(ui, dict):
         return get_ui_settings()
-    cfg.setdefault("ui", {}).update({k: v for k, v in ui.items() if isinstance(v, (int, float))})
+    cur = cfg.setdefault("ui", {})
+    for k, v in ui.items():
+        if k in ("refresh_ms", "sends_open_refresh_ms", "sse_throttle_ms", "sidebar_width_px"):
+            try:
+                cur[k] = int(v)
+            except Exception:
+                continue
+        elif k in ("default_sidebar_tab",):
+            try:
+                cur[k] = str(v)
+            except Exception:
+                continue
     return get_ui_settings()
 
 

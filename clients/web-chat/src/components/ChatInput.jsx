@@ -13,10 +13,7 @@ import {
   Container,
   InputAdornment
 } from '@mui/material';
-import {
-  Send as SendIcon,
-  SmartToy as AIIcon
-} from '@mui/icons-material';
+import { Send as SendIcon } from '@mui/icons-material';
 
 export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
   const [input, setInput] = useState('');
@@ -56,13 +53,7 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
             placeholder="Ask questions or send commands: 'set track 1 volume to -6 dB' or 'how to sidechain in Ableton?'"
             disabled={disabled}
             autoComplete="off"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <AIIcon color="primary" />
-                </InputAdornment>
-              ),
-            }}
+            InputProps={{}}
             sx={{
               '& .MuiOutlinedInput-root': {
                 pr: 1 // Reduce right padding to align better with button
