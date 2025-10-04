@@ -1,6 +1,6 @@
 # Fadebender Status & Roadmap
 
-**Last Updated:** 2025-10-01
+**Last Updated:** 2025-10-03
 
 ## ✅ Completed Features
 
@@ -28,6 +28,16 @@
 - ✅ Knowledge-backed help system
 - ✅ Intent card display in UI
 
+### Preset Management & Cloud Enrichment
+- ✅ Preset auto-capture with structure signatures
+- ✅ Cloud worker for async metadata enrichment (Cloud Run + Pub/Sub)
+- ✅ Parameter value conversion (normalized → display values using device mappings)
+- ✅ LLM-generated metadata with knowledge base context (Gemini 2.5 Flash)
+- ✅ Structured JSON output with response schemas
+- ✅ Firestore storage for presets and device mappings
+- ✅ Re-enrichment script for existing presets
+- ✅ 8/8 presets enriched with accurate metadata (v2)
+
 ### Testing & Documentation
 - ✅ Comprehensive test plans (Delay, Return devices)
 - ✅ All Delay parameter tests passing (8/8)
@@ -42,12 +52,15 @@
 ## 📋 Planned Features
 
 ### Phase 4: Knowledge + Aliasing
-- ❌ Knowledge files for device parameters (LLM context)
+- ✅ Knowledge files for device parameters (Reverb, Delay - synced to GCS)
 - ❌ Parameter aliasing (e.g., "wet" → "Dry/Wet")
 - ❌ LLM intent mapping improvements
 
-### Multi-User Architecture (Future)
-- ❌ Cloud deployment (Phases 3-9)
+### Cloud Infrastructure (Partially Complete)
+- ✅ Cloud Run deployment for preset enrichment worker
+- ✅ Pub/Sub for async job processing
+- ✅ GCS for knowledge base storage
+- ✅ Firestore for presets and device mappings
 - ❌ Fadebender Agent app
 - ❌ WebSocket/WebRTC for local DAW connectivity
 - ❌ Session management & auth
@@ -83,10 +96,11 @@
 |----------|--------|
 | Parameter Learning | 95% (binary exploration pending) |
 | Parameter Control | 100% (all tests passing) |
+| Preset Management | 100% (auto-capture + cloud enrichment) |
+| Cloud Infrastructure | 60% (enrichment worker live, no multi-user yet) |
 | Intent Parsing | 80% (Step 6 in progress) |
 | UI/UX | 90% (core features complete) |
 | Documentation | 100% (organized & up-to-date) |
-| Multi-User | 0% (design only) |
 
 ---
 
