@@ -2739,12 +2739,19 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     mapping = STORE.get_device_map(signature) if STORE.enabled else None
     if not mapping:
         mapping = STORE.get_device_map_local(signature)
-    # Try exact param match by name
+    # Try exact param match by name (with alias normalization)
     param_name = str(cur.get("name", ""))
     learned = None
+    canonical = None
+    try:
+        from shared.aliases import canonical_name  # type: ignore
+        canonical = canonical_name(param_name)
+    except Exception:
+        canonical = param_name
     if mapping and isinstance(mapping.get("params"), list):
         for mp in mapping["params"]:
-            if str(mp.get("name", "")).lower() == param_name.lower():
+            mpn = str(mp.get("name", ""))
+            if mpn.lower() == param_name.lower() or mpn.lower() == str(canonical or "").lower():
                 learned = mp
                 break
 
@@ -2885,20 +2892,25 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                         found = True
                         break
     elif target_y is not None and learned:
-        fit = learned.get("fit")
-        if fit:
-            x = _invert_fit_to_value(fit, target_y, vmin, vmax)
-        else:
-            # fallback: nearest sample
-            best = None; bestd = 1e9
-            for s in learned.get("samples", []) or []:
-                dy = s.get("display_num")
-                if dy is None: continue
-                d = abs(float(dy) - target_y)
-                if d < bestd:
-                    bestd = d; best = s
-            if best:
-                x = float(best.get("value", vmin))
+        # Use shared conversion for display->normalized when mapping is available
+        try:
+            from shared.param_convert import to_normalized  # type: ignore
+            x = float(to_normalized(target_y, learned))
+        except Exception:
+            fit = learned.get("fit")
+            if fit:
+                x = _invert_fit_to_value(fit, target_y, vmin, vmax)
+            else:
+                # fallback: nearest sample
+                best = None; bestd = 1e9
+                for s in learned.get("samples", []) or []:
+                    dy = s.get("display_num")
+                    if dy is None: continue
+                    d = abs(float(dy) - target_y)
+                    if d < bestd:
+                        bestd = d; best = s
+                if best:
+                    x = float(best.get("value", vmin))
         # If this is effectively binary, snap to edges based on threshold
         if _is_binary(learned):
             x = vmax if float(target_y) >= 0.5 else vmin

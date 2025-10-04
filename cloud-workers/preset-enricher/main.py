@@ -30,122 +30,37 @@ def convert_parameter_values(
     parameter_values: Dict[str, float],
     structure_signature: str
 ) -> Dict[str, Any]:
-    """Convert normalized parameter values to display values using device mapping.
-
-    Args:
-        parameter_values: Dict of parameter_name -> normalized_value (0-1)
-        structure_signature: Device structure signature to look up mapping
-
-    Returns:
-        Dict of parameter_name -> {value: float, display: str, unit: str}
-    """
+    """Convert normalized parameter values to display using shared mapping and fits."""
     try:
-        from google.cloud import firestore
-        import math
-
-        client = firestore.Client(project=FIRESTORE_PROJECT)
-        mapping_doc = client.collection("device_mappings").document(structure_signature).get()
-
-        if not mapping_doc.exists:
-            print(f"[MAPPING] No mapping found for signature {structure_signature}")
-            return {name: {"value": val, "display": f"{val:.3f}"} for name, val in parameter_values.items()}
-
-        # Load parameter mappings
-        params_ref = mapping_doc.reference.collection("params")
-        param_mappings = {}
-        for pdoc in params_ref.stream():
-            pdata = pdoc.to_dict()
-            param_name = pdata.get("name")
-            if param_name:
-                param_mappings[param_name] = pdata
-
-        print(f"[MAPPING] Loaded {len(param_mappings)} parameter mappings")
-
-        # Convert each parameter
-        converted = {}
-        for param_name, norm_value in parameter_values.items():
-            param_map = param_mappings.get(param_name)
-            if not param_map:
-                converted[param_name] = {"value": norm_value, "display": f"{norm_value:.3f}"}
-                continue
-
-            fit = param_map.get("fit")
-            unit = param_map.get("unit", "")
-
-            # Apply fit to convert normalized to display value
-            if fit and fit.get("type"):
-                fit_type = fit["type"]
-
-                if fit_type == "linear":
-                    # y = a*x + b
-                    a, b = fit.get("a", 1.0), fit.get("b", 0.0)
-                    display_val = a * norm_value + b
-
-                elif fit_type == "exp":
-                    # y = exp(b) * exp(a*x)
-                    a, b = fit.get("a", 0.0), fit.get("b", 0.0)
-                    display_val = math.exp(b) * math.exp(a * norm_value)
-
-                elif fit_type == "log":
-                    # Inverse: x = ln(norm), y = a*ln(norm) + b
-                    a, b = fit.get("a", 1.0), fit.get("b", 0.0)
-                    if norm_value > 0:
-                        display_val = a * math.log(norm_value) + b
-                    else:
-                        display_val = norm_value
-
-                elif fit_type == "piecewise":
-                    # Linear interpolation between points
-                    points = fit.get("points", [])
-                    if not points:
-                        display_val = norm_value
-                    else:
-                        # Find surrounding points
-                        points_sorted = sorted(points, key=lambda p: p["x"])
-                        if norm_value <= points_sorted[0]["x"]:
-                            display_val = points_sorted[0]["y"]
-                        elif norm_value >= points_sorted[-1]["x"]:
-                            display_val = points_sorted[-1]["y"]
-                        else:
-                            # Interpolate
-                            for i in range(len(points_sorted) - 1):
-                                p1, p2 = points_sorted[i], points_sorted[i + 1]
-                                if p1["x"] <= norm_value <= p2["x"]:
-                                    t = (norm_value - p1["x"]) / (p2["x"] - p1["x"])
-                                    display_val = p1["y"] + t * (p2["y"] - p1["y"])
-                                    break
-                            else:
-                                display_val = norm_value
-                else:
-                    display_val = norm_value
-            else:
-                display_val = norm_value
-
-            # Format display string
-            if unit:
-                if abs(display_val) >= 1000:
-                    display_str = f"{display_val:.1f} {unit}"
-                elif abs(display_val) >= 10:
-                    display_str = f"{display_val:.2f} {unit}"
-                else:
-                    display_str = f"{display_val:.3f} {unit}"
-            else:
-                display_str = f"{display_val:.3f}"
-
-            converted[param_name] = {
-                "value": display_val,
-                "display": display_str,
-                "unit": unit,
-                "normalized": norm_value
-            }
-
-        return converted
-
+        from shared.mapping_fetch import load_device_mapping
+        from shared.param_convert import to_display
+        from shared.aliases import canonical_name
     except Exception as e:
-        print(f"[MAPPING] Failed to convert parameters: {e}")
-        import traceback
-        traceback.print_exc()
-        return {name: {"value": val, "display": f"{val:.3f}"} for name, val in parameter_values.items()}
+        print(f"[MAPPING] Shared modules unavailable: {e}")
+        return {name: {"value": None, "display": f"{val:.3f}", "normalized": float(val)} for name, val in parameter_values.items()}
+
+    mapping = load_device_mapping(structure_signature, project_id=FIRESTORE_PROJECT)
+    if not mapping or not isinstance(mapping.get("params"), list):
+        print(f"[MAPPING] No mapping found for signature {structure_signature}")
+        return {name: {"value": None, "display": f"{val:.3f}", "normalized": float(val)} for name, val in parameter_values.items()}
+
+    idx = {str(p.get("name", "")).lower(): p for p in mapping["params"]}
+    converted: Dict[str, Any] = {}
+    for raw_name, norm_value in parameter_values.items():
+        lp = idx.get(str(raw_name).lower())
+        cname = canonical_name(raw_name)
+        if lp:
+            disp_str, disp_num = to_display(float(norm_value), lp)
+            converted[cname] = {
+                "value": disp_num if disp_num is not None else None,
+                "display": disp_str,
+                "unit": lp.get("unit") or None,
+                "normalized": float(norm_value),
+            }
+        else:
+            converted[cname] = {"value": None, "display": f"{norm_value:.3f}", "normalized": float(norm_value)}
+
+    return converted
 
 
 def load_knowledge_base(device_type: str) -> str:
@@ -481,6 +396,7 @@ Output formatting rules:
                 base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
 
                 metadata: Dict[str, Any] = {}
+                sec_ok = 0; sec_fail = 0
                 dbg_text = None
 
                 # description schema
@@ -493,6 +409,9 @@ Output formatting rules:
                     metadata["description"], _ = parse_llm_json(t)
                 except Exception as e:
                     print(f"[LLM] GENAI description parse failed: {e}")
+                    sec_fail += 1
+                else:
+                    sec_ok += 1
 
                 # audio_engineering
                 ae_schema = response_schema_dict["properties"]["audio_engineering"]
@@ -504,6 +423,9 @@ Output formatting rules:
                     metadata["audio_engineering"], _ = parse_llm_json(t)
                 except Exception as e:
                     print(f"[LLM] GENAI audio_engineering parse failed: {e}")
+                    sec_fail += 1
+                else:
+                    sec_ok += 1
 
                 # natural_language_controls
                 nlc_schema = response_schema_dict["properties"]["natural_language_controls"]
@@ -515,6 +437,9 @@ Output formatting rules:
                     metadata["natural_language_controls"], _ = parse_llm_json(t)
                 except Exception as e:
                     print(f"[LLM] GENAI natural_language_controls parse failed: {e}")
+                    sec_fail += 1
+                else:
+                    sec_ok += 1
 
                 # subcategory
                 sub_schema = {"type": "object", "properties": {"subcategory": {"type": "string"}}, "required": ["subcategory"]}
@@ -526,6 +451,10 @@ Output formatting rules:
                         metadata["subcategory"] = sub_obj["subcategory"]
                 except Exception as e:
                     print(f"[LLM] GENAI subcategory parse failed: {e}")
+                    sec_fail += 1
+                else:
+                    if "subcategory" in metadata:
+                        sec_ok += 1
 
                 # warnings
                 warn_schema = response_schema_dict["properties"]["warnings"]
@@ -535,6 +464,9 @@ Output formatting rules:
                     metadata["warnings"], _ = parse_llm_json(t)
                 except Exception as e:
                     print(f"[LLM] GENAI warnings parse failed: {e}")
+                    sec_fail += 1
+                else:
+                    sec_ok += 1
 
                 # genre_tags
                 genre_schema = {"type": "object", "properties": {"genre_tags": {"type": "array", "items": {"type": "string"}}}, "required": ["genre_tags"]}
@@ -546,10 +478,15 @@ Output formatting rules:
                         metadata["genre_tags"] = gobj["genre_tags"]
                 except Exception as e:
                     print(f"[LLM] GENAI genre_tags parse failed: {e}")
+                    sec_fail += 1
+                else:
+                    if "genre_tags" in metadata:
+                        sec_ok += 1
 
                 required_top = {"description", "audio_engineering", "natural_language_controls", "subcategory", "warnings", "genre_tags"}
                 ok = isinstance(metadata, dict) and required_top.issubset(set(metadata.keys()))
                 print(f"[LLM] GENAI chunked assembled; ok={ok}")
+                print(f"[METRICS] genai_chunked sections_ok={sec_ok} sections_failed={sec_fail}")
 
                 # If we got all required fields, return success
                 if ok:
@@ -659,6 +596,7 @@ Output formatting rules:
             base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
 
             sections: Dict[str, Any] = {}
+            sec_ok = 0; sec_fail = 0
             # Description
             desc_prompt = (
                 "Generate only the 'description' JSON object with keys what (string), when (array of 5 strings), why (string).\n"
@@ -669,6 +607,9 @@ Output formatting rules:
                 sections["description"], _ = parse_llm_json(r.text.strip())
             except Exception as e:
                 print(f"[LLM] description parse failed: {e}")
+                sec_fail += 1
+            else:
+                sec_ok += 1
 
             # Audio engineering
             ae_prompt = (
@@ -680,6 +621,9 @@ Output formatting rules:
                 sections["audio_engineering"], _ = parse_llm_json(r.text.strip())
             except Exception as e:
                 print(f"[LLM] audio_engineering parse failed: {e}")
+                sec_fail += 1
+            else:
+                sec_ok += 1
 
             # Natural language controls
             nlc_prompt = (
@@ -692,6 +636,9 @@ Output formatting rules:
                 sections["natural_language_controls"], _ = parse_llm_json(r.text.strip())
             except Exception as e:
                 print(f"[LLM] natural_language_controls parse failed: {e}")
+                sec_fail += 1
+            else:
+                sec_ok += 1
 
             # Subcategory
             sub_prompt = (
@@ -704,6 +651,10 @@ Output formatting rules:
                     sections["subcategory"] = sub_obj["subcategory"]
             except Exception as e:
                 print(f"[LLM] subcategory parse failed: {e}")
+                sec_fail += 1
+            else:
+                if "subcategory" in sections:
+                    sec_ok += 1
 
             # Warnings
             warn_prompt = (
@@ -714,6 +665,9 @@ Output formatting rules:
                 sections["warnings"], _ = parse_llm_json(r.text.strip())
             except Exception as e:
                 print(f"[LLM] warnings parse failed: {e}")
+                sec_fail += 1
+            else:
+                sec_ok += 1
 
             # Genre tags
             genre_prompt = (
@@ -726,11 +680,16 @@ Output formatting rules:
                     sections["genre_tags"] = genre_obj["genre_tags"]
             except Exception as e:
                 print(f"[LLM] genre_tags parse failed: {e}")
+                sec_fail += 1
+            else:
+                if "genre_tags" in sections:
+                    sec_ok += 1
 
             if sections:
                 metadata = {**metadata, **sections}
 
         ok = have_all(metadata)
+        print(f"[METRICS] vertex_chunked sections_ok={sec_ok} sections_failed={sec_fail}")
         print(f"[LLM] Successfully generated structured metadata with keys: {list(metadata.keys()) if isinstance(metadata, dict) else 'n/a'}; ok={ok}")
         return metadata, ok, None, None
 

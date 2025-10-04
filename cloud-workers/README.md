@@ -97,6 +97,14 @@ This:
 - Sets environment variables (project, model, bucket)
 - Returns service URL (e.g., `https://preset-enricher-xxx.run.app`)
 
+Secret Manager (LLM API Key)
+- The deploy script is configured to mount a Secret Manager secret named `llm-api-key` as `LLM_API_KEY`.
+- Create or update the secret:
+  - Create: `echo -n 'YOUR_API_KEY' | gcloud secrets create llm-api-key --data-file=- --project=fadebender`
+  - Update: `echo -n 'YOUR_API_KEY' | gcloud secrets versions add llm-api-key --data-file=- --project=fadebender`
+- Ensure the Cloud Run service account has `roles/secretmanager.secretAccessor`.
+- Health endpoint will show provider: `genai` when the key is mounted.
+
 ### Step 3: Create Pub/Sub Push Subscription
 
 Get the Cloud Run service URL:

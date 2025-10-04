@@ -24,7 +24,8 @@ gcloud run deploy $SERVICE_NAME \
   --region=$REGION \
   --platform=managed \
   --allow-unauthenticated \
-  --set-env-vars="VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=$REGION,VERTEX_MODEL=gemini-2.5-flash,KB_BUCKET=fadebender-kb,FIRESTORE_PROJECT_ID=$PROJECT_ID" \
+  --set-env-vars="VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=$REGION,VERTEX_MODEL=gemini-2.5-flash,KB_BUCKET=fadebender-kb,FIRESTORE_PROJECT_ID=$PROJECT_ID,LLM_CHUNKED_ONLY=1" \
+  --set-secrets="LLM_API_KEY=llm-api-key:latest" \
   --memory=512Mi \
   --cpu=1 \
   --timeout=300 \
@@ -40,3 +41,7 @@ echo "   gcloud run services describe $SERVICE_NAME --region=$REGION --project=$
 echo ""
 echo "2. Create Pub/Sub push subscription (see setup-pubsub.sh)"
 echo ""
+echo "Optional: If you haven't created the secret yet, run:" 
+echo "   echo -n 'YOUR_API_KEY' | gcloud secrets create llm-api-key --data-file=- --project=$PROJECT_ID || \\
+          echo -n 'YOUR_API_KEY' | gcloud secrets versions add llm-api-key --data-file=- --project=$PROJECT_ID"
+echo "And ensure the service account has Secret Manager access: roles/secretmanager.secretAccessor"
