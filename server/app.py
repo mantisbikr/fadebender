@@ -624,6 +624,21 @@ def get_returns() -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+@app.get("/return/sends")
+def get_return_sends(index: int) -> Dict[str, Any]:
+    """Read sends for a return track (if supported by bridge)."""
+    try:
+        resp = udp_request({"op": "get_return_sends", "return_index": int(index)}, timeout=1.0)
+        if not resp:
+            return {"ok": False, "error": "no response"}
+        data = resp.get("data") if isinstance(resp, dict) else None
+        if data is None:
+            data = resp
+        return {"ok": True, "data": data}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/return/devices")
 def get_return_devices(index: int) -> Dict[str, Any]:
     resp = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
@@ -802,6 +817,57 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
         schedule_emit({"event": "return_device_param_changed", "return": op.return_index, "device": op.device_index, "param": op.param_index})
+    except Exception:
+        pass
+    return resp
+
+
+class ReturnSendBody(BaseModel):
+    return_index: int
+    send_index: int
+    value: float
+
+
+@app.post("/op/return/send")
+def op_return_send(body: ReturnSendBody) -> Dict[str, Any]:
+    """Set a return track's send value (if supported by bridge)."""
+    msg = {
+        "op": "set_return_send",
+        "return_index": int(body.return_index),
+        "send_index": int(body.send_index),
+        "value": float(body.value),
+    }
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        schedule_emit({"event": "return_send_changed", "return": int(body.return_index), "send_index": int(body.send_index)})
+    except Exception:
+        pass
+    return resp
+
+
+class ReturnMixerBody(BaseModel):
+    return_index: int
+    field: str  # 'volume' | 'pan'
+    value: float
+
+
+@app.post("/op/return/mixer")
+def op_return_mixer(body: ReturnMixerBody) -> Dict[str, Any]:
+    if body.field not in ("volume", "pan"):
+        raise HTTPException(400, "invalid_field")
+    msg = {
+        "op": "set_return_mixer",
+        "return_index": int(body.return_index),
+        "field": body.field,
+        "value": float(body.value),
+    }
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        schedule_emit({"event": "return_mixer_changed", "return": int(body.return_index), "field": body.field})
     except Exception:
         pass
     return resp

@@ -57,6 +57,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [loadingReturns, setLoadingReturns] = useState(false);
   const [openReturn, setOpenReturn] = useState(null);
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
+  const [returnSends, setReturnSends] = useState({}); // { [returnIndex]: sends[] }
   const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
   const [learnJobs, setLearnJobs] = useState({}); // { `${ri}:${di}`: { jobId, progress, total, state } }
   const prevOutlineRef = useRef('');
@@ -152,6 +153,17 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       setReturns([]);
     } finally {
       setLoadingReturns(false);
+    }
+  };
+
+  const fetchReturnSends = async (ri, opts = {}) => {
+    const silent = !!opts.silent;
+    try {
+      const res = await apiService.getReturnSends(ri);
+      const snds = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      setReturnSends(prev => ({ ...prev, [ri]: snds }));
+    } catch {
+      if (!silent) setReturnSends(prev => ({ ...prev, [ri]: [] }));
     }
   };
 
@@ -569,40 +581,42 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                       {!loadingSends && sends && sends.length > 0 && (
                         <List dense>
                           {sends.map((s, i) => (
-                            <ListItem key={s.index} disableGutters>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                <Typography variant="body2" sx={{ minWidth: 80 }}>
+                            <ListItem key={s.index} disableGutters sx={{ py: 0.5 }}>
+                              <Box sx={{ width: '100%' }}>
+                                <Typography variant="body2" sx={{ mb: 0.5 }}>
                                   {s.name || `Send ${s.index}`}
                                 </Typography>
-                                <Slider
-                                  size="small"
-                                  value={typeof s.value === 'number' ? s.value : 0}
-                                  min={0}
-                                  max={1}
-                                  step={0.005}
-                                  valueLabelDisplay="auto"
-                                  valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
-                                  onChange={(_, val) => {
-                                    const v = Array.isArray(val) ? val[0] : val;
-                                    setSends(prev => {
-                                      const next = [...(prev || [])];
-                                      next[i] = { ...next[i], value: Number(v) };
-                                      return next;
-                                    });
-                                  }}
-                                  onChangeCommitted={async (_, val) => {
-                                    const v = Array.isArray(val) ? val[0] : val;
-                                    try {
-                                      await apiService.setSend(selectedIndex, s.index, Number(v));
-                                    } catch {}
-                                  }}
-                                  sx={{ flex: 1, maxWidth: '60%' }}
-                                />
-                                <Tooltip title={`${liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB`}>
-                                  <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
-                                    {liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB
-                                  </Typography>
-                                </Tooltip>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                  <Slider
+                                    size="small"
+                                    value={typeof s.value === 'number' ? s.value : 0}
+                                    min={0}
+                                    max={1}
+                                    step={0.005}
+                                    valueLabelDisplay="auto"
+                                    valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
+                                    onChange={(_, val) => {
+                                      const v = Array.isArray(val) ? val[0] : val;
+                                      setSends(prev => {
+                                        const next = [...(prev || [])];
+                                        next[i] = { ...next[i], value: Number(v) };
+                                        return next;
+                                      });
+                                    }}
+                                    onChangeCommitted={async (_, val) => {
+                                      const v = Array.isArray(val) ? val[0] : val;
+                                      try {
+                                        await apiService.setSend(selectedIndex, s.index, Number(v));
+                                      } catch {}
+                                    }}
+                                    sx={{ flex: 1 }}
+                                  />
+                                  <Tooltip title={`${liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB`}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
+                                      {liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB
+                                    </Typography>
+                                  </Tooltip>
+                                </Box>
                               </Box>
                             </ListItem>
                           ))}
@@ -642,6 +656,38 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                   </Box>
                   {openReturn === r.index && (
                     <Box sx={{ mt: 1, pl: 1 }}>
+                      {/* Return mixer: Volume & Pan sliders stacked */}
+                      <Box sx={{ mb: 1, pr: 2 }}>
+                        <Typography variant="caption" color="text.secondary">Volume</Typography>
+                        <Slider
+                          size="small"
+                          value={0.5}
+                          min={0}
+                          max={1}
+                          step={0.005}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
+                          onChangeCommitted={async (_, val) => {
+                            const v = Array.isArray(val) ? val[0] : val;
+                            try { await apiService.setReturnMixer(r.index, 'volume', Number(v)); } catch {}
+                          }}
+                        />
+                        <Box sx={{ height: 8 }} />
+                        <Typography variant="caption" color="text.secondary">Pan</Typography>
+                        <Slider
+                          size="small"
+                          value={0}
+                          min={-1}
+                          max={1}
+                          step={0.02}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={(v) => `${Math.round(Math.abs(Number(v)) * 50)}${Number(v) < 0 ? 'L' : (Number(v) > 0 ? 'R' : '')}`}
+                          onChangeCommitted={async (_, val) => {
+                            const v = Array.isArray(val) ? val[0] : val;
+                            try { await apiService.setReturnMixer(r.index, 'pan', Number(v)); } catch {}
+                          }}
+                        />
+                      </Box>
                       {!returnDevices[r.index] && (
                         <Typography variant="caption" color="text.secondary">Loading devices…</Typography>
                       )}
@@ -723,6 +769,59 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                           </Box>
                         </Box>
                       ))}
+
+                      {/* Sends for this Return (name above slider) */}
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Sends</Typography>
+                        {!returnSends[r.index] && (
+                          <Button size="small" onClick={() => fetchReturnSends(r.index)}>Load Sends</Button>
+                        )}
+                        {returnSends[r.index] && returnSends[r.index].length === 0 && (
+                          <Typography variant="caption" color="text.secondary">No sends</Typography>
+                        )}
+                        {returnSends[r.index] && returnSends[r.index].length > 0 && (
+                          <List dense>
+                            {returnSends[r.index].map((s, i) => (
+                              <ListItem key={s.index} disableGutters sx={{ py: 0.5 }}>
+                                <Box sx={{ width: '100%' }}>
+                                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                    {s.name || `Send ${s.index}`}
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                    <Slider
+                                      size="small"
+                                      value={typeof s.value === 'number' ? s.value : 0}
+                                      min={0}
+                                      max={1}
+                                      step={0.005}
+                                      valueLabelDisplay="auto"
+                                      valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
+                                      onChange={(_, val) => {
+                                        const v = Array.isArray(val) ? val[0] : val;
+                                        setReturnSends(prev => {
+                                          const arr = prev[r.index] ? [...prev[r.index]] : [];
+                                          arr[i] = { ...arr[i], value: Number(v) };
+                                          return { ...prev, [r.index]: arr };
+                                        });
+                                      }}
+                                      onChangeCommitted={async (_, val) => {
+                                        const v = Array.isArray(val) ? val[0] : val;
+                                        try { await apiService.setReturnSend(r.index, s.index, Number(v)); } catch {}
+                                      }}
+                                      sx={{ flex: 1 }}
+                                    />
+                                    <Tooltip title={`${liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB`}>
+                                      <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
+                                        {liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB
+                                      </Typography>
+                                    </Tooltip>
+                                  </Box>
+                                </Box>
+                              </ListItem>
+                            ))}
+                          </List>
+                        )}
+                      </Box>
                     </Box>
                   )}
                 </ListItem>

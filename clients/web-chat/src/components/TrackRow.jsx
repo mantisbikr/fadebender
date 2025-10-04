@@ -5,12 +5,12 @@ import {
   Box,
   Tooltip,
   IconButton,
+  Slider,
+  Typography,
 } from '@mui/material';
 import {
   VolumeOff as VolumeOffIcon,
   Headphones as HeadphonesIcon,
-  VolumeUp as VolumeUpIcon,
-  SurroundSound as PanIcon,
 } from '@mui/icons-material';
 import { dbFromStatus, panLabelFromStatus, liveFloatToDb } from '../utils/volumeUtils.js';
 import { apiService } from '../services/api.js';
@@ -43,7 +43,7 @@ export default function TrackRow({
       onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
       onMouseEnter={() => { onHoverPrime?.(t.index); }}
       secondaryAction={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {/* Mute toggle */}
           <Tooltip title={(() => {
             const ts = getStatus(t.index);
@@ -82,64 +82,57 @@ export default function TrackRow({
               </IconButton>
             </span>
           </Tooltip>
-          {/* Volume indicator */}
-          <Tooltip
-            key={volKey}
-            onOpen={async () => { await refreshTrack(t.index); }}
-            title={(() => {
-              const ts = getStatus(t.index);
-              const dbVal = dbFromStatus(ts);
-              return dbVal != null ? `${dbVal.toFixed(1)}` : '';
-            })()}
-          >
-            <Box
-              sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', cursor: 'pointer' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                const ts = getStatus(t.index);
-                if (ts) {
-                  // Use displayed dB if available; otherwise compute from float
-                  const vdb = (() => {
-                    const v = (ts?.mixer && typeof ts.mixer.volume === 'number') ? Number(ts.mixer.volume) : null;
-                    if (v != null) return liveFloatToDb(v);
-                    return (typeof ts?.volume_db === 'number') ? Number(ts.volume_db) : -6;
-                  })();
-                  onSetDraft?.(`set track ${t.index} volume to ${vdb.toFixed(1)}`);
-                }
-              }}
-            >
-              <VolumeUpIcon sx={{ fontSize: 16 }} />
-            </Box>
-          </Tooltip>
-          {/* Pan indicator */}
-          <Tooltip
-            key={panKey}
-            onOpen={async () => { await refreshTrack(t.index); }}
-            title={(() => panLabelFromStatus(getStatus(t.index)) || 'Current pan')()}
-          >
-            <Box
-              sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', cursor: 'pointer' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                const ts = getStatus(t.index);
-                if (ts && ts.mixer && ts.mixer.pan != null) {
-                  const lbl = panLabelFromStatus(ts);
-                  onSetDraft?.(`set track ${t.index} pan to ${lbl}`);
-                }
-              }}
-            >
-              <PanIcon sx={{ fontSize: 16, mr: 0.25 }} />
-            </Box>
-          </Tooltip>
         </Box>
       }
       sx={{ cursor: 'pointer' }}
     >
-      <ListItemText
-        primary={`${t.index}. ${t.name}`}
-        secondary={t.type}
-      />
+      <Box sx={{ width: '100%' }}>
+        <ListItemText primary={`${t.index}. ${t.name}`} secondary={t.type} />
+        {/* Sliders stacked vertically for clarity */}
+        <Box sx={{ mt: 1, pr: 12 }}>
+          <Typography variant="caption" color="text.secondary">Volume</Typography>
+          <Slider
+            size="small"
+            value={(() => {
+              const v = status?.mixer?.volume;
+              return typeof v === 'number' ? v : 0.5;
+            })()}
+            min={0}
+            max={1}
+            step={0.005}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(v) => `${liveFloatToDb(Number(v)).toFixed(1)} dB`}
+            onChangeCommitted={async (_, val) => {
+              const v = Array.isArray(val) ? val[0] : val;
+              try {
+                await apiService.setMixer(t.index, 'volume', Number(v));
+                await refreshTrack(t.index);
+              } catch {}
+            }}
+          />
+          <Box sx={{ height: 8 }} />
+          <Typography variant="caption" color="text.secondary">Pan</Typography>
+          <Slider
+            size="small"
+            value={(() => {
+              const p = status?.mixer?.pan;
+              return typeof p === 'number' ? p : 0;
+            })()}
+            min={-1}
+            max={1}
+            step={0.02}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(v) => `${Math.round(Math.abs(Number(v)) * 50)}${Number(v) < 0 ? 'L' : (Number(v) > 0 ? 'R' : '')}`}
+            onChangeCommitted={async (_, val) => {
+              const v = Array.isArray(val) ? val[0] : val;
+              try {
+                await apiService.setMixer(t.index, 'pan', Number(v));
+                await refreshTrack(t.index);
+              } catch {}
+            }}
+          />
+        </Box>
+      </Box>
     </ListItem>
   );
 }
-

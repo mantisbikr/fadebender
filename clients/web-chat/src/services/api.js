@@ -162,6 +162,11 @@ class ApiService {
     if (!response.ok) throw new Error(`Return devices failed: ${response.statusText}`);
     return response.json();
   }
+  async getReturnSends(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/sends?index=${index}`);
+    if (!response.ok) throw new Error(`Return sends failed: ${response.statusText}`);
+    return response.json();
+  }
   async getReturnDeviceParams(index, device) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/params?index=${index}&device=${device}`);
     if (!response.ok) throw new Error(`Return device params failed: ${response.statusText}`);
@@ -202,6 +207,24 @@ class ApiService {
       body: JSON.stringify({ return_index, device_index, param_index, value })
     });
     if (!response.ok) throw new Error(`Set return param failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setReturnSend(return_index, send_index, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/return/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, send_index, value })
+    });
+    if (!response.ok) throw new Error(`Set return send failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setReturnMixer(return_index, field, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/return/mixer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, field, value })
+    });
+    if (!response.ok) throw new Error(`Set return mixer failed: ${response.statusText}`);
     return response.json();
   }
 
