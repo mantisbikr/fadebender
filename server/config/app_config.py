@@ -35,6 +35,11 @@ def _load() -> Dict[str, Any]:
                 "echo": 1,
             }
         },
+        "debug": {
+            "firestore": False,     # Firestore/mapping store debug prints
+            "sse": False,            # Log SSE emits (event name + minimal payload)
+            "auto_capture": False,   # Log auto-capture preset flow
+        },
     }
     try:
         if os.path.exists(path):
@@ -71,6 +76,20 @@ def set_ui_settings(ui: Dict[str, Any]) -> Dict[str, Any]:
         return get_ui_settings()
     cfg.setdefault("ui", {}).update({k: v for k, v in ui.items() if isinstance(v, (int, float))})
     return get_ui_settings()
+
+
+def get_debug_settings() -> Dict[str, Any]:
+    return dict(_load().get("debug", {}))
+
+
+def set_debug_settings(debug: Dict[str, Any]) -> Dict[str, Any]:
+    cfg = _load()
+    if not isinstance(debug, dict):
+        return get_debug_settings()
+    cur = cfg.setdefault("debug", {})
+    for k, v in debug.items():
+        cur[str(k).lower()] = bool(v)
+    return get_debug_settings()
 
 
 def set_send_aliases(aliases: Dict[str, int]) -> Dict[str, int]:

@@ -21,6 +21,8 @@ from server.config.app_config import (
     get_ui_settings,
     set_ui_settings,
     set_send_aliases,
+    get_debug_settings,
+    set_debug_settings,
     reload_config as cfg_reload,
     save_config as cfg_save,
 )
@@ -408,6 +410,8 @@ def llm_health() -> Dict[str, Any]:
 # --- Simple safety state: undo + rate limiting ---
 UNDO_STACK: list[Dict[str, Any]] = []
 REDO_STACK: list[Dict[str, Any]] = []
+# Cache last known non-zero Dry/Wet (or Mix) value per return device for bypass restore
+DEVICE_BYPASS_CACHE: dict[tuple[int, int], float] = {}
 LAST_SENT: Dict[str, float] = {}
 LAST_TS: Dict[str, float] = {}
 MIN_INTERVAL_SEC = 0.05  # 50ms per target key
@@ -477,17 +481,20 @@ def app_config() -> Dict[str, Any]:
     """Expose a subset of app config to clients (UI + aliases)."""
     ui = get_ui_settings()
     aliases = get_send_aliases()
-    return {"ok": True, "ui": ui, "aliases": {"sends": aliases}}
+    debug = get_debug_settings()
+    return {"ok": True, "ui": ui, "aliases": {"sends": aliases}, "debug": debug}
 
 
 @app.post("/config/update")
 def app_config_update(body: Dict[str, Any]) -> Dict[str, Any]:
     ui_in = (body or {}).get("ui") or {}
     aliases_in = ((body or {}).get("aliases") or {}).get("sends") or {}
+    debug_in = (body or {}).get("debug") or {}
     ui = set_ui_settings(ui_in) if ui_in else get_ui_settings()
     aliases = set_send_aliases(aliases_in) if aliases_in else get_send_aliases()
+    debug = set_debug_settings(debug_in) if debug_in else get_debug_settings()
     saved = cfg_save()
-    return {"ok": True, "saved": saved, "ui": ui, "aliases": {"sends": aliases}}
+    return {"ok": True, "saved": saved, "ui": ui, "aliases": {"sends": aliases}, "debug": debug}
 
 
 @app.post("/config/reload")
@@ -715,6 +722,7 @@ def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
             m = STORE.get_device_map_local(signature)
         if m:
             plist = []
+            exists = False
             for p in m.get("params", []) or []:
                 plist.append({
                     "name": p.get("name"),
@@ -730,15 +738,23 @@ def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
                     "min": p.get("min"),
                     "max": p.get("max"),
                 })
+                try:
+                    if not exists and len(p.get("samples") or []) >= 3:
+                        exists = True
+                except Exception:
+                    pass
             data = {
                 "device_name": m.get("device_name") or dname,
                 "signature": signature,
                 "groups": m.get("groups") or [],
                 "params": plist,
+                "exists": exists,
             }
     except Exception as e:
         return {"ok": False, "error": str(e), "backend": backend}
-    return {"ok": True, "backend": backend, "signature": signature, "data": data}
+    # Top-level exists mirrors data.exists for convenience
+    top_exists = bool((data or {}).get("exists")) if data else False
+    return {"ok": True, "backend": backend, "signature": signature, "exists": top_exists, "data": data}
 
 
 class MapDeleteBody(BaseModel):
@@ -779,7 +795,7 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({"event": "return_device_param_changed", "return": op.return_index, "device": op.device_index, "param": op.param_index}))
+        schedule_emit({"event": "return_device_param_changed", "return": op.return_index, "device": op.device_index, "param": op.param_index})
     except Exception:
         pass
     return resp
@@ -3010,7 +3026,7 @@ def op_mixer(op: MixerOp) -> Dict[str, Any]:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     # publish SSE event (fire and forget)
     try:
-        asyncio.create_task(broker.publish({"event": "mixer_changed", "track": op.track_index, "field": op.field}))
+        schedule_emit({"event": "mixer_changed", "track": op.track_index, "field": op.field})
     except Exception:
         pass
     return resp
@@ -3023,7 +3039,7 @@ def op_send(op: SendOp) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({"event": "send_changed", "track": op.track_index, "send_index": op.send_index}))
+        schedule_emit({"event": "send_changed", "track": op.track_index, "send_index": op.send_index})
     except Exception:
         pass
     return resp
@@ -3036,7 +3052,7 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({"event": "device_param_changed", "track": op.track_index, "device": op.device_index, "param": op.param_index}))
+        schedule_emit({"event": "device_param_changed", "track": op.track_index, "device": op.device_index, "param": op.param_index})
     except Exception:
         pass
     return resp
@@ -3050,7 +3066,7 @@ def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({"event": "mixer_changed", "track": int(body.track_index), "field": "volume"}))
+        schedule_emit({"event": "mixer_changed", "track": int(body.track_index), "field": "volume"})
     except Exception:
         pass
     return resp
@@ -3063,7 +3079,7 @@ def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({"event": "selection_changed", "track": int(body.track_index)}))
+        schedule_emit({"event": "selection_changed", "track": int(body.track_index)})
     except Exception:
         pass
     return resp
@@ -3111,7 +3127,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         resp = udp_request(msg, timeout=1.0)
         # Publish SSE so UI tooltips/details refresh immediately
         try:
-            asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "volume"}))
+            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "volume"})
         except Exception:
             pass
         summ = f"Set Track {track_index} volume to {target:g} dB"
@@ -3163,7 +3179,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            asyncio.create_task(broker.publish({"event": "send_changed", "track": track_index, "send_index": si}))
+            schedule_emit({"event": "send_changed", "track": track_index, "send_index": si})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
@@ -3223,7 +3239,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"{action.title()} Track {track_index} send {send_label} by {amt:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            asyncio.create_task(broker.publish({"event": "send_changed", "track": track_index, "send_index": si}))
+            schedule_emit({"event": "send_changed", "track": track_index, "send_index": si})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"{action.title()} Track {track_index} send {send_label} by {amt:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
@@ -3241,7 +3257,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "pan"}))
+            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "pan"})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
@@ -3259,7 +3275,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "pan"}))
+            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "pan"})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
@@ -3405,45 +3421,81 @@ def chat(body: ChatBody) -> Dict[str, Any]:
 
 @app.post("/op/undo_last")
 def undo_last() -> Dict[str, Any]:
-    """Undo the last successful mixer change (volume/pan) if previous value is known."""
+    """Undo the last successful change (mixer or device param) if previous value is known."""
     while UNDO_STACK:
         entry = UNDO_STACK.pop()
-        prev = entry.get("prev")
-        track_index = entry.get("track_index")
-        field = entry.get("field")
-        if prev is None or track_index is None or field not in ("volume", "pan"):
-            continue
-        msg = {"op": "set_mixer", "track_index": int(track_index), "field": field, "value": float(prev)}
-        resp = udp_request(msg, timeout=1.0)
-        if resp and resp.get("ok", True):
-            LAST_SENT[_key(field, int(track_index))] = float(prev)
-            # push redo entry
-            REDO_STACK.append({"key": entry.get("key"), "field": field, "track_index": track_index, "prev": msg["value"], "new": entry.get("new")})
-            return {"ok": True, "undone": entry, "resp": resp}
-        else:
-            return {"ok": False, "error": "undo_send_failed", "attempt": entry}
+        etype = entry.get("type", "mixer")
+        if etype == "mixer":
+            prev = entry.get("prev")
+            track_index = entry.get("track_index")
+            field = entry.get("field")
+            if prev is None or track_index is None or field not in ("volume", "pan"):
+                continue
+            msg = {"op": "set_mixer", "track_index": int(track_index), "field": field, "value": float(prev)}
+            resp = udp_request(msg, timeout=1.0)
+            if resp and resp.get("ok", True):
+                LAST_SENT[_key(field, int(track_index))] = float(prev)
+                # push redo entry
+                REDO_STACK.append({"type": "mixer", "key": entry.get("key"), "field": field, "track_index": track_index, "prev": msg["value"], "new": entry.get("new")})
+                return {"ok": True, "undone": entry, "resp": resp}
+            else:
+                return {"ok": False, "error": "undo_send_failed", "attempt": entry}
+        elif etype == "device_param":
+            prev = entry.get("prev")
+            ri = entry.get("return_index")
+            di = entry.get("device_index")
+            pi = entry.get("param_index")
+            if prev is None or ri is None or di is None or pi is None:
+                continue
+            msg = {"op": "set_return_device_param", "return_index": int(ri), "device_index": int(di), "param_index": int(pi), "value": float(prev)}
+            resp = udp_request(msg, timeout=1.0)
+            if resp and resp.get("ok", True):
+                # push redo entry
+                REDO_STACK.append({"type": "device_param", "return_index": ri, "device_index": di, "param_index": pi, "prev": entry.get("new"), "new": prev})
+                try:
+                    schedule_emit({"event": "device_param_restored", "return_index": ri, "device_index": di})
+                except Exception:
+                    pass
+                return {"ok": True, "undone": entry, "resp": resp}
+            else:
+                return {"ok": False, "error": "undo_send_failed", "attempt": entry}
     return {"ok": False, "error": "nothing_to_undo"}
 
 
 @app.post("/op/redo_last")
 def redo_last() -> Dict[str, Any]:
-    """Re-apply the last undone mixer change if available."""
+    """Re-apply the last undone change (mixer or device param) if available."""
     while REDO_STACK:
         entry = REDO_STACK.pop()
-        new_val = entry.get("new")
-        track_index = entry.get("track_index")
-        field = entry.get("field")
-        if new_val is None or track_index is None or field not in ("volume", "pan"):
-            continue
-        msg = {"op": "set_mixer", "track_index": int(track_index), "field": field, "value": float(new_val)}
-        resp = udp_request(msg, timeout=1.0)
-        if resp and resp.get("ok", True):
-            LAST_SENT[_key(field, int(track_index))] = float(new_val)
-            # Add corresponding undo entry so we can undo the redo
-            UNDO_STACK.append({"key": entry.get("key"), "field": field, "track_index": track_index, "prev": entry.get("prev"), "new": new_val})
-            return {"ok": True, "redone": entry, "resp": resp}
-        else:
-            return {"ok": False, "error": "redo_send_failed", "attempt": entry}
+        etype = entry.get("type", "mixer")
+        if etype == "mixer":
+            new_val = entry.get("new")
+            track_index = entry.get("track_index")
+            field = entry.get("field")
+            if new_val is None or track_index is None or field not in ("volume", "pan"):
+                continue
+            msg = {"op": "set_mixer", "track_index": int(track_index), "field": field, "value": float(new_val)}
+            resp = udp_request(msg, timeout=1.0)
+            if resp and resp.get("ok", True):
+                LAST_SENT[_key(field, int(track_index))] = float(new_val)
+                UNDO_STACK.append({"type": "mixer", "key": entry.get("key"), "field": field, "track_index": track_index, "prev": entry.get("prev"), "new": new_val})
+                return {"ok": True, "redone": entry, "resp": resp}
+            else:
+                return {"ok": False, "error": "redo_send_failed", "attempt": entry}
+        elif etype == "device_param":
+            new_val = entry.get("new")
+            ri = entry.get("return_index")
+            di = entry.get("device_index")
+            pi = entry.get("param_index")
+            if new_val is None or ri is None or di is None or pi is None:
+                continue
+            msg = {"op": "set_return_device_param", "return_index": int(ri), "device_index": int(di), "param_index": int(pi), "value": float(new_val)}
+            resp = udp_request(msg, timeout=1.0)
+            if resp and resp.get("ok", True):
+                UNDO_STACK.append({"type": "device_param", "return_index": ri, "device_index": di, "param_index": pi, "prev": entry.get("prev"), "new": new_val})
+                return {"ok": True, "redone": entry, "resp": resp}
+            else:
+                return {"ok": False, "error": "redo_send_failed", "attempt": entry}
     return {"ok": False, "error": "nothing_to_redo"}
 
 
@@ -3456,6 +3508,178 @@ def history_state() -> Dict[str, Any]:
         "undo_depth": len(UNDO_STACK),
         "redo_depth": len(REDO_STACK),
     }
+
+
+# ==================== Return Device Control Helpers ====================
+
+class BypassBody(BaseModel):
+    return_index: int
+    device_index: int
+    on: bool  # True = turn on, False = bypass/off
+
+
+def _find_device_param(params: list[dict], names: list[str]) -> Optional[dict]:
+    for nm in names:
+        p = next((x for x in params if str(x.get("name", "")).lower() == nm.lower()), None)
+        if p:
+            return p
+    return None
+
+
+@app.post("/return/device/bypass")
+def bypass_return_device(body: BypassBody) -> Dict[str, Any]:
+    """Bypass or enable a return device.
+
+    Strategy:
+    - Prefer the binary parameter "Device On" (1=on, 0=off)
+    - Fallback: set "Dry/Wet" to 0 when turning off; restore previous value when turning on if known
+    """
+    ri = int(body.return_index)
+    di = int(body.device_index)
+    # Read current params
+    resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+    params = ((resp or {}).get("data") or {}).get("params") or []
+    if not params:
+        raise HTTPException(404, "device_params_not_found")
+
+    # Try Device On first
+    dev_on = _find_device_param(params, ["Device On"])  # Ableton stock devices commonly expose this
+    if dev_on is not None:
+        idx = int(dev_on.get("index", -1))
+        if idx < 0:
+            raise HTTPException(500, "invalid_param_index")
+        prev = float(dev_on.get("value", 1.0))
+        target = 1.0 if body.on else 0.0
+        ok = udp_request({
+            "op": "set_return_device_param",
+            "return_index": ri,
+            "device_index": di,
+            "param_index": idx,
+            "value": float(target),
+        }, timeout=0.8)
+        if ok and ok.get("ok", True):
+            # Push undo entry for device param
+            UNDO_STACK.append({
+                "type": "device_param",
+                "return_index": ri,
+                "device_index": di,
+                "param_index": idx,
+                "prev": prev,
+                "new": target,
+            })
+            REDO_STACK.clear()
+            try:
+                schedule_emit({"event": "device_bypass_changed", "return_index": ri, "device_index": di, "on": body.on})
+            except Exception:
+                pass
+            return {"ok": True, "method": "device_on", "prev": prev, "new": target}
+        raise HTTPException(502, "set_param_failed")
+
+    # Fallback: use Dry/Wet as proxy for bypass when turning off
+    drywet = _find_device_param(params, ["Dry/Wet", "Mix"])  # try common names
+    if drywet is None:
+        raise HTTPException(400, "no_bypass_strategy_available")
+    idx = int(drywet.get("index", -1))
+    if idx < 0:
+        raise HTTPException(500, "invalid_param_index")
+    prev = float(drywet.get("value", 0.0))
+    key = (ri, di)
+    # When turning off, remember the last non-zero Dry/Wet to restore later
+    if not body.on:
+        if prev > 0.0:
+            DEVICE_BYPASS_CACHE[key] = prev
+        target = 0.0
+    else:
+        # Restore cached non-zero value if available; otherwise a sensible default
+        restore = DEVICE_BYPASS_CACHE.get(key, None)
+        target = float(restore if restore is not None else max(prev, 0.25))
+    ok = udp_request({
+        "op": "set_return_device_param",
+        "return_index": ri,
+        "device_index": di,
+        "param_index": idx,
+        "value": float(target),
+    }, timeout=0.8)
+    if ok and ok.get("ok", True):
+        UNDO_STACK.append({
+            "type": "device_param",
+            "return_index": ri,
+            "device_index": di,
+            "param_index": idx,
+            "prev": prev,
+            "new": target,
+        })
+        REDO_STACK.clear()
+        # If we restored a value, clear cache to avoid stale
+        if body.on and key in DEVICE_BYPASS_CACHE:
+            try:
+                del DEVICE_BYPASS_CACHE[key]
+            except Exception:
+                pass
+        try:
+            schedule_emit({"event": "device_bypass_changed", "return_index": ri, "device_index": di, "on": body.on})
+        except Exception:
+            pass
+        return {"ok": True, "method": "drywet", "prev": prev, "new": target}
+    raise HTTPException(502, "set_param_failed")
+
+
+class SaveUserPresetBody(BaseModel):
+    return_index: int
+    device_index: int
+    preset_name: str
+    user_id: Optional[str] = None
+
+
+@app.post("/return/device/save_as_user_preset")
+def save_as_user_preset(body: SaveUserPresetBody) -> Dict[str, Any]:
+    """Capture current device state and save as a user preset in Firestore."""
+    ri = int(body.return_index)
+    di = int(body.device_index)
+    # Read device info and params
+    devs = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
+    if not devs or "devices" not in devs:
+        raise HTTPException(404, "return_not_found")
+    devices = devs.get("devices", [])
+    if di >= len(devices):
+        raise HTTPException(404, "device_index_out_of_range")
+    device = devices[di]
+    device_name = device.get("name", "Unknown")
+
+    params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+    if not params_resp or "params" not in params_resp:
+        raise HTTPException(500, "device_params_fetch_failed")
+    params = params_resp.get("params", [])
+
+    # Build param values and signature
+    parameter_values: Dict[str, float] = {}
+    for p in params:
+        nm = p.get("name"); val = p.get("value")
+        if nm is not None and val is not None:
+            parameter_values[str(nm)] = float(val)
+
+    signature = _make_device_signature(device_name, params)
+    device_type = _detect_device_type(params)
+
+    preset_id = f"{device_type}_user_{body.preset_name.lower().replace(' ', '_')}"
+    preset_data = {
+        "name": body.preset_name,
+        "device_name": device_name,
+        "manufacturer": "Ableton",
+        "daw": "Ableton Live",
+        "structure_signature": signature,
+        "category": device_type,
+        "preset_type": "user",
+        "user_id": body.user_id,
+        "parameter_values": parameter_values,
+    }
+
+    ok = STORE.save_preset(preset_id, preset_data, local_only=False)
+    try:
+        schedule_emit({"event": "preset_saved", "preset_id": preset_id, "name": body.preset_name})
+    except Exception:
+        pass
+    return {"ok": bool(ok), "preset_id": preset_id, "device_type": device_type, "signature": signature}
 
 
 if __name__ == "__main__":
@@ -3531,3 +3755,44 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     return {"ok": True, "intent": canonical.dict(), "raw_intent": raw_intent}
 class SelectTrackBody(BaseModel):
     track_index: int
+def _debug_enabled(name: str) -> bool:
+    try:
+        if name == "sse":
+            env = str(os.getenv("FB_DEBUG_SSE", "")).lower() in ("1","true","yes","on")
+            cfg = get_debug_settings().get("sse", False)
+            return bool(env or cfg)
+        if name == "auto_capture":
+            env = str(os.getenv("FB_DEBUG_AUTO_CAPTURE", "")).lower() in ("1","true","yes","on")
+            cfg = get_debug_settings().get("auto_capture", False)
+            return bool(env or cfg)
+    except Exception:
+        return False
+    return False
+
+
+async def emit_event(payload: Dict[str, Any]) -> None:
+    if _debug_enabled("sse"):
+        try:
+            ename = payload.get("event")
+            meta = {k: v for k, v in payload.items() if k != "data"}
+            print(f"[SSE] Emitting {ename}: {json.dumps(meta)}")
+        except Exception:
+            print(f"[SSE] Emitting {payload}")
+    await broker.publish(payload)
+
+
+def schedule_emit(payload: Dict[str, Any]) -> None:
+    """Schedule an SSE emit safely from sync or async contexts without leaking coroutines."""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(emit_event(payload))
+    except RuntimeError:
+        # No running loop in this thread; run emit_event synchronously
+        try:
+            asyncio.run(emit_event(payload))
+        except RuntimeError:
+            # Already inside a running loop but couldn't get it; last resort: fire and forget via ensure_future
+            try:
+                asyncio.ensure_future(emit_event(payload))
+            except Exception:
+                pass

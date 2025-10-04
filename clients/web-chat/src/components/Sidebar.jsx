@@ -154,16 +154,49 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     try {
       const res = await apiService.getReturnDevices(ri);
       const devs = (res && res.data && Array.isArray(res.data.devices)) ? res.data.devices : [];
-      setReturnDevices(prev => ({ ...prev, [ri]: devs }));
-      // Check learned status for each device
-      devs.forEach(async (d) => {
+      // For each device get minimal param state to derive on/off
+      const withState = await Promise.all(devs.map(async (d) => {
         try {
-          const mr = await apiService.getReturnDeviceMap(ri, d.index);
-          setLearnedMap(prev => ({ ...prev, [`${ri}:${d.index}`]: !!(mr && mr.exists) }));
+          const pr = await apiService.getReturnDeviceParams(ri, d.index);
+          const params = (pr && pr.data && Array.isArray(pr.data.params)) ? pr.data.params : [];
+          const devOn = params.find(p => (p.name || '').toLowerCase() === 'device on');
+          let isOn = true;
+          if (devOn && typeof devOn.value === 'number') {
+            isOn = devOn.value >= 0.5;
+          } else {
+            const dw = params.find(p => {
+              const n = (p.name || '').toLowerCase();
+              return n === 'dry/wet' || n === 'mix';
+            });
+            if (dw && typeof dw.value === 'number') isOn = dw.value > 0.0;
+          }
+          return { ...d, isOn };
+        } catch {
+          return { ...d, isOn: true };
+        }
+      }));
+      setReturnDevices(prev => ({ ...prev, [ri]: withState }));
+      // Check learned status once per device
+      withState.forEach(async (d) => {
+        try {
+          const key = `${ri}:${d.index}`;
+          if (learnedMap[key] === true) return;
+          const mr = await apiService.getReturnDeviceMapSummary(ri, d.index);
+          const exists = !!(mr && (mr.exists || (mr.data && mr.data.exists)));
+          setLearnedMap(prev => ({ ...prev, [key]: exists }));
         } catch {}
       });
     } catch {}
   };
+
+  // Light polling to keep return devices fresh while a return is open
+  useEffect(() => {
+    if (tab !== 0 || openReturn == null) return;
+    const id = setInterval(() => {
+      fetchReturnDevices(openReturn).catch(() => {});
+    }, 3000);
+    return () => clearInterval(id);
+  }, [tab, openReturn]);
 
   const ensureRowStatus = async (idx) => {
     try {
@@ -231,11 +264,24 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     () => { if (tab === 0) { fetchOutline(false); } },
     async (payload) => {
       if (tab !== 0) return;
-      // For preset events, refresh the open return's device list and learned map
-      if (payload?.event && (payload.event.startsWith('preset_') || payload.event === 'return_device_param_changed')) {
+      if (!payload?.event) return;
+      // Optimistic handling for bypass; minimal refresh for others
+      if (payload.event === 'device_bypass_changed') {
+        const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
+        if (rIndex == null) return;
+        setReturnDevices(prev => {
+          const list = prev[rIndex];
+          if (!Array.isArray(list)) return prev;
+          const nextList = list.map(d => (d.index === payload.device_index ? { ...d, isOn: !!payload.on } : d));
+          return { ...prev, [rIndex]: nextList };
+        });
+        return;
+      }
+      if (payload.event.startsWith('preset_') || payload.event === 'return_device_param_changed' || payload.event === 'device_removed') {
         try {
-          if (typeof payload.return === 'number') {
-            await fetchReturnDevices(payload.return);
+          const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
+          if (rIndex != null) {
+            await fetchReturnDevices(rIndex);
           } else if (openReturn != null) {
             await fetchReturnDevices(openReturn);
           }
@@ -432,8 +478,36 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                               )}
                               {returnDevices[r.index] && returnDevices[r.index].map((d) => (
                                 <Box key={d.index} sx={{ mb: 0.5, pl: 1, pr: 1 }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 320 }}>
-                                    <Typography variant="body2" noWrap>{d.name || `Device ${d.index}`}</Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 360 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                      <Tooltip title={d.isOn ? 'On' : 'Off'} placement="top">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!d.isOn}
+                                          onChange={async (e) => {
+                                            const nextOn = e.target.checked;
+                                            // Optimistic UI update
+                                            setReturnDevices(prev => {
+                                              const list = prev[r.index] || [];
+                                              const nextList = list.map(x => (x.index === d.index ? { ...x, isOn: nextOn } : x));
+                                              return { ...prev, [r.index]: nextList };
+                                            });
+                                            try {
+                                              await apiService.bypassReturnDevice(r.index, d.index, nextOn);
+                                            } catch {
+                                              // revert on error
+                                              setReturnDevices(prev => {
+                                                const list = prev[r.index] || [];
+                                                const nextList = list.map(x => (x.index === d.index ? { ...x, isOn: !nextOn } : x));
+                                                return { ...prev, [r.index]: nextList };
+                                              });
+                                            }
+                                          }}
+                                          style={{ cursor: 'pointer' }}
+                                        />
+                                      </Tooltip>
+                                      <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{d.name || `Device ${d.index}`}</Typography>
+                                    </Box>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                       {learnJobs[`${r.index}:${d.index}`]?.state === 'running' && (
                                         <Typography variant="caption" color="text.secondary">

@@ -20,7 +20,11 @@ export function useMixerEvents(onMixerChanged, onSelectionChanged, onOtherEvent,
           payload.event === 'preset_backfill_item' ||
           payload.event === 'preset_backfill_progress' ||
           payload.event === 'preset_backfill_done' ||
-          payload.event === 'return_device_param_changed'
+          payload.event === 'return_device_param_changed' ||
+          payload.event === 'device_bypass_changed' ||
+          payload.event === 'preset_saved' ||
+          payload.event === 'device_param_restored' ||
+          payload.event === 'device_removed'
         ) {
           onOtherEvent && onOtherEvent(payload);
         }

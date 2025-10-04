@@ -92,12 +92,18 @@ class MappingStore:
         if not self._enabled or not self._client:
             return None
         try:
+            from server.config.app_config import get_debug_settings  # lazy import to avoid cycles
+            dbg_cfg = get_debug_settings().get("firestore", False)
+            dbg_env = str(os.getenv("FB_DEBUG_FIRESTORE", "")).lower() in ("1","true","yes","on")
+            dbg = bool(dbg_cfg or dbg_env)
             doc = self._client.collection("device_mappings").document(signature).get()
             if not doc.exists:
-                print(f"[DEBUG] Firestore: Document {signature} does not exist")
+                if dbg:
+                    print(f"[DEBUG] Firestore: Document {signature} does not exist")
                 return None
             data = doc.to_dict() or {}
-            print(f"[DEBUG] Firestore: Got doc data, fetching params subcollection...")
+            if dbg:
+                print(f"[DEBUG] Firestore: Got doc data, fetching params subcollection...")
             # Pull params
             params_snap = self._client.collection("device_mappings").document(signature).collection("params").stream()
             params: List[Dict[str, Any]] = []
@@ -105,12 +111,14 @@ class MappingStore:
                 pdata = pdoc.to_dict() or {}
                 params.append(pdata)
             data["params"] = params
-            print(f"[DEBUG] Firestore: Loaded {len(params)} params")
+            if dbg:
+                print(f"[DEBUG] Firestore: Loaded {len(params)} params")
             return data
         except Exception as e:
-            print(f"[DEBUG] Firestore exception in get_device_map: {e}")
-            import traceback
-            traceback.print_exc()
+            if str(os.getenv("FB_DEBUG_FIRESTORE", "")).lower() in ("1","true","yes","on"):
+                print(f"[DEBUG] Firestore exception in get_device_map: {e}")
+                import traceback
+                traceback.print_exc()
             return None
 
     def delete_device_map(self, signature: str) -> bool:

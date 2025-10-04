@@ -172,6 +172,29 @@ class ApiService {
     if (!response.ok) throw new Error(`Return device map failed: ${response.statusText}`);
     return response.json();
   }
+  async getReturnDeviceMapSummary(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/map_summary?index=${index}&device=${device}`);
+    if (!response.ok) throw new Error(`Return device map summary failed: ${response.statusText}`);
+    return response.json();
+  }
+  async bypassReturnDevice(return_index, device_index, on) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/bypass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, device_index, on })
+    });
+    if (!response.ok) throw new Error(`Bypass device failed: ${response.statusText}`);
+    return response.json();
+  }
+  async saveReturnDeviceUserPreset(return_index, device_index, preset_name, user_id = null) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/save_as_user_preset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, device_index, preset_name, user_id })
+    });
+    if (!response.ok) throw new Error(`Save user preset failed: ${response.statusText}`);
+    return response.json();
+  }
   async setReturnDeviceParam(return_index, device_index, param_index, value) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/return/device/param`, {
       method: 'POST',
