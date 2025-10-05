@@ -39,7 +39,48 @@ import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
-import ClickAwayAccordion from './ClickAwayAccordion.jsx';
+
+function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturnSends }) {
+  const [localVol, setLocalVol] = useState(null);
+  const currentVol = localVol !== null ? localVol : (send?.volume ?? 0);
+
+  return (
+    <Box sx={{ mb: 0.5 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.3, display: 'block' }}>
+        {send?.name || `Send ${sendIndex + 1}`}
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Slider
+          size="small"
+          value={currentVol}
+          min={0}
+          max={1}
+          step={0.005}
+          onChange={(_, val) => setLocalVol(Array.isArray(val) ? val[0] : val)}
+          onChangeCommitted={async (_, val) => {
+            const v = Array.isArray(val) ? val[0] : val;
+            try {
+              await apiService.setReturnSend(returnIndex, send.index, Number(v));
+              // Update local cache
+              setReturnSends(prev => {
+                const list = prev[returnIndex] || [];
+                return {
+                  ...prev,
+                  [returnIndex]: list.map((s, i) => i === sendIndex ? { ...s, volume: Number(v) } : s)
+                };
+              });
+            } catch {}
+            setLocalVol(null);
+          }}
+          sx={{ flex: 1 }}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
+          {liveFloatToDbSend(Number(currentVol)).toFixed(1)} dB
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
 
 function ReturnRow({
   returnTrack: r,
@@ -52,10 +93,13 @@ function ReturnRow({
   setLearnJobs,
   fetchReturnDevices,
   fetchReturnSends,
-  fetchReturns
+  fetchReturns,
+  returnSends,
+  setReturnSends
 }) {
   const [localVol, setLocalVol] = useState(null);
   const [localPan, setLocalPan] = useState(null);
+  const [sendsExpanded, setSendsExpanded] = useState(false);
   const currentVol = localVol !== null ? localVol : (r.mixer?.volume ?? 0.5);
   const currentPan = localPan !== null ? localPan : (r.mixer?.pan ?? 0);
 
@@ -205,6 +249,50 @@ function ReturnRow({
           ))}
         </Box>
       )}
+
+      {/* Sends expandable section */}
+      <Accordion
+        disableGutters
+        elevation={0}
+        expanded={sendsExpanded}
+        onChange={(_, exp) => {
+          setSendsExpanded(exp);
+          if (exp && !returnSends[r.index]) {
+            fetchReturnSends(r.index);
+          }
+        }}
+        sx={{
+          mt: 0.5,
+          border: 'none',
+          '&:before': { display: 'none' },
+          '&.Mui-expanded': { margin: 0 }
+        }}
+      >
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon fontSize="small" />}
+          sx={{ minHeight: 32, padding: '0 8px', '&.Mui-expanded': { minHeight: 32 } }}
+        >
+          <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+            Sends {returnSends[r.index] ? `(${returnSends[r.index].length})` : ''}
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails sx={{ p: 1, pt: 0 }}>
+          {!returnSends[r.index] && <Typography variant="caption" color="text.secondary">Loading…</Typography>}
+          {returnSends[r.index] && returnSends[r.index].length === 0 && (
+            <Typography variant="caption" color="text.secondary">No sends</Typography>
+          )}
+          {returnSends[r.index] && returnSends[r.index].map((s, i) => (
+            <ReturnSendSlider
+              key={s.index}
+              send={s}
+              sendIndex={i}
+              returnIndex={r.index}
+              returnSends={returnSends}
+              setReturnSends={setReturnSends}
+            />
+          ))}
+        </AccordionDetails>
+      </Accordion>
     </ListItem>
   );
 }
@@ -221,9 +309,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [sendsFastRefreshMs, setSendsFastRefreshMs] = useState(800);
   const [sseThrottleMs, setSseThrottleMs] = useState(150);
   const [followSelection, setFollowSelection] = useState(true);
-  const [sends, setSends] = useState(null);
-  const [loadingSends, setLoadingSends] = useState(false);
-  const [sendsOpen, setSendsOpen] = useState(false);
+  const [trackSends, setTrackSends] = useState({}); // { [trackIndex]: sends[] }
   const [returns, setReturns] = useState(null);
   const [loadingReturns, setLoadingReturns] = useState(false);
   const [openReturn, setOpenReturn] = useState(null);
@@ -290,28 +376,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     return () => window.removeEventListener('fb:refresh-project', handler);
   }, []);
 
-  const fetchSends = async (idx, opts = {}) => {
-    const silent = !!opts.silent;
+  const fetchTrackSends = async (trackIndex) => {
     try {
-      if (!silent) setLoadingSends(true);
-      const res = await apiService.getTrackSends(idx);
-      const next = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
-      setSends((prev) => {
-        if (!Array.isArray(prev) || prev.length === 0) return next;
-        const byIdx = new Map(next.map((x) => [x.index, x]));
-        const merged = prev.map((p) => {
-          const n = byIdx.get(p.index);
-          if (!n) return p;
-          const same = p.value === n.value && (p.name || '') === (n.name || '');
-          return same ? p : { ...p, value: n.value, name: n.name };
-        });
-        next.forEach((n) => { if (!merged.find((m) => m.index === n.index)) merged.push(n); });
-        return merged;
-      });
+      const res = await apiService.getTrackSends(trackIndex);
+      const sends = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      setTrackSends(prev => ({ ...prev, [trackIndex]: sends }));
     } catch {
-      if (!silent) setSends([]);
-    } finally {
-      if (!silent) setLoadingSends(false);
+      setTrackSends(prev => ({ ...prev, [trackIndex]: [] }));
     }
   };
 
@@ -451,10 +522,6 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (tab !== 0 || !payload?.track) return;
       // Always refresh basic track status
       refreshTrackThrottled(payload.track);
-      // If sends accordion is open for the selected track and a send changed, refresh sends too
-      if (payload.event === 'send_changed' && sendsOpen && selectedIndex === payload.track) {
-        fetchSends(selectedIndex, { silent: true });
-      }
     },
     () => { if (tab === 0) { fetchOutline(false); } },
     async (payload) => {
@@ -493,22 +560,10 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       fetchOutline(false);
       if (selectedIndex) {
         apiService.getTrackStatus(selectedIndex).then((ts) => setTrackStatus(ts.data || null)).catch(() => {});
-        if (sendsOpen) {
-          fetchSends(selectedIndex, { silent: true });
-        }
       }
     }, refreshInterval);
     return () => clearInterval(id);
-  }, [tab, autoRefresh, selectedIndex, followSelection, refreshInterval, sendsOpen]);
-
-  // Faster, low-jitter refresh loop for sends while accordion is open
-  useEffect(() => {
-    if (tab !== 0 || !sendsOpen || !selectedIndex) return;
-    const id = setInterval(() => {
-      fetchSends(selectedIndex, { silent: true });
-    }, sendsFastRefreshMs);
-    return () => clearInterval(id);
-  }, [tab, sendsOpen, selectedIndex, sendsFastRefreshMs]);
+  }, [tab, autoRefresh, selectedIndex, followSelection, refreshInterval]);
 
   // When outline is fetched the first time, set selected to outline.selected_track if present
   useEffect(() => {
@@ -709,95 +764,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     setSelectedIndex={setSelectedIndex}
                     onSetDraft={onSetDraft}
                     onHoverPrime={ensureRowStatus}
+                    sends={trackSends}
+                    setSends={setTrackSends}
+                    fetchSends={fetchTrackSends}
                   />
                 ))}
               </List>
-
-              {selectedIndex && trackStatus && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Track {trackStatus.index}: {trackStatus.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Volume: {
-                      typeof trackStatus.volume_db === 'number'
-                        ? `${trackStatus.volume_db.toFixed(1)} dB`
-                        : (trackStatus.mixer?.volume != null
-                            ? `${liveFloatToDb(Number(trackStatus.mixer.volume)).toFixed(1)} dB`
-                            : '—')
-                    }
-                    {' '}• Pan: {trackStatus.mixer?.pan != null ? `${Math.round(Math.abs(trackStatus.mixer.pan) * 50)}${trackStatus.mixer.pan < 0 ? 'L' : (trackStatus.mixer.pan > 0 ? 'R' : '')}` : '—'}
-                  </Typography>
-
-                  {/* Sends Accordion */}
-                  <Accordion
-                    disableGutters
-                    elevation={0}
-                    onChange={(_, expanded) => {
-                      setSendsOpen(!!expanded);
-                      if (expanded && selectedIndex) fetchSends(selectedIndex);
-                    }}
-                    sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}
-                  >
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="subtitle2">Sends</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {loadingSends && sends === null && (
-                        <Typography variant="body2" color="text.secondary">Loading…</Typography>
-                      )}
-                      {!loadingSends && (!sends || sends.length === 0) && (
-                        <Typography variant="body2" color="text.secondary">No sends</Typography>
-                      )}
-                      {!loadingSends && sends && sends.length > 0 && (
-                        <List dense>
-                          {sends.map((s, i) => (
-                            <ListItem key={s.index} disableGutters sx={{ py: 0.5 }}>
-                              <Box sx={{ width: '100%' }}>
-                                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                  {s.name || `Send ${s.index}`}
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                  <Slider
-                                    size="small"
-                                    value={typeof s.value === 'number' ? s.value : 0}
-                                    min={0}
-                                    max={1}
-                                    step={0.005}
-                                    valueLabelDisplay="auto"
-                                    valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
-                                    onChange={(_, val) => {
-                                      const v = Array.isArray(val) ? val[0] : val;
-                                      setSends(prev => {
-                                        const next = [...(prev || [])];
-                                        next[i] = { ...next[i], value: Number(v) };
-                                        return next;
-                                      });
-                                    }}
-                                    onChangeCommitted={async (_, val) => {
-                                      const v = Array.isArray(val) ? val[0] : val;
-                                      try {
-                                        await apiService.setSend(selectedIndex, s.index, Number(v));
-                                      } catch {}
-                                    }}
-                                    sx={{ flex: 1 }}
-                                  />
-                                  <Tooltip title={`${liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB`}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
-                                      {liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB
-                                    </Typography>
-                                  </Tooltip>
-                                </Box>
-                              </Box>
-                            </ListItem>
-                          ))}
-                        </List>
-                      )}
-                  </AccordionDetails>
-                  </Accordion>
-
-                </Box>
-              )}
             </>
           )}
         </Box>
@@ -829,6 +801,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                   fetchReturnDevices={fetchReturnDevices}
                   fetchReturnSends={fetchReturnSends}
                   fetchReturns={fetchReturns}
+                  returnSends={returnSends}
+                  setReturnSends={setReturnSends}
                 />
               ))}
             </List>
