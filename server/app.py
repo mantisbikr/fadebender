@@ -849,13 +849,13 @@ def op_return_send(body: ReturnSendBody) -> Dict[str, Any]:
 
 class ReturnMixerBody(BaseModel):
     return_index: int
-    field: str  # 'volume' | 'pan'
+    field: str  # 'volume' | 'pan' | 'mute' | 'solo'
     value: float
 
 
 @app.post("/op/return/mixer")
 def op_return_mixer(body: ReturnMixerBody) -> Dict[str, Any]:
-    if body.field not in ("volume", "pan"):
+    if body.field not in ("volume", "pan", "mute", "solo"):
         raise HTTPException(400, "invalid_field")
     msg = {
         "op": "set_return_mixer",

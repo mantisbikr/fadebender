@@ -1,7 +1,6 @@
-import React from 'react';
+import { useState } from 'react';
 import {
   ListItem,
-  ListItemText,
   Box,
   Tooltip,
   IconButton,
@@ -12,7 +11,7 @@ import {
   VolumeOff as VolumeOffIcon,
   Headphones as HeadphonesIcon,
 } from '@mui/icons-material';
-import { dbFromStatus, panLabelFromStatus, liveFloatToDb } from '../utils/volumeUtils.js';
+import { liveFloatToDb } from '../utils/volumeUtils.js';
 import { apiService } from '../services/api.js';
 
 export default function TrackRow({
@@ -25,16 +24,14 @@ export default function TrackRow({
   onHoverPrime,
 }) {
   const t = track;
-
   const status = getStatus(t.index);
-  const volKey = (() => {
-    const dbVal = dbFromStatus(status);
-    return `vol-${t.index}-${dbVal != null ? dbVal.toFixed(1) : 'na'}`;
-  })();
-  const panKey = (() => {
-    const lbl = panLabelFromStatus(status) || 'na';
-    return `pan-${t.index}-${lbl}`;
-  })();
+
+  // Local state for live slider feedback
+  const [localVolume, setLocalVolume] = useState(null);
+  const [localPan, setLocalPan] = useState(null);
+
+  const currentVolume = localVolume !== null ? localVolume : status?.mixer?.volume;
+  const currentPan = localPan !== null ? localPan : status?.mixer?.pan;
 
   return (
     <ListItem
@@ -43,94 +40,112 @@ export default function TrackRow({
       onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
       onMouseEnter={() => { onHoverPrime?.(t.index); }}
       secondaryAction={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/* Mute toggle */}
-          <Tooltip title={(() => {
-            const ts = getStatus(t.index);
-            return ts && ts.mute ? 'Unmute' : 'Mute';
-          })()}>
-            <span>
-              <IconButton size="small" onClick={async (e) => {
-                e.stopPropagation();
-                try {
-                  if (!isSelected) setSelectedIndex(t.index);
-                  const ts = getStatus(t.index) || await refreshTrack(t.index);
-                  await apiService.setMixer(t.index, 'mute', ts?.mute ? 0 : 1);
-                  await refreshTrack(t.index);
-                } catch {}
-              }}>
-                <VolumeOffIcon fontSize="small" color={(getStatus(t.index)?.mute) ? 'warning' : 'inherit'} />
-              </IconButton>
-            </span>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title={status?.mute ? 'Unmute' : 'Mute'}>
+            <IconButton size="small" onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                if (!isSelected) setSelectedIndex(t.index);
+                const ts = getStatus(t.index) || await refreshTrack(t.index);
+                await apiService.setMixer(t.index, 'mute', ts?.mute ? 0 : 1);
+                await refreshTrack(t.index);
+              } catch {}
+            }}>
+              <VolumeOffIcon fontSize="small" color={status?.mute ? 'warning' : 'inherit'} />
+            </IconButton>
           </Tooltip>
-          {/* Solo toggle */}
-          <Tooltip title={(() => {
-            const ts = getStatus(t.index);
-            return ts && ts.solo ? 'Unsolo' : 'Solo';
-          })()}>
-            <span>
-              <IconButton size="small" onClick={async (e) => {
-                e.stopPropagation();
-                try {
-                  if (!isSelected) setSelectedIndex(t.index);
-                  const ts = getStatus(t.index) || await refreshTrack(t.index);
-                  await apiService.setMixer(t.index, 'solo', ts?.solo ? 0 : 1);
-                  await refreshTrack(t.index);
-                } catch {}
-              }}>
-                <HeadphonesIcon fontSize="small" color={(getStatus(t.index)?.solo) ? 'success' : 'inherit'} />
-              </IconButton>
-            </span>
+          <Tooltip title={status?.solo ? 'Unsolo' : 'Solo'}>
+            <IconButton size="small" onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                if (!isSelected) setSelectedIndex(t.index);
+                const ts = getStatus(t.index) || await refreshTrack(t.index);
+                await apiService.setMixer(t.index, 'solo', ts?.solo ? 0 : 1);
+                await refreshTrack(t.index);
+              } catch {}
+            }}>
+              <HeadphonesIcon fontSize="small" color={status?.solo ? 'success' : 'inherit'} />
+            </IconButton>
           </Tooltip>
         </Box>
       }
-      sx={{ cursor: 'pointer' }}
+      sx={{
+        cursor: 'pointer',
+        py: 0.5,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+      }}
     >
-      <Box sx={{ width: '100%' }}>
-        <ListItemText primary={`${t.index}. ${t.name}`} secondary={t.type} />
-        {/* Sliders stacked vertically for clarity */}
-        <Box sx={{ mt: 1, pr: 12 }}>
-          <Typography variant="caption" color="text.secondary">Volume</Typography>
-          <Slider
-            size="small"
-            value={(() => {
-              const v = status?.mixer?.volume;
-              return typeof v === 'number' ? v : 0.5;
-            })()}
-            min={0}
-            max={1}
-            step={0.005}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(v) => `${liveFloatToDb(Number(v)).toFixed(1)} dB`}
-            onChangeCommitted={async (_, val) => {
-              const v = Array.isArray(val) ? val[0] : val;
-              try {
-                await apiService.setMixer(t.index, 'volume', Number(v));
-                await refreshTrack(t.index);
-              } catch {}
-            }}
-          />
-          <Box sx={{ height: 8 }} />
-          <Typography variant="caption" color="text.secondary">Pan</Typography>
-          <Slider
-            size="small"
-            value={(() => {
-              const p = status?.mixer?.pan;
-              return typeof p === 'number' ? p : 0;
-            })()}
-            min={-1}
-            max={1}
-            step={0.02}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(v) => `${Math.round(Math.abs(Number(v)) * 50)}${Number(v) < 0 ? 'L' : (Number(v) > 0 ? 'R' : '')}`}
-            onChangeCommitted={async (_, val) => {
-              const v = Array.isArray(val) ? val[0] : val;
-              try {
-                await apiService.setMixer(t.index, 'pan', Number(v));
-                await refreshTrack(t.index);
-              } catch {}
-            }}
-          />
+      <Box sx={{ width: '100%', pr: 10 }}>
+        <Typography variant="body2" sx={{ fontWeight: isSelected ? 600 : 400, fontSize: '0.875rem' }}>
+          {t.index}. {t.name}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+          {t.type}
+        </Typography>
+
+        {/* Sliders stacked vertically below track name */}
+        <Box sx={{ mt: 0.5 }}>
+          {/* Volume */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 22 }}>
+              Vol
+            </Typography>
+            <Slider
+              size="small"
+              value={typeof currentVolume === 'number' ? currentVolume : 0.5}
+              min={0}
+              max={1}
+              step={0.005}
+              onChange={(_, val) => {
+                const v = Array.isArray(val) ? val[0] : val;
+                setLocalVolume(v);
+              }}
+              onChangeCommitted={async (_, val) => {
+                const v = Array.isArray(val) ? val[0] : val;
+                try {
+                  await apiService.setMixer(t.index, 'volume', Number(v));
+                  await refreshTrack(t.index);
+                } catch {}
+                setLocalVolume(null);
+              }}
+              sx={{ flex: 1 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
+              {liveFloatToDb(Number(currentVolume || 0.5)).toFixed(1)} dB
+            </Typography>
+          </Box>
+
+          {/* Pan */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 22 }}>
+              Pan
+            </Typography>
+            <Slider
+              size="small"
+              value={typeof currentPan === 'number' ? currentPan : 0}
+              min={-1}
+              max={1}
+              step={0.02}
+              onChange={(_, val) => {
+                const v = Array.isArray(val) ? val[0] : val;
+                setLocalPan(v);
+              }}
+              onChangeCommitted={async (_, val) => {
+                const v = Array.isArray(val) ? val[0] : val;
+                try {
+                  await apiService.setMixer(t.index, 'pan', Number(v));
+                  await refreshTrack(t.index);
+                } catch {}
+                setLocalPan(null);
+              }}
+              sx={{ flex: 1 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 30, textAlign: 'right' }}>
+              {Math.round(Math.abs(Number(currentPan || 0)) * 50)}{Number(currentPan || 0) < 0 ? 'L' : (Number(currentPan || 0) > 0 ? 'R' : '')}
+            </Typography>
+          </Box>
         </Box>
       </Box>
     </ListItem>

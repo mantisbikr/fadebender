@@ -30,13 +30,184 @@ import {
   PlayArrow as PlayIcon,
   History as HistoryIcon,
   AccountTree as ProjectIcon,
-  ExpandMore as ExpandMoreIcon
+  ExpandMore as ExpandMoreIcon,
+  ChevronRight as ChevronRightIcon,
+  VolumeOff as VolumeOffIcon,
+  Headphones as HeadphonesIcon
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
 import ClickAwayAccordion from './ClickAwayAccordion.jsx';
+
+function ReturnRow({
+  returnTrack: r,
+  openReturn,
+  setOpenReturn,
+  returnDevices,
+  setReturnDevices,
+  learnedMap,
+  setLearnedMap,
+  setLearnJobs,
+  fetchReturnDevices,
+  fetchReturnSends,
+  fetchReturns
+}) {
+  const [localVol, setLocalVol] = useState(null);
+  const [localPan, setLocalPan] = useState(null);
+  const currentVol = localVol !== null ? localVol : (r.mixer?.volume ?? 0.5);
+  const currentPan = localPan !== null ? localPan : (r.mixer?.pan ?? 0);
+
+  return (
+    <ListItem sx={{
+      display: 'block',
+      py: 0.5,
+      borderBottom: '1px solid',
+      borderColor: 'divider',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+    }}>
+      {/* Compact header: name + mute/solo */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+        <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+          {r.name || `Return ${r.index}`}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title={r.mixer?.mute ? 'Unmute' : 'Mute'}>
+            <IconButton size="small" onClick={async () => {
+              try { await apiService.setReturnMixer(r.index, 'mute', r.mixer?.mute ? 0 : 1); fetchReturns(); } catch {}
+            }}>
+              <VolumeOffIcon fontSize="small" color={r.mixer?.mute ? 'warning' : 'inherit'} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={r.mixer?.solo ? 'Unsolo' : 'Solo'}>
+            <IconButton size="small" onClick={async () => {
+              try { await apiService.setReturnMixer(r.index, 'solo', r.mixer?.solo ? 0 : 1); fetchReturns(); } catch {}
+            }}>
+              <HeadphonesIcon fontSize="small" color={r.mixer?.solo ? 'success' : 'inherit'} />
+            </IconButton>
+          </Tooltip>
+          <IconButton size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) { await fetchReturnDevices(next); fetchReturnSends(next); } }}>
+            {openReturn === r.index ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+          </IconButton>
+        </Box>
+      </Box>
+
+      {/* Mixer controls: Vol + Pan stacked vertically */}
+      <Box sx={{ mb: 0.5 }}>
+        {/* Volume */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 22 }}>Vol</Typography>
+          <Slider
+            size="small"
+            value={currentVol}
+            min={0}
+            max={1}
+            step={0.005}
+            onChange={(_, val) => setLocalVol(Array.isArray(val) ? val[0] : val)}
+            onChangeCommitted={async (_, val) => {
+              const v = Array.isArray(val) ? val[0] : val;
+              try { await apiService.setReturnMixer(r.index, 'volume', Number(v)); } catch {}
+              setLocalVol(null);
+            }}
+            sx={{ flex: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
+            {liveFloatToDbSend(Number(currentVol)).toFixed(1)} dB
+          </Typography>
+        </Box>
+
+        {/* Pan */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 22 }}>Pan</Typography>
+          <Slider
+            size="small"
+            value={currentPan}
+            min={-1}
+            max={1}
+            step={0.02}
+            onChange={(_, val) => setLocalPan(Array.isArray(val) ? val[0] : val)}
+            onChangeCommitted={async (_, val) => {
+              const v = Array.isArray(val) ? val[0] : val;
+              try { await apiService.setReturnMixer(r.index, 'pan', Number(v)); } catch {}
+              setLocalPan(null);
+            }}
+            sx={{ flex: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 30, textAlign: 'right' }}>
+            {Math.round(Math.abs(Number(currentPan)) * 50)}{Number(currentPan) < 0 ? 'L' : (Number(currentPan) > 0 ? 'R' : '')}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Devices - compact list with preset names first */}
+      {openReturn === r.index && (
+        <Box sx={{ pl: 1, mt: 0.5 }}>
+          {!returnDevices[r.index] && <Typography variant="caption" color="text.secondary">Loading devices…</Typography>}
+          {returnDevices[r.index] && returnDevices[r.index].length === 0 && <Typography variant="caption" color="text.secondary">No devices</Typography>}
+          {returnDevices[r.index] && returnDevices[r.index].map((d) => (
+            <Box key={d.index} sx={{ mb: 0.3 }}>
+              {/* Preset name first */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                  {d.name || `Device ${d.index}`}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Tooltip title={d.isOn ? 'On' : 'Off'}>
+                    <input
+                      type="checkbox"
+                      checked={!!d.isOn}
+                      onChange={async (e) => {
+                        const nextOn = e.target.checked;
+                        setReturnDevices(prev => {
+                          const list = prev[r.index] || [];
+                          return { ...prev, [r.index]: list.map(x => (x.index === d.index ? { ...x, isOn: nextOn } : x)) };
+                        });
+                        try { await apiService.bypassReturnDevice(r.index, d.index, nextOn); } catch {}
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                  <Tooltip title={learnedMap[`${r.index}:${d.index}`] ? "Learned" : "Click to learn"} placement="left">
+                    <Box
+                      onClick={async () => {
+                        if (learnedMap[`${r.index}:${d.index}`]) return;
+                        try {
+                          const st = await apiService.learnReturnDeviceStart(r.index, d.index, 41, 20);
+                          const jobId = st?.job_id;
+                          if (!jobId) return;
+                          setLearnJobs(prev => ({ ...prev, [`${r.index}:${d.index}`]: { jobId, state: 'running', progress: 0, total: 1 } }));
+                          const key = `${r.index}:${d.index}`;
+                          const poll = async () => {
+                            try {
+                              const s = await apiService.learnReturnDeviceStatus(jobId);
+                              setLearnJobs(prev => ({ ...prev, [key]: { ...(prev[key]||{}), ...s, jobId } }));
+                              if (s?.state === 'done') { setLearnedMap(prev => ({ ...prev, [key]: true })); return; }
+                              if (s?.state === 'error') return;
+                              setTimeout(poll, 400);
+                            } catch { setTimeout(poll, 600); }
+                          };
+                          poll();
+                        } catch {}
+                      }}
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        backgroundColor: learnedMap[`${r.index}:${d.index}`] ? '#4caf50' : '#f44336',
+                        cursor: learnedMap[`${r.index}:${d.index}`] ? 'default' : 'pointer'
+                      }}
+                    />
+                  </Tooltip>
+                </Box>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      )}
+    </ListItem>
+  );
+}
 
 export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanent', onSetDraft, widthPx = 360 }) {
   const [tab, setTab] = useState(0); // 0: Project, 1: History
@@ -645,186 +816,20 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           {!loadingReturns && returns && returns.length > 0 && (
             <List dense>
               {returns.map((r) => (
-                <ListItem key={r.index} sx={{ display: 'block' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                    <Typography variant="body2" noWrap>{r.name || `Return ${r.index}`}</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button size="small" onClick={async () => { const next = (openReturn === r.index) ? null : r.index; setOpenReturn(next); if (next != null) await fetchReturnDevices(next); }}>
-                        {openReturn === r.index ? 'Hide' : 'Show'}
-                      </Button>
-                    </Box>
-                  </Box>
-                  {openReturn === r.index && (
-                    <Box sx={{ mt: 1, pl: 1 }}>
-                      {/* Return mixer: Volume & Pan sliders stacked */}
-                      <Box sx={{ mb: 1, pr: 2 }}>
-                        <Typography variant="caption" color="text.secondary">Volume</Typography>
-                        <Slider
-                          size="small"
-                          value={0.5}
-                          min={0}
-                          max={1}
-                          step={0.005}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
-                          onChangeCommitted={async (_, val) => {
-                            const v = Array.isArray(val) ? val[0] : val;
-                            try { await apiService.setReturnMixer(r.index, 'volume', Number(v)); } catch {}
-                          }}
-                        />
-                        <Box sx={{ height: 8 }} />
-                        <Typography variant="caption" color="text.secondary">Pan</Typography>
-                        <Slider
-                          size="small"
-                          value={0}
-                          min={-1}
-                          max={1}
-                          step={0.02}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={(v) => `${Math.round(Math.abs(Number(v)) * 50)}${Number(v) < 0 ? 'L' : (Number(v) > 0 ? 'R' : '')}`}
-                          onChangeCommitted={async (_, val) => {
-                            const v = Array.isArray(val) ? val[0] : val;
-                            try { await apiService.setReturnMixer(r.index, 'pan', Number(v)); } catch {}
-                          }}
-                        />
-                      </Box>
-                      {!returnDevices[r.index] && (
-                        <Typography variant="caption" color="text.secondary">Loading devices…</Typography>
-                      )}
-                      {returnDevices[r.index] && returnDevices[r.index].length === 0 && (
-                        <Typography variant="caption" color="text.secondary">No devices</Typography>
-                      )}
-                      {returnDevices[r.index] && returnDevices[r.index].map((d) => (
-                        <Box key={d.index} sx={{ mb: 0.5, pl: 1, pr: 1 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 360 }}>
-                            {/* Left cluster: bypass + name */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                              <Tooltip title={d.isOn ? 'On' : 'Off'} placement="top">
-                                <input
-                                  type="checkbox"
-                                  checked={!!d.isOn}
-                                  onChange={async (e) => {
-                                    const nextOn = e.target.checked;
-                                    setReturnDevices(prev => {
-                                      const list = prev[r.index] || [];
-                                      const nextList = list.map(x => (x.index === d.index ? { ...x, isOn: nextOn } : x));
-                                      return { ...prev, [r.index]: nextList };
-                                    });
-                                    try { await apiService.bypassReturnDevice(r.index, d.index, nextOn); } catch {}
-                                  }}
-                                  style={{ cursor: 'pointer' }}
-                                />
-                              </Tooltip>
-                              <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
-                                {d.name || `Device ${d.index}`}
-                              </Typography>
-                            </Box>
-                            {/* Right cluster: learned LED */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Tooltip
-                                title={
-                                  learnedMap[`${r.index}:${d.index}`]
-                                    ? "Device learned - ready for control"
-                                    : "Click to learn device parameters"
-                                }
-                                placement="left"
-                              >
-                                <Box
-                                  onClick={async () => {
-                                    if (learnedMap[`${r.index}:${d.index}`]) return; // Don't re-learn
-                                    try {
-                                      const st = await apiService.learnReturnDeviceStart(r.index, d.index, 41, 20);
-                                      const jobId = st?.job_id;
-                                      if (!jobId) return;
-                                      setLearnJobs(prev => ({ ...prev, [`${r.index}:${d.index}`]: { jobId, state: 'running', progress: 0, total: 1 } }));
-                                      // Poll status
-                                      const key = `${r.index}:${d.index}`;
-                                      const poll = async () => {
-                                        try {
-                                          const s = await apiService.learnReturnDeviceStatus(jobId);
-                                          setLearnJobs(prev => ({ ...prev, [key]: { ...(prev[key]||{}), ...s, jobId } }));
-                                          if (s && s.state === 'done') {
-                                            setLearnedMap(prev => ({ ...prev, [key]: true }));
-                                            return;
-                                          }
-                                          if (s && s.state === 'error') return;
-                                          setTimeout(poll, 400);
-                                        } catch {
-                                          setTimeout(poll, 600);
-                                        }
-                                      };
-                                      poll();
-                                    } catch {}
-                                  }}
-                                  sx={{
-                                    width: 12,
-                                    height: 12,
-                                    borderRadius: '50%',
-                                    backgroundColor: learnedMap[`${r.index}:${d.index}`] ? '#4caf50' : '#f44336',
-                                    cursor: learnedMap[`${r.index}:${d.index}`] ? 'default' : 'pointer'
-                                  }}
-                                />
-                              </Tooltip>
-                            </Box>
-                          </Box>
-                        </Box>
-                      ))}
-
-                      {/* Sends for this Return (name above slider) */}
-                      <Box sx={{ mt: 1 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Sends</Typography>
-                        {!returnSends[r.index] && (
-                          <Button size="small" onClick={() => fetchReturnSends(r.index)}>Load Sends</Button>
-                        )}
-                        {returnSends[r.index] && returnSends[r.index].length === 0 && (
-                          <Typography variant="caption" color="text.secondary">No sends</Typography>
-                        )}
-                        {returnSends[r.index] && returnSends[r.index].length > 0 && (
-                          <List dense>
-                            {returnSends[r.index].map((s, i) => (
-                              <ListItem key={s.index} disableGutters sx={{ py: 0.5 }}>
-                                <Box sx={{ width: '100%' }}>
-                                  <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                    {s.name || `Send ${s.index}`}
-                                  </Typography>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                    <Slider
-                                      size="small"
-                                      value={typeof s.value === 'number' ? s.value : 0}
-                                      min={0}
-                                      max={1}
-                                      step={0.005}
-                                      valueLabelDisplay="auto"
-                                      valueLabelFormat={(v) => `${liveFloatToDbSend(Number(v)).toFixed(1)} dB`}
-                                      onChange={(_, val) => {
-                                        const v = Array.isArray(val) ? val[0] : val;
-                                        setReturnSends(prev => {
-                                          const arr = prev[r.index] ? [...prev[r.index]] : [];
-                                          arr[i] = { ...arr[i], value: Number(v) };
-                                          return { ...prev, [r.index]: arr };
-                                        });
-                                      }}
-                                      onChangeCommitted={async (_, val) => {
-                                        const v = Array.isArray(val) ? val[0] : val;
-                                        try { await apiService.setReturnSend(r.index, s.index, Number(v)); } catch {}
-                                      }}
-                                      sx={{ flex: 1 }}
-                                    />
-                                    <Tooltip title={`${liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB`}>
-                                      <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
-                                        {liveFloatToDbSend(Number(s.value || 0)).toFixed(1)} dB
-                                      </Typography>
-                                    </Tooltip>
-                                  </Box>
-                                </Box>
-                              </ListItem>
-                            ))}
-                          </List>
-                        )}
-                      </Box>
-                    </Box>
-                  )}
-                </ListItem>
+                <ReturnRow
+                  key={r.index}
+                  returnTrack={r}
+                  openReturn={openReturn}
+                  setOpenReturn={setOpenReturn}
+                  returnDevices={returnDevices}
+                  setReturnDevices={setReturnDevices}
+                  learnedMap={learnedMap}
+                  setLearnedMap={setLearnedMap}
+                  setLearnJobs={setLearnJobs}
+                  fetchReturnDevices={fetchReturnDevices}
+                  fetchReturnSends={fetchReturnSends}
+                  fetchReturns={fetchReturns}
+                />
               ))}
             </List>
           )}
