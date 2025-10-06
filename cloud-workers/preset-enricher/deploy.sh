@@ -23,9 +23,10 @@ gcloud run deploy $SERVICE_NAME \
   --project=$PROJECT_ID \
   --region=$REGION \
   --platform=managed \
-  --allow-unauthenticated \
-  --set-env-vars="VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=$REGION,VERTEX_MODEL=gemini-2.5-flash,KB_BUCKET=fadebender-kb,FIRESTORE_PROJECT_ID=$PROJECT_ID,LLM_CHUNKED_ONLY=1" \
-  --set-secrets="LLM_API_KEY=llm-api-key:latest" \
+  --no-allow-unauthenticated \
+  --ingress=internal-and-cloud-load-balancing \
+  --set-env-vars="VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=$REGION,VERTEX_MODEL=gemini-2.5-flash,KB_BUCKET=fadebender-kb,FIRESTORE_PROJECT_ID=$PROJECT_ID,LLM_CHUNKED_ONLY=1,MAX_LLM_CALLS_PER_HOUR=20,USE_GENAI_PRIMARY=0,DISABLE_GENAI=1" \
+  --clear-secrets \
   --memory=512Mi \
   --cpu=1 \
   --timeout=300 \

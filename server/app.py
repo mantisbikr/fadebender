@@ -719,7 +719,7 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
 
 
 @app.get("/return/device/map_summary")
-def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
+async def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
     """Return a summary of a learned mapping: param names and sample counts."""
     devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
     devices = ((devs or {}).get("data") or {}).get("devices") or []
@@ -734,6 +734,9 @@ def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
     params = ((params_resp or {}).get("data") or {}).get("params") or []
     signature = _make_device_signature(dname, params)
     backend = STORE.backend
+    # Also detect device type from live params so we can optionally
+    # trigger auto-capture when a learned mapping exists.
+    device_type = _detect_device_type(params)
     data = None
     try:
         # Check Firestore first (primary source), fall back to local cache
@@ -771,6 +774,14 @@ def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
                 "params": plist,
                 "exists": exists,
             }
+            # If mapping exists, trigger background preset auto-capture
+            # so that calling only the summary endpoint can still save presets.
+            try:
+                if exists and device_type and dname:
+                    # Use live params with 'value' fields for capture
+                    asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
+            except Exception:
+                pass
     except Exception as e:
         return {"ok": False, "error": str(e), "backend": backend}
     # Top-level exists mirrors data.exists for convenience
@@ -2330,7 +2341,9 @@ def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
         preset_data["description"] = {"what": body.description}
 
     # Save preset (Firestore + local)
+    print(f"[CAPTURE] Saving preset {preset_id}, category={body.category}, local_only={body.category == 'user'}")
     saved = STORE.save_preset(preset_id, preset_data, local_only=(body.category == "user"))
+    print(f"[CAPTURE] Preset save result: {saved}")
 
     return {
         "ok": saved,

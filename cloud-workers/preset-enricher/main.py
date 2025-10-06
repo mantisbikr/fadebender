@@ -24,6 +24,14 @@ KB_BUCKET = os.getenv("KB_BUCKET", "fadebender-kb")
 FIRESTORE_PROJECT = os.getenv("FIRESTORE_PROJECT_ID", PROJECT_ID)
 LLM_CHUNKED_ONLY = str(os.getenv("LLM_CHUNKED_ONLY", "1")).lower() in ("1", "true", "yes", "on")
 GENAI_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+# Safety: disable direct Gemini API usage by default (cost-control)
+DISABLE_GENAI = str(os.getenv("DISABLE_GENAI", "1")).lower() in ("1", "true", "yes", "on")
+if DISABLE_GENAI:
+    GENAI_API_KEY = None
+
+# Rate limiting: Max LLM calls per hour to prevent runaway costs
+MAX_LLM_CALLS_PER_HOUR = int(os.getenv("MAX_LLM_CALLS_PER_HOUR", "20"))  # Conservative limit
+_llm_call_timestamps = []  # Track recent call times
 
 
 def convert_parameter_values(
@@ -113,6 +121,25 @@ def load_knowledge_base(device_type: str) -> str:
         return ""
 
 
+def check_rate_limit() -> bool:
+    """Check if we're within rate limit. Returns True if OK to proceed."""
+    global _llm_call_timestamps
+    import time
+    now = time.time()
+    hour_ago = now - 3600
+
+    # Remove calls older than 1 hour
+    _llm_call_timestamps = [ts for ts in _llm_call_timestamps if ts > hour_ago]
+
+    if len(_llm_call_timestamps) >= MAX_LLM_CALLS_PER_HOUR:
+        print(f"[RATE_LIMIT] ⚠️  Hit rate limit: {len(_llm_call_timestamps)} calls in last hour (max: {MAX_LLM_CALLS_PER_HOUR})")
+        return False
+
+    _llm_call_timestamps.append(now)
+    print(f"[RATE_LIMIT] ✓ OK: {len(_llm_call_timestamps)}/{MAX_LLM_CALLS_PER_HOUR} calls in last hour")
+    return True
+
+
 def generate_metadata_with_kb(
     device_name: str,
     device_type: str,
@@ -130,6 +157,11 @@ def generate_metadata_with_kb(
     Returns:
         Metadata dict with description, audio_engineering, etc.
     """
+    # Check rate limit first
+    if not check_rate_limit():
+        print("[WORKER] Skipping LLM call due to rate limit")
+        return {}, False, "rate_limited", None
+
     try:
         # Format parameter values for prompt
         def format_params(params: Dict[str, Any]) -> str:
@@ -373,9 +405,11 @@ Output formatting rules:
                         # Provide debug snippet to help diagnose
                         dbg = recovered[:1600] if isinstance(recovered, str) else str(recovered)[:1600]
                         raise ValueError(f"Failed to parse LLM JSON: {e2}") from e2
-        # If API key is provided, try google-generativeai with response_schema for stricter JSON
+        # COST OPTIMIZATION: Use Vertex AI only by default; disable Gemini API path unless explicitly allowed
+        use_genai_first = (os.getenv("USE_GENAI_PRIMARY", "0") == "1") and not DISABLE_GENAI
+
         genai_failed = False
-        if GENAI_API_KEY:
+        if use_genai_first and GENAI_API_KEY:
             try:
                 import google.generativeai as genai  # type: ignore
                 genai.configure(api_key=GENAI_API_KEY)
@@ -786,6 +820,13 @@ def update_preset_firestore(
 def handle_pubsub():
     """Handle Pub/Sub push message."""
     try:
+        # Verify Pub/Sub authentication (Cloud Run with --no-allow-unauthenticated)
+        # Pub/Sub will include Authorization header with service account token
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            print("[WORKER] ⚠️  Unauthorized request rejected (no Bearer token)")
+            return ("Unauthorized", 401)
+
         envelope = request.get_json()
         if not envelope:
             return ("Bad Request: no Pub/Sub message", 400)
