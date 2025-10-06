@@ -38,9 +38,9 @@ def _load() -> Dict[str, Any]:
             }
         },
         "debug": {
-            "firestore": False,     # Firestore/mapping store debug prints
+            "firestore": True,     # Firestore/mapping store debug prints
             "sse": False,            # Log SSE emits (event name + minimal payload)
-            "auto_capture": False,   # Log auto-capture preset flow
+            "auto_capture": True,   # Log auto-capture preset flow
         },
     }
     try:

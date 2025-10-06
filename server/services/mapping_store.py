@@ -272,18 +272,36 @@ class MappingStore:
         Returns:
             True if saved successfully
         """
+        from server.config.app_config import get_debug_settings
+        dbg_cfg = get_debug_settings().get("firestore", False)
+        dbg_env = str(os.getenv("FB_DEBUG_FIRESTORE", "")).lower() in ("1","true","yes","on")
+        dbg = bool(dbg_cfg or dbg_env)
+
         # Always save locally first
         local_ok = self._save_preset_local(preset_id, preset_data)
+        if dbg:
+            print(f"[DEBUG] Firestore: Local save {'✓' if local_ok else '✗'} for preset {preset_id}")
 
-        if local_only or not self._enabled or not self._client:
+        if local_only:
+            if dbg:
+                print(f"[DEBUG] Firestore: Skipping Firestore save (local_only=True)")
+            return local_ok
+
+        if not self._enabled or not self._client:
+            if dbg:
+                print(f"[DEBUG] Firestore: Skipping save (enabled={self._enabled}, client={bool(self._client)})")
             return local_ok
 
         # Save to Firestore
         try:
             doc = self._client.collection("presets").document(preset_id)
             doc.set(preset_data, merge=True)
+            if dbg:
+                print(f"[DEBUG] Firestore: Saved preset {preset_id}")
             return True
-        except Exception:
+        except Exception as e:
+            if dbg:
+                print(f"[DEBUG] Firestore: Failed to save preset {preset_id}: {e}")
             return local_ok  # At least local succeeded
 
     def get_preset(self, preset_id: str) -> Optional[Dict[str, Any]]:
