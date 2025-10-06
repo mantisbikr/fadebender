@@ -62,6 +62,7 @@ Exit criteria (Phase R):
 | Track create/delete/rename | ✅ | 🟡 | ✅ | 🟡 | P0 | UI supports Add/Delete; rename via inline edit & chat |
 | Mute/Solo/Arm | ✅ | ✅ | ✅ | 🟢 | P0 | Keep exclusive solo semantics consistent with Live |
 | Volume/Pan/Sends (A/B/C…) | ✅ | ✅ | ✅ | 🟡 | P0 | Sends render as per-return knobs; value listeners enabled |
+| Routing capture (chat-only) | ✅ | — | ✅ | 🟡 | P0 | Track input/output routing and monitor state exposed to LLM, even without UI knobs |
 | Scene/Clip launch/stop | ✅ | ✅ | ✅ | 🟡 | P0 | Clip grid minimal; fire/stop buttons; scene column |
 
 **Exit criteria (Phase 1):**
@@ -96,6 +97,7 @@ Goal: Master bus operations required for mix control.
 | Master volume | ✅ | ✅ | ✅ | 🟢 | P1 | `LiveSet.master_track.mixer_device.volume` |
 | Crossfader | ✅ | ✅ | 🟡 | 🟡 | P1 | `...mixer_device.crossfader`; UI + chat “set crossfader to B 70%” |
 | Cue volume (if exposed) | 🟡 | 🟡 | — | 🟡 | P2 | `...mixer_device.cue_volume` availability varies by Live version |
+| Cue/Main Out selection | — | — | — | 🔴 | P2 | Generally not exposed in LOM; document limitation for chat |
 | Master devices list | ✅ | ✅ | 🟡 | 🟡 | P1 | Enable on/off; top params |
 | Master device params | ✅ | ✅ | 🟡 | 🟡 | P1 | Carefully guard destructive processors |
 
@@ -148,9 +150,38 @@ Exit criteria (Phase M): master volume and crossfader controllable via UI and LL
 - **Quantization/Time Math:** shared utils for bars/beats → samples/ticks as RS needs.  
 - **Value Listeners:** attach on track/mixer/param/clip to keep UI & LLM state coherent.  
 - **Safety Policy:** centralized guardrails (confirmations, dry runs, rollbacks on error).  
- - **Return/Bus Guardrails:** prevent feedback loops (e.g., return→return sends) via feature flags and validation.  
+- **Return/Bus Guardrails:** prevent feedback loops (e.g., return→return sends) via feature flags and validation.  
+ - **Routing Catalog:** enumerate valid input/output types/channels per track and expose to LLM for disambiguation.  
 
 ---
+
+## Bridge Ops Spec (Routing & Monitor)
+
+Implement these UDP ops in the Remote Script bridge to support server endpoints and LLM intents.
+
+- `get_track_routing` (req)
+  - Request: `{ op: "get_track_routing", track_index: number }`
+  - Response: `{ ok, data: { monitor_state: "in"|"auto"|"off", audio_from: { type, channel }, audio_to: { type, channel }, midi_from?: { type, channel }, midi_to?: { type, channel }, options?: { audio_from_types: string[], audio_from_channels: string[], audio_to_types: string[], audio_to_channels: string[], midi_from_types?: string[], midi_from_channels?: string[], midi_to_types?: string[], midi_to_channels?: string[] } } }`
+
+- `set_track_routing` (req)
+  - Request: `{ op: "set_track_routing", track_index, monitor_state?, audio_from_type?, audio_from_channel?, audio_to_type?, audio_to_channel?, midi_from_type?, midi_from_channel?, midi_to_type?, midi_to_channel? }`
+  - Response: `{ ok: boolean }`
+
+- `get_return_routing` (req)
+  - Request: `{ op: "get_return_routing", return_index }`
+  - Response: `{ ok, data: { audio_to: { type, channel }, sends_mode?: "pre"|"post", options?: { audio_to_types: string[], audio_to_channels: string[], sends_modes?: ["pre","post"] } } }`
+
+- `set_return_routing` (req)
+  - Request: `{ op: "set_return_routing", return_index, audio_to_type?, audio_to_channel?, sends_mode? }`
+  - Response: `{ ok: boolean }`
+
+Server emits SSE events on changes:
+- `track_routing_changed` with `{ track_index }`
+- `return_routing_changed` with `{ return_index }`
+
+Validation & behavior:
+- RS should validate requested type/channel against `options` and return `{ ok:false, error:"invalid_selection" }` when out of range.
+- For Live versions lacking certain fields (e.g., MIDI on audio tracks, sends_mode not exposed), omit fields in `data` and `options` gracefully.
 
 ## Non-Goals (for now)
 - Opening plugin GUIs, OS dialogs, or Live Preferences screen.  

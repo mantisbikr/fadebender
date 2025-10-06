@@ -613,6 +613,55 @@ def track_sends(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+# ==================== Track Routing & Monitor ====================
+
+class TrackRoutingSetBody(BaseModel):
+    track_index: int
+    monitor_state: Optional[str] = None  # "in" | "auto" | "off"
+    audio_from_type: Optional[str] = None
+    audio_from_channel: Optional[str] = None
+    audio_to_type: Optional[str] = None
+    audio_to_channel: Optional[str] = None
+    midi_from_type: Optional[str] = None
+    midi_from_channel: Optional[str] = None
+    midi_to_type: Optional[str] = None
+    midi_to_channel: Optional[str] = None
+
+
+@app.get("/track/routing")
+def get_track_routing(index: int) -> Dict[str, Any]:
+    """Get current routing + available options for a track (for LLM disambiguation)."""
+    resp = udp_request({"op": "get_track_routing", "track_index": int(index)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+@app.post("/track/routing")
+def set_track_routing(body: TrackRoutingSetBody) -> Dict[str, Any]:
+    """Set routing and/or monitor state for a track. Any field can be omitted to leave unchanged.
+
+    Delegates to Remote Script op "set_track_routing" with provided keys only.
+    """
+    msg: Dict[str, Any] = {"op": "set_track_routing", "track_index": int(body.track_index)}
+    for k, v in body.dict().items():
+        if k == "track_index":
+            continue
+        if v is not None:
+            msg[k] = v
+    resp = udp_request(msg, timeout=1.2)
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    try:
+        schedule_emit({"event": "track_routing_changed", "track_index": int(body.track_index)})
+    except Exception:
+        pass
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 @app.get("/returns")
 def get_returns() -> Dict[str, Any]:
     resp = udp_request({"op": "get_return_tracks"}, timeout=1.0)
@@ -637,6 +686,46 @@ def get_return_sends(index: int) -> Dict[str, Any]:
         return {"ok": True, "data": data}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+# ==================== Return Routing & Sends Mode ====================
+
+class ReturnRoutingSetBody(BaseModel):
+    return_index: int
+    audio_to_type: Optional[str] = None
+    audio_to_channel: Optional[str] = None
+    sends_mode: Optional[str] = None  # "pre" | "post" (optional capability)
+
+
+@app.get("/return/routing")
+def get_return_routing(index: int) -> Dict[str, Any]:
+    """Get return track routing (Audio To) and available options if provided by RS."""
+    resp = udp_request({"op": "get_return_routing", "return_index": int(index)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+@app.post("/return/routing")
+def set_return_routing(body: ReturnRoutingSetBody) -> Dict[str, Any]:
+    """Set return Audio To destination and/or sends mode if supported."""
+    msg: Dict[str, Any] = {"op": "set_return_routing", "return_index": int(body.return_index)}
+    for k, v in body.dict().items():
+        if k == "return_index":
+            continue
+        if v is not None:
+            msg[k] = v
+    resp = udp_request(msg, timeout=1.2)
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    try:
+        schedule_emit({"event": "return_routing_changed", "return_index": int(body.return_index)})
+    except Exception:
+        pass
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
 
 
 @app.get("/return/devices")

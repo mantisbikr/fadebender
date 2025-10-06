@@ -12,7 +12,8 @@ import time
 
 _STATE: Dict[str, Any] = {
     "tracks": [
-        {"index": 1, "name": "Track 1", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0]},
+        {"index": 1, "name": "Track 1", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0],
+         "routing": {"monitor_state": "auto", "audio_from": {"type": "Ext. In", "channel": "1"}, "audio_to": {"type": "Master", "channel": "1/2"}}},
         {"index": 2, "name": "Track 2", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0]},
     ],
     "selected_track": 1,
@@ -21,6 +22,7 @@ _STATE: Dict[str, Any] = {
         {
             "index": 0,
             "name": "A Reverb",
+            "routing": {"audio_to": {"type": "Master", "channel": "1/2"}, "sends_mode": "post"},
             "devices": [
                 {
                     "index": 0,
@@ -35,6 +37,7 @@ _STATE: Dict[str, Any] = {
         {
             "index": 1,
             "name": "B Delay",
+            "routing": {"audio_to": {"type": "Master", "channel": "1/2"}, "sends_mode": "post"},
             "devices": [
                 {
                     "index": 0,
@@ -371,6 +374,48 @@ def set_return_device_param(live, return_index: int, device_index: int, param_in
     return False
 
 
+def set_return_mixer(live, return_index: int, field: str, value: float) -> bool:
+    """Set return track mixer fields: volume [0..1], pan [-1..1], mute/solo (bool)."""
+    try:
+        if live is not None:
+            ri = int(return_index)
+            if 0 <= ri < len(getattr(live, "return_tracks", [])):
+                tr = live.return_tracks[ri]
+                mix = getattr(tr, "mixer_device", None)
+                if field == "volume" and hasattr(mix, "volume"):
+                    mix.volume.value = max(0.0, min(1.0, float(value)))
+                    return True
+                if field == "pan" and hasattr(mix, "panning"):
+                    mix.panning.value = max(-1.0, min(1.0, float(value)))
+                    return True
+                if field == "mute":
+                    # Return tracks typically use Track.mute directly
+                    if hasattr(tr, "mute"):
+                        setattr(tr, "mute", bool(value))
+                        return True
+                if field == "solo":
+                    if hasattr(tr, "solo"):
+                        setattr(tr, "solo", bool(value))
+                        return True
+                return False
+    except Exception:
+        pass
+    # Stub fallback
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            if field == "volume":
+                r.setdefault("mixer", {}).update({"volume": max(0.0, min(1.0, float(value)))})
+                return True
+            if field == "pan":
+                r.setdefault("mixer", {}).update({"pan": max(-1.0, min(1.0, float(value)))})
+                return True
+            if field in ("mute", "solo"):
+                r[field] = bool(value)
+                return True
+            return False
+    return False
+
+
 def select_track(live, track_index: int) -> bool:
     try:
         if live is not None:
@@ -405,7 +450,7 @@ def set_volume_db(live, track_index: int, target_db: float):
     if live is None:
         # Use correct formula: X ≈ 0.85 - (0.025 × |dB_target|)
         norm = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
-        return set_mixer(None, track_index, 'volume', norm)
+    return set_mixer(None, track_index, 'volume', norm)
 
     try:
         idx = int(track_index)
@@ -448,3 +493,261 @@ def set_volume_db(live, track_index: int, target_db: float):
         # Fallback to stub mapping if anything fails using correct formula
         norm = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
         return set_mixer(None, track_index, 'volume', norm)
+
+
+# ---------------- Routing & Monitoring ----------------
+
+def _routing_options_stub(track_type: str = "audio") -> Dict[str, Any]:
+    opts: Dict[str, Any] = {
+        "audio_from_types": ["Ext. In"],
+        "audio_from_channels": ["1", "2"],
+        "audio_to_types": ["Master", "Sends Only", "Ext. Out"],
+        "audio_to_channels": ["1/2", "3/4"],
+    }
+    if track_type == "midi":
+        opts.update({
+            "midi_from_types": ["All Ins", "Fadebender In"],
+            "midi_from_channels": ["All Channels", "1", "10"],
+            "midi_to_types": ["No Output", "Fadebender Out"],
+            "midi_to_channels": ["All Channels", "1", "10"],
+        })
+    return opts
+
+
+def get_track_routing(live, track_index: int) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            idx = int(track_index)
+            tr = live.tracks[idx - 1] if 1 <= idx <= len(live.tracks) else None
+            if tr is None:
+                raise RuntimeError("track_not_found")
+            # Monitor state mapping
+            mon_val = getattr(tr, "current_monitoring_state", None)
+            mon_state = None
+            try:
+                mv = int(mon_val)
+                mon_state = {0: "off", 1: "auto", 2: "in"}.get(mv)
+            except Exception:
+                mon_state = None
+            # Routing current values (best-effort)
+            af_type = getattr(tr, "input_routing_type", None)
+            af_chan = getattr(tr, "input_routing_channel", None)
+            ao_type = getattr(tr, "output_routing_type", None)
+            ao_chan = getattr(tr, "output_routing_channel", None)
+            def _name(x):
+                if x is None:
+                    return None
+                return str(getattr(x, "display_name", None) or getattr(x, "to_string", lambda: None)() or str(x))
+            data = {
+                "monitor_state": mon_state,
+                "audio_from": {"type": _name(af_type), "channel": _name(af_chan)},
+                "audio_to": {"type": _name(ao_type), "channel": _name(ao_chan)},
+            }
+            # MIDI only for MIDI tracks
+            try:
+                if getattr(tr, "has_midi_input", False) or tr.__class__.__name__.lower().startswith("midi"):
+                    mf_type = getattr(tr, "midi_input_routing_type", None) or getattr(tr, "input_routing_type", None)
+                    mf_chan = getattr(tr, "midi_input_routing_channel", None) or getattr(tr, "input_routing_channel", None)
+                    mt_type = getattr(tr, "midi_output_routing_type", None) or getattr(tr, "output_routing_type", None)
+                    mt_chan = getattr(tr, "midi_output_routing_channel", None) or getattr(tr, "output_routing_channel", None)
+                    data.update({
+                        "midi_from": {"type": _name(mf_type), "channel": _name(mf_chan)},
+                        "midi_to": {"type": _name(mt_type), "channel": _name(mt_chan)},
+                    })
+            except Exception:
+                pass
+            # Options
+            def _list_names(objs):
+                out = []
+                for o in (objs or []):
+                    try:
+                        out.append(str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o)))
+                    except Exception:
+                        continue
+                return out
+            opts = {
+                "audio_from_types": _list_names(getattr(tr, "available_input_routing_types", [])),
+                "audio_from_channels": _list_names(getattr(tr, "available_input_routing_channels", [])),
+                "audio_to_types": _list_names(getattr(tr, "available_output_routing_types", [])),
+                "audio_to_channels": _list_names(getattr(tr, "available_output_routing_channels", [])),
+            }
+            # MIDI opts best-effort
+            try:
+                if "midi_from" in data:
+                    opts.update({
+                        "midi_from_types": _list_names(getattr(tr, "available_input_routing_types", [])),
+                        "midi_from_channels": _list_names(getattr(tr, "available_input_routing_channels", [])),
+                        "midi_to_types": _list_names(getattr(tr, "available_output_routing_types", [])),
+                        "midi_to_channels": _list_names(getattr(tr, "available_output_routing_channels", [])),
+                    })
+            except Exception:
+                pass
+            data["options"] = opts
+            return data
+    except Exception:
+        pass
+    # Stub fallback
+    for t in _STATE["tracks"]:
+        if t["index"] == int(track_index):
+            r = t.get("routing") or {"monitor_state": "auto", "audio_from": {"type": "Ext. In", "channel": "1"}, "audio_to": {"type": "Master", "channel": "1/2"}}
+            data = {**r}
+            data["options"] = _routing_options_stub(t.get("type", "audio"))
+            return data
+    return {"error": "track_not_found"}
+
+
+def set_track_routing(live, track_index: int, **kwargs) -> bool:
+    # kwargs: monitor_state, audio_from_type, audio_from_channel, audio_to_type, audio_to_channel,
+    #         midi_from_type, midi_from_channel, midi_to_type, midi_to_channel
+    try:
+        if live is not None:
+            idx = int(track_index)
+            tr = live.tracks[idx - 1] if 1 <= idx <= len(live.tracks) else None
+            if tr is None:
+                return False
+            # Monitor
+            mon = kwargs.get("monitor_state")
+            if mon is not None and hasattr(tr, "current_monitoring_state"):
+                m = str(mon).lower()
+                val = {"off": 0, "auto": 1, "in": 2}.get(m)
+                if val is not None:
+                    try:
+                        tr.current_monitoring_state = int(val)
+                    except Exception:
+                        pass
+            # Helper to set routing by matching display_name
+            def _assign(name_list, attr_name, chosen):
+                if chosen is None:
+                    return
+                try:
+                    avail = getattr(tr, name_list, [])
+                    for o in avail:
+                        nm = str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o))
+                        if nm == str(chosen):
+                            setattr(tr, attr_name, o)
+                            return
+                except Exception:
+                    return
+            _assign("available_input_routing_types", "input_routing_type", kwargs.get("audio_from_type"))
+            _assign("available_input_routing_channels", "input_routing_channel", kwargs.get("audio_from_channel"))
+            _assign("available_output_routing_types", "output_routing_type", kwargs.get("audio_to_type"))
+            _assign("available_output_routing_channels", "output_routing_channel", kwargs.get("audio_to_channel"))
+            # MIDI (best-effort using same available lists)
+            _assign("available_input_routing_types", "midi_input_routing_type", kwargs.get("midi_from_type"))
+            _assign("available_input_routing_channels", "midi_input_routing_channel", kwargs.get("midi_from_channel"))
+            _assign("available_output_routing_types", "midi_output_routing_type", kwargs.get("midi_to_type"))
+            _assign("available_output_routing_channels", "midi_output_routing_channel", kwargs.get("midi_to_channel"))
+            return True
+    except Exception:
+        pass
+    # Stub state update
+    for t in _STATE["tracks"]:
+        if t["index"] == int(track_index):
+            r = t.setdefault("routing", {"monitor_state": "auto", "audio_from": {"type": "Ext. In", "channel": "1"}, "audio_to": {"type": "Master", "channel": "1/2"}})
+            if kwargs.get("monitor_state"):
+                r["monitor_state"] = str(kwargs["monitor_state"]).lower()
+            if kwargs.get("audio_from_type"):
+                r.setdefault("audio_from", {}).update({"type": kwargs.get("audio_from_type")})
+            if kwargs.get("audio_from_channel"):
+                r.setdefault("audio_from", {}).update({"channel": kwargs.get("audio_from_channel")})
+            if kwargs.get("audio_to_type"):
+                r.setdefault("audio_to", {}).update({"type": kwargs.get("audio_to_type")})
+            if kwargs.get("audio_to_channel"):
+                r.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
+            # MIDI ignored in stub unless present
+            return True
+    return False
+
+
+def get_return_routing(live, return_index: int) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            ri = int(return_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                rt = returns[ri]
+                ao_type = getattr(rt, "output_routing_type", None)
+                ao_chan = getattr(rt, "output_routing_channel", None)
+                def _name(x):
+                    if x is None:
+                        return None
+                    return str(getattr(x, "display_name", None) or getattr(x, "to_string", lambda: None)() or str(x))
+                data = {
+                    "audio_to": {"type": _name(ao_type), "channel": _name(ao_chan)}
+                }
+                # Sends mode (pre/post) if exposed
+                try:
+                    sends_pre = getattr(rt, "sends_are_pre", None)
+                    if sends_pre is not None:
+                        data["sends_mode"] = "pre" if bool(sends_pre) else "post"
+                except Exception:
+                    pass
+                # Options lists
+                def _list_names(objs):
+                    out = []
+                    for o in (objs or []):
+                        try:
+                            out.append(str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o)))
+                        except Exception:
+                            continue
+                    return out
+                data["options"] = {
+                    "audio_to_types": _list_names(getattr(rt, "available_output_routing_types", [])),
+                    "audio_to_channels": _list_names(getattr(rt, "available_output_routing_channels", [])),
+                    "sends_modes": ["pre", "post"],
+                }
+                return data
+    except Exception:
+        pass
+    # Stub
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            data = {"audio_to": r.get("routing", {}).get("audio_to", {"type": "Master", "channel": "1/2"}), "sends_mode": r.get("routing", {}).get("sends_mode", "post")}
+            data["options"] = {"audio_to_types": ["Master", "Ext. Out"], "audio_to_channels": ["1/2", "3/4"], "sends_modes": ["pre", "post"]}
+            return data
+    return {"error": "return_not_found"}
+
+
+def set_return_routing(live, return_index: int, **kwargs) -> bool:
+    # kwargs: audio_to_type, audio_to_channel, sends_mode
+    try:
+        if live is not None:
+            ri = int(return_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                rt = returns[ri]
+                def _assign(obj, list_attr, target_attr, chosen):
+                    if chosen is None:
+                        return
+                    try:
+                        avail = getattr(obj, list_attr, [])
+                        for o in avail:
+                            nm = str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o))
+                            if nm == str(chosen):
+                                setattr(obj, target_attr, o)
+                                return
+                    except Exception:
+                        return
+                _assign(rt, "available_output_routing_types", "output_routing_type", kwargs.get("audio_to_type"))
+                _assign(rt, "available_output_routing_channels", "output_routing_channel", kwargs.get("audio_to_channel"))
+                sm = kwargs.get("sends_mode")
+                if sm is not None and hasattr(rt, "sends_are_pre"):
+                    try:
+                        rt.sends_are_pre = (str(sm).lower() == "pre")
+                    except Exception:
+                        pass
+                return True
+    except Exception:
+        pass
+    # Stub
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            rr = r.setdefault("routing", {"audio_to": {"type": "Master", "channel": "1/2"}, "sends_mode": "post"})
+            if kwargs.get("audio_to_type"):
+                rr.setdefault("audio_to", {}).update({"type": kwargs.get("audio_to_type")})
+            if kwargs.get("audio_to_channel"):
+                rr.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
+            if kwargs.get("sends_mode"):
+                rr["sends_mode"] = str(kwargs.get("sends_mode")).lower()
+            return True
+    return False

@@ -318,6 +318,10 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
   const [learnJobs, setLearnJobs] = useState({}); // { `${ri}:${di}`: { jobId, progress, total, state } }
   const prevOutlineRef = useRef('');
+  const inflightReturnFetch = useRef({}); // { [returnIndex]: boolean }
+  const lastReturnFetchAt = useRef({}); // { [returnIndex]: number }
+  const lastReturnsListAt = useRef(0);
+  const MIN_REFRESH_GAP_MS = 800; // debounce poll vs SSE
 
   const userCommands = useMemo(() => {
     // Most recent first
@@ -386,15 +390,29 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }
   };
 
-  const fetchReturns = async () => {
+  const fetchReturns = async (opts = {}) => {
+    const silent = !!opts.silent;
     try {
-      setLoadingReturns(true);
+      const now = Date.now();
+      if (silent && now - lastReturnsListAt.current < MIN_REFRESH_GAP_MS) return; // debounce
+      if (!silent) setLoadingReturns(true);
       const res = await apiService.getReturnTracks();
-      setReturns((res && res.data && Array.isArray(res.data.returns)) ? res.data.returns : []);
+      const next = (res && res.data && Array.isArray(res.data.returns)) ? res.data.returns : [];
+      lastReturnsListAt.current = now;
+      setReturns(prev => {
+        if (!Array.isArray(prev) || prev.length === 0) return next;
+        // Reconcile by index to preserve item identity when unchanged
+        const byIndex = Object.fromEntries(prev.map(r => [r.index, r]));
+        return next.map(r => {
+          const existing = byIndex[r.index];
+          if (existing && existing.name === r.name) return existing; // keep reference
+          return r;
+        });
+      });
     } catch {
       setReturns([]);
     } finally {
-      setLoadingReturns(false);
+      if (!silent) setLoadingReturns(false);
     }
   };
 
@@ -409,8 +427,14 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }
   };
 
-  const fetchReturnDevices = async (ri) => {
+  const fetchReturnDevices = async (ri, opts = {}) => {
+    const force = !!opts.force;
     try {
+      const now = Date.now();
+      const lastAt = lastReturnFetchAt.current[ri] || 0;
+      if (!force && now - lastAt < MIN_REFRESH_GAP_MS) return; // debounce
+      if (inflightReturnFetch.current[ri]) return; // coalesce
+      inflightReturnFetch.current[ri] = true;
       const res = await apiService.getReturnDevices(ri);
       const devs = (res && res.data && Array.isArray(res.data.devices)) ? res.data.devices : [];
       // For each device get minimal param state to derive on/off
@@ -434,7 +458,16 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           return { ...d, isOn: true };
         }
       }));
-      setReturnDevices(prev => ({ ...prev, [ri]: withState }));
+      setReturnDevices(prev => {
+        const prevList = Array.isArray(prev[ri]) ? prev[ri] : [];
+        const prevByIdx = Object.fromEntries(prevList.map(x => [x.index, x]));
+        const nextList = withState.map(d => {
+          const e = prevByIdx[d.index];
+          if (e && e.name === d.name && !!e.isOn === !!d.isOn) return e; // preserve reference
+          return d;
+        });
+        return { ...prev, [ri]: nextList };
+      });
       // Check learned status once per device
       withState.forEach(async (d) => {
         try {
@@ -446,6 +479,10 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         } catch {}
       });
     } catch {}
+    finally {
+      lastReturnFetchAt.current[ri] = Date.now();
+      inflightReturnFetch.current[ri] = false;
+    }
   };
 
   // Light polling to keep return devices fresh while a return is open
@@ -506,6 +543,18 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }
   }, [tab]);
 
+  // Poll returns/devices while Returns tab is open to keep names/states fresh
+  useEffect(() => {
+    if (tab !== 1) return;
+    const id = setInterval(() => {
+      fetchReturns({ silent: true }).catch(() => {});
+      if (openReturn != null) {
+        fetchReturnDevices(openReturn).catch(() => {});
+      }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [tab, openReturn]);
+
   // Throttled refresh for SSE bursts
   const lastRefreshRef = useRef({});
   const refreshTrackThrottled = useCallback(async (idx) => {
@@ -543,9 +592,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         try {
           const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
           if (rIndex != null) {
-            await fetchReturnDevices(rIndex);
+            await fetchReturnDevices(rIndex, { force: true });
           } else if (openReturn != null) {
-            await fetchReturnDevices(openReturn);
+            await fetchReturnDevices(openReturn, { force: true });
           }
         } catch {}
       }

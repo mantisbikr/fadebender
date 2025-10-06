@@ -81,6 +81,7 @@ Return tracks are accessed via `LiveSet.return_tracks[]` and expose a similar `T
 | Device Parameter | `DeviceParameter.value` | Adjust parameter value. | ✅ RW | Both |
 | Insert Device/Preset | `ReturnTrack.drop_device(path)` | Add device/rack to return. | ✅ Exec | LLM (with confirm) |
 | Return→Return Sends (optional) | `ReturnTrack.mixer_device.sends[]` | Only if enabled in Live prefs. | 🟡 | UI |
+| Audio To (destination) | `ReturnTrack.output_routing_type`, `ReturnTrack.output_routing_channel` | Route return to Master or other bus where supported. | 🟡 RW | LLM |
 
 Notes:
 - Return tracks do not have clip slots. Scene/clip commands do not apply.
@@ -104,6 +105,8 @@ The master bus is accessed via `LiveSet.master_track`. Common mixer parameters a
 Notes:
 - Not all Live versions expose `cue_volume` in the same way; handle gracefully if missing.
 - No clips on master; clip/scene ops do not apply directly.
+ - Master output destination selection is generally not exposed via LOM; treat as not available for chat control.
+ - Cue output destination selection is also not reliably exposed; only `cue_volume` is typically available.
 
 ---
 
@@ -122,6 +125,23 @@ Notes:
 | **Monitoring** | Meters | “Is track clipping?” (query) | — |
 
 ---
+
+## 🔌 Routing & Monitoring (All Tracks)
+
+These parameters are important for LLM control even without dedicated UI widgets. Capture them in the state model and allow chat to adjust where supported.
+
+| **Parameter / Function** | **Object Path** | **Description** | **LOM Access** | **Recommended Control Surface** |
+|---|---|---|---|---|
+| Monitor State | `Track.current_monitoring_state` | In / Auto / Off. | ✅ RW | LLM |
+| Audio From (type/channel) | `Track.input_routing_type`, `Track.input_routing_channel` | Select input source and channel. | ✅ RW | LLM |
+| Audio To (type/channel) | `Track.output_routing_type`, `Track.output_routing_channel` | Route track output to bus/device. | ✅ RW | LLM |
+| MIDI From (device/channel) | `Track.input_routing_type`, `Track.input_routing_channel` | For MIDI tracks, select MIDI source/channel. | ✅ RW | LLM |
+| MIDI To (device/channel) | `Track.output_routing_type`, `Track.output_routing_channel` | For MIDI tracks, select MIDI destination/channel. | ✅ RW | LLM |
+| Sends Mode (pre/post) | (Return-level toggle) | Whether sends feed pre/post‑fader; availability varies by Live version. | 🟡 (varies) | LLM (if available) |
+
+Implementation notes:
+- Routing types/channels are enumerations; Remote Script must surface available options for each track and validate selections.
+- Pre/Post send mode, when exposed, is set at the Return Track level (affects all sends to that return). Treat as optional; probe capability and guard with a feature flag.
 
 ## 💡 Implementation Guidelines
 
