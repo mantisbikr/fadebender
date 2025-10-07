@@ -1,7 +1,21 @@
-import google.generativeai as genai
+"""DAW Intent Parser using Vertex AI.
+
+Migrated from google.generativeai (paid API) to Vertex AI (project-based).
+Uses Application Default Credentials - no API key needed.
+"""
 import json
 import re
+import os
 from typing import Dict, Any, List, Optional
+
+# Vertex AI imports
+try:
+    import vertexai
+    from vertexai.generative_models import GenerativeModel
+    VERTEX_AVAILABLE = True
+except ImportError:
+    VERTEX_AVAILABLE = False
+    print("Warning: Vertex AI SDK not available. Install with: pip install google-cloud-aiplatform")
 
 SYSTEM_PROMPT = """You are an expert DAW (Digital Audio Workstation) command parser with conversational intelligence.
 Parse natural language commands into structured JSON intents for controlling music production software.
@@ -277,18 +291,52 @@ def fallback_parse(text: str) -> Dict[str, Any]:
 
 
 class DAWIntentParser:
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash-latest"):
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(
-            model_name,
-            system_instruction=SYSTEM_PROMPT
-        )
+    """DAW Intent Parser using Vertex AI.
+
+    Args:
+        project_id: GCP project ID (defaults to env: GOOGLE_CLOUD_PROJECT or PROJECT_ID)
+        location: Vertex AI location (defaults to env: VERTEX_LOCATION or 'us-central1')
+        model_name: Model name (defaults to env: VERTEX_MODEL or 'gemini-1.5-flash-002')
+    """
+
+    def __init__(
+        self,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        model_name: Optional[str] = None
+    ):
+        if not VERTEX_AVAILABLE:
+            print("⚠️  Vertex AI not available - using fallback parser only")
+            self.model = None
+            return
+
+        # Get config from env or params
+        self.project_id = project_id or os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("PROJECT_ID") or "fadebender"
+        self.location = location or os.getenv("VERTEX_LOCATION") or "us-central1"
+        # Use model name compatible with Vertex AI
+        self.model_name = model_name or os.getenv("VERTEX_MODEL") or "gemini-1.5-flash"
+
+        try:
+            # Initialize Vertex AI (uses Application Default Credentials)
+            vertexai.init(project=self.project_id, location=self.location)
+
+            # Create model with system instruction
+            self.model = GenerativeModel(
+                self.model_name,
+                system_instruction=SYSTEM_PROMPT
+            )
+            print(f"✅ Vertex AI initialized: {self.model_name} in {self.project_id}/{self.location}")
+
+        except Exception as e:
+            print(f"⚠️  Failed to initialize Vertex AI: {e}")
+            print("    Using fallback parser only")
+            self.model = None
 
     def parse(self, text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Parse natural language utterance into structured intent"""
         if not self.model:
             print("No AI model available, using fallback")
-            return self._fallback_parse(text)
+            return fallback_parse(text)
 
         try:
             # Build prompt with context and conversation history if available
@@ -296,7 +344,7 @@ class DAWIntentParser:
                 # Handle clarification responses
                 if context.get('action'):  # This is a clarification context
                     context_info = f"\n\nCONTEXT: The user previously wanted to {context.get('action', '')} {context.get('parameter', '')} for {context.get('track', 'unknown track')}. This is their clarification response. Combine the context with this response to create a complete command."
-                    prompt = f"{SYSTEM_PROMPT}{context_info}\n\nORIGINAL CONTEXT: {json.dumps(context)}\nUSER CLARIFICATION: {text}\n\nCombine the original intent with this clarification to generate the final JSON command.\nJSON:"
+                    prompt = f"ORIGINAL CONTEXT: {json.dumps(context)}\nUSER CLARIFICATION: {text}\n\nCombine the original intent with this clarification to generate the final JSON command.\nJSON:"
                 else:
                     # Handle conversation history
                     history_info = ""
@@ -305,11 +353,19 @@ class DAWIntentParser:
                         for msg in context['recentHistory']:
                             history_info += f"- {msg['type']}: {msg['content']}\n"
 
-                    prompt = f"{SYSTEM_PROMPT}{history_info}\n\nCURRENT COMMAND: {text}\nJSON:"
+                    prompt = f"{history_info}\n\nCURRENT COMMAND: {text}\nJSON:"
             else:
-                prompt = f"{SYSTEM_PROMPT}\n\nCOMMAND: {text}\nJSON:"
+                prompt = f"COMMAND: {text}\nJSON:"
 
-            response = self.model.generate_content(prompt)
+            # Generate content with Vertex AI
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.1,
+                    "max_output_tokens": 1024,
+                    "top_p": 0.9,
+                }
+            )
 
             # Extract JSON from response
             result_text = response.text.strip()
@@ -327,58 +383,14 @@ class DAWIntentParser:
             # Try to parse JSON
             try:
                 intent = json.loads(result_text)
+                if "meta" not in intent:
+                    intent["meta"] = {}
                 intent["meta"]["utterance"] = text
                 return intent
             except json.JSONDecodeError as e:
                 print(f"JSON parsing failed: {e}")
-                return self._fallback_parse(text)
+                return fallback_parse(text)
 
         except Exception as e:
             print(f"AI parsing error: {e}")
-            return self._fallback_parse(text)
-
-    def _fallback_parse(self, utterance: str) -> Dict[str, Any]:
-        """Simple fallback parser for when AI fails"""
-        print(f"⚠️ FALLBACK: Using basic parsing for: '{utterance}'")
-
-        # Basic regex patterns for common cases
-        import re
-
-        # Try to extract basic patterns
-        if "increase" in utterance.lower() or "louder" in utterance.lower():
-            return {
-                "intent": "relative_change",
-                "targets": [{"track": "Track 1", "plugin": None, "parameter": "volume"}],
-                "operation": {"type": "relative", "value": 2, "unit": "dB"},
-                "meta": {
-                    "utterance": utterance,
-                    "confidence": 0.3,
-                    "fallback": True,
-                    "fallback_reason": "AI model unavailable - used basic pattern matching"
-                }
-            }
-        elif "decrease" in utterance.lower() or "quieter" in utterance.lower():
-            return {
-                "intent": "relative_change",
-                "targets": [{"track": "Track 1", "plugin": None, "parameter": "volume"}],
-                "operation": {"type": "relative", "value": -2, "unit": "dB"},
-                "meta": {
-                    "utterance": utterance,
-                    "confidence": 0.3,
-                    "fallback": True,
-                    "fallback_reason": "AI model unavailable - used basic pattern matching"
-                }
-            }
-        else:
-            # Default fallback
-            return {
-                "intent": "set_parameter",
-                "targets": [{"track": "Track 1", "plugin": None, "parameter": "volume"}],
-                "operation": {"type": "absolute", "value": -6, "unit": "dB"},
-                "meta": {
-                    "utterance": utterance,
-                    "confidence": 0.1,
-                    "fallback": True,
-                    "fallback_reason": "AI model unavailable - used default response"
-                }
-            }
+            return fallback_parse(text)
