@@ -101,6 +101,18 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_return_tracks(live_ctx)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "get_return_sends":
+                return_index = int(msg.get("return_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_return_sends(live_ctx, return_index)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "set_return_send":
+                return_index = int(msg.get("return_index", 0))
+                send_index = int(msg.get("send_index", 0))
+                value = float(msg.get("value", 0.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_return_send(live_ctx, return_index, send_index, value)
+                resp = {"ok": bool(ok), "op": op}
             elif op == "set_return_mixer":
                 return_index = int(msg.get("return_index", 0))
                 field = str(msg.get("field"))

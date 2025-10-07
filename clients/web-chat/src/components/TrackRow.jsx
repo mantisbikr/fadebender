@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   ListItem,
   Box,
@@ -20,7 +20,13 @@ import { apiService } from '../services/api.js';
 
 function TrackSendSlider({ send, sendIndex, trackIndex, sends, setSends }) {
   const [localVol, setLocalVol] = useState(null);
-  const currentVol = localVol !== null ? localVol : (send?.volume ?? 0);
+  const baseVal = (typeof send?.volume === 'number') ? send.volume : ((typeof send?.value === 'number') ? send.value : 0);
+  const lastVolRef = useRef(baseVal);
+  const currentVol = localVol !== null ? localVol : ((typeof send?.volume === 'number') ? send.volume : ((typeof send?.value === 'number') ? send.value : undefined));
+  useEffect(() => {
+    if (typeof currentVol === 'number') lastVolRef.current = currentVol;
+  }, [currentVol]);
+  const displayVol = (typeof currentVol === 'number') ? currentVol : lastVolRef.current;
 
   return (
     <Box sx={{ mb: 0.5 }}>
@@ -30,10 +36,12 @@ function TrackSendSlider({ send, sendIndex, trackIndex, sends, setSends }) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <Slider
           size="small"
-          value={currentVol}
+          value={displayVol}
           min={0}
           max={1}
           step={0.005}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
           onChange={(_, val) => setLocalVol(Array.isArray(val) ? val[0] : val)}
           onChangeCommitted={async (_, val) => {
             const v = Array.isArray(val) ? val[0] : val;
@@ -44,7 +52,7 @@ function TrackSendSlider({ send, sendIndex, trackIndex, sends, setSends }) {
                 const list = prev[trackIndex] || [];
                 return {
                   ...prev,
-                  [trackIndex]: list.map((s, i) => i === sendIndex ? { ...s, volume: Number(v) } : s)
+                  [trackIndex]: list.map((s, i) => i === sendIndex ? { ...s, volume: Number(v), value: Number(v) } : s)
                 };
               });
             } catch {}
@@ -53,7 +61,7 @@ function TrackSendSlider({ send, sendIndex, trackIndex, sends, setSends }) {
           sx={{ flex: 1 }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
-          {liveFloatToDbSend(Number(currentVol)).toFixed(1)} dB
+          {liveFloatToDbSend(Number(displayVol)).toFixed(1)} dB
         </Typography>
       </Box>
     </Box>
@@ -71,6 +79,8 @@ export default function TrackRow({
   sends,
   setSends,
   fetchSends,
+  onAdjustStart,
+  onAdjustEnd,
 }) {
   const t = track;
   const status = getStatus(t.index);
@@ -80,8 +90,39 @@ export default function TrackRow({
   const [localPan, setLocalPan] = useState(null);
   const [sendsExpanded, setSendsExpanded] = useState(false);
 
-  const currentVolume = localVolume !== null ? localVolume : status?.mixer?.volume;
-  const currentPan = localPan !== null ? localPan : status?.mixer?.pan;
+  // Preserve last known values to avoid slider jumps during refresh re-renders
+  const lastVolRef = useRef(typeof status?.mixer?.volume === 'number' ? status.mixer.volume : 0.5);
+  const lastPanRef = useRef(typeof status?.mixer?.pan === 'number' ? status.mixer.pan : 0);
+  const currentVolume = localVolume !== null ? localVolume : (typeof status?.mixer?.volume === 'number' ? status.mixer.volume : undefined);
+  const currentPan = localPan !== null ? localPan : (typeof status?.mixer?.pan === 'number' ? status.mixer.pan : undefined);
+  // Suppress adopting transient refreshes for a short window after user commit
+  const volBusyUntilRef = useRef(0);
+  const panBusyUntilRef = useRef(0);
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentVolume === 'number' && now >= volBusyUntilRef.current) {
+      lastVolRef.current = currentVolume;
+    }
+  }, [currentVolume]);
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentPan === 'number' && now >= panBusyUntilRef.current) {
+      lastPanRef.current = currentPan;
+    }
+  }, [currentPan]);
+  const nowTick = Date.now();
+  const supVol = nowTick < volBusyUntilRef.current;
+  const supPan = nowTick < panBusyUntilRef.current;
+  const displayVol = (localVolume !== null)
+    ? localVolume
+    : (supVol
+      ? lastVolRef.current
+      : (typeof currentVolume === 'number' ? currentVolume : lastVolRef.current));
+  const displayPan = (localPan !== null)
+    ? localPan
+    : (supPan
+      ? lastPanRef.current
+      : (typeof currentPan === 'number' ? currentPan : lastPanRef.current));
 
   return (
     <ListItem
@@ -149,10 +190,12 @@ export default function TrackRow({
             </Typography>
             <Slider
               size="small"
-              value={typeof currentVolume === 'number' ? currentVolume : 0.5}
+              value={displayVol}
               min={0}
               max={1}
               step={0.005}
+              onMouseDown={(e) => { e.stopPropagation(); try { onAdjustStart?.(t.index); } catch {} }}
+              onClick={(e) => e.stopPropagation()}
               onChange={(_, val) => {
                 const v = Array.isArray(val) ? val[0] : val;
                 setLocalVolume(v);
@@ -161,14 +204,15 @@ export default function TrackRow({
                 const v = Array.isArray(val) ? val[0] : val;
                 try {
                   await apiService.setMixer(t.index, 'volume', Number(v));
-                  await refreshTrack(t.index);
                 } catch {}
+                volBusyUntilRef.current = Date.now() + 350; // small suppression window
                 setLocalVolume(null);
+                try { onAdjustEnd?.(t.index); } catch {}
               }}
               sx={{ flex: 1 }}
             />
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
-              {liveFloatToDb(Number(currentVolume || 0.5)).toFixed(1)} dB
+              {liveFloatToDb(Number(displayVol)).toFixed(1)} dB
             </Typography>
           </Box>
 
@@ -179,10 +223,12 @@ export default function TrackRow({
             </Typography>
             <Slider
               size="small"
-              value={typeof currentPan === 'number' ? currentPan : 0}
+              value={displayPan}
               min={-1}
               max={1}
               step={0.02}
+              onMouseDown={(e) => { e.stopPropagation(); try { onAdjustStart?.(t.index); } catch {} }}
+              onClick={(e) => e.stopPropagation()}
               onChange={(_, val) => {
                 const v = Array.isArray(val) ? val[0] : val;
                 setLocalPan(v);
@@ -191,14 +237,15 @@ export default function TrackRow({
                 const v = Array.isArray(val) ? val[0] : val;
                 try {
                   await apiService.setMixer(t.index, 'pan', Number(v));
-                  await refreshTrack(t.index);
                 } catch {}
+                panBusyUntilRef.current = Date.now() + 350;
                 setLocalPan(null);
+                try { onAdjustEnd?.(t.index); } catch {}
               }}
               sx={{ flex: 1 }}
             />
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 30, textAlign: 'right' }}>
-              {Math.round(Math.abs(Number(currentPan || 0)) * 50)}{Number(currentPan || 0) < 0 ? 'L' : (Number(currentPan || 0) > 0 ? 'R' : '')}
+              {Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}
             </Typography>
           </Box>
         </Box>
@@ -209,9 +256,14 @@ export default function TrackRow({
         disableGutters
         elevation={0}
         expanded={sendsExpanded}
-        onChange={(_, exp) => {
+        onChange={(ev, exp) => {
+          try { ev.stopPropagation(); } catch {}
           setSendsExpanded(exp);
-          if (exp && !sends?.[t.index]) {
+          if (exp) {
+            // Briefly suppress adopting external mixer updates to avoid visual bounce when section opens
+            const now = Date.now();
+            volBusyUntilRef.current = Math.max(volBusyUntilRef.current, now + 350);
+            panBusyUntilRef.current = Math.max(panBusyUntilRef.current, now + 350);
             fetchSends?.(t.index);
           }
         }}
@@ -224,6 +276,8 @@ export default function TrackRow({
       >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon fontSize="small" />}
+          onClick={(e) => { e.stopPropagation(); }}
+          onMouseDown={(e) => { e.stopPropagation(); }}
           sx={{ minHeight: 32, padding: '0 8px', '&.Mui-expanded': { minHeight: 32 } }}
         >
           <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>

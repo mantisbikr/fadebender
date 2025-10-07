@@ -42,7 +42,13 @@ import TrackRow from './TrackRow.jsx';
 
 function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturnSends }) {
   const [localVol, setLocalVol] = useState(null);
-  const currentVol = localVol !== null ? localVol : (send?.volume ?? 0);
+  const baseVal = (typeof send?.volume === 'number') ? send.volume : ((typeof send?.value === 'number') ? send.value : 0);
+  const lastVolRef = useRef(baseVal);
+  const currentVol = localVol !== null ? localVol : ((typeof send?.volume === 'number') ? send.volume : ((typeof send?.value === 'number') ? send.value : undefined));
+  useEffect(() => {
+    if (typeof currentVol === 'number') lastVolRef.current = currentVol;
+  }, [currentVol]);
+  const displayVol = (typeof currentVol === 'number') ? currentVol : lastVolRef.current;
 
   return (
     <Box sx={{ mb: 0.5 }}>
@@ -52,10 +58,12 @@ function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturn
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <Slider
           size="small"
-          value={currentVol}
+          value={displayVol}
           min={0}
           max={1}
           step={0.005}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
           onChange={(_, val) => setLocalVol(Array.isArray(val) ? val[0] : val)}
           onChangeCommitted={async (_, val) => {
             const v = Array.isArray(val) ? val[0] : val;
@@ -66,7 +74,7 @@ function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturn
                 const list = prev[returnIndex] || [];
                 return {
                   ...prev,
-                  [returnIndex]: list.map((s, i) => i === sendIndex ? { ...s, volume: Number(v) } : s)
+                  [returnIndex]: list.map((s, i) => i === sendIndex ? { ...s, volume: Number(v), value: Number(v) } : s)
                 };
               });
             } catch {}
@@ -75,7 +83,7 @@ function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturn
           sx={{ flex: 1 }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
-          {liveFloatToDbSend(Number(currentVol)).toFixed(1)} dB
+          {liveFloatToDbSend(Number(displayVol)).toFixed(1)} dB
         </Typography>
       </Box>
     </Box>
@@ -99,9 +107,31 @@ function ReturnRow({
 }) {
   const [localVol, setLocalVol] = useState(null);
   const [localPan, setLocalPan] = useState(null);
+  // Preserve last known values and suppress transient refresh right after commit
+  const lastVolRef = useRef(typeof r?.mixer?.volume === 'number' ? r.mixer.volume : 0.5);
+  const lastPanRef = useRef(typeof r?.mixer?.pan === 'number' ? r.mixer.pan : 0);
+  const volBusyUntilRef = useRef(0);
+  const panBusyUntilRef = useRef(0);
   const [sendsExpanded, setSendsExpanded] = useState(false);
-  const currentVol = localVol !== null ? localVol : (r.mixer?.volume ?? 0.5);
-  const currentPan = localPan !== null ? localPan : (r.mixer?.pan ?? 0);
+  const currentVol = localVol !== null ? localVol : (typeof r.mixer?.volume === 'number' ? r.mixer.volume : undefined);
+  const currentPan = localPan !== null ? localPan : (typeof r.mixer?.pan === 'number' ? r.mixer.pan : undefined);
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentVol === 'number' && now >= volBusyUntilRef.current) lastVolRef.current = currentVol;
+  }, [currentVol]);
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentPan === 'number' && now >= panBusyUntilRef.current) lastPanRef.current = currentPan;
+  }, [currentPan]);
+  const nowTick = Date.now();
+  const supVol = nowTick < volBusyUntilRef.current;
+  const supPan = nowTick < panBusyUntilRef.current;
+  const displayVol = (localVol !== null)
+    ? localVol
+    : (supVol ? lastVolRef.current : (typeof currentVol === 'number' ? currentVol : lastVolRef.current));
+  const displayPan = (localPan !== null)
+    ? localPan
+    : (supPan ? lastPanRef.current : (typeof currentPan === 'number' ? currentPan : lastPanRef.current));
 
   return (
     <ListItem sx={{
@@ -119,14 +149,14 @@ function ReturnRow({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Tooltip title={r.mixer?.mute ? 'Unmute' : 'Mute'}>
             <IconButton size="small" onClick={async () => {
-              try { await apiService.setReturnMixer(r.index, 'mute', r.mixer?.mute ? 0 : 1); fetchReturns(); } catch {}
+              try { await apiService.setReturnMixer(r.index, 'mute', r.mixer?.mute ? 0 : 1); fetchReturns({ silent: true }); } catch {}
             }}>
               <VolumeOffIcon fontSize="small" color={r.mixer?.mute ? 'warning' : 'inherit'} />
             </IconButton>
           </Tooltip>
           <Tooltip title={r.mixer?.solo ? 'Unsolo' : 'Solo'}>
             <IconButton size="small" onClick={async () => {
-              try { await apiService.setReturnMixer(r.index, 'solo', r.mixer?.solo ? 0 : 1); fetchReturns(); } catch {}
+              try { await apiService.setReturnMixer(r.index, 'solo', r.mixer?.solo ? 0 : 1); fetchReturns({ silent: true }); } catch {}
             }}>
               <HeadphonesIcon fontSize="small" color={r.mixer?.solo ? 'success' : 'inherit'} />
             </IconButton>
@@ -144,20 +174,23 @@ function ReturnRow({
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 22 }}>Vol</Typography>
           <Slider
             size="small"
-            value={currentVol}
+            value={displayVol}
             min={0}
             max={1}
             step={0.005}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             onChange={(_, val) => setLocalVol(Array.isArray(val) ? val[0] : val)}
             onChangeCommitted={async (_, val) => {
               const v = Array.isArray(val) ? val[0] : val;
               try { await apiService.setReturnMixer(r.index, 'volume', Number(v)); } catch {}
+              volBusyUntilRef.current = Date.now() + 350;
               setLocalVol(null);
             }}
             sx={{ flex: 1 }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 44, textAlign: 'right' }}>
-            {liveFloatToDbSend(Number(currentVol)).toFixed(1)} dB
+            {liveFloatToDb(Number(displayVol)).toFixed(1)} dB
           </Typography>
         </Box>
 
@@ -166,20 +199,23 @@ function ReturnRow({
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 22 }}>Pan</Typography>
           <Slider
             size="small"
-            value={currentPan}
+            value={displayPan}
             min={-1}
             max={1}
             step={0.02}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             onChange={(_, val) => setLocalPan(Array.isArray(val) ? val[0] : val)}
             onChangeCommitted={async (_, val) => {
               const v = Array.isArray(val) ? val[0] : val;
               try { await apiService.setReturnMixer(r.index, 'pan', Number(v)); } catch {}
+              panBusyUntilRef.current = Date.now() + 350;
               setLocalPan(null);
             }}
             sx={{ flex: 1 }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: 30, textAlign: 'right' }}>
-            {Math.round(Math.abs(Number(currentPan)) * 50)}{Number(currentPan) < 0 ? 'L' : (Number(currentPan) > 0 ? 'R' : '')}
+            {Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}
           </Typography>
         </Box>
       </Box>
@@ -255,9 +291,16 @@ function ReturnRow({
         disableGutters
         elevation={0}
         expanded={sendsExpanded}
-        onChange={(_, exp) => {
+        onChange={(ev, exp) => {
+          try { ev.stopPropagation(); } catch {}
           setSendsExpanded(exp);
-          if (exp && !returnSends[r.index]) {
+          if (exp) {
+            // Briefly suppress adopting external mixer updates to avoid visual bounce
+            const now = Date.now();
+            try {
+              volBusyUntilRef.current = Math.max(volBusyUntilRef.current, now + 350);
+              panBusyUntilRef.current = Math.max(panBusyUntilRef.current, now + 350);
+            } catch {}
             fetchReturnSends(r.index);
           }
         }}
@@ -270,6 +313,8 @@ function ReturnRow({
       >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon fontSize="small" />}
+          onClick={(e) => { e.stopPropagation(); }}
+          onMouseDown={(e) => { e.stopPropagation(); }}
           sx={{ minHeight: 32, padding: '0 8px', '&.Mui-expanded': { minHeight: 32 } }}
         >
           <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
@@ -315,6 +360,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [openReturn, setOpenReturn] = useState(null);
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
   const [returnSends, setReturnSends] = useState({}); // { [returnIndex]: sends[] }
+  const [isAdjusting, setIsAdjusting] = useState(false);
+  const adjustingUntilRef = useRef(0);
   const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
   const [learnJobs, setLearnJobs] = useState({}); // { `${ri}:${di}`: { jobId, progress, total, state } }
   const prevOutlineRef = useRef('');
@@ -340,6 +387,18 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (nextStr !== prevOutlineRef.current) {
         prevOutlineRef.current = nextStr;
         setOutline(data);
+        // Prime per-track statuses so sliders have values without hover
+        try {
+          const tracks = (data && Array.isArray(data.tracks)) ? data.tracks : [];
+          const results = await Promise.all(tracks.map(async (t) => {
+            try {
+              const r = await apiService.getTrackStatus(t.index);
+              return [t.index, (r && r.data) || null];
+            } catch { return [t.index, null]; }
+          }));
+          const map = Object.fromEntries(results.filter((kv) => kv[1] != null));
+          if (Object.keys(map).length) setRowStatuses((prev) => ({ ...prev, ...map }));
+        } catch {}
         if (followSelection && data && data.selected_track) {
           setSelectedIndex(data.selected_track);
           // Also refresh track status when following selection
@@ -383,7 +442,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const fetchTrackSends = async (trackIndex) => {
     try {
       const res = await apiService.getTrackSends(trackIndex);
-      const sends = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      const sendsRaw = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      const sends = sendsRaw.map(s => ({ ...s, volume: (typeof s.value === 'number') ? s.value : s.volume }));
       setTrackSends(prev => ({ ...prev, [trackIndex]: sends }));
     } catch {
       setTrackSends(prev => ({ ...prev, [trackIndex]: [] }));
@@ -401,12 +461,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       lastReturnsListAt.current = now;
       setReturns(prev => {
         if (!Array.isArray(prev) || prev.length === 0) return next;
-        // Reconcile by index to preserve item identity when unchanged
+        // Reconcile by index; merge mixer fields so UI reflects latest
         const byIndex = Object.fromEntries(prev.map(r => [r.index, r]));
         return next.map(r => {
           const existing = byIndex[r.index];
-          if (existing && existing.name === r.name) return existing; // keep reference
-          return r;
+          if (!existing) return r;
+          return { ...existing, ...r, mixer: { ...(existing.mixer || {}), ...(r.mixer || {}) } };
         });
       });
     } catch {
@@ -420,7 +480,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     const silent = !!opts.silent;
     try {
       const res = await apiService.getReturnSends(ri);
-      const snds = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      const sndsRaw = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
+      const snds = sndsRaw.map(s => ({ ...s, volume: (typeof s.value === 'number') ? s.value : s.volume }));
       setReturnSends(prev => ({ ...prev, [ri]: snds }));
     } catch {
       if (!silent) setReturnSends(prev => ({ ...prev, [ri]: [] }));
@@ -574,7 +635,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     },
     () => { if (tab === 0) { fetchOutline(false); } },
     async (payload) => {
-      if (tab !== 0) return;
+      // Handle return events on Returns tab as well
+      if (tab !== 0 && tab !== 1) return;
       if (!payload?.event) return;
       // Optimistic handling for bypass; minimal refresh for others
       if (payload.event === 'device_bypass_changed') {
@@ -588,6 +650,18 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         });
         return;
       }
+      // Handle return-level changes via SSE
+      if (payload.event === 'return_mixer_changed' || payload.event === 'return_send_changed' || payload.event === 'return_routing_changed') {
+        try {
+          await fetchReturns({ silent: true });
+          const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
+          if (rIndex != null && openReturn === rIndex) {
+            await fetchReturnDevices(rIndex, { force: true });
+            await fetchReturnSends(rIndex, { silent: true });
+          }
+        } catch {}
+        return;
+      }
       if (payload.event.startsWith('preset_') || payload.event === 'return_device_param_changed' || payload.event === 'device_removed') {
         try {
           const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
@@ -599,13 +673,16 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         } catch {}
       }
     },
-    tab === 0
+    // Enable SSE on Tracks and Returns tabs
+    tab === 0 || tab === 1
   );
 
   // Auto-refresh outline and selected track status every 5s when Project tab is active
   useEffect(() => {
     if (tab !== 0 || !autoRefresh) return;
     const id = setInterval(() => {
+      const now = Date.now();
+      if (now < adjustingUntilRef.current || isAdjusting) return; // pause during active adjustments
       fetchOutline(false);
       if (selectedIndex) {
         apiService.getTrackStatus(selectedIndex).then((ts) => setTrackStatus(ts.data || null)).catch(() => {});
@@ -816,6 +893,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     sends={trackSends}
                     setSends={setTrackSends}
                     fetchSends={fetchTrackSends}
+                    onAdjustStart={(idx) => { setIsAdjusting(true); adjustingUntilRef.current = Date.now() + 600; }}
+                    onAdjustEnd={(idx) => { adjustingUntilRef.current = Date.now() + 400; setTimeout(() => setIsAdjusting(false), 420); }}
                   />
                 ))}
               </List>

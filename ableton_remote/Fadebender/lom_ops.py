@@ -264,20 +264,113 @@ def set_device_param(live, track_index: int, device_index: int, param_index: int
 
 
 def get_return_tracks(live) -> dict:
+    """List return tracks with basic mixer state for UI feedback.
+
+    Returns shape: { returns: [ { index, name, mixer: { volume, pan, mute, solo } } ] }
+    """
     try:
         if live is not None:
             returns = getattr(live, "return_tracks", []) or []
             out = []
             for idx, tr in enumerate(returns):
-                out.append({"index": idx, "name": str(getattr(tr, "name", f"Return {idx}"))})
+                mix = getattr(tr, "mixer_device", None)
+                vol = getattr(getattr(mix, "volume", None), "value", None)
+                pan = getattr(getattr(mix, "panning", None), "value", None)
+                mute = getattr(tr, "mute", None)
+                solo = getattr(tr, "solo", None)
+                out.append({
+                    "index": idx,
+                    "name": str(getattr(tr, "name", f"Return {idx}")),
+                    "mixer": {
+                        "volume": float(vol) if vol is not None else None,
+                        "pan": float(pan) if pan is not None else None,
+                        "mute": bool(mute) if mute is not None else False,
+                        "solo": bool(solo) if solo is not None else False,
+                    },
+                })
             return {"returns": out}
     except Exception:
         pass
     # Stub
     out = []
     for r in _STATE.get("returns", []):
-        out.append({"index": r["index"], "name": r["name"]})
+        mx = r.get("mixer") or {}
+        out.append({
+            "index": r["index"],
+            "name": r["name"],
+            "mixer": {
+                "volume": float(mx.get("volume", 0.5)),
+                "pan": float(mx.get("pan", 0.0)),
+                "mute": bool(r.get("mute", False)),
+                "solo": bool(r.get("solo", False)),
+            },
+        })
     return {"returns": out}
+
+
+def get_return_sends(live, return_index: int) -> dict:
+    """Return sends for a return track: [{index, name, value}] where available.
+
+    Availability depends on Live preference allowing return→return sends.
+    """
+    try:
+        if live is not None:
+            ri = int(return_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                rt = returns[ri]
+                mix = getattr(rt, "mixer_device", None)
+                sends = getattr(mix, "sends", []) or []
+                out = []
+                # Infer names from the project return tracks list
+                names = []
+                try:
+                    names = [str(getattr(x, "name", f"Return {i}")) for i, x in enumerate(returns)]
+                except Exception:
+                    names = []
+                for i, p in enumerate(sends):
+                    try:
+                        val = float(getattr(p, 'value', 0.0))
+                    except Exception:
+                        val = 0.0
+                    name = names[i] if i < len(names) else f"Send {i}"
+                    out.append({"index": i, "name": name, "value": val})
+                return {"index": ri, "sends": out}
+    except Exception:
+        pass
+    # Stub fallback
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            arr = r.setdefault("sends", [0.0, 0.0])
+            labels = ["A", "B", "C", "D"]
+            out = [{"index": i, "name": labels[i] if i < len(labels) else f"Send {i}", "value": float(v)} for i, v in enumerate(arr)]
+            return {"index": r["index"], "sends": out}
+    return {"error": "return_not_found", "index": return_index}
+
+
+def set_return_send(live, return_index: int, send_index: int, value: float) -> bool:
+    try:
+        if live is not None:
+            ri = int(return_index)
+            si = int(send_index)
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                rt = returns[ri]
+                sends = getattr(getattr(rt, "mixer_device", None), "sends", []) or []
+                if 0 <= si < len(sends):
+                    sends[si].value = max(0.0, min(1.0, float(value)))
+                    return True
+    except Exception:
+        pass
+    # Stub
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            arr = r.setdefault("sends", [0.0, 0.0])
+            si = int(send_index)
+            if 0 <= si < len(arr):
+                arr[si] = max(0.0, min(1.0, float(value)))
+                return True
+    return False
 
 
 def get_return_devices(live, return_index: int) -> dict:

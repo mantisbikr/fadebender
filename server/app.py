@@ -32,6 +32,10 @@ from server.config.param_learn_config import (
     reload_param_learn_config,
     save_param_learn_config,
 )
+from server.config.param_registry import (
+    get_param_registry,
+    reload_param_registry,
+)
 from server.services.mapping_store import MappingStore
 from server.cloud.enrich_queue import enqueue_preset_enrich
 import hashlib
@@ -507,7 +511,18 @@ def app_config_update(body: Dict[str, Any]) -> Dict[str, Any]:
 def app_config_reload() -> Dict[str, Any]:
     cfg = cfg_reload()
     plc = reload_param_learn_config()
-    return {"ok": True, "config": cfg, "param_learn": plc}
+    preg = reload_param_registry()
+    return {"ok": True, "config": cfg, "param_learn": plc, "param_registry": preg}
+
+
+@app.get("/param_registry")
+def get_param_registry_endpoint() -> Dict[str, Any]:
+    """Expose parameter registry for track/sends mappings to clients."""
+    try:
+        reg = get_param_registry()
+        return {"ok": True, "registry": reg}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.get("/param_learn/config")
