@@ -50,6 +50,7 @@ _STATE: Dict[str, Any] = {
             ],
         }
     ],
+    "transport": {"is_playing": False, "is_recording": False, "metronome": False, "tempo": 120.0},
 }
 
 
@@ -543,7 +544,7 @@ def set_volume_db(live, track_index: int, target_db: float):
     if live is None:
         # Use correct formula: X ≈ 0.85 - (0.025 × |dB_target|)
         norm = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
-    return set_mixer(None, track_index, 'volume', norm)
+        return set_mixer(None, track_index, 'volume', norm)
 
     try:
         idx = int(track_index)
@@ -586,6 +587,94 @@ def set_volume_db(live, track_index: int, target_db: float):
         # Fallback to stub mapping if anything fails using correct formula
         norm = max(0.0, min(1.0, 0.85 - 0.025 * abs(target_db)))
         return set_mixer(None, track_index, 'volume', norm)
+
+
+# ---------------- Transport ----------------
+def get_transport(live) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            song = live
+            return {
+                "is_playing": bool(getattr(song, "is_playing", False)),
+                # Prefer session_record (Session view) then record_mode (Arrangement)
+                "is_recording": bool(getattr(song, "session_record", False) or getattr(song, "record_mode", False)),
+                "metronome": bool(getattr(song, "metronome", False)),
+                "tempo": float(getattr(song, "tempo", 120.0)),
+            }
+    except Exception:
+        pass
+    return dict(_STATE.get("transport", {}))
+
+
+def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]:
+    ok = False
+    try:
+        if live is not None:
+            song = live
+            a = str(action or "").lower()
+            if a == "play":
+                try:
+                    if hasattr(song, "start_playing"):
+                        song.start_playing()
+                        ok = True
+                except Exception:
+                    ok = False
+            elif a == "stop":
+                try:
+                    if hasattr(song, "stop_playing"):
+                        song.stop_playing()
+                        ok = True
+                except Exception:
+                    ok = False
+            elif a == "record":
+                try:
+                    # Prefer session_record toggle (common in Session view)
+                    if hasattr(song, "session_record"):
+                        song.session_record = not bool(getattr(song, "session_record", False))
+                        ok = True
+                    elif hasattr(song, "record_mode"):
+                        song.record_mode = not bool(getattr(song, "record_mode", False))
+                        ok = True
+                except Exception:
+                    ok = False
+            elif a == "metronome":
+                try:
+                    song.metronome = not bool(getattr(song, "metronome", False))
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a == "tempo" and value is not None:
+                try:
+                    song.tempo = float(value)
+                    ok = True
+                except Exception:
+                    ok = False
+            state = get_transport(live)
+            return {"ok": ok, "state": state}
+    except Exception:
+        ok = False
+    # Stub fallback
+    a = str(action or "").lower()
+    tr = _STATE.setdefault("transport", {"is_playing": False, "is_recording": False, "metronome": False, "tempo": 120.0})
+    if a == "play":
+        tr["is_playing"] = True
+        ok = True
+    elif a == "stop":
+        tr["is_playing"] = False
+        ok = True
+    elif a == "record":
+        tr["is_recording"] = not bool(tr.get("is_recording", False))
+        ok = True
+    elif a == "metronome":
+        tr["metronome"] = not bool(tr.get("metronome", False))
+        ok = True
+    elif a == "tempo" and value is not None:
+        try:
+            tr["tempo"] = float(value)
+            ok = True
+        except Exception:
+            ok = False
+    return {"ok": ok, "state": dict(tr)}
 
 
 # ---------------- Routing & Monitoring ----------------

@@ -486,6 +486,40 @@ def server_health() -> Dict[str, Any]:
     return {"status": "healthy", "service": "controller"}
 
 
+# ==================== Transport ====================
+
+@app.get("/transport")
+def get_transport_state() -> Dict[str, Any]:
+    resp = udp_request({"op": "get_transport"}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+class TransportBody(BaseModel):
+    action: str  # play|stop|record|metronome|tempo
+    value: Optional[float] = None  # used for tempo
+
+
+@app.post("/transport")
+def set_transport(body: TransportBody) -> Dict[str, Any]:
+    msg: Dict[str, Any] = {"op": "set_transport", "action": str(body.action)}
+    if body.value is not None:
+        msg["value"] = float(body.value)
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    # broadcast minimal event
+    try:
+        schedule_emit({"event": "transport_changed", "action": str(body.action)})
+    except Exception:
+        pass
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 @app.get("/config")
 def app_config() -> Dict[str, Any]:
     """Expose a subset of app config to clients (UI + aliases)."""
@@ -3493,6 +3527,27 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             "reduce compressor threshold on track 1 by 3 dB",
         ]
         return {"ok": False, "summary": answer, "answer": answer, "suggested_intents": suggested, "sources": sources, "intent": intent}
+
+    # Auto-exec transport intents
+    if intent.get("intent") == "transport":
+        op = intent.get("operation") or {}
+        action = str(op.get("action", ""))
+        value = op.get("value")
+        msg = {"op": "set_transport", "action": action}
+        if value is not None:
+            try:
+                msg["value"] = float(value)
+            except Exception:
+                pass
+        summary = f"Transport: {action}{(' ' + str(value)) if value is not None else ''}"
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
+        resp = udp_request(msg, timeout=1.0)
+        try:
+            schedule_emit({"event": "transport_changed", "action": action})
+        except Exception:
+            pass
+        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "intent": intent, "summary": summary}
 
     # Very small mapper for MVP: support volume absolute set if provided
     targets = intent.get("targets") or []

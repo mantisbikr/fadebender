@@ -169,6 +169,16 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.select_track(live_ctx, track_index)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "get_transport":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_transport(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "set_transport":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                action = str(msg.get("action", ""))
+                val = msg.get("value")
+                data_out = lom_ops.set_transport(live_ctx, action, val)
+                resp = {"ok": bool(data_out.get("ok", True)), "op": op, "data": data_out.get("state", {})}
             else:
                 resp = {"ok": False, "error": f"unknown op: {op}", "echo": msg}
         except Exception as e:  # pragma: no cover

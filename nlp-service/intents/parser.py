@@ -24,6 +24,7 @@ SUPPORTED OPERATIONS:
 - Volume control: "set track X volume to Y dB", "make track X louder/quieter by Y dB", "increase/decrease volume"
 - Pan control: "pan track X left/right by Y%", "center track X"
 - Effects: "add reverb to track X", "increase reverb wet by Y%"
+- Transport: "play", "stop", "start recording", "toggle metronome", "set tempo 120" (BPM)
 - Questions and explanations: "what did I just do?", "explain what happened", "what does reverb do?"
 - Audio engineering advice: "I want spaciousness to my vocals", "add punch to drums", "position it to the right"
 
@@ -189,6 +190,65 @@ def fallback_parse(text: str) -> Dict[str, Any]:
     # Normalize common number words in track references
     for word, num in NUM_WORDS.items():
         s = re.sub(rf"track\s+{word}\b", f"track {num}", s)
+
+    # 0) Transport controls
+    # Play / Stop
+    if re.search(r"\b(play|start)\b", s) and not re.search(r"\b(stop|record|recording)\b", s):
+        return {
+            "intent": "transport",
+            "targets": [],
+            "operation": {"action": "play"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+    if re.search(r"\b(stop|pause)\b", s):
+        return {
+            "intent": "transport",
+            "targets": [],
+            "operation": {"action": "stop"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+    # Record on/off (start/stop recording)
+    if re.search(r"\b(start\s+record(ing)?|record\b)\b", s) and not re.search(r"stop\s+record", s):
+        return {
+            "intent": "transport",
+            "targets": [],
+            "operation": {"action": "record"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+    if re.search(r"\bstop\s+record(ing)?\b", s):
+        # Use same toggle behavior on RS side; intent remains 'record'
+        return {
+            "intent": "transport",
+            "targets": [],
+            "operation": {"action": "record"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+    # Metronome toggle / on / off
+    if re.search(r"\bmetronome\b.*\bon\b", s):
+        return {"intent": "transport", "targets": [], "operation": {"action": "metronome"}, "meta": {"utterance": t, "fallback": True}}
+    if re.search(r"\bmetronome\b.*\boff\b", s):
+        return {"intent": "transport", "targets": [], "operation": {"action": "metronome"}, "meta": {"utterance": t, "fallback": True}}
+    if re.search(r"\b(toggle|tap)\s+metronome\b", s):
+        return {"intent": "transport", "targets": [], "operation": {"action": "metronome"}, "meta": {"utterance": t, "fallback": True}}
+    # Tempo / BPM
+    m = re.search(r"\b(set|change)\s+(tempo|bpm)\s*(to)?\s*(\d+(?:\.\d+)?)\b", s)
+    if m:
+        bpm = float(m.group(4))
+        return {
+            "intent": "transport",
+            "targets": [],
+            "operation": {"action": "tempo", "value": bpm},
+            "meta": {"utterance": t, "fallback": True}
+        }
+    m = re.search(r"\b(tempo|bpm)\s*(to)?\s*(\d+(?:\.\d+)?)\b", s)
+    if m:
+        bpm = float(m.group(3))
+        return {
+            "intent": "transport",
+            "targets": [],
+            "operation": {"action": "tempo", "value": bpm},
+            "meta": {"utterance": t, "fallback": True}
+        }
 
     # 1) Explicit: set track N volume to X dB
     m = re.search(r"set\s+track\s+(\d+)\s+volume\s+to\s+(-?\d+\.?\d*)\s*d?b\b", s)

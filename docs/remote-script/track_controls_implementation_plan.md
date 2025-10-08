@@ -37,12 +37,12 @@ Goal: Implement all Return Track controls end‑to‑end before main track detai
 
 | Capability | RS | UI | LLM | Diff | Prio | Notes |
 |---|---|---|---|:---:|:---:|---|
-| Enumerate return tracks | ✅ | ✅ | ✅ | 🟢 | P0 | `LiveSet.return_tracks[]`; expose names, indices |
-| Return mixer: volume/pan | ✅ | ✅ | ✅ | 🟢 | P0 | `Track.mixer_device.volume/panning` |
-| Return mute/solo | ✅ | ✅ | ✅ | 🟢 | P0 | Solo logic mirrors Live (exclusive as configured) |
-| Return devices list | ✅ | ✅ | ✅ | 🟡 | P0 | `Track.devices[]` with on/off, top params |
-| Return device param set | ✅ | ✅ | ✅ | 🟡 | P0 | Parameter by name/index; value listeners |
-| Return device bypass/on-off | ✅ | ✅ | ✅ | 🟢 | P0 | First parameter convention |
+| Enumerate return tracks | ✅ | ✅ | ✅ | 🟢 | P0 | Done: `/returns` now includes mixer state |
+| Return mixer: volume/pan | ✅ | ✅ | ✅ | 🟢 | P0 | Done: bounce-free UI; SSE refresh wired |
+| Return mute/solo | ✅ | ✅ | ✅ | 🟢 | P0 | Done: silent refresh, no list flash |
+| Return devices list | ✅ | ✅ | ✅ | 🟡 | P0 | Done with on/off + learn status |
+| Return device param set | ✅ | ✅ | ✅ | 🟡 | P0 | Done: by name/index; learned mapping used |
+| Return device bypass/on-off | ✅ | ✅ | ✅ | 🟢 | P0 | Done: Device On or Dry/Wet fallback |
 | Insert device/preset on return | 🟡 | — | ✅ | 🔴 | P1 | Path-based insert; confirm target return |
 | Optional: return→return sends | 🟡 | 🟡 | — | 🔴 | P2 | Only if Live pref allows; feature‑flag |
 
@@ -58,10 +58,10 @@ Exit criteria (Phase R):
 
 | Capability | RS | UI | LLM | Diff | Prio | Notes |
 |---|---|---|---|:---:|:---:|---|
-| Play/Stop/Record/Metronome/Tempo | ✅ | ✅ | ✅ | 🟢 | P0 | Tempo numeric field in UI + “set tempo 120” intent |
+| Play/Stop/Record/Metronome/Tempo | ✅ | ✅ | ✅ | 🟢 | P0 | Added TransportBar (always visible); RS ops + server endpoints wired |
 | Track create/delete/rename | ✅ | 🟡 | ✅ | 🟡 | P0 | UI supports Add/Delete; rename via inline edit & chat |
 | Mute/Solo/Arm | ✅ | ✅ | ✅ | 🟢 | P0 | Keep exclusive solo semantics consistent with Live |
-| Volume/Pan/Sends (A/B/C…) | ✅ | ✅ | ✅ | 🟡 | P0 | Sends render as per-return knobs; value listeners enabled |
+| Volume/Pan/Sends (A/B/C…) | ✅ | ✅ | ✅ | 🟡 | P0 | Bounce fixed; sends fetch on expand; stable sliders |
 | Routing capture (chat-only) | ✅ | — | ✅ | 🟡 | P0 | Track input/output routing and monitor state exposed to LLM, even without UI knobs |
 | Scene/Clip launch/stop | ✅ | ✅ | ✅ | 🟡 | P0 | Clip grid minimal; fire/stop buttons; scene column |
 
@@ -148,10 +148,21 @@ Exit criteria (Phase M): master volume and crossfader controllable via UI and LL
 - **Reference Resolver:** natural names → concrete indices (tracks, scenes, devices, parameters).  
 - **Path Index Cache:** map friendly names to absolute device/preset paths (periodic scan or curated YAML).  
 - **Quantization/Time Math:** shared utils for bars/beats → samples/ticks as RS needs.  
-- **Value Listeners:** attach on track/mixer/param/clip to keep UI & LLM state coherent.  
+- **Value Listeners / SSE:** attach on track/mixer/param/clip to keep UI & LLM state coherent.  
 - **Safety Policy:** centralized guardrails (confirmations, dry runs, rollbacks on error).  
 - **Return/Bus Guardrails:** prevent feedback loops (e.g., return→return sends) via feature flags and validation.  
  - **Routing Catalog:** enumerate valid input/output types/channels per track and expose to LLM for disambiguation.  
+
+---
+
+## Transport — Implementation Notes (New)
+
+- RS ops: `get_transport`, `set_transport { action: play|stop|record|metronome|tempo, value? }`
+- Server endpoints:
+  - GET `/transport` → `{ is_playing, is_recording, metronome, tempo }`
+  - POST `/transport` with `{ action, value? }`
+- UI: `TransportBar` always visible at top of Sidebar; controls Play/Stop, Record, Metronome, Tempo.
+- SSE: optional `transport_changed` event emitted on change; UI polls on actions for now.
 
 ---
 

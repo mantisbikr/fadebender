@@ -111,6 +111,22 @@ class ApiService {
     return response.json();
   }
 
+  // Transport API
+  async getTransport() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/transport`);
+    if (!response.ok) throw new Error(`Transport get failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setTransport(action, value = undefined) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/transport`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, value })
+    });
+    if (!response.ok) throw new Error(`Transport set failed: ${response.statusText}`);
+    return response.json();
+  }
+
   async getTrackStatus(index) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/status?index=${index}`);
     if (!response.ok) throw new Error(`Track status failed: ${response.statusText}`);

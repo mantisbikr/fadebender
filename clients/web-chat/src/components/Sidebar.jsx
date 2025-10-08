@@ -39,6 +39,7 @@ import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
+import TransportBar from './TransportBar.jsx';
 
 function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturnSends }) {
   const [localVol, setLocalVol] = useState(null);
@@ -383,12 +384,19 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (manual) setLoadingOutline(true);
       const res = await apiService.getProjectOutline();
       const data = res.data || null;
+      const hasTracks = !!(data && Array.isArray(data.tracks) && data.tracks.length > 0);
+      if (!hasTracks) {
+        // Avoid clearing UI with empty outline; retry shortly on cold start
+        setTimeout(() => { if (tab === 0) fetchOutline(false); }, 600);
+        return;
+      }
       const nextStr = JSON.stringify(data || {});
-      if (nextStr !== prevOutlineRef.current) {
-        prevOutlineRef.current = nextStr;
-        setOutline(data);
-        // Prime per-track statuses so sliders have values without hover
-        try {
+      if (nextStr === prevOutlineRef.current) return;
+      prevOutlineRef.current = nextStr;
+      setOutline(data);
+      // Prime per-track statuses in background to avoid blocking initial render
+      try {
+        setTimeout(async () => {
           const tracks = (data && Array.isArray(data.tracks)) ? data.tracks : [];
           const results = await Promise.all(tracks.map(async (t) => {
             try {
@@ -398,18 +406,18 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           }));
           const map = Object.fromEntries(results.filter((kv) => kv[1] != null));
           if (Object.keys(map).length) setRowStatuses((prev) => ({ ...prev, ...map }));
-        } catch {}
-        if (followSelection && data && data.selected_track) {
-          setSelectedIndex(data.selected_track);
-          // Also refresh track status when following selection
-          try { const ts = await apiService.getTrackStatus(data.selected_track); setTrackStatus(ts.data || null); } catch {}
-          // clear sends cache on selection change; fetch on demand when accordion expands
-          setSends(null);
-        }
+        }, 0);
+      } catch {}
+      if (followSelection && data && data.selected_track) {
+        setSelectedIndex(data.selected_track);
+        // Also refresh track status when following selection
+        try { const ts = await apiService.getTrackStatus(data.selected_track); setTrackStatus(ts.data || null); } catch {}
+        // clear sends cache on selection change; fetch on demand when accordion expands
+        setTrackSends({});
       }
     } catch (e) {
-      // don't clobber existing outline unless manual
-      if (manual) setOutline(null);
+      // Keep existing outline on error to avoid flicker/disappear
+      // Optionally, we could surface a toast here.
     } finally {
       if (manual) setLoadingOutline(false);
     }
@@ -593,7 +601,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   useEffect(() => {
     if (tab !== 0) return;
     let mounted = true;
-    (async () => { if (mounted) await fetchOutline(); })();
+    (async () => { if (mounted) await fetchOutline(true); })();
     return () => { mounted = false; };
   }, [tab]);
 
@@ -712,6 +720,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 
   const content = (
     <>
+      <TransportBar />
       <Box sx={{ p: 1 }}>
         <Tabs
           value={tab}
