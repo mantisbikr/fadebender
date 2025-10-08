@@ -11,7 +11,7 @@ $17/day in Gemini API charges from `llm-research-409622` project
 
 ### 1. Deleted All Gemini API Keys
 - **llm-research-409622**: Deleted 2 keys (Beatswara Key, Fadebender Key)
-- **fadebender**: Deleted 1 key (`AIzaSyAmduieKpflfeFV4oKKMkPqjh6zFXHOtKk`)
+- **fadebender**: Deleted 1 key (redacted - already deleted from GCP)
 
 ### 2. Updated Configuration Files
 - `.env`: Removed API keys, commented out service account path
