@@ -5,6 +5,8 @@ import time
 import asyncio
 from fastapi.responses import StreamingResponse
 import json
+import socket
+import threading
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -518,6 +520,39 @@ def set_transport(body: TransportBody) -> Dict[str, Any]:
     except Exception:
         pass
     return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+# ==================== Master ====================
+
+@app.get("/master/status")
+def get_master_status() -> Dict[str, Any]:
+    resp = udp_request({"op": "get_master_status"}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else None
+    if data is None:
+        data = resp
+    return {"ok": True, "data": data}
+
+
+class MasterMixerBody(BaseModel):
+    field: str  # 'volume' | 'pan' | 'cue'
+    value: float
+
+
+@app.post("/op/master/mixer")
+def op_master_mixer(body: MasterMixerBody) -> Dict[str, Any]:
+    if body.field not in ("volume", "pan", "cue"):
+        raise HTTPException(400, "invalid_field")
+    msg = {"op": "set_master_mixer", "field": body.field, "value": float(body.value)}
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        schedule_emit({"event": "master_mixer_changed", "field": body.field, "value": float(body.value)})
+    except Exception:
+        pass
+    return resp
 
 
 @app.get("/config")
@@ -4040,3 +4075,41 @@ def schedule_emit(payload: Dict[str, Any]) -> None:
                 asyncio.ensure_future(emit_event(payload))
             except Exception:
                 pass
+
+
+_EVENT_THREAD: Optional[threading.Thread] = None
+
+
+def start_ableton_event_listener() -> None:
+    global _EVENT_THREAD
+    if _EVENT_THREAD and _EVENT_THREAD.is_alive():
+        return
+    host = os.getenv("ABLETON_UDP_CLIENT_HOST", "127.0.0.1")
+    port = int(os.getenv("ABLETON_UDP_CLIENT_PORT", os.getenv("ABLETON_EVENT_PORT", "19846")))
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((host, port))
+        print(f"[Ableton] Listening for notifications on {host}:{port}")
+    except Exception as e:
+        print(f"[Ableton] Failed to bind event listener on {host}:{port} -> {e}")
+        return
+
+    def loop():
+        while True:
+            try:
+                data, _ = sock.recvfrom(64 * 1024)
+            except Exception:
+                continue
+            try:
+                payload = json.loads(data.decode("utf-8"))
+            except Exception:
+                continue
+            schedule_emit(payload)
+
+    _EVENT_THREAD = threading.Thread(target=loop, name="AbletonEventListener", daemon=True)
+    _EVENT_THREAD.start()
+
+
+@app.on_event("startup")
+async def _ableton_startup_listener() -> None:
+    start_ableton_event_listener()
