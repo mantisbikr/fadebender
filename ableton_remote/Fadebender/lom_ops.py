@@ -6,7 +6,8 @@ stub so that the UDP bridge can respond meaningfully.
 """
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable, List, Tuple, Optional
+import os
 import time
 
 
@@ -52,6 +53,149 @@ _STATE: Dict[str, Any] = {
     ],
     "transport": {"is_playing": False, "is_recording": False, "metronome": False, "tempo": 120.0},
 }
+
+_NOTIFIER: Optional[Callable[[Dict[str, Any]], None]] = None
+_LISTENERS: List[Tuple[Any, Callable[[], None]]] = []
+
+
+def set_notifier(fn: Callable[[Dict[str, Any]], None]) -> None:
+    global _NOTIFIER
+    _NOTIFIER = fn
+
+
+def _emit(payload: Dict[str, Any]) -> None:
+    notify = _NOTIFIER
+    if notify is None:
+        return
+    try:
+        notify(payload)
+    except Exception:
+        pass
+
+
+def clear_listeners() -> None:
+    global _LISTENERS
+    for param, cb in _LISTENERS:
+        try:
+            if hasattr(param, 'remove_value_listener'):
+                param.remove_value_listener(cb)
+        except Exception:
+            pass
+    _LISTENERS = []
+
+
+def _add_param_listener(param, cb):
+    try:
+        if not hasattr(param, 'add_value_listener'):
+            return
+        if hasattr(param, 'value_has_listener') and param.value_has_listener(cb):
+            return
+        param.add_value_listener(cb)
+        _LISTENERS.append((param, cb))
+    except Exception:
+        pass
+
+
+def init_listeners(live) -> None:
+    clear_listeners()
+    if live is None:
+        return
+    try:
+        scope_raw = (os.getenv("FADEBENDER_LISTENERS") or "master").lower()
+        scopes = {s.strip() for s in scope_raw.split(",") if s.strip()}
+        all_on = ("all" in scopes or "*" in scopes)
+        if all_on or "tracks" in scopes or "track" in scopes:
+            _attach_track_listeners(live)
+        if all_on or "returns" in scopes or "return" in scopes:
+            _attach_return_listeners(live)
+        if all_on or "master" in scopes:
+            _attach_master_listeners(live)
+    except Exception:
+        pass
+
+
+def _attach_track_listeners(live) -> None:
+    tracks = getattr(live, 'tracks', []) or []
+    for idx, tr in enumerate(tracks, start=1):
+        mix = getattr(tr, 'mixer_device', None)
+        if mix is None:
+            continue
+        vol = getattr(mix, 'volume', None)
+        pan = getattr(mix, 'panning', None)
+        if vol is not None:
+            def make_cb(param=vol, track_idx=idx):
+                def _cb():
+                    try:
+                        _emit({"event": "mixer_changed", "track": track_idx, "field": "volume", "value": float(getattr(param, 'value', 0.0))})
+                    except Exception:
+                        pass
+                return _cb
+            _add_param_listener(vol, make_cb())
+        if pan is not None:
+            def make_cb(param=pan, track_idx=idx):
+                def _cb():
+                    try:
+                        _emit({"event": "mixer_changed", "track": track_idx, "field": "pan", "value": float(getattr(param, 'value', 0.0))})
+                    except Exception:
+                        pass
+                return _cb
+            _add_param_listener(pan, make_cb())
+
+
+def _attach_return_listeners(live) -> None:
+    returns = getattr(live, 'return_tracks', []) or []
+    for idx, rt in enumerate(returns):
+        mix = getattr(rt, 'mixer_device', None)
+        if mix is None:
+            continue
+        vol = getattr(mix, 'volume', None)
+        pan = getattr(mix, 'panning', None)
+        if vol is not None:
+            def make_cb(param=vol, return_idx=idx):
+                def _cb():
+                    try:
+                        _emit({"event": "return_mixer_changed", "return": return_idx, "field": "volume", "value": float(getattr(param, 'value', 0.0))})
+                    except Exception:
+                        pass
+                return _cb
+            _add_param_listener(vol, make_cb())
+        if pan is not None:
+            def make_cb(param=pan, return_idx=idx):
+                def _cb():
+                    try:
+                        _emit({"event": "return_mixer_changed", "return": return_idx, "field": "pan", "value": float(getattr(param, 'value', 0.0))})
+                    except Exception:
+                        pass
+                return _cb
+            _add_param_listener(pan, make_cb())
+
+
+def _attach_master_listeners(live) -> None:
+    master = getattr(live, 'master_track', None)
+    if master is None:
+        return
+    mix = getattr(master, 'mixer_device', None)
+    if mix is None:
+        return
+    volume = getattr(mix, 'volume', None)
+    pan = getattr(mix, 'panning', None)
+    cue = getattr(mix, 'cue_volume', None)
+
+    def add(field, param):
+        if param is None:
+            return
+        def make_cb(p=param, fld=field):
+            def _cb():
+                try:
+                    _emit({"event": "master_mixer_changed", "field": fld, "value": float(getattr(p, 'value', 0.0))})
+                except Exception:
+                    pass
+            return _cb
+        _add_param_listener(param, make_cb())
+
+    add('volume', volume)
+    add('pan', pan)
+    add('cue', cue)
 
 
 def get_overview(live) -> dict:
@@ -164,17 +308,23 @@ def set_mixer(live, track_index: int, field: str, value: float) -> bool:
                 tr = live.tracks[idx - 1]
                 mix = getattr(tr, "mixer_device", None)
                 if field == "volume" and hasattr(mix, "volume"):
-                    mix.volume.value = max(0.0, min(1.0, float(value)))
+                    val = max(0.0, min(1.0, float(value)))
+                    mix.volume.value = val
+                    _emit({"event": "mixer_changed", "track": idx, "field": "volume", "value": float(val)})
                     return True
                 if field == "pan" and hasattr(mix, "panning"):
-                    mix.panning.value = max(-1.0, min(1.0, float(value)))
+                    val = max(-1.0, min(1.0, float(value)))
+                    mix.panning.value = val
+                    _emit({"event": "mixer_changed", "track": idx, "field": "pan", "value": float(val)})
                     return True
                 if field == "mute" and hasattr(mix, "track_activator"):
                     # Set activator: 1 = active(unmuted), 0 = muted
                     mix.track_activator.value = 0 if bool(value) else 1
+                    _emit({"event": "mixer_changed", "track": idx, "field": "mute", "value": bool(value)})
                     return True
                 if field == "solo" and hasattr(tr, "solo"):
                     tr.solo = bool(value)
+                    _emit({"event": "mixer_changed", "track": idx, "field": "solo", "value": bool(value)})
                     return True
                 return False
     except Exception:
@@ -182,16 +332,22 @@ def set_mixer(live, track_index: int, field: str, value: float) -> bool:
     for t in _STATE["tracks"]:
         if t["index"] == int(track_index):
             if field == "volume":
-                t["mixer"]["volume"] = max(0.0, min(1.0, float(value)))
+                val = max(0.0, min(1.0, float(value)))
+                t["mixer"]["volume"] = val
+                _emit({"event": "mixer_changed", "track": int(track_index), "field": "volume", "value": float(val)})
                 return True
             if field == "pan":
-                t["mixer"]["pan"] = max(-1.0, min(1.0, float(value)))
+                val = max(-1.0, min(1.0, float(value)))
+                t["mixer"]["pan"] = val
+                _emit({"event": "mixer_changed", "track": int(track_index), "field": "pan", "value": float(val)})
                 return True
             if field == "mute":
                 t["mute"] = bool(value)
+                _emit({"event": "mixer_changed", "track": int(track_index), "field": "mute", "value": bool(value)})
                 return True
             if field == "solo":
                 t["solo"] = bool(value)
+                _emit({"event": "mixer_changed", "track": int(track_index), "field": "solo", "value": bool(value)})
                 return True
             return False
     return False
@@ -477,19 +633,25 @@ def set_return_mixer(live, return_index: int, field: str, value: float) -> bool:
                 tr = live.return_tracks[ri]
                 mix = getattr(tr, "mixer_device", None)
                 if field == "volume" and hasattr(mix, "volume"):
-                    mix.volume.value = max(0.0, min(1.0, float(value)))
+                    val = max(0.0, min(1.0, float(value)))
+                    mix.volume.value = val
+                    _emit({"event": "return_mixer_changed", "return": ri, "field": "volume", "value": float(val)})
                     return True
                 if field == "pan" and hasattr(mix, "panning"):
-                    mix.panning.value = max(-1.0, min(1.0, float(value)))
+                    val = max(-1.0, min(1.0, float(value)))
+                    mix.panning.value = val
+                    _emit({"event": "return_mixer_changed", "return": ri, "field": "pan", "value": float(val)})
                     return True
                 if field == "mute":
                     # Return tracks typically use Track.mute directly
                     if hasattr(tr, "mute"):
                         setattr(tr, "mute", bool(value))
+                        _emit({"event": "return_mixer_changed", "return": ri, "field": "mute", "value": bool(value)})
                         return True
                 if field == "solo":
                     if hasattr(tr, "solo"):
                         setattr(tr, "solo", bool(value))
+                        _emit({"event": "return_mixer_changed", "return": ri, "field": "solo", "value": bool(value)})
                         return True
                 return False
     except Exception:
@@ -498,13 +660,18 @@ def set_return_mixer(live, return_index: int, field: str, value: float) -> bool:
     for r in _STATE.get("returns", []):
         if r["index"] == int(return_index):
             if field == "volume":
-                r.setdefault("mixer", {}).update({"volume": max(0.0, min(1.0, float(value)))})
+                val = max(0.0, min(1.0, float(value)))
+                r.setdefault("mixer", {}).update({"volume": val})
+                _emit({"event": "return_mixer_changed", "return": int(return_index), "field": "volume", "value": float(val)})
                 return True
             if field == "pan":
-                r.setdefault("mixer", {}).update({"pan": max(-1.0, min(1.0, float(value)))})
+                val = max(-1.0, min(1.0, float(value)))
+                r.setdefault("mixer", {}).update({"pan": val})
+                _emit({"event": "return_mixer_changed", "return": int(return_index), "field": "pan", "value": float(val)})
                 return True
             if field in ("mute", "solo"):
                 r[field] = bool(value)
+                _emit({"event": "return_mixer_changed", "return": int(return_index), "field": field, "value": bool(value)})
                 return True
             return False
     return False
@@ -675,6 +842,81 @@ def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]
         except Exception:
             ok = False
     return {"ok": ok, "state": dict(tr)}
+
+
+# ---------------- Master ----------------
+
+def get_master_status(live) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            mt = getattr(live, "master_track", None)
+            if mt is None:
+                raise RuntimeError("no_master")
+            mix = getattr(mt, "mixer_device", None)
+            vol = getattr(getattr(mix, "volume", None), "value", None)
+            pan = getattr(getattr(mix, "panning", None), "value", None)
+            mute = getattr(mt, "mute", None)
+            solo = getattr(mt, "solo", None)
+            cue = getattr(getattr(mix, "cue_volume", None), "value", None)
+            return {
+                "mixer": {
+                    "volume": float(vol) if vol is not None else None,
+                    "pan": float(pan) if pan is not None else 0.0,
+                    "cue": float(cue) if cue is not None else 0.0,
+                },
+                "mute": bool(mute) if mute is not None else False,
+                "solo": bool(solo) if solo is not None else False,
+            }
+    except Exception:
+        pass
+    # stub: reuse first track if present
+    mt = _STATE["tracks"][0] if _STATE.get("tracks") else {"mixer": {"volume": 0.8, "pan": 0.0}, "mute": False, "solo": False}
+    return {"mixer": {"volume": float(mt.get("mixer", {}).get("volume", 0.8)), "pan": float(mt.get("mixer", {}).get("pan", 0.0)), "cue": float(mt.get("mixer", {}).get("cue", 0.0))}, "mute": bool(mt.get("mute", False)), "solo": bool(mt.get("solo", False))}
+
+
+def set_master_mixer(live, field: str, value: float) -> bool:
+    try:
+        if live is not None:
+            mt = getattr(live, "master_track", None)
+            if mt is None:
+                return False
+            mix = getattr(mt, "mixer_device", None)
+            if field == "volume" and hasattr(mix, "volume"):
+                val = max(0.0, min(1.0, float(value)))
+                mix.volume.value = val
+                _emit({"event": "master_mixer_changed", "field": "volume", "value": float(val)})
+                return True
+            if field == "pan" and hasattr(mix, "panning"):
+                val = max(-1.0, min(1.0, float(value)))
+                mix.panning.value = val
+                _emit({"event": "master_mixer_changed", "field": "pan", "value": float(val)})
+                return True
+            if field == "cue" and hasattr(mix, "cue_volume"):
+                val = max(0.0, min(1.0, float(value)))
+                mix.cue_volume.value = val
+                _emit({"event": "master_mixer_changed", "field": "cue", "value": float(val)})
+                return True
+            return False
+    except Exception:
+        pass
+    # stub: update in-memory
+    mt = _STATE.setdefault("master", {"mixer": {"volume": 0.8, "pan": 0.0}, "mute": False, "solo": False})
+    if field == "volume":
+        val = max(0.0, min(1.0, float(value)))
+        mt.setdefault("mixer", {}).update({"volume": val})
+        _emit({"event": "master_mixer_changed", "field": "volume", "value": float(val)})
+        return True
+    if field == "pan":
+        val = max(-1.0, min(1.0, float(value)))
+        mt.setdefault("mixer", {}).update({"pan": val})
+        _emit({"event": "master_mixer_changed", "field": "pan", "value": float(val)})
+        return True
+    if field == "cue":
+        val = max(0.0, min(1.0, float(value)))
+        mt.setdefault("mixer", {}).update({"cue": val})
+        _emit({"event": "master_mixer_changed", "field": "cue", "value": float(val)})
+        return True
+    return False
 
 
 # ---------------- Routing & Monitoring ----------------

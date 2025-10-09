@@ -33,10 +33,15 @@ class Fadebender(ControlSurface):
         if os.environ.get("FADEBENDER_UDP_ENABLE") in ("1", "true", "True"):
             try:
                 from .udp_bridge import start_udp_server, set_live_accessor  # type: ignore
+                from . import lom_ops  # type: ignore
 
                 set_live_accessor(lambda: self.song())
                 t = threading.Thread(target=start_udp_server, name="FadebenderUDP", daemon=True)
                 t.start()
+                try:
+                    lom_ops.init_listeners(self.song())
+                except Exception:
+                    pass
                 self.log_message("[Fadebender] UDP bridge started")
             except Exception as e:  # pragma: no cover
                 self.log_message(f"[Fadebender] UDP not started: {e}")

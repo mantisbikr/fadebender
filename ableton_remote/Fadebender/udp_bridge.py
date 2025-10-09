@@ -11,11 +11,13 @@ import json
 import os
 import socket
 from . import lom_ops
-from typing import Callable, Optional, Any
+from typing import Callable, Optional, Any, Dict
 
 
 HOST = os.getenv("ABLETON_UDP_HOST", "127.0.0.1")
 PORT = int(os.getenv("ABLETON_UDP_PORT", "19845"))
+CLIENT_HOST = os.getenv("ABLETON_UDP_CLIENT_HOST", HOST)
+CLIENT_PORT = int(os.getenv("ABLETON_UDP_CLIENT_PORT", os.getenv("ABLETON_EVENT_PORT", "19846")))
 
 _LIVE_ACCESSOR: Optional[Callable[[], Any]] = None
 
@@ -28,6 +30,20 @@ def set_live_accessor(getter: Callable[[], Any]):  # pragma: no cover
 def start_udp_server():  # pragma: no cover
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((HOST, PORT))
+    event_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def notify(payload: Dict[str, Any]):  # pragma: no cover
+        try:
+            event_sock.sendto(json.dumps(payload).encode("utf-8"), (CLIENT_HOST, CLIENT_PORT))
+        except Exception:
+            pass
+
+    lom_ops.set_notifier(notify)
+    try:
+        if _LIVE_ACCESSOR:
+            lom_ops.init_listeners(_LIVE_ACCESSOR())
+    except Exception:
+        pass
     while True:
         data, addr = sock.recvfrom(64 * 1024)
         try:
@@ -179,6 +195,16 @@ def start_udp_server():  # pragma: no cover
                 val = msg.get("value")
                 data_out = lom_ops.set_transport(live_ctx, action, val)
                 resp = {"ok": bool(data_out.get("ok", True)), "op": op, "data": data_out.get("state", {})}
+            elif op == "get_master_status":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_master_status(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "set_master_mixer":
+                field = str(msg.get("field"))
+                value = float(msg.get("value", 0.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_master_mixer(live_ctx, field, value)
+                resp = {"ok": bool(ok), "op": op}
             else:
                 resp = {"ok": False, "error": f"unknown op: {op}", "echo": msg}
         except Exception as e:  # pragma: no cover

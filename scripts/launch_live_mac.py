@@ -47,8 +47,18 @@ def main() -> int:
     env["FADEBENDER_UDP_ENABLE"] = "1"
     env["ABLETON_UDP_HOST"] = str(args.host)
     env["ABLETON_UDP_PORT"] = str(args.port)
+    # Event notifications (RS -> Server over UDP JSON)
+    # Server should bind ABLETON_EVENT_PORT (default 19846); Live (RS) sends to ABLETON_UDP_CLIENT_HOST/PORT.
+    env.setdefault("ABLETON_UDP_CLIENT_HOST", env.get("ABLETON_UDP_HOST", "127.0.0.1"))
+    env.setdefault("ABLETON_UDP_CLIENT_PORT", os.getenv("ABLETON_EVENT_PORT", "19846"))
+    # Gate LOM listeners. Default to master-only for initial rollout.
+    env.setdefault("FADEBENDER_LISTENERS", os.getenv("FADEBENDER_LISTENERS", "master"))
 
-    print(f"Launching: {live_bin}\n  FADEBENDER_UDP_ENABLE=1 ABLETON_UDP_HOST={env['ABLETON_UDP_HOST']} ABLETON_UDP_PORT={env['ABLETON_UDP_PORT']}")
+    print(
+        "Launching: {}\n  FADEBENDER_UDP_ENABLE=1 ABLETON_UDP_HOST={} ABLETON_UDP_PORT={} ABLETON_UDP_CLIENT_HOST={} ABLETON_UDP_CLIENT_PORT={} FADEBENDER_LISTENERS={}".format(
+            live_bin, env['ABLETON_UDP_HOST'], env['ABLETON_UDP_PORT'], env.get('ABLETON_UDP_CLIENT_HOST'), env.get('ABLETON_UDP_CLIENT_PORT'), env.get('FADEBENDER_LISTENERS')
+        )
+    )
     # Launch detached
     subprocess.Popen([str(live_bin)], env=env)
     return 0
@@ -56,4 +66,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
