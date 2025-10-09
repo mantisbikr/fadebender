@@ -13,6 +13,35 @@ class ApiService {
   getEventsURL() {
     return `${API_CONFIG.SERVER_BASE_URL}/events`;
   }
+  async getMasterStatus() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/master/status`);
+    if (!response.ok) throw new Error(`Master status failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setMasterMixer(field, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/master/mixer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value })
+    });
+    if (!response.ok) throw new Error(`Set master mixer failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async getReturnRouting(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/routing?index=${index}`);
+    if (!response.ok) throw new Error(`Return routing failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setReturnRouting(return_index, payload) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/routing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_index, ...payload })
+    });
+    if (!response.ok) throw new Error(`Set return routing failed: ${response.statusText}`);
+    return response.json();
+  }
   async getAppConfig() {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config`);
     if (!response.ok) throw new Error(`Config fetch failed: ${response.statusText}`);

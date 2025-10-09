@@ -27,7 +27,8 @@ export function useMixerEvents(onMixerChanged, onSelectionChanged, onOtherEvent,
           payload.event === 'return_routing_changed' ||
           payload.event === 'preset_saved' ||
           payload.event === 'device_param_restored' ||
-          payload.event === 'device_removed'
+          payload.event === 'device_removed' ||
+          payload.event === 'master_mixer_changed'
         ) {
           onOtherEvent && onOtherEvent(payload);
         }

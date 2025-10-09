@@ -81,6 +81,7 @@ export default function TrackRow({
   fetchSends,
   onAdjustStart,
   onAdjustEnd,
+  onAdjustSet,
 }) {
   const t = track;
   const status = getStatus(t.index);
@@ -206,8 +207,9 @@ export default function TrackRow({
                   await apiService.setMixer(t.index, 'volume', Number(v));
                 } catch {}
                 volBusyUntilRef.current = Date.now() + 350; // small suppression window
-                setLocalVolume(null);
+                setTimeout(() => setLocalVolume(null), 500);
                 try { onAdjustEnd?.(t.index); } catch {}
+                try { onAdjustSet?.(t.index, 'volume', Number(v)); } catch {}
               }}
               sx={{ flex: 1 }}
             />
@@ -239,8 +241,9 @@ export default function TrackRow({
                   await apiService.setMixer(t.index, 'pan', Number(v));
                 } catch {}
                 panBusyUntilRef.current = Date.now() + 350;
-                setLocalPan(null);
+                setTimeout(() => setLocalPan(null), 500);
                 try { onAdjustEnd?.(t.index); } catch {}
+                try { onAdjustSet?.(t.index, 'pan', Number(v)); } catch {}
               }}
               sx={{ flex: 1 }}
             />
