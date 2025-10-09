@@ -18,7 +18,7 @@ import {
 import { apiService } from '../services/api.js';
 
 export default function SettingsModal({ open, onClose, confirmExecute, setConfirmExecute, systemStatus }) {
-  const [ui, setUi] = useState({ refresh_ms: 5000, sends_open_refresh_ms: 800, sse_throttle_ms: 150, sidebar_width_px: 360, default_sidebar_tab: 'tracks' });
+  const [ui, setUi] = useState({ refresh_ms: 5000, sends_open_refresh_ms: 800, master_refresh_ms: 800, sse_throttle_ms: 150, sidebar_width_px: 360, default_sidebar_tab: 'tracks' });
   const [debug, setDebug] = useState({ firestore: false, sse: false, auto_capture: false });
   const [saving, setSaving] = useState(false);
 
@@ -79,6 +79,13 @@ export default function SettingsModal({ open, onClose, confirmExecute, setConfir
               type="number"
               value={ui.sends_open_refresh_ms}
               onChange={(e) => setUi({ ...ui, sends_open_refresh_ms: Number(e.target.value) })}
+              size="small"
+            />
+            <TextField
+              label="Master Poll (ms)"
+              type="number"
+              value={ui.master_refresh_ms}
+              onChange={(e) => setUi({ ...ui, master_refresh_ms: Number(e.target.value) })}
               size="small"
             />
             <TextField

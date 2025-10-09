@@ -40,6 +40,7 @@ import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } fr
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
 import TransportBar from './TransportBar.jsx';
+// apiService already imported above; remove duplicate import
 
 function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturnSends }) {
   const [localVol, setLocalVol] = useState(null);
@@ -104,7 +105,8 @@ function ReturnRow({
   fetchReturnSends,
   fetchReturns,
   returnSends,
-  setReturnSends
+  setReturnSends,
+  onReturnMixerSet,
 }) {
   const [localVol, setLocalVol] = useState(null);
   const [localPan, setLocalPan] = useState(null);
@@ -114,6 +116,7 @@ function ReturnRow({
   const volBusyUntilRef = useRef(0);
   const panBusyUntilRef = useRef(0);
   const [sendsExpanded, setSendsExpanded] = useState(false);
+  const [routing, setRouting] = useState(null);
   const currentVol = localVol !== null ? localVol : (typeof r.mixer?.volume === 'number' ? r.mixer.volume : undefined);
   const currentPan = localPan !== null ? localPan : (typeof r.mixer?.pan === 'number' ? r.mixer.pan : undefined);
   useEffect(() => {
@@ -185,8 +188,9 @@ function ReturnRow({
             onChangeCommitted={async (_, val) => {
               const v = Array.isArray(val) ? val[0] : val;
               try { await apiService.setReturnMixer(r.index, 'volume', Number(v)); } catch {}
-              volBusyUntilRef.current = Date.now() + 350;
-              setLocalVol(null);
+              volBusyUntilRef.current = Date.now() + 1000;
+              onReturnMixerSet?.(r.index, 'volume', Number(v));
+              setTimeout(() => setLocalVol(null), 500);
             }}
             sx={{ flex: 1 }}
           />
@@ -210,8 +214,9 @@ function ReturnRow({
             onChangeCommitted={async (_, val) => {
               const v = Array.isArray(val) ? val[0] : val;
               try { await apiService.setReturnMixer(r.index, 'pan', Number(v)); } catch {}
-              panBusyUntilRef.current = Date.now() + 350;
-              setLocalPan(null);
+              panBusyUntilRef.current = Date.now() + 1000;
+              onReturnMixerSet?.(r.index, 'pan', Number(v));
+              setTimeout(() => setLocalPan(null), 500);
             }}
             sx={{ flex: 1 }}
           />
@@ -224,6 +229,14 @@ function ReturnRow({
       {/* Devices - compact list with preset names first */}
       {openReturn === r.index && (
         <Box sx={{ pl: 1, mt: 0.5 }}>
+          {/* Routing: Sends mode (Pre/Post) */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Typography variant="caption" color="text.secondary">Sends Mode:</Typography>
+            <MUISelect size="small" value={(routing?.sends_mode || 'post')} onOpen={async () => { try { const rr = await apiService.getReturnRouting(r.index); setRouting((rr && rr.data) || null); } catch {} }} onChange={async (e) => { const val = e.target.value; setRouting((prev) => ({ ...(prev || {}), sends_mode: val })); try { await apiService.setReturnRouting(r.index, { sends_mode: val }); } catch {} }}>
+              <MenuItem value="pre">Pre</MenuItem>
+              <MenuItem value="post">Post</MenuItem>
+            </MUISelect>
+          </Box>
           {!returnDevices[r.index] && <Typography variant="caption" color="text.secondary">Loading devices…</Typography>}
           {returnDevices[r.index] && returnDevices[r.index].length === 0 && <Typography variant="caption" color="text.secondary">No devices</Typography>}
           {returnDevices[r.index] && returnDevices[r.index].map((d) => (
@@ -354,6 +367,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [sendsFastRefreshMs, setSendsFastRefreshMs] = useState(800);
   const [sseThrottleMs, setSseThrottleMs] = useState(150);
+  const [masterRefreshMs, setMasterRefreshMs] = useState(800);
   const [followSelection, setFollowSelection] = useState(true);
   const [trackSends, setTrackSends] = useState({}); // { [trackIndex]: sends[] }
   const [returns, setReturns] = useState(null);
@@ -361,8 +375,15 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [openReturn, setOpenReturn] = useState(null);
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
   const [returnSends, setReturnSends] = useState({}); // { [returnIndex]: sends[] }
+  const [masterStatus, setMasterStatus] = useState(null); // Master track mixer state
   const [isAdjusting, setIsAdjusting] = useState(false);
   const adjustingUntilRef = useRef(0);
+  const trackBusyUntilRef = useRef({}); // { [trackIndex]: ts }
+  const returnBusyUntilRef = useRef({}); // { [returnIndex]: ts }
+  const masterBusyUntilRef = useRef({}); // { field: ts }
+  const trackPendingRef = useRef({}); // { [trackIndex]: { volume?:number, pan?:number } }
+  const returnPendingRef = useRef({}); // { [returnIndex]: { volume?:number, pan?:number } }
+  const masterPendingRef = useRef({}); // { volume?:number, pan?:number, cue?:number }
   const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
   const [learnJobs, setLearnJobs] = useState({}); // { `${ri}:${di}`: { jobId, progress, total, state } }
   const prevOutlineRef = useRef('');
@@ -370,6 +391,29 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const lastReturnFetchAt = useRef({}); // { [returnIndex]: number }
   const lastReturnsListAt = useRef(0);
   const MIN_REFRESH_GAP_MS = 800; // debounce poll vs SSE
+
+  const mergePending = (pendingMap, idx, data, fields) => {
+    if (!data) return;
+    const pending = pendingMap.current[idx];
+    if (!pending) return;
+    data.mixer = data.mixer || {};
+    let cleared = true;
+    fields.forEach((field) => {
+      if (pending[field] === undefined) return;
+      const incoming = data.mixer[field];
+      if (incoming != null && Math.abs(Number(incoming) - Number(pending[field])) <= 0.004) {
+        delete pending[field];
+      } else {
+        data.mixer[field] = Number(pending[field]);
+      }
+      if (pending[field] !== undefined) cleared = false;
+    });
+    if (cleared) {
+      delete pendingMap.current[idx];
+    } else {
+      pendingMap.current[idx] = pending;
+    }
+  };
 
   const userCommands = useMemo(() => {
     // Most recent first
@@ -405,6 +449,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
             } catch { return [t.index, null]; }
           }));
           const map = Object.fromEntries(results.filter((kv) => kv[1] != null));
+          Object.entries(map).forEach(([idx, payload]) => mergePending(trackPendingRef, Number(idx), payload, ['volume', 'pan']));
           if (Object.keys(map).length) setRowStatuses((prev) => ({ ...prev, ...map }));
         }, 0);
       } catch {}
@@ -434,6 +479,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           if (ui.refresh_ms) setRefreshInterval(Number(ui.refresh_ms));
           if (ui.sends_open_refresh_ms) setSendsFastRefreshMs(Number(ui.sends_open_refresh_ms));
           if (ui.sse_throttle_ms) setSseThrottleMs(Number(ui.sse_throttle_ms));
+          if (ui.master_refresh_ms) setMasterRefreshMs(Number(ui.master_refresh_ms));
         }
       } catch {}
     })();
@@ -468,13 +514,25 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       const next = (res && res.data && Array.isArray(res.data.returns)) ? res.data.returns : [];
       lastReturnsListAt.current = now;
       setReturns(prev => {
-        if (!Array.isArray(prev) || prev.length === 0) return next;
+        if (!Array.isArray(prev) || prev.length === 0) {
+          return next.map(r => {
+            const copy = { ...r };
+            mergePending(returnPendingRef, r.index, copy, ['volume', 'pan']);
+            return copy;
+          });
+        }
         // Reconcile by index; merge mixer fields so UI reflects latest
         const byIndex = Object.fromEntries(prev.map(r => [r.index, r]));
         return next.map(r => {
           const existing = byIndex[r.index];
-          if (!existing) return r;
-          return { ...existing, ...r, mixer: { ...(existing.mixer || {}), ...(r.mixer || {}) } };
+          if (!existing) {
+            const clone = { ...r };
+            mergePending(returnPendingRef, r.index, clone, ['volume', 'pan']);
+            return clone;
+          }
+          const merged = { ...existing, ...r, mixer: { ...(existing.mixer || {}), ...(r.mixer || {}) } };
+          mergePending(returnPendingRef, r.index, merged, ['volume', 'pan']);
+          return merged;
         });
       });
     } catch {
@@ -588,14 +646,84 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const refreshTrack = async (idx) => {
     try {
       if (!idx) return null;
+      const now = Date.now();
+      if (now < (trackBusyUntilRef.current[idx] || 0)) {
+        return rowStatuses[idx] || null;
+      }
       const res = await apiService.getTrackStatus(idx);
       const data = res.data || null;
+      if (data) mergePending(trackPendingRef, idx, data, ['volume', 'pan']);
       setRowStatuses((prev) => ({ ...prev, [idx]: data }));
       if (selectedIndex === idx) setTrackStatus(data);
       return data;
     } catch {
       return null;
     }
+  };
+
+  const handleTrackMixerSet = useCallback((idx, field, value) => {
+    const now = Date.now();
+    trackBusyUntilRef.current[idx] = now + 800;
+    trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
+    setRowStatuses((prev) => {
+      const cur = prev[idx] || {};
+      const mix = cur.mixer || {};
+      return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
+    });
+    if (selectedIndex === idx) {
+      setTrackStatus((prev) => prev ? { ...prev, mixer: { ...(prev.mixer || {}), [field]: Number(value) } } : prev);
+    }
+  }, [selectedIndex]);
+
+  const handleReturnMixerSet = useCallback((ri, field, value) => {
+    const now = Date.now();
+    returnBusyUntilRef.current[ri] = now + 800;
+    returnPendingRef.current[ri] = { ...(returnPendingRef.current[ri] || {}), [field]: Number(value) };
+    setReturns(prev => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.map(x => (x.index === ri ? { ...x, mixer: { ...(x.mixer || {}), [field]: Number(value) } } : x));
+    });
+  }, []);
+
+  const handleMasterMixerSet = useCallback((field, value) => {
+    const now = Date.now();
+    masterBusyUntilRef.current[field] = now + 800;
+    masterPendingRef.current[field] = Number(value);
+    setMasterStatus(prev => ({
+      ...(prev || {}),
+      mixer: { ...(prev?.mixer || {}), [field]: Number(value) }
+    }));
+  }, []);
+
+  const fetchMasterStatus = async (opts = {}) => {
+    const silent = !!opts.silent;
+    try {
+      const res = await apiService.getMasterStatus();
+      const data = (res && res.data) || null;
+      if (data) {
+        // Merge pending values
+        if (data.mixer && masterPendingRef.current) {
+          ['volume', 'pan', 'cue'].forEach(field => {
+            const pending = masterPendingRef.current[field];
+            if (pending === undefined) return;
+            const incoming = data.mixer[field];
+            const now = Date.now();
+            const busyUntil = masterBusyUntilRef.current[field] || 0;
+            if (now < busyUntil) {
+              // Still busy, keep pending value
+              data.mixer[field] = Number(pending);
+            } else if (incoming != null && Math.abs(Number(incoming) - Number(pending)) <= 0.004) {
+              // Converged, clear pending
+              delete masterPendingRef.current[field];
+            } else {
+              // Use pending value
+              data.mixer[field] = Number(pending);
+            }
+          });
+        }
+        setMasterStatus(data);
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -612,6 +740,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }
   }, [tab]);
 
+  // Load master status when navigating to Master tab
+  useEffect(() => {
+    if (tab === 2) {
+      fetchMasterStatus();
+    }
+  }, [tab]);
+
   // Poll returns/devices while Returns tab is open to keep names/states fresh
   useEffect(() => {
     if (tab !== 1) return;
@@ -623,6 +758,15 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }, 3000);
     return () => clearInterval(id);
   }, [tab, openReturn]);
+
+  // Poll master status while Master tab is open
+  useEffect(() => {
+    if (tab !== 2) return;
+    const id = setInterval(() => {
+      fetchMasterStatus({ silent: true }).catch(() => {});
+    }, Math.max(200, Number(masterRefreshMs || 800)));
+    return () => clearInterval(id);
+  }, [tab, masterRefreshMs]);
 
   // Throttled refresh for SSE bursts
   const lastRefreshRef = useRef({});
@@ -638,14 +782,24 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   useMixerEvents(
     (payload) => {
       if (tab !== 0 || !payload?.track) return;
-      // Always refresh basic track status
-      refreshTrackThrottled(payload.track);
+      const idx = Number(payload.track);
+      if (payload.field && payload.value != null) {
+        handleTrackMixerSet(idx, payload.field, payload.value);
+      }
+      refreshTrackThrottled(idx);
     },
     () => { if (tab === 0) { fetchOutline(false); } },
     async (payload) => {
-      // Handle return events on Returns tab as well
-      if (tab !== 0 && tab !== 1) return;
+      // Handle return events on Returns tab as well, and master events on Master tab
+      if (tab !== 0 && tab !== 1 && tab !== 2) return;
       if (!payload?.event) return;
+      // Handle master mixer changes via SSE
+      if (payload.event === 'master_mixer_changed') {
+        if (payload.field && typeof payload.value === 'number') {
+          handleMasterMixerSet(payload.field, payload.value);
+        }
+        return;
+      }
       // Optimistic handling for bypass; minimal refresh for others
       if (payload.event === 'device_bypass_changed') {
         const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
@@ -659,7 +813,14 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         return;
       }
       // Handle return-level changes via SSE
-      if (payload.event === 'return_mixer_changed' || payload.event === 'return_send_changed' || payload.event === 'return_routing_changed') {
+      if (payload.event === 'return_mixer_changed') {
+        const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
+        if (rIndex != null && payload.field && payload.value != null) {
+          handleReturnMixerSet(Number(rIndex), payload.field, payload.value);
+        }
+        return;
+      }
+      if (payload.event === 'return_send_changed' || payload.event === 'return_routing_changed') {
         try {
           await fetchReturns({ silent: true });
           const rIndex = (typeof payload.return === 'number') ? payload.return : (typeof payload.return_index === 'number' ? payload.return_index : null);
@@ -681,8 +842,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         } catch {}
       }
     },
-    // Enable SSE on Tracks and Returns tabs
-    tab === 0 || tab === 1
+    // Enable SSE on Tracks, Returns, and Master tabs
+    tab === 0 || tab === 1 || tab === 2
   );
 
   // Auto-refresh outline and selected track status every 5s when Project tab is active
@@ -890,7 +1051,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 
               <List dense>
                 {outline.tracks.map((t) => (
-                  <TrackRow
+                <TrackRow
                     key={t.index}
                     track={t}
                     isSelected={selectedIndex === t.index}
@@ -902,8 +1063,22 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     sends={trackSends}
                     setSends={setTrackSends}
                     fetchSends={fetchTrackSends}
-                    onAdjustStart={(idx) => { setIsAdjusting(true); adjustingUntilRef.current = Date.now() + 600; }}
+                    onAdjustStart={(idx) => {
+                      setIsAdjusting(true);
+                      const now = Date.now();
+                      adjustingUntilRef.current = now + 600;
+                      trackBusyUntilRef.current[idx] = now + 1000;
+                    }}
                     onAdjustEnd={(idx) => { adjustingUntilRef.current = Date.now() + 400; setTimeout(() => setIsAdjusting(false), 420); }}
+                    onAdjustSet={(idx, field, value) => {
+                      trackBusyUntilRef.current[idx] = Date.now() + 1000;
+                      trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
+                      setRowStatuses((prev) => {
+                        const cur = prev[idx] || {};
+                        const mix = cur.mixer || {};
+                        return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
+                      });
+                    }}
                   />
                 ))}
               </List>
@@ -940,6 +1115,15 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                   fetchReturns={fetchReturns}
                   returnSends={returnSends}
                   setReturnSends={setReturnSends}
+                  onReturnMixerSet={(idx, field, value) => {
+                    const now = Date.now();
+                    returnBusyUntilRef.current[idx] = now + 1000;
+                    returnPendingRef.current[idx] = { ...(returnPendingRef.current[idx] || {}), [field]: Number(value) };
+                    setReturns(prev => {
+                      const list = Array.isArray(prev) ? prev : [];
+                      return list.map(x => (x.index === idx ? { ...x, mixer: { ...(x.mixer || {}), [field]: Number(value) } } : x));
+                    });
+                  }}
                 />
               ))}
             </List>
@@ -949,10 +1133,11 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 
       {/* Master Tab */}
       {tab === 2 && (
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Master</Typography>
-          <Typography variant="body2" color="text.secondary">Master controls coming soon.</Typography>
-        </Box>
+        <MasterPanel
+          masterStatus={masterStatus}
+          onMasterMixerSet={handleMasterMixerSet}
+          masterBusyUntilRef={masterBusyUntilRef}
+        />
       )}
     </>
   );
@@ -976,5 +1161,109 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     >
       {content}
     </Drawer>
+  );
+}
+
+function MasterPanel({ masterStatus: m, onMasterMixerSet, masterBusyUntilRef }) {
+  const [localVol, setLocalVol] = useState(null);
+  const [localPan, setLocalPan] = useState(null);
+  const [localCue, setLocalCue] = useState(null);
+
+  // Preserve last known values and suppress transient refresh right after commit
+  // CRITICAL: Initialize with simple fallbacks, NOT with prop expressions (useRef only evaluates once!)
+  const lastVolRef = useRef(0.85);
+  const lastPanRef = useRef(0);
+  const lastCueRef = useRef(0);
+
+  const currentVol = localVol !== null ? localVol : (typeof m?.mixer?.volume === 'number' ? m.mixer.volume : undefined);
+  const currentPan = localPan !== null ? localPan : (typeof m?.mixer?.pan === 'number' ? m.mixer.pan : undefined);
+  const currentCue = localCue !== null ? localCue : (typeof m?.mixer?.cue === 'number' ? m.mixer.cue : undefined);
+
+  // Update refs when data arrives or changes (only if not busy)
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentVol === 'number' && now >= (masterBusyUntilRef.current?.volume || 0)) {
+      lastVolRef.current = currentVol;
+    }
+  }, [currentVol, masterBusyUntilRef]);
+
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentPan === 'number' && now >= (masterBusyUntilRef.current?.pan || 0)) {
+      lastPanRef.current = currentPan;
+    }
+  }, [currentPan, masterBusyUntilRef]);
+
+  useEffect(() => {
+    const now = Date.now();
+    if (typeof currentCue === 'number' && now >= (masterBusyUntilRef.current?.cue || 0)) {
+      lastCueRef.current = currentCue;
+    }
+  }, [currentCue, masterBusyUntilRef]);
+
+  const nowTick = Date.now();
+  const supVol = nowTick < (masterBusyUntilRef.current?.volume || 0);
+  const supPan = nowTick < (masterBusyUntilRef.current?.pan || 0);
+  const supCue = nowTick < (masterBusyUntilRef.current?.cue || 0);
+
+  const displayVol = (localVol !== null)
+    ? localVol
+    : (supVol ? lastVolRef.current : (typeof currentVol === 'number' ? currentVol : lastVolRef.current));
+  const displayPan = (localPan !== null)
+    ? localPan
+    : (supPan ? lastPanRef.current : (typeof currentPan === 'number' ? currentPan : lastPanRef.current));
+  const displayCue = (localCue !== null)
+    ? localCue
+    : (supCue ? lastCueRef.current : (typeof currentCue === 'number' ? currentCue : lastCueRef.current));
+
+  return (
+    <Box sx={{ p: 2 }}>
+      <Typography variant="subtitle1" sx={{ mb: 1 }}>Master</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Cue</Typography>
+        <Slider size="small" value={displayCue} min={0} max={1} step={0.005}
+          onChange={(_, v) => setLocalCue(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={async (_, v) => {
+            const x = Array.isArray(v) ? v[0] : v;
+            try {
+              await apiService.setMasterMixer('cue', Number(x));
+            } catch {}
+            onMasterMixerSet?.('cue', Number(x));
+            setTimeout(() => setLocalCue(null), 500);
+          }}
+          sx={{ flex: 1 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44, textAlign: 'right' }}>{liveFloatToDb(Number(displayCue)).toFixed(1)} dB</Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Vol</Typography>
+        <Slider size="small" value={displayVol} min={0} max={1} step={0.005}
+          onChange={(_, v) => setLocalVol(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={async (_, v) => {
+            const x = Array.isArray(v) ? v[0] : v;
+            try {
+              await apiService.setMasterMixer('volume', Number(x));
+            } catch {}
+            onMasterMixerSet?.('volume', Number(x));
+            setTimeout(() => setLocalVol(null), 500);
+          }}
+          sx={{ flex: 1 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44, textAlign: 'right' }}>{liveFloatToDb(Number(displayVol)).toFixed(1)} dB</Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Pan</Typography>
+        <Slider size="small" value={displayPan} min={-1} max={1} step={0.02}
+          onChange={(_, v) => setLocalPan(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={async (_, v) => {
+            const x = Array.isArray(v) ? v[0] : v;
+            try {
+              await apiService.setMasterMixer('pan', Number(x));
+            } catch {}
+            onMasterMixerSet?.('pan', Number(x));
+            setTimeout(() => setLocalPan(null), 500);
+          }}
+          sx={{ flex: 1 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 30, textAlign: 'right' }}>{Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}</Typography>
+      </Box>
+    </Box>
   );
 }

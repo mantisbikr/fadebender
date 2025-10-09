@@ -16,6 +16,7 @@
   },
   "ui": {
     "default_sidebar_tab": "tracks",
+    "master_refresh_ms": 400,
     "refresh_ms": 30000,
     "sends_open_refresh_ms": 800,
     "sidebar_width_px": 345,
