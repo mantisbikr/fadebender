@@ -847,6 +847,86 @@ def get_return_devices(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+# ---------------- Track devices (Phase A - minimal) ----------------
+
+@app.get("/track/devices")
+def get_track_devices(index: int) -> Dict[str, Any]:
+    resp = udp_request({"op": "get_track_devices", "track_index": int(index)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+@app.get("/track/device/params")
+def get_track_device_params(index: int, device: int) -> Dict[str, Any]:
+    resp = udp_request({"op": "get_track_device_params", "track_index": int(index), "device_index": int(device)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class TrackDeviceParamBody(BaseModel):
+    track_index: int
+    device_index: int
+    param_index: int
+    value: float
+
+
+@app.post("/op/track/device/param")
+def set_track_device_param(body: TrackDeviceParamBody) -> Dict[str, Any]:
+    msg = {"op": "set_track_device_param", "track_index": int(body.track_index), "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)}
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    # optional SSE
+    try:
+        schedule_emit({"event": "device_param_changed", "scope": "track", "track": int(body.track_index), "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)})
+    except Exception:
+        pass
+    return resp if isinstance(resp, dict) else {"ok": True}
+
+
+# ---------------- Master devices (Phase A - minimal) ----------------
+
+@app.get("/master/devices")
+def get_master_devices_endpoint() -> Dict[str, Any]:
+    resp = udp_request({"op": "get_master_devices"}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+@app.get("/master/device/params")
+def get_master_device_params_endpoint(device: int) -> Dict[str, Any]:
+    resp = udp_request({"op": "get_master_device_params", "device_index": int(device)}, timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class MasterDeviceParamBody(BaseModel):
+    device_index: int
+    param_index: int
+    value: float
+
+
+@app.post("/op/master/device/param")
+def set_master_device_param(body: MasterDeviceParamBody) -> Dict[str, Any]:
+    msg = {"op": "set_master_device_param", "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)}
+    resp = udp_request(msg, timeout=1.0)
+    if not resp:
+        raise HTTPException(504, "No reply from Ableton Remote Script")
+    try:
+        schedule_emit({"event": "master_device_param_changed", "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)})
+    except Exception:
+        pass
+    return resp if isinstance(resp, dict) else {"ok": True}
+
+
 @app.get("/return/device/params")
 def get_return_device_params(index: int, device: int) -> Dict[str, Any]:
     resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.0)

@@ -91,6 +91,8 @@ export default function TrackRow({
   const [localVolume, setLocalVolume] = useState(null);
   const [localPan, setLocalPan] = useState(null);
   const [sendsExpanded, setSendsExpanded] = useState(false);
+  const [devices, setDevices] = useState(null);
+  const [devicesOpen, setDevicesOpen] = useState(false);
 
   // Preserve last known values to avoid slider jumps during refresh re-renders
   const lastVolRef = useRef(typeof status?.mixer?.volume === 'number' ? status.mixer.volume : 0.5);
@@ -254,6 +256,37 @@ export default function TrackRow({
               {Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}
             </Typography>
           </Box>
+        </Box>
+
+        {/* Devices (expand on demand, filter to effects kinds) */}
+        <Box sx={{ mt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer' }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const next = !devicesOpen;
+              setDevicesOpen(next);
+              if (next && devices == null) {
+                try { const r = await apiService.getTrackDevices(t.index); setDevices((r && r.data && r.data.devices) || []); } catch {}
+              }
+            }}>
+            {devicesOpen ? '▾ Devices' : '▸ Devices'}
+          </Typography>
+          {devicesOpen && Array.isArray(devices) && devices
+            .filter(d => (
+              d.kind === 'audio_effect' || d.kind === 'midi_effect' ||
+              (d.kind === 'plugin' && (t.type === 'audio')) ||
+              (d.kind === 'unknown' && (t.type === 'audio'))
+            ))
+            .map(d => (
+              <Typography key={d.index} variant="caption" sx={{ display: 'block' }}>{d.name}</Typography>
+            ))}
+          {devicesOpen && Array.isArray(devices) && devices.filter(d => (
+            d.kind === 'audio_effect' || d.kind === 'midi_effect' ||
+            (d.kind === 'plugin' && (t.type === 'audio')) ||
+            (d.kind === 'unknown' && (t.type === 'audio'))
+          )).length === 0 && (
+            <Typography variant="caption" color="text.secondary">No effects</Typography>
+          )}
         </Box>
       </Box>
 

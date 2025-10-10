@@ -607,6 +607,197 @@ def set_return_send(live, return_index: int, send_index: int, value: float) -> b
     return False
 
 
+# ---------- Track Devices ----------
+def _device_kind(dev) -> str:
+    try:
+        cls = str(getattr(dev, '__class__', type(dev)).__name__).lower()
+        name = str(getattr(dev, 'name', '')).lower()
+        disp = str(getattr(dev, 'class_display_name', '') or '').lower()
+        # Heuristics
+        if 'audioeffect' in cls or 'audio effect' in disp:
+            return 'audio_effect'
+        if 'midieffect' in cls or ('midi' in cls and 'effect' in cls) or 'midi effect' in disp:
+            return 'midi_effect'
+        if 'instrument' in cls or 'drum' in cls or 'simpler' in cls or 'sampler' in cls or 'instrument' in disp or 'drum' in disp:
+            return 'instrument'
+        if 'plugindevice' in cls or 'plugin' in cls or 'plug-in' in disp:
+            # Unknown if instrument or effect; classify as plugin
+            return 'plugin'
+        # Racks / GroupDevices
+        if 'audioeffectgroupdevice' in cls or 'audiorack' in cls or 'effectrack' in cls or 'audio effect rack' in disp:
+            return 'audio_effect'
+        if 'midieffectgroupdevice' in cls or 'midirack' in cls or 'midi effect rack' in disp:
+            return 'midi_effect'
+        if 'drumgroupdevice' in cls or 'drumrack' in cls or 'instrumentgroupdevice' in cls or 'instrumentrack' in cls or 'instrument rack' in disp or 'drum rack' in disp:
+            return 'instrument'
+        # Fallback by name hints
+        if 'instrument' in name:
+            return 'instrument'
+        if 'effect' in name:
+            return 'audio_effect'
+    except Exception:
+        pass
+    return 'unknown'
+
+
+def get_track_devices(live, track_index: int) -> Dict[str, Any]:
+    idx_int = int(track_index)
+    if live is None:
+        return {"index": idx_int, "devices": []}
+    try:
+        tr = live.tracks[idx_int - 1] if 1 <= idx_int <= len(live.tracks) else None
+        if tr is None:
+            return {"index": idx_int, "devices": []}
+        devs = getattr(tr, 'devices', []) or []
+        out = []
+        # Determine track type and instrument boundary (best-effort)
+        try:
+            tr_cls = str(getattr(tr, '__class__', type(tr)).__name__).lower()
+            is_midi = bool(getattr(tr, 'has_midi_input', False) or 'midi' in tr_cls)
+        except Exception:
+            is_midi = False
+        prelim_kinds = []
+        instrument_idx = None
+        for di, d in enumerate(devs):
+            try:
+                k = _device_kind(d)
+                prelim_kinds.append(k)
+                disp = str(getattr(d, 'class_display_name', '') or '').lower()
+                if instrument_idx is None and (k == 'instrument' or 'instrument' in disp or 'drum' in disp):
+                    instrument_idx = di
+            except Exception:
+                prelim_kinds.append('unknown')
+        for di, d in enumerate(devs):
+            try:
+                name = str(getattr(d, 'name', f'Device {di}'))
+                k = prelim_kinds[di]
+                if k == 'unknown':
+                    if not is_midi:
+                        k = 'audio_effect'
+                    else:
+                        if instrument_idx is not None and di > instrument_idx:
+                            k = 'audio_effect'
+                        else:
+                            k = 'instrument'
+                is_on = False
+                try:
+                    is_on = bool(getattr(d, 'is_enabled', getattr(d, 'is_active', True)))
+                except Exception:
+                    is_on = True
+                out.append({"index": di, "name": name, "isOn": is_on, "kind": k})
+            except Exception:
+                continue
+        return {"index": idx_int, "devices": out}
+    except Exception:
+        return {"index": idx_int, "devices": []}
+
+
+def get_track_device_params(live, track_index: int, device_index: int) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            idx = int(track_index)
+            di = int(device_index)
+            tr = live.tracks[idx - 1] if 1 <= idx <= len(live.tracks) else None
+            if tr is None:
+                raise RuntimeError("track_not_found")
+            devs = getattr(tr, 'devices', []) or []
+            d = devs[di] if 0 <= di < len(devs) else None
+            if d is None:
+                raise RuntimeError("device_not_found")
+            params = getattr(d, 'parameters', []) or []
+            out = []
+            for pi, p in enumerate(params):
+                try:
+                    out.append({
+                        "index": pi,
+                        "name": str(getattr(p, 'name', f'Param {pi}')),
+                        "value": float(getattr(p, 'value', 0.0)),
+                        "min": float(getattr(p, 'min', 0.0)) if hasattr(p, 'min') else 0.0,
+                        "max": float(getattr(p, 'max', 1.0)) if hasattr(p, 'max') else 1.0,
+                    })
+                except Exception:
+                    continue
+            return {"index": int(idx), "device_index": int(di), "params": out}
+    except Exception:
+        pass
+    return {"index": int(track_index), "device_index": int(device_index), "params": []}
+
+
+# ---------- Master Devices ----------
+def get_master_devices(live) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            mt = getattr(live, 'master_track', None)
+            if mt is None:
+                raise RuntimeError("no_master")
+            devs = getattr(mt, 'devices', []) or []
+            out = []
+            for di, d in enumerate(devs):
+                name = str(getattr(d, 'name', f'Device {di}'))
+                kind = _device_kind(d)
+                is_on = bool(getattr(d, 'is_enabled', getattr(d, 'is_active', True)))
+                out.append({"index": di, "name": name, "isOn": is_on, "kind": kind})
+            return {"devices": out}
+    except Exception:
+        pass
+    return {"devices": []}
+
+
+def get_master_device_params(live, device_index: int) -> Dict[str, Any]:
+    try:
+        if live is not None:
+            mt = getattr(live, 'master_track', None)
+            if mt is None:
+                raise RuntimeError("no_master")
+            di = int(device_index)
+            devs = getattr(mt, 'devices', []) or []
+            d = devs[di] if 0 <= di < len(devs) else None
+            if d is None:
+                raise RuntimeError("device_not_found")
+            params = getattr(d, 'parameters', []) or []
+            out = []
+            for pi, p in enumerate(params):
+                try:
+                    out.append({
+                        "index": pi,
+                        "name": str(getattr(p, 'name', f'Param {pi}')),
+                        "value": float(getattr(p, 'value', 0.0)),
+                        "min": float(getattr(p, 'min', 0.0)) if hasattr(p, 'min') else 0.0,
+                        "max": float(getattr(p, 'max', 1.0)) if hasattr(p, 'max') else 1.0,
+                    })
+                except Exception:
+                    continue
+            return {"device_index": int(di), "params": out}
+    except Exception:
+        pass
+    return {"device_index": int(device_index), "params": []}
+
+
+def set_master_device_param(live, device_index: int, param_index: int, value: float) -> bool:
+    try:
+        if live is not None:
+            mt = getattr(live, 'master_track', None)
+            if mt is None:
+                return False
+            di = int(device_index)
+            pi = int(param_index)
+            devs = getattr(mt, 'devices', []) or []
+            d = devs[di] if 0 <= di < len(devs) else None
+            if d is None:
+                return False
+            params = getattr(d, 'parameters', []) or []
+            p = params[pi] if 0 <= pi < len(params) else None
+            if p is None:
+                return False
+            v = float(value)
+            setattr(p, 'value', v)
+            _emit({"event": "master_device_param_changed", "device_index": di, "param_index": pi, "value": v})
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def get_return_devices(live, return_index: int) -> dict:
     try:
         if live is not None:

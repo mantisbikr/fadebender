@@ -229,14 +229,7 @@ function ReturnRow({
       {/* Devices - compact list with preset names first */}
       {openReturn === r.index && (
         <Box sx={{ pl: 1, mt: 0.5 }}>
-          {/* Routing: Sends mode (Pre/Post) */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <Typography variant="caption" color="text.secondary">Sends Mode:</Typography>
-            <MUISelect size="small" value={(routing?.sends_mode || 'post')} onOpen={async () => { try { const rr = await apiService.getReturnRouting(r.index); setRouting((rr && rr.data) || null); } catch {} }} onChange={async (e) => { const val = e.target.value; setRouting((prev) => ({ ...(prev || {}), sends_mode: val })); try { await apiService.setReturnRouting(r.index, { sends_mode: val }); } catch {} }}>
-              <MenuItem value="pre">Pre</MenuItem>
-              <MenuItem value="post">Post</MenuItem>
-            </MUISelect>
-          </Box>
+          {/* Routing controls hidden (Chat-only). Keeping state capture but no direct UI for now. */}
           {!returnDevices[r.index] && <Typography variant="caption" color="text.secondary">Loading devices…</Typography>}
           {returnDevices[r.index] && returnDevices[r.index].length === 0 && <Typography variant="caption" color="text.secondary">No devices</Typography>}
           {returnDevices[r.index] && returnDevices[r.index].map((d) => (
@@ -1355,10 +1348,35 @@ function MasterPanel({ masterStatus: m, onMasterMixerSet, masterBusyUntilRef }) 
                 setTimeout(() => setLocalPan(null), 500);
               }}
               sx={{ flex: 1 }} />
-            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 30, textAlign: 'right' }}>{Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 30, textAlign: 'right' }}>{Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}</Typography>
+          </Box>
+
+          {/* Devices (minimal list) */}
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>Devices</Typography>
+            <MasterDevicesList />
           </Box>
         </>
       )}
+    </Box>
+  );
+}
+
+function MasterDevicesList() {
+  const [devices, setDevices] = useState(null);
+  return (
+    <Box>
+      {!devices && (
+        <Typography variant="caption" color="text.secondary">(tap to load)</Typography>
+      )}
+      <Box sx={{ mt: 0.5 }}>
+        <Typography variant="caption" sx={{ cursor: 'pointer' }} onClick={async () => {
+          try { const r = await apiService.getMasterDevices(); setDevices((r && r.data && r.data.devices) || []); } catch {}
+        }}>Load devices</Typography>
+        {Array.isArray(devices) && devices.length > 0 && devices.map(d => (
+          <Typography key={d.index} variant="caption" sx={{ display: 'block' }}>{d.name}</Typography>
+        ))}
+      </Box>
     </Box>
   );
 }

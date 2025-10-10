@@ -156,6 +156,41 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_return_device_param(live_ctx, return_index, device_index, param_index, value)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "get_track_devices":
+                track_index = int(msg.get("track_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_track_devices(live_ctx, track_index)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "get_track_device_params":
+                track_index = int(msg.get("track_index", 0))
+                device_index = int(msg.get("device_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_track_device_params(live_ctx, track_index, device_index)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "set_track_device_param":
+                track_index = int(msg.get("track_index", 0))
+                device_index = int(msg.get("device_index", 0))
+                param_index = int(msg.get("param_index", 0))
+                value = float(msg.get("value", 0.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_device_param(live_ctx, track_index, device_index, param_index, value)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "get_master_devices":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_master_devices(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "get_master_device_params":
+                device_index = int(msg.get("device_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_master_device_params(live_ctx, device_index)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "set_master_device_param":
+                device_index = int(msg.get("device_index", 0))
+                param_index = int(msg.get("param_index", 0))
+                value = float(msg.get("value", 0.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_master_device_param(live_ctx, device_index, param_index, value)
+                resp = {"ok": bool(ok), "op": op}
             elif op == "get_return_routing":
                 return_index = int(msg.get("return_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None

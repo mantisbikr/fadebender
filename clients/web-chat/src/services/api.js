@@ -33,6 +33,20 @@ class ApiService {
     if (!response.ok) throw new Error(`Return routing failed: ${response.statusText}`);
     return response.json();
   }
+  async getTrackRouting(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/routing?index=${index}`);
+    if (!response.ok) throw new Error(`Track routing failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setTrackRouting(track_index, payload) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/routing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_index, ...payload })
+    });
+    if (!response.ok) throw new Error(`Set track routing failed: ${response.statusText}`);
+    return response.json();
+  }
   async setReturnRouting(return_index, payload) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/routing`, {
       method: 'POST',
@@ -205,6 +219,48 @@ class ApiService {
   async getReturnDevices(index) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/devices?index=${index}`);
     if (!response.ok) throw new Error(`Return devices failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  // Track devices (Phase A - minimal)
+  async getTrackDevices(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/devices?index=${index}`);
+    if (!response.ok) throw new Error(`Track devices failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getTrackDeviceParams(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/device/params?index=${index}&device=${device}`);
+    if (!response.ok) throw new Error(`Track device params failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setTrackDeviceParam(track_index, device_index, param_index, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/track/device/param`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_index, device_index, param_index, value })
+    });
+    if (!response.ok) throw new Error(`Set track device param failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  // Master devices (Phase A - minimal)
+  async getMasterDevices() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/master/devices`);
+    if (!response.ok) throw new Error(`Master devices failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getMasterDeviceParams(device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/master/device/params?device=${device}`);
+    if (!response.ok) throw new Error(`Master device params failed: ${response.statusText}`);
+    return response.json();
+  }
+  async setMasterDeviceParam(device_index, param_index, value) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/master/device/param`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_index, param_index, value })
+    });
+    if (!response.ok) throw new Error(`Set master device param failed: ${response.statusText}`);
     return response.json();
   }
   async getReturnSends(index) {
