@@ -368,6 +368,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [sendsFastRefreshMs, setSendsFastRefreshMs] = useState(800);
   const [sseThrottleMs, setSseThrottleMs] = useState(150);
   const [masterRefreshMs, setMasterRefreshMs] = useState(800);
+  const [trackRefreshMs, setTrackRefreshMs] = useState(1200);
+  const [returnsRefreshMs, setReturnsRefreshMs] = useState(3000);
   const [followSelection, setFollowSelection] = useState(true);
   const [trackSends, setTrackSends] = useState({}); // { [trackIndex]: sends[] }
   const [returns, setReturns] = useState(null);
@@ -384,6 +386,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const trackPendingRef = useRef({}); // { [trackIndex]: { volume?:number, pan?:number } }
   const returnPendingRef = useRef({}); // { [returnIndex]: { volume?:number, pan?:number } }
   const masterPendingRef = useRef({}); // { volume?:number, pan?:number, cue?:number }
+  const trackToggleUntilRef = useRef({}); // { [trackIndex]: timestamp }
   const [learnedMap, setLearnedMap] = useState({}); // { `${ri}:${di}`: bool }
   const [learnJobs, setLearnJobs] = useState({}); // { `${ri}:${di}`: { jobId, progress, total, state } }
   const prevOutlineRef = useRef('');
@@ -480,6 +483,8 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           if (ui.sends_open_refresh_ms) setSendsFastRefreshMs(Number(ui.sends_open_refresh_ms));
           if (ui.sse_throttle_ms) setSseThrottleMs(Number(ui.sse_throttle_ms));
           if (ui.master_refresh_ms) setMasterRefreshMs(Number(ui.master_refresh_ms));
+          if (ui.track_refresh_ms) setTrackRefreshMs(Number(ui.track_refresh_ms));
+          if (ui.returns_refresh_ms) setReturnsRefreshMs(Number(ui.returns_refresh_ms));
         }
       } catch {}
     })();
@@ -662,16 +667,33 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   };
 
   const handleTrackMixerSet = useCallback((idx, field, value) => {
+    const f = String(field || '').toLowerCase();
     const now = Date.now();
-    trackBusyUntilRef.current[idx] = now + 800;
-    trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
-    setRowStatuses((prev) => {
-      const cur = prev[idx] || {};
-      const mix = cur.mixer || {};
-      return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
-    });
-    if (selectedIndex === idx) {
-      setTrackStatus((prev) => prev ? { ...prev, mixer: { ...(prev.mixer || {}), [field]: Number(value) } } : prev);
+    if (f === 'volume' || f === 'pan') {
+      // Continuous params: apply busy window and pending merge
+      trackBusyUntilRef.current[idx] = now + 800;
+      trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [f]: Number(value) };
+      setRowStatuses((prev) => {
+        const cur = prev[idx] || {};
+        const mix = cur.mixer || {};
+        return { ...prev, [idx]: { ...cur, mixer: { ...mix, [f]: Number(value) } } };
+      });
+      if (selectedIndex === idx) {
+        setTrackStatus((prev) => prev ? { ...prev, mixer: { ...(prev.mixer || {}), [f]: Number(value) } } : prev);
+      }
+      return;
+    }
+    if (f === 'mute' || f === 'solo') {
+      // Toggles: update top-level flags immediately; no pending needed
+      const boolVal = !!value;
+      setRowStatuses((prev) => {
+        const cur = prev[idx] || {};
+        return { ...prev, [idx]: { ...cur, [f]: boolVal } };
+      });
+      if (selectedIndex === idx) {
+        setTrackStatus((prev) => (prev ? { ...prev, [f]: boolVal } : prev));
+      }
+      return;
     }
   }, [selectedIndex]);
 
@@ -697,12 +719,13 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 
   const fetchMasterStatus = async (opts = {}) => {
     const silent = !!opts.silent;
+    const force = !!opts.force;
     try {
       const res = await apiService.getMasterStatus();
       const data = (res && res.data) || null;
       if (data) {
-        // Merge pending values
-        if (data.mixer && masterPendingRef.current) {
+        // Merge pending values unless forcing a fresh read
+        if (!force && data.mixer && masterPendingRef.current) {
           ['volume', 'pan', 'cue'].forEach(field => {
             const pending = masterPendingRef.current[field];
             if (pending === undefined) return;
@@ -723,7 +746,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         }
         setMasterStatus(data);
       }
-    } catch {}
+    } catch (err) {
+      console.error('[fetchMasterStatus] Error:', err);
+    }
   };
 
   useEffect(() => {
@@ -743,7 +768,10 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   // Load master status when navigating to Master tab
   useEffect(() => {
     if (tab === 2) {
-      fetchMasterStatus();
+      // Clear any stale pending/busy state so initial values are not shadowed
+      try { masterPendingRef.current = {}; } catch {}
+      try { masterBusyUntilRef.current = {}; } catch {}
+      fetchMasterStatus({ force: true });
     }
   }, [tab]);
 
@@ -755,16 +783,18 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (openReturn != null) {
         fetchReturnDevices(openReturn).catch(() => {});
       }
-    }, 3000);
+    }, Math.max(500, Number(returnsRefreshMs || 3000)));
     return () => clearInterval(id);
-  }, [tab, openReturn]);
+  }, [tab, openReturn, returnsRefreshMs]);
 
-  // Poll master status while Master tab is open
+  // Poll master status while Master tab is open (disabled when masterRefreshMs === 0)
   useEffect(() => {
     if (tab !== 2) return;
+    const intervalMs = Number(masterRefreshMs);
+    if (intervalMs === 0) return; // Polling disabled - rely on SSE listeners only
     const id = setInterval(() => {
       fetchMasterStatus({ silent: true }).catch(() => {});
-    }, Math.max(200, Number(masterRefreshMs || 800)));
+    }, Math.max(200, intervalMs || 800));
     return () => clearInterval(id);
   }, [tab, masterRefreshMs]);
 
@@ -781,23 +811,36 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   // Subscribe to mixer events via hook
   useMixerEvents(
     (payload) => {
-      if (tab !== 0 || !payload?.track) return;
+      // Accept track SSE regardless of active tab so caches stay fresh.
+      if (!payload?.track) return;
       const idx = Number(payload.track);
+      // If this is a toggle event, set a short suppression window to avoid mixer jitter
+      if (payload.field === 'mute' || payload.field === 'solo') {
+        trackToggleUntilRef.current[idx] = Date.now() + 800;
+      }
       if (payload.field && payload.value != null) {
+        const fld = String(payload.field).toLowerCase();
+        // During toggle suppression window, ignore continuous SSE updates to prevent slider wiggle
+        if ((fld === 'volume' || fld === 'pan')) {
+          const until = trackToggleUntilRef.current[idx] || 0;
+          if (Date.now() < until) return;
+        }
         handleTrackMixerSet(idx, payload.field, payload.value);
       }
-      refreshTrackThrottled(idx);
+      // Only refresh for continuous fields to avoid jitter after mute/solo
+      if (tab === 0 && (payload.field === 'volume' || payload.field === 'pan')) {
+        const until = trackToggleUntilRef.current[idx] || 0;
+        if (Date.now() < until) return;
+        refreshTrackThrottled(idx);
+      }
     },
     () => { if (tab === 0) { fetchOutline(false); } },
     async (payload) => {
       // Handle return events on Returns tab as well, and master events on Master tab
       if (tab !== 0 && tab !== 1 && tab !== 2) return;
       if (!payload?.event) return;
-      // Handle master mixer changes via SSE
+      // Ignore master SSE to avoid snap-back; rely on polling-only for Master
       if (payload.event === 'master_mixer_changed') {
-        if (payload.field && typeof payload.value === 'number') {
-          handleMasterMixerSet(payload.field, payload.value);
-        }
         return;
       }
       // Optimistic handling for bypass; minimal refresh for others
@@ -859,6 +902,22 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     }, refreshInterval);
     return () => clearInterval(id);
   }, [tab, autoRefresh, selectedIndex, followSelection, refreshInterval]);
+
+  // Poll selected track status while Tracks tab is open (fallback when SSE not flowing)
+  useEffect(() => {
+    if (tab !== 0) return;
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (now < adjustingUntilRef.current || isAdjusting) return; // avoid during user drag
+      if (selectedIndex) {
+        // Suppress polling immediately after toggles to avoid jitter
+        const until = trackToggleUntilRef.current[selectedIndex] || 0;
+        if (now < until) return;
+        refreshTrack(selectedIndex).catch(() => {});
+      }
+    }, Math.max(300, Number(trackRefreshMs || 1200)));
+    return () => clearInterval(id);
+  }, [tab, selectedIndex, isAdjusting, trackRefreshMs]);
 
   // When outline is fetched the first time, set selected to outline.selected_track if present
   useEffect(() => {
@@ -1079,6 +1138,11 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                         return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
                       });
                     }}
+                    onToggleStart={(idx, field) => {
+                      const now = Date.now();
+                      // Extend suppression slightly to avoid jitter from near-simultaneous vol/pan SSE
+                      trackToggleUntilRef.current[idx] = now + 800;
+                    }}
                   />
                 ))}
               </List>
@@ -1165,6 +1229,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 }
 
 function MasterPanel({ masterStatus: m, onMasterMixerSet, masterBusyUntilRef }) {
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RENDERING
   const [localVol, setLocalVol] = useState(null);
   const [localPan, setLocalPan] = useState(null);
   const [localCue, setLocalCue] = useState(null);
@@ -1174,10 +1239,26 @@ function MasterPanel({ masterStatus: m, onMasterMixerSet, masterBusyUntilRef }) 
   const lastVolRef = useRef(0.85);
   const lastPanRef = useRef(0);
   const lastCueRef = useRef(0);
+  const seededRef = useRef(false);
+
+  // Require volume to be numeric before showing sliders (avoid default 0.85)
+  const ready = (typeof m?.mixer?.volume === 'number');
 
   const currentVol = localVol !== null ? localVol : (typeof m?.mixer?.volume === 'number' ? m.mixer.volume : undefined);
   const currentPan = localPan !== null ? localPan : (typeof m?.mixer?.pan === 'number' ? m.mixer.pan : undefined);
   const currentCue = localCue !== null ? localCue : (typeof m?.mixer?.cue === 'number' ? m.mixer.cue : undefined);
+
+  // Seed once from initial status (only when volume is present)
+  useEffect(() => {
+    if (seededRef.current) return;
+    const vOK = typeof m?.mixer?.volume === 'number';
+    if (vOK) {
+      lastVolRef.current = Number(m.mixer.volume);
+      if (typeof m?.mixer?.pan === 'number') lastPanRef.current = Number(m.mixer.pan);
+      if (typeof m?.mixer?.cue === 'number') lastCueRef.current = Number(m.mixer.cue);
+      seededRef.current = true;
+    }
+  }, [m]);
 
   // Update refs when data arrives or changes (only if not busy)
   useEffect(() => {
@@ -1206,64 +1287,78 @@ function MasterPanel({ masterStatus: m, onMasterMixerSet, masterBusyUntilRef }) 
   const supPan = nowTick < (masterBusyUntilRef.current?.pan || 0);
   const supCue = nowTick < (masterBusyUntilRef.current?.cue || 0);
 
+  // On first paint after status arrives, bypass suppression to show Live values exactly
+  const initialMode = !seededRef.current;
   const displayVol = (localVol !== null)
     ? localVol
-    : (supVol ? lastVolRef.current : (typeof currentVol === 'number' ? currentVol : lastVolRef.current));
+    : (initialMode
+      ? (typeof currentVol === 'number' ? currentVol : lastVolRef.current)
+      : (supVol ? lastVolRef.current : (typeof currentVol === 'number' ? currentVol : lastVolRef.current)));
   const displayPan = (localPan !== null)
     ? localPan
-    : (supPan ? lastPanRef.current : (typeof currentPan === 'number' ? currentPan : lastPanRef.current));
+    : (initialMode
+      ? (typeof currentPan === 'number' ? currentPan : lastPanRef.current)
+      : (supPan ? lastPanRef.current : (typeof currentPan === 'number' ? currentPan : lastPanRef.current)));
   const displayCue = (localCue !== null)
     ? localCue
-    : (supCue ? lastCueRef.current : (typeof currentCue === 'number' ? currentCue : lastCueRef.current));
+    : (initialMode
+      ? (typeof currentCue === 'number' ? currentCue : lastCueRef.current)
+      : (supCue ? lastCueRef.current : (typeof currentCue === 'number' ? currentCue : lastCueRef.current)));
 
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="subtitle1" sx={{ mb: 1 }}>Master</Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Cue</Typography>
-        <Slider size="small" value={displayCue} min={0} max={1} step={0.005}
-          onChange={(_, v) => setLocalCue(Array.isArray(v) ? v[0] : v)}
-          onChangeCommitted={async (_, v) => {
-            const x = Array.isArray(v) ? v[0] : v;
-            try {
-              await apiService.setMasterMixer('cue', Number(x));
-            } catch {}
-            onMasterMixerSet?.('cue', Number(x));
-            setTimeout(() => setLocalCue(null), 500);
-          }}
-          sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44, textAlign: 'right' }}>{liveFloatToDb(Number(displayCue)).toFixed(1)} dB</Typography>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Vol</Typography>
-        <Slider size="small" value={displayVol} min={0} max={1} step={0.005}
-          onChange={(_, v) => setLocalVol(Array.isArray(v) ? v[0] : v)}
-          onChangeCommitted={async (_, v) => {
-            const x = Array.isArray(v) ? v[0] : v;
-            try {
-              await apiService.setMasterMixer('volume', Number(x));
-            } catch {}
-            onMasterMixerSet?.('volume', Number(x));
-            setTimeout(() => setLocalVol(null), 500);
-          }}
-          sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44, textAlign: 'right' }}>{liveFloatToDb(Number(displayVol)).toFixed(1)} dB</Typography>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Pan</Typography>
-        <Slider size="small" value={displayPan} min={-1} max={1} step={0.02}
-          onChange={(_, v) => setLocalPan(Array.isArray(v) ? v[0] : v)}
-          onChangeCommitted={async (_, v) => {
-            const x = Array.isArray(v) ? v[0] : v;
-            try {
-              await apiService.setMasterMixer('pan', Number(x));
-            } catch {}
-            onMasterMixerSet?.('pan', Number(x));
-            setTimeout(() => setLocalPan(null), 500);
-          }}
-          sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 30, textAlign: 'right' }}>{Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}</Typography>
-      </Box>
+      {!ready ? (
+        <Typography variant="body2" color="text.secondary">Loading…</Typography>
+      ) : (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Cue</Typography>
+            <Slider size="small" value={displayCue} min={0} max={1} step={0.005}
+              onChange={(_, v) => setLocalCue(Array.isArray(v) ? v[0] : v)}
+              onChangeCommitted={async (_, v) => {
+                const x = Array.isArray(v) ? v[0] : v;
+                try {
+                  await apiService.setMasterMixer('cue', Number(x));
+                } catch {}
+                onMasterMixerSet?.('cue', Number(x));
+                setTimeout(() => setLocalCue(null), 500);
+              }}
+              sx={{ flex: 1 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44, textAlign: 'right' }}>{liveFloatToDb(Number(displayCue)).toFixed(1)} dB</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Vol</Typography>
+            <Slider size="small" value={displayVol} min={0} max={1} step={0.005}
+              onChange={(_, v) => setLocalVol(Array.isArray(v) ? v[0] : v)}
+              onChangeCommitted={async (_, v) => {
+                const x = Array.isArray(v) ? v[0] : v;
+                try {
+                  await apiService.setMasterMixer('volume', Number(x));
+                } catch {}
+                onMasterMixerSet?.('volume', Number(x));
+                setTimeout(() => setLocalVol(null), 500);
+              }}
+              sx={{ flex: 1 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44, textAlign: 'right' }}>{liveFloatToDb(Number(displayVol)).toFixed(1)} dB</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 22 }}>Pan</Typography>
+            <Slider size="small" value={displayPan} min={-1} max={1} step={0.02}
+              onChange={(_, v) => setLocalPan(Array.isArray(v) ? v[0] : v)}
+              onChangeCommitted={async (_, v) => {
+                const x = Array.isArray(v) ? v[0] : v;
+                try {
+                  await apiService.setMasterMixer('pan', Number(x));
+                } catch {}
+                onMasterMixerSet?.('pan', Number(x));
+                setTimeout(() => setLocalPan(null), 500);
+              }}
+              sx={{ flex: 1 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ minWidth: 30, textAlign: 'right' }}>{Math.round(Math.abs(Number(displayPan)) * 50)}{Number(displayPan) < 0 ? 'L' : (Number(displayPan) > 0 ? 'R' : '')}</Typography>
+          </Box>
+        </>
+      )}
     </Box>
   );
 }

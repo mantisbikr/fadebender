@@ -43,6 +43,7 @@ from server.cloud.enrich_queue import enqueue_preset_enrich
 import hashlib
 import math
 from server.volume_parser import parse_volume_command
+_MASTER_DEDUP: dict[str, tuple[float, float]] = {}
 
 # --------- Param classification & grouping helpers ---------
 import re as _re
@@ -469,6 +470,19 @@ BACKFILL_JOBS: dict[str, dict] = {}
 async def events():
     q = await broker.subscribe()
     async def event_gen():
+        # Bootstrap: emit current master mixer values so clients seed immediately
+        try:
+            resp = udp_request({"op": "get_master_status"}, timeout=0.6)
+            data = (resp.get("data") if isinstance(resp, dict) else resp) if resp else None
+            mix = (data or {}).get("mixer") if isinstance(data, dict) else None
+            if isinstance(mix, dict):
+                for fld in ("volume", "pan", "cue"):
+                    val = mix.get(fld)
+                    if isinstance(val, (int, float)):
+                        payload = json.dumps({"event": "master_mixer_changed", "field": fld, "value": float(val)})
+                        yield "data: " + payload + "\n\n"
+        except Exception:
+            pass
         try:
             while True:
                 data = await q.get()
@@ -532,6 +546,16 @@ def get_master_status() -> Dict[str, Any]:
     data = resp.get("data") if isinstance(resp, dict) else None
     if data is None:
         data = resp
+    # Assist UI: emit one-shot SSE with current values so Master tab seeds instantly
+    try:
+        mix = (data or {}).get("mixer") if isinstance(data, dict) else None
+        if isinstance(mix, dict):
+            for fld in ("volume", "pan", "cue"):
+                val = mix.get(fld)
+                if isinstance(val, (int, float)):
+                    schedule_emit({"event": "master_mixer_changed", "field": fld, "value": float(val)})
+    except Exception:
+        pass
     return {"ok": True, "data": data}
 
 
@@ -4050,6 +4074,23 @@ def _debug_enabled(name: str) -> bool:
 
 
 async def emit_event(payload: Dict[str, Any]) -> None:
+    # Drop duplicate master events (identical value) to prevent storms
+    try:
+        if isinstance(payload, dict) and payload.get("event") == "master_mixer_changed":
+            fld = str(payload.get("field") or "").strip()
+            val = payload.get("value")
+            if fld and isinstance(val, (int, float)):
+                v = float(val)
+                last = _MASTER_DEDUP.get(fld)
+                if last is not None:
+                    last_v, _last_ts = last
+                    # Exact or near-exact repeats are dropped
+                    if abs(v - last_v) <= 1e-7:
+                        return
+                _MASTER_DEDUP[fld] = (v, time.time())
+    except Exception:
+        # Never block emit on dedup errors
+        pass
     if _debug_enabled("sse"):
         try:
             ename = payload.get("event")

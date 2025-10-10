@@ -29,6 +29,7 @@ def set_live_accessor(getter: Callable[[], Any]):  # pragma: no cover
 
 def start_udp_server():  # pragma: no cover
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((HOST, PORT))
     event_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 

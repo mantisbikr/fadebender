@@ -21,7 +21,8 @@ export default function TransportBar() {
     // Initial read
     refresh();
     // Lightweight polling to reflect Live-side changes (bidirectional)
-    pollIdRef.current = setInterval(() => { if (!editingTempoRef.current) refresh(); }, 1000);
+    // Reduced from 1000ms to 3000ms to match Returns tab and reduce server load
+    pollIdRef.current = setInterval(() => { if (!editingTempoRef.current) refresh(); }, 3000);
     // Also listen to SSE and refresh on transport_changed events
     try {
       const es = new EventSource(apiService.getEventsURL());

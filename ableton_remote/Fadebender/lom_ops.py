@@ -56,6 +56,8 @@ _STATE: Dict[str, Any] = {
 
 _NOTIFIER: Optional[Callable[[Dict[str, Any]], None]] = None
 _LISTENERS: List[Tuple[Any, Callable[[], None]]] = []
+_LAST_MASTER_VALUES: Dict[str, float] = {}  # Cache to prevent duplicate master events
+_LAST_TRANSPORT_VALUES: Dict[str, Any] = {}  # Cache to prevent duplicate transport events
 
 
 def set_notifier(fn: Callable[[Dict[str, Any]], None]) -> None:
@@ -110,6 +112,8 @@ def init_listeners(live) -> None:
             _attach_return_listeners(live)
         if all_on or "master" in scopes:
             _attach_master_listeners(live)
+        if all_on or "transport" in scopes:
+            _attach_transport_listeners(live)
     except Exception:
         pass
 
@@ -171,6 +175,7 @@ def _attach_return_listeners(live) -> None:
 
 
 def _attach_master_listeners(live) -> None:
+    global _LAST_MASTER_VALUES
     master = getattr(live, 'master_track', None)
     if master is None:
         return
@@ -184,18 +189,90 @@ def _attach_master_listeners(live) -> None:
     def add(field, param):
         if param is None:
             return
-        def make_cb(p=param, fld=field):
-            def _cb():
-                try:
-                    _emit({"event": "master_mixer_changed", "field": fld, "value": float(getattr(p, 'value', 0.0))})
-                except Exception:
-                    pass
-            return _cb
-        _add_param_listener(param, make_cb())
+        def _cb():
+            try:
+                val = float(getattr(param, 'value', 0.0))
+                # Only emit if value actually changed (threshold: 0.0001)
+                last = _LAST_MASTER_VALUES.get(field)
+                if last is None or abs(val - last) > 0.0001:
+                    _LAST_MASTER_VALUES[field] = val
+                    _emit({"event": "master_mixer_changed", "field": field, "value": val})
+            except Exception:
+                pass
+        _add_param_listener(param, _cb)
 
     add('volume', volume)
     add('pan', pan)
     add('cue', cue)
+
+
+def _attach_transport_listeners(live) -> None:
+    """Attach transport listeners with change detection to prevent SSE storms."""
+    global _LAST_TRANSPORT_VALUES
+    if live is None:
+        return
+
+    # Listen to is_playing
+    def make_playing_cb():
+        def _cb():
+            try:
+                val = bool(getattr(live, 'is_playing', False))
+                last = _LAST_TRANSPORT_VALUES.get('is_playing')
+                if last is None or val != last:
+                    _LAST_TRANSPORT_VALUES['is_playing'] = val
+                    _emit({"event": "transport_changed", "field": "is_playing", "value": val})
+            except Exception:
+                pass
+        return _cb
+
+    # Listen to metronome
+    def make_metronome_cb():
+        def _cb():
+            try:
+                val = bool(getattr(live, 'metronome', False))
+                last = _LAST_TRANSPORT_VALUES.get('metronome')
+                if last is None or val != last:
+                    _LAST_TRANSPORT_VALUES['metronome'] = val
+                    _emit({"event": "transport_changed", "field": "metronome", "value": val})
+            except Exception:
+                pass
+        return _cb
+
+    # Listen to tempo (with threshold for floating point)
+    def make_tempo_cb():
+        def _cb():
+            try:
+                val = float(getattr(live, 'tempo', 120.0))
+                last = _LAST_TRANSPORT_VALUES.get('tempo')
+                if last is None or abs(val - last) > 0.01:  # 0.01 BPM threshold
+                    _LAST_TRANSPORT_VALUES['tempo'] = val
+                    _emit({"event": "transport_changed", "field": "tempo", "value": val})
+            except Exception:
+                pass
+        return _cb
+
+    # Attach listeners if they exist
+    try:
+        if hasattr(live, 'is_playing_has_listener') and hasattr(live, 'add_is_playing_listener'):
+            if not live.is_playing_has_listener(make_playing_cb()):
+                live.add_is_playing_listener(make_playing_cb())
+                # Note: We don't add to _LISTENERS because transport listeners have different API
+    except Exception:
+        pass
+
+    try:
+        if hasattr(live, 'metronome_has_listener') and hasattr(live, 'add_metronome_listener'):
+            if not live.metronome_has_listener(make_metronome_cb()):
+                live.add_metronome_listener(make_metronome_cb())
+    except Exception:
+        pass
+
+    try:
+        if hasattr(live, 'tempo_has_listener') and hasattr(live, 'add_tempo_listener'):
+            if not live.tempo_has_listener(make_tempo_cb()):
+                live.add_tempo_listener(make_tempo_cb())
+    except Exception:
+        pass
 
 
 def get_overview(live) -> dict:
@@ -855,8 +932,6 @@ def get_master_status(live) -> Dict[str, Any]:
             mix = getattr(mt, "mixer_device", None)
             vol = getattr(getattr(mix, "volume", None), "value", None)
             pan = getattr(getattr(mix, "panning", None), "value", None)
-            mute = getattr(mt, "mute", None)
-            solo = getattr(mt, "solo", None)
             cue = getattr(getattr(mix, "cue_volume", None), "value", None)
             return {
                 "mixer": {
@@ -864,14 +939,12 @@ def get_master_status(live) -> Dict[str, Any]:
                     "pan": float(pan) if pan is not None else 0.0,
                     "cue": float(cue) if cue is not None else 0.0,
                 },
-                "mute": bool(mute) if mute is not None else False,
-                "solo": bool(solo) if solo is not None else False,
             }
     except Exception:
         pass
-    # stub: reuse first track if present
-    mt = _STATE["tracks"][0] if _STATE.get("tracks") else {"mixer": {"volume": 0.8, "pan": 0.0}, "mute": False, "solo": False}
-    return {"mixer": {"volume": float(mt.get("mixer", {}).get("volume", 0.8)), "pan": float(mt.get("mixer", {}).get("pan", 0.0)), "cue": float(mt.get("mixer", {}).get("cue", 0.0))}, "mute": bool(mt.get("mute", False)), "solo": bool(mt.get("solo", False))}
+    # stub: reuse first track if present (master tracks don't have mute/solo)
+    mt = _STATE["tracks"][0] if _STATE.get("tracks") else {"mixer": {"volume": 0.8, "pan": 0.0, "cue": 0.0}}
+    return {"mixer": {"volume": float(mt.get("mixer", {}).get("volume", 0.8)), "pan": float(mt.get("mixer", {}).get("pan", 0.0)), "cue": float(mt.get("mixer", {}).get("cue", 0.0))}}
 
 
 def set_master_mixer(live, field: str, value: float) -> bool:

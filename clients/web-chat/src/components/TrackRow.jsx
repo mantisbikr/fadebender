@@ -82,6 +82,7 @@ export default function TrackRow({
   onAdjustStart,
   onAdjustEnd,
   onAdjustSet,
+  onToggleStart,
 }) {
   const t = track;
   const status = getStatus(t.index);
@@ -156,9 +157,10 @@ export default function TrackRow({
               e.stopPropagation();
               try {
                 if (!isSelected) setSelectedIndex(t.index);
-                const ts = getStatus(t.index) || await refreshTrack(t.index);
-                await apiService.setMixer(t.index, 'mute', ts?.mute ? 0 : 1);
-                await refreshTrack(t.index);
+                const cur = getStatus(t.index) || status || {};
+                try { onToggleStart?.(t.index, 'mute'); } catch {}
+                await apiService.setMixer(t.index, 'mute', cur?.mute ? 0 : 1);
+                // Avoid immediate refresh; SSE will update promptly
               } catch {}
             }}>
               <VolumeOffIcon fontSize="small" color={status?.mute ? 'warning' : 'inherit'} />
@@ -169,9 +171,10 @@ export default function TrackRow({
               e.stopPropagation();
               try {
                 if (!isSelected) setSelectedIndex(t.index);
-                const ts = getStatus(t.index) || await refreshTrack(t.index);
-                await apiService.setMixer(t.index, 'solo', ts?.solo ? 0 : 1);
-                await refreshTrack(t.index);
+                const cur = getStatus(t.index) || status || {};
+                try { onToggleStart?.(t.index, 'solo'); } catch {}
+                await apiService.setMixer(t.index, 'solo', cur?.solo ? 0 : 1);
+                // Avoid immediate refresh; SSE will update promptly
               } catch {}
             }}>
               <HeadphonesIcon fontSize="small" color={status?.solo ? 'success' : 'inherit'} />
