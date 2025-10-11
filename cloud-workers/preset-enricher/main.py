@@ -34,11 +34,132 @@ MAX_LLM_CALLS_PER_HOUR = int(os.getenv("MAX_LLM_CALLS_PER_HOUR", "20"))  # Conse
 _llm_call_timestamps = []  # Track recent call times
 
 
+def load_grouping_config(device_name: str) -> Dict[str, Any]:
+    """Load grouping configuration from param_learn_config.
+
+    Args:
+        device_name: Device name (e.g., "AudioEffectGroupDelay")
+
+    Returns:
+        Grouping config with masters, dependents, dependent_master_values
+    """
+    try:
+        from google.cloud import storage
+        import json
+
+        # Load param_learn.json from GCS (synced from configs/)
+        client = storage.Client(project=PROJECT_ID)
+        bucket = client.bucket(KB_BUCKET)
+
+        # Try to load from GCS first
+        try:
+            blob = bucket.blob("configs/param_learn.json")
+            if blob.exists():
+                content = blob.download_as_text()
+                config = json.loads(content)
+                grouping = config.get("grouping", {})
+                print(f"[GROUPING] Loaded config from GCS")
+            else:
+                print(f"[GROUPING] configs/param_learn.json not found in GCS, using defaults")
+                grouping = {}
+        except Exception as e:
+            print(f"[GROUPING] Failed to load from GCS: {e}, using defaults")
+            grouping = {}
+
+        # Match device type to grouping config
+        device_name_lower = device_name.lower()
+        for device_type, grp_cfg in grouping.items():
+            if device_type.lower() in device_name_lower:
+                print(f"[GROUPING] Matched device '{device_name}' to grouping config '{device_type}'")
+                return grp_cfg
+
+        # Fallback to default
+        default_cfg = grouping.get("default", {
+            "masters": [],
+            "dependents": {},
+            "dependent_master_values": {},
+            "skip_auto_enable": []
+        })
+        print(f"[GROUPING] No specific grouping config for '{device_name}', using default")
+        return default_cfg
+
+    except Exception as e:
+        print(f"[GROUPING] Failed to load grouping config: {e}")
+        return {
+            "masters": [],
+            "dependents": {},
+            "dependent_master_values": {},
+            "skip_auto_enable": []
+        }
+
+
+def filter_inactive_parameters(
+    parameter_values: Dict[str, float],
+    grouping_config: Dict[str, Any]
+) -> Dict[str, float]:
+    """Filter out inactive parameters based on master switch states.
+
+    Args:
+        parameter_values: Dict of param_name -> normalized_value (0.0-1.0)
+        grouping_config: Grouping config with dependents and dependent_master_values
+
+    Returns:
+        Filtered dict with only active parameters
+    """
+    dependents = grouping_config.get("dependents", {})
+    dependent_master_values = grouping_config.get("dependent_master_values", {})
+
+    if not dependents:
+        # No grouping rules, return all parameters
+        return parameter_values
+
+    # Build reverse lookup: master -> list of dependents
+    master_to_deps: Dict[str, List[str]] = {}
+    for dep_name, master_name in dependents.items():
+        master_to_deps.setdefault(master_name, []).append(dep_name)
+
+    filtered = {}
+    for param_name, param_value in parameter_values.items():
+        # Check if this parameter is a dependent
+        if param_name in dependents:
+            master_name = dependents[param_name]
+            master_value = parameter_values.get(master_name)
+
+            if master_value is None:
+                # Master not found, include dependent by default
+                filtered[param_name] = param_value
+                continue
+
+            # Check if dependent should be active
+            required_master_value = dependent_master_values.get(param_name)
+            if required_master_value is not None:
+                # Exact match required (e.g., L 16th active when L Sync=1.0)
+                if abs(master_value - required_master_value) < 0.01:
+                    filtered[param_name] = param_value
+                # else: Skip inactive dependent
+            else:
+                # No specific value required, active when master > 0.5
+                if master_value > 0.5:
+                    filtered[param_name] = param_value
+        else:
+            # Not a dependent, include it
+            filtered[param_name] = param_value
+
+    excluded = set(parameter_values.keys()) - set(filtered.keys())
+    if excluded:
+        print(f"[GROUPING] Excluded {len(excluded)} inactive parameters: {', '.join(sorted(excluded))}")
+
+    return filtered
+
+
 def convert_parameter_values(
     parameter_values: Dict[str, float],
     structure_signature: str
 ) -> Dict[str, Any]:
-    """Convert normalized parameter values to display using shared mapping and fits."""
+    """Convert normalized parameter values to display using shared mapping and fits.
+
+    Also filters out inactive parameters based on grouping rules.
+    """
     try:
         from shared.mapping_fetch import load_device_mapping
         from shared.param_convert import to_display
@@ -52,9 +173,14 @@ def convert_parameter_values(
         print(f"[MAPPING] No mapping found for signature {structure_signature}")
         return {name: {"value": None, "display": f"{val:.3f}", "normalized": float(val)} for name, val in parameter_values.items()}
 
+    # Load grouping config and filter inactive parameters
+    device_name = mapping.get("device_name", structure_signature)
+    grouping_config = load_grouping_config(device_name)
+    filtered_params = filter_inactive_parameters(parameter_values, grouping_config)
+
     idx = {str(p.get("name", "")).lower(): p for p in mapping["params"]}
     converted: Dict[str, Any] = {}
-    for raw_name, norm_value in parameter_values.items():
+    for raw_name, norm_value in filtered_params.items():
         lp = idx.get(str(raw_name).lower())
         cname = canonical_name(raw_name)
         if lp:
