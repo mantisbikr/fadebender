@@ -47,6 +47,7 @@
     },
     "delay": {
       "masters": [
+        "Link",
         "L Sync",
         "R Sync",
         "Filter On"
@@ -54,16 +55,20 @@
       "dependents": {
         "L Time": "L Sync",
         "L 16th": "L Sync",
-        "R Time": "R Sync",
-        "R 16th": "R Sync",
+        "R Sync": "Link",
+        "R Time": "Link",
+        "R 16th": "Link",
+        "R Offset": "Link",
         "Filter Freq": "Filter On",
         "Filter Width": "Filter On"
       },
       "dependent_master_values": {
         "L Time": 0.0,
         "L 16th": 1.0,
+        "R Sync": 0.0,
         "R Time": 0.0,
-        "R 16th": 1.0
+        "R 16th": 0.0,
+        "R Offset": 0.0
       },
       "skip_auto_enable": []
     },

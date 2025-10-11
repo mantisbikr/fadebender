@@ -1,7 +1,7 @@
 {
   "debug": {
-    "auto_capture": false,
-    "firestore": false,
+    "auto_capture": true,
+    "firestore": true,
     "sse": false
   },
   "server": {

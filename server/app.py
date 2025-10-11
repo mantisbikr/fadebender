@@ -1807,6 +1807,10 @@ async def _auto_capture_preset(
             param_value = p.get("value")
             if param_name and param_value is not None:
                 parameter_values[param_name] = float(param_value)
+                # Debug: Show Sync/Time related params WITH display_value
+                if any(x in param_name for x in ['Sync', 'Time', '16th']):
+                    display_val = p.get("display_value", "N/A")
+                    print(f"[AUTO-CAPTURE] DEBUG - {param_name}: value={param_value}, display_value='{display_val}'")
 
         print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
 
