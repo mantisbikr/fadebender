@@ -140,6 +140,78 @@ def check_rate_limit() -> bool:
     return True
 
 
+def load_prompt_template(device_type: str) -> tuple[str, Dict[str, Any]]:
+    """Load prompt template and schema from Firestore for device type.
+
+    Args:
+        device_type: Device category (delay, reverb, etc.)
+
+    Returns:
+        Tuple of (prompt_template, audio_engineering_schema)
+    """
+    from google.cloud import firestore
+
+    client = firestore.Client(project=FIRESTORE_PROJECT)
+    device_type_l = str(device_type or "").lower()
+
+    # Load prompt template
+    template_doc = client.collection("prompt_templates").document(device_type_l).get()
+    if template_doc.exists:
+        template_data = template_doc.to_dict()
+        prompt_template = template_data.get("template", "")
+        print(f"[PROMPT] Loaded template for {device_type_l} from Firestore")
+    else:
+        print(f"[PROMPT] No template found for {device_type_l}, using fallback")
+        prompt_template = """You are an expert audio engineer analyzing a {device_type} preset.
+
+Preset Name: {device_name}
+Device Type: {device_type}
+
+Parameter Values:
+{parameter_values}
+
+# Knowledge Base Context
+
+{kb_context}
+
+# Task
+
+Using the parameter values and knowledge base context, generate comprehensive metadata for this preset.
+Be specific, technical, and reference actual parameter values in your explanations."""
+
+    # Load device-specific audio_engineering schema
+    schema_doc = client.collection("schemas").document(f"{device_type_l}_audio_engineering").get()
+    if schema_doc.exists:
+        ae_schema = schema_doc.to_dict()
+        print(f"[SCHEMA] Loaded audio_engineering schema for {device_type_l} from Firestore")
+    else:
+        print(f"[SCHEMA] No audio_engineering schema found for {device_type_l}, using generic fallback")
+        # Generic fallback schema
+        ae_schema = {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string"},
+                "use_cases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source": {"type": "string"},
+                            "context": {"type": "string"},
+                            "send_level": {"type": "string"},
+                            "send_level_rationale": {"type": "string"},
+                            "eq_prep": {"type": "string"},
+                            "eq_rationale": {"type": "string"},
+                            "notes": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        }
+
+    return prompt_template, ae_schema
+
+
 def generate_metadata_with_kb(
     device_name: str,
     device_type: str,
@@ -163,6 +235,9 @@ def generate_metadata_with_kb(
         return {}, False, "rate_limited", None
 
     try:
+        # Load prompt template and schema from Firestore
+        prompt_template, ae_schema = load_prompt_template(device_type)
+
         # Format parameter values for prompt
         def format_params(params: Dict[str, Any]) -> str:
             """Format parameters for LLM prompt - use display values if available."""
@@ -176,7 +251,7 @@ def generate_metadata_with_kb(
 
         params_formatted = format_params(parameter_values)
 
-        # Define response schema as JSON Schema dict (usable by google-generativeai, convertible for vertex)
+        # Build response schema with device-specific audio_engineering
         response_schema_dict = {
             "type": "object",
             "properties": {
@@ -189,52 +264,7 @@ def generate_metadata_with_kb(
                     },
                     "required": ["what", "when", "why"],
                 },
-                "audio_engineering": {
-                    "type": "object",
-                    "properties": {
-                        "space_type": {"type": "string"},
-                        "size": {"type": "string"},
-                        "decay_time": {"type": "string"},
-                        "predelay": {"type": "string"},
-                        "frequency_character": {"type": "string"},
-                        "stereo_width": {"type": "string"},
-                        "diffusion": {"type": "string"},
-                        "use_cases": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "source": {"type": "string"},
-                                    "context": {"type": "string"},
-                                    "send_level": {"type": "string"},
-                                    "send_level_rationale": {"type": "string"},
-                                    "eq_prep": {"type": "string"},
-                                    "eq_rationale": {"type": "string"},
-                                    "notes": {"type": "string"},
-                                },
-                                "required": [
-                                    "source",
-                                    "context",
-                                    "send_level",
-                                    "send_level_rationale",
-                                    "eq_prep",
-                                    "eq_rationale",
-                                    "notes",
-                                ],
-                            },
-                        },
-                    },
-                    "required": [
-                        "space_type",
-                        "size",
-                        "decay_time",
-                        "predelay",
-                        "frequency_character",
-                        "stereo_width",
-                        "diffusion",
-                        "use_cases",
-                    ],
-                },
+                "audio_engineering": ae_schema,  # Device-specific schema from Firestore
                 "natural_language_controls": {
                     "type": "object",
                     "properties": {
@@ -337,46 +367,13 @@ def generate_metadata_with_kb(
             ],
         }
 
-        # Build enriched prompt with KB
-        prompt = f"""You are an expert audio engineer analyzing a {device_type} preset.
-
-Preset Name: {device_name}
-Device Type: {device_type}
-
-Parameter Values:
-{params_formatted}
-
-# Knowledge Base Context
-
-{kb_content}
-
-# Task
-
-Using the parameter values and knowledge base context, generate comprehensive metadata.
-
-Guidelines:
-- description.what: Concise technical description of the preset's sonic character (1-2 sentences)
-- description.when: Array of 5 specific use cases
-- description.why: Deep audio engineering explanation covering decay characteristics, frequency response, stereo imaging, psychoacoustic perception. Reference specific parameter values and their acoustic impact. (4-6 sentences)
-- audio_engineering.space_type: Type of space being simulated (e.g., hall, room, plate)
-- audio_engineering.size: Size descriptor with numeric reference from parameters
-- audio_engineering.decay_time: RT60-style decay description with parameter values
-- audio_engineering.predelay: Predelay amount and spatial reasoning with values
-- audio_engineering.frequency_character: Frequency response description (bright/dark/neutral + EQ with parameter values)
-- audio_engineering.stereo_width: Stereo width description with angle/parameter values
-- audio_engineering.diffusion: Diffusion character (smooth/grainy/dense) with parameter values
-- audio_engineering.use_cases: Array of 4 detailed use cases with source, context, send_level, send_level_rationale, eq_prep, eq_rationale, notes
-- natural_language_controls: For each control (tighter, looser, warmer, brighter, closer, further, wider, narrower), provide params object with parameter adjustments and explanation
-- subcategory: Specific category (e.g., hall, room, plate for reverb)
-- warnings: Object with mono_compatibility, cpu_usage, mix_context, frequency_buildup, low_end_accumulation
-- genre_tags: Array of 4 relevant genres
-
-Be specific, technical, and reference actual parameter values in your explanations.
-
-Output formatting rules:
-- Return ONLY a single JSON object that strictly matches the schema.
-- Do not include any prose, comments, or code fences.
-"""
+        # Build enriched prompt using template
+        prompt = prompt_template.format(
+            device_type=device_type,
+            device_name=device_name,
+            parameter_values=params_formatted,
+            kb_context=kb_content
+        )
 
         def parse_llm_json(txt: str) -> tuple[Dict[str, Any], str | None]:
             import re
@@ -405,137 +402,8 @@ Output formatting rules:
                         # Provide debug snippet to help diagnose
                         dbg = recovered[:1600] if isinstance(recovered, str) else str(recovered)[:1600]
                         raise ValueError(f"Failed to parse LLM JSON: {e2}") from e2
-        # COST OPTIMIZATION: Use Vertex AI only by default; disable Gemini API path unless explicitly allowed
-        use_genai_first = (os.getenv("USE_GENAI_PRIMARY", "0") == "1") and not DISABLE_GENAI
 
-        genai_failed = False
-        if use_genai_first and GENAI_API_KEY:
-            try:
-                import google.generativeai as genai  # type: ignore
-                genai.configure(api_key=GENAI_API_KEY)
-                gmodel = genai.GenerativeModel(MODEL_NAME)
-
-                def gcall(prompt_text: str, schema: dict) -> str:
-                    cfg = {
-                        "temperature": 0.0,
-                        "top_p": 0.9,
-                        "max_output_tokens": 4096,
-                        "response_mime_type": "application/json",
-                        "response_schema": schema,
-                    }
-                    resp = gmodel.generate_content(prompt_text, generation_config=cfg)
-                    return (resp.text or "").strip()
-
-                # Always use chunked mode for robustness
-                base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
-
-                metadata: Dict[str, Any] = {}
-                sec_ok = 0; sec_fail = 0
-                dbg_text = None
-
-                # description schema
-                desc_schema = response_schema_dict["properties"]["description"]
-                desc_prompt = (
-                    "Generate only the 'description' object. Return ONLY JSON."
-                )
-                try:
-                    t = gcall(base_context + "\n# Task\n" + desc_prompt, desc_schema)
-                    metadata["description"], _ = parse_llm_json(t)
-                except Exception as e:
-                    print(f"[LLM] GENAI description parse failed: {e}")
-                    sec_fail += 1
-                else:
-                    sec_ok += 1
-
-                # audio_engineering
-                ae_schema = response_schema_dict["properties"]["audio_engineering"]
-                ae_prompt = (
-                    "Generate only the 'audio_engineering' object. Return ONLY JSON."
-                )
-                try:
-                    t = gcall(base_context + "\n# Task\n" + ae_prompt, ae_schema)
-                    metadata["audio_engineering"], _ = parse_llm_json(t)
-                except Exception as e:
-                    print(f"[LLM] GENAI audio_engineering parse failed: {e}")
-                    sec_fail += 1
-                else:
-                    sec_ok += 1
-
-                # natural_language_controls
-                nlc_schema = response_schema_dict["properties"]["natural_language_controls"]
-                nlc_prompt = (
-                    "Generate only the 'natural_language_controls' object. Return ONLY JSON."
-                )
-                try:
-                    t = gcall(base_context + "\n# Task\n" + nlc_prompt, nlc_schema)
-                    metadata["natural_language_controls"], _ = parse_llm_json(t)
-                except Exception as e:
-                    print(f"[LLM] GENAI natural_language_controls parse failed: {e}")
-                    sec_fail += 1
-                else:
-                    sec_ok += 1
-
-                # subcategory
-                sub_schema = {"type": "object", "properties": {"subcategory": {"type": "string"}}, "required": ["subcategory"]}
-                sub_prompt = "Return only: {\"subcategory\": <string>}"
-                try:
-                    t = gcall(base_context + "\n# Task\n" + sub_prompt, sub_schema)
-                    sub_obj, _ = parse_llm_json(t)
-                    if isinstance(sub_obj, dict) and "subcategory" in sub_obj:
-                        metadata["subcategory"] = sub_obj["subcategory"]
-                except Exception as e:
-                    print(f"[LLM] GENAI subcategory parse failed: {e}")
-                    sec_fail += 1
-                else:
-                    if "subcategory" in metadata:
-                        sec_ok += 1
-
-                # warnings
-                warn_schema = response_schema_dict["properties"]["warnings"]
-                warn_prompt = "Generate only the 'warnings' object. Return ONLY JSON."
-                try:
-                    t = gcall(base_context + "\n# Task\n" + warn_prompt, warn_schema)
-                    metadata["warnings"], _ = parse_llm_json(t)
-                except Exception as e:
-                    print(f"[LLM] GENAI warnings parse failed: {e}")
-                    sec_fail += 1
-                else:
-                    sec_ok += 1
-
-                # genre_tags
-                genre_schema = {"type": "object", "properties": {"genre_tags": {"type": "array", "items": {"type": "string"}}}, "required": ["genre_tags"]}
-                genre_prompt = "Return only: {\"genre_tags\": [<string>, <string>, <string>, <string>]}"
-                try:
-                    t = gcall(base_context + "\n# Task\n" + genre_prompt, genre_schema)
-                    gobj, _ = parse_llm_json(t)
-                    if isinstance(gobj, dict) and "genre_tags" in gobj:
-                        metadata["genre_tags"] = gobj["genre_tags"]
-                except Exception as e:
-                    print(f"[LLM] GENAI genre_tags parse failed: {e}")
-                    sec_fail += 1
-                else:
-                    if "genre_tags" in metadata:
-                        sec_ok += 1
-
-                required_top = {"description", "audio_engineering", "natural_language_controls", "subcategory", "warnings", "genre_tags"}
-                ok = isinstance(metadata, dict) and required_top.issubset(set(metadata.keys()))
-                print(f"[LLM] GENAI chunked assembled; ok={ok}")
-                print(f"[METRICS] genai_chunked sections_ok={sec_ok} sections_failed={sec_fail}")
-
-                # If we got all required fields, return success
-                if ok:
-                    return metadata, ok, None, dbg_text
-                else:
-                    print(f"[LLM] GENAI incomplete metadata (missing fields), falling back to Vertex AI")
-                    genai_failed = True
-
-            except Exception as e:
-                print(f"[LLM] GENAI completely failed, falling back to Vertex AI: {e}")
-                import traceback
-                traceback.print_exc()
-                genai_failed = True
-
-        # Use Vertex AI path (fallback if GENAI failed, or primary if no API key)
+        # Use Vertex AI (primary path)
         import vertexai
         from vertexai.generative_models import (
             GenerativeModel,
@@ -584,145 +452,107 @@ Output formatting rules:
         vertex_schema = to_vertex_schema(response_schema_dict) if HAS_VERTEX_SCHEMA else None
 
         model = GenerativeModel(MODEL_NAME)
-        # Single-shot is bypassed if chunked-only
-        parse_failed = True if LLM_CHUNKED_ONLY else False
-        metadata: Dict[str, Any] = {}
-        dbg_text = None
-        if not LLM_CHUNKED_ONLY:
-            try:
-                kwargs = {}
-                if vertex_schema is not None:
-                    kwargs["response_schema"] = vertex_schema
-                gen_config = GenerationConfig(
-                    temperature=0.0,
-                    max_output_tokens=4096,
-                    top_p=0.9,
-                    response_mime_type="application/json",
-                    **kwargs,
-                )
-                response = model.generate_content(prompt, generation_config=gen_config)
-            except TypeError as te:
-                print(f"[LLM] Structured output unsupported, retrying without response_*: {te}")
-                try:
-                    gen_config = GenerationConfig(temperature=0.0, max_output_tokens=4096, top_p=0.9)
-                    response = model.generate_content(prompt, generation_config=gen_config)
-                except TypeError as te2:
-                    print(f"[LLM] generation_config unsupported, calling with defaults: {te2}")
-                    response = model.generate_content(prompt)
 
-            response_text = response.text.strip()
-            print(f"[LLM] Raw response length: {len(response_text)} chars")
-            print(f"[LLM] First 200 chars: {response_text[:200]}")
-            try:
-                metadata, _dbg = parse_llm_json(response_text)
-            except Exception as parse_err:
-                print(f"[LLM] JSON parsing failed (single-shot): {parse_err}")
-                dbg_text = response_text[:1600]
-                parse_failed = True
-                metadata = {}
+        # Always use chunked mode for robustness
+        print("[LLM] Using chunked generation per section")
+        base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
+
+        sections: Dict[str, Any] = {}
+        sec_ok = 0; sec_fail = 0
+
+        # Description
+        desc_prompt = (
+            "Generate only the 'description' JSON object with keys what (string), when (array of 5 strings), why (string).\n"
+            "Return ONLY the JSON for description, no prose."
+        )
+        r = model.generate_content(base_context + "\n# Task\n" + desc_prompt)
+        try:
+            sections["description"], _ = parse_llm_json(r.text.strip())
+        except Exception as e:
+            print(f"[LLM] description parse failed: {e}")
+            sec_fail += 1
+        else:
+            sec_ok += 1
+
+        # Audio engineering (device-specific fields from schema)
+        ae_fields = list(ae_schema.get("properties", {}).keys())
+        ae_prompt = (
+            f"Generate only the 'audio_engineering' JSON object with keys {', '.join(ae_fields)}.\n"
+            "Return ONLY the JSON for audio_engineering."
+        )
+        r = model.generate_content(base_context + "\n# Task\n" + ae_prompt)
+        try:
+            sections["audio_engineering"], _ = parse_llm_json(r.text.strip())
+        except Exception as e:
+            print(f"[LLM] audio_engineering parse failed: {e}")
+            sec_fail += 1
+        else:
+            sec_ok += 1
+
+        # Natural language controls
+        nlc_prompt = (
+            "Generate only the 'natural_language_controls' JSON object with keys tighter, looser, warmer, brighter, closer, further, wider, narrower. \n"
+            "Each is an object with params (object mapping parameter names to numeric adjustments or target values) and explanation (string).\n"
+            "Return ONLY the JSON for natural_language_controls."
+        )
+        r = model.generate_content(base_context + "\n# Task\n" + nlc_prompt)
+        try:
+            sections["natural_language_controls"], _ = parse_llm_json(r.text.strip())
+        except Exception as e:
+            print(f"[LLM] natural_language_controls parse failed: {e}")
+            sec_fail += 1
+        else:
+            sec_ok += 1
+
+        # Subcategory
+        sub_prompt = (
+            f"Return a JSON object: {{\"subcategory\": <string>}} for the specific subtype of {device_type}."
+        )
+        r = model.generate_content(base_context + "\n# Task\n" + sub_prompt)
+        try:
+            sub_obj, _ = parse_llm_json(r.text.strip())
+            if isinstance(sub_obj, dict) and "subcategory" in sub_obj:
+                sections["subcategory"] = sub_obj["subcategory"]
+        except Exception as e:
+            print(f"[LLM] subcategory parse failed: {e}")
+            sec_fail += 1
+        else:
+            if "subcategory" in sections:
+                sec_ok += 1
+
+        # Warnings
+        warn_prompt = (
+            "Generate only the 'warnings' JSON object with keys mono_compatibility, cpu_usage, mix_context, frequency_buildup, low_end_accumulation. Return ONLY JSON."
+        )
+        r = model.generate_content(base_context + "\n# Task\n" + warn_prompt)
+        try:
+            sections["warnings"], _ = parse_llm_json(r.text.strip())
+        except Exception as e:
+            print(f"[LLM] warnings parse failed: {e}")
+            sec_fail += 1
+        else:
+            sec_ok += 1
+
+        # Genre tags
+        genre_prompt = (
+            "Return a JSON object: {\"genre_tags\": [<string>, <string>, <string>, <string>]}."
+        )
+        r = model.generate_content(base_context + "\n# Task\n" + genre_prompt)
+        try:
+            genre_obj, _ = parse_llm_json(r.text.strip())
+            if isinstance(genre_obj, dict) and "genre_tags" in genre_obj:
+                sections["genre_tags"] = genre_obj["genre_tags"]
+        except Exception as e:
+            print(f"[LLM] genre_tags parse failed: {e}")
+            sec_fail += 1
+        else:
+            if "genre_tags" in sections:
+                sec_ok += 1
+
+        metadata = sections
 
         required_top = {"description", "audio_engineering", "natural_language_controls", "subcategory", "warnings", "genre_tags"}
-        def have_all(d: Dict[str, Any]) -> bool:
-            return isinstance(d, dict) and required_top.issubset(set(d.keys()))
-
-        if parse_failed or not have_all(metadata):
-            print("[LLM] Falling back to chunked generation per section")
-            base_context = f"Preset Name: {device_name}\nDevice Type: {device_type}\n\nParameter Values:\n{params_formatted}\n\n# Knowledge Base Context\n\n{kb_content}\n"
-
-            sections: Dict[str, Any] = {}
-            sec_ok = 0; sec_fail = 0
-            # Description
-            desc_prompt = (
-                "Generate only the 'description' JSON object with keys what (string), when (array of 5 strings), why (string).\n"
-                "Return ONLY the JSON for description, no prose."
-            )
-            r = model.generate_content(base_context + "\n# Task\n" + desc_prompt)
-            try:
-                sections["description"], _ = parse_llm_json(r.text.strip())
-            except Exception as e:
-                print(f"[LLM] description parse failed: {e}")
-                sec_fail += 1
-            else:
-                sec_ok += 1
-
-            # Audio engineering
-            ae_prompt = (
-                "Generate only the 'audio_engineering' JSON object with keys space_type, size, decay_time, predelay, frequency_character, stereo_width, diffusion, use_cases (array of 4 objects with source, context, send_level, send_level_rationale, eq_prep, eq_rationale, notes).\n"
-                "Return ONLY the JSON for audio_engineering."
-            )
-            r = model.generate_content(base_context + "\n# Task\n" + ae_prompt)
-            try:
-                sections["audio_engineering"], _ = parse_llm_json(r.text.strip())
-            except Exception as e:
-                print(f"[LLM] audio_engineering parse failed: {e}")
-                sec_fail += 1
-            else:
-                sec_ok += 1
-
-            # Natural language controls
-            nlc_prompt = (
-                "Generate only the 'natural_language_controls' JSON object with keys tighter, looser, warmer, brighter, closer, further, wider, narrower. \n"
-                "Each is an object with params (object mapping parameter names to numeric adjustments or target values) and explanation (string).\n"
-                "Return ONLY the JSON for natural_language_controls."
-            )
-            r = model.generate_content(base_context + "\n# Task\n" + nlc_prompt)
-            try:
-                sections["natural_language_controls"], _ = parse_llm_json(r.text.strip())
-            except Exception as e:
-                print(f"[LLM] natural_language_controls parse failed: {e}")
-                sec_fail += 1
-            else:
-                sec_ok += 1
-
-            # Subcategory
-            sub_prompt = (
-                "Return a JSON object: {\"subcategory\": <string>} for the specific subtype (e.g., hall, room, plate)."
-            )
-            r = model.generate_content(base_context + "\n# Task\n" + sub_prompt)
-            try:
-                sub_obj, _ = parse_llm_json(r.text.strip())
-                if isinstance(sub_obj, dict) and "subcategory" in sub_obj:
-                    sections["subcategory"] = sub_obj["subcategory"]
-            except Exception as e:
-                print(f"[LLM] subcategory parse failed: {e}")
-                sec_fail += 1
-            else:
-                if "subcategory" in sections:
-                    sec_ok += 1
-
-            # Warnings
-            warn_prompt = (
-                "Generate only the 'warnings' JSON object with keys mono_compatibility, cpu_usage, mix_context, frequency_buildup, low_end_accumulation. Return ONLY JSON."
-            )
-            r = model.generate_content(base_context + "\n# Task\n" + warn_prompt)
-            try:
-                sections["warnings"], _ = parse_llm_json(r.text.strip())
-            except Exception as e:
-                print(f"[LLM] warnings parse failed: {e}")
-                sec_fail += 1
-            else:
-                sec_ok += 1
-
-            # Genre tags
-            genre_prompt = (
-                "Return a JSON object: {\"genre_tags\": [<string>, <string>, <string>, <string>]}."
-            )
-            r = model.generate_content(base_context + "\n# Task\n" + genre_prompt)
-            try:
-                genre_obj, _ = parse_llm_json(r.text.strip())
-                if isinstance(genre_obj, dict) and "genre_tags" in genre_obj:
-                    sections["genre_tags"] = genre_obj["genre_tags"]
-            except Exception as e:
-                print(f"[LLM] genre_tags parse failed: {e}")
-                sec_fail += 1
-            else:
-                if "genre_tags" in sections:
-                    sec_ok += 1
-
-            if sections:
-                metadata = {**metadata, **sections}
-
-        ok = have_all(metadata)
+        ok = isinstance(metadata, dict) and required_top.issubset(set(metadata.keys()))
         print(f"[METRICS] vertex_chunked sections_ok={sec_ok} sections_failed={sec_fail}")
         print(f"[LLM] Successfully generated structured metadata with keys: {list(metadata.keys()) if isinstance(metadata, dict) else 'n/a'}; ok={ok}")
         return metadata, ok, None, None
