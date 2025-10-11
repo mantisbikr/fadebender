@@ -956,7 +956,7 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     signature = _make_device_signature(dname, live_params)
     backend = STORE.backend
     exists = False
-    device_type = _detect_device_type(live_params)
+    device_type = _detect_device_type(live_params, dname)
 
     try:
         # Check Firestore first (primary source), fall back to local cache
@@ -1013,7 +1013,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
     backend = STORE.backend
     # Also detect device type from live params so we can optionally
     # trigger auto-capture when a learned mapping exists.
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(params, dname)
     data = None
     try:
         # Check Firestore first (primary source), fall back to local cache
@@ -1168,7 +1168,7 @@ class LearnDeviceBody(BaseModel):
     sleep_ms: int = 25
 
 
-def _detect_device_type(params: list[dict]) -> str:
+def _detect_device_type(params: list[dict], device_name: str | None = None) -> str:
     """Detect device type from parameter fingerprints.
 
     Uses characteristic parameter names to identify device types.
@@ -1181,6 +1181,21 @@ def _detect_device_type(params: list[dict]) -> str:
     Returns:
         Device type string (reverb, delay, compressor, eq, etc.) or "unknown"
     """
+    name_lc = (device_name or "").strip().lower()
+    if name_lc:
+        if any(k in name_lc for k in ("delay", "echo")):
+            return "delay"
+        if any(k in name_lc for k in ("reverb", "hall", "plate", "room")):
+            return "reverb"
+        if any(k in name_lc for k in ("compressor", "glue")):
+            return "compressor"
+        if "eq" in name_lc and "eight" in name_lc:
+            return "eq8"
+        if "auto filter" in name_lc or ("filter" in name_lc and "auto" in name_lc):
+            return "autofilter"
+        if "saturator" in name_lc:
+            return "saturator"
+
     param_set = set(p.get("name", "") for p in params)
 
     # Ableton Reverb signature parameters
@@ -1207,6 +1222,11 @@ def _detect_device_type(params: list[dict]) -> str:
     if {"Drive", "Dry/Wet", "Color", "Type"}.issubset(param_set):
         return "saturator"
 
+    # Fallback: infer from common parameter name hints
+    if {"Time", "Feedback"}.intersection(param_set) and any("Time" in n for n in param_set):
+        return "delay"
+    if {"Decay", "Size"}.intersection(param_set):
+        return "reverb"
     return "unknown"
 
 
@@ -1375,7 +1395,21 @@ Return ONLY valid JSON. Be specific and technical. Use actual parameter values t
         try:
             # First attempt: JSON-only MIME type
             # Build enriched prompt with KB context and stricter content requirements
-            enriched_prompt = f"""
+            # Allow Firestore prompt template override per device_type
+            params_json = json.dumps(parameter_values or {}, indent=2, ensure_ascii=False)
+            custom_tpl = None
+            try:
+                custom_tpl = STORE.get_prompt_template(device_type)
+            except Exception:
+                custom_tpl = None
+            if custom_tpl and isinstance(custom_tpl, str) and custom_tpl.strip():
+                enriched_prompt = (custom_tpl
+                    .replace("{{device_type}}", str(device_type))
+                    .replace("{{device_name}}", str(device_name))
+                    .replace("{{parameter_values}}", params_json)
+                    .replace("{{kb_context}}", kb or ""))
+            else:
+                enriched_prompt = f"""
 You are generating authoritative audio engineering metadata for a {device_type} preset.
 
 KB Context (verbatim excerpts from internal knowledge):
@@ -1385,7 +1419,7 @@ KB Context (verbatim excerpts from internal knowledge):
 
 Preset Name: {device_name}
 Parameter Values:
-{json.dumps(parameter_values, indent=2)}
+{params_json}
 
 Requirements:
 - Output STRICT JSON only (no prose).
@@ -2057,7 +2091,7 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
 
     # Save to mapping store (Firestore)
     groups_meta = _build_groups_from_params(learned_params, dname)
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(params, dname)
     saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
 
@@ -2232,7 +2266,7 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
 
             # Build groups metadata from learned params
             groups_meta = _build_groups_from_params(learned_params, dname)
-            device_type = _detect_device_type(params)
+            device_type = _detect_device_type(params, dname)
             # Always save locally to avoid losing long scans
             local_saved = STORE.save_device_map_local(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
             saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
@@ -2383,7 +2417,7 @@ def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
         })
 
     groups_meta = _build_groups_from_params(learned_params, dname)
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(params, dname)
     local_ok = STORE.save_device_map_local(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     fs_ok = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "local_saved": local_ok, "saved": fs_ok, "param_count": len(learned_params)}
@@ -2442,7 +2476,7 @@ def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = 
         })
         updated_params.append(p)
     groups_meta = _build_groups_from_params(updated_params, data.get("device_name"))
-    device_type = _detect_device_type(updated_params)
+    device_type = _detect_device_type(updated_params, data.get("device_name"))
     ok_local = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
     ok_fs = STORE.save_device_map(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
     return {"ok": True, "signature": signature, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
@@ -2532,7 +2566,7 @@ def fit_mapping(index: Optional[int] = None, device: Optional[int] = None, signa
         if fit:
             p["fit"] = fit
             updated += 1
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(params, device_name)
     ok = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type}, params)
     return {"ok": ok, "signature": signature, "updated": updated}
 
@@ -2599,7 +2633,7 @@ def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
             parameter_values[param_name] = float(param_value)
 
     # Detect device type
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(params, body.preset_name)
 
     # Create preset data (minimal version - can be enhanced with metadata later)
     preset_id = f"{device_type}_{body.preset_name.lower().replace(' ', '_')}"
@@ -2862,6 +2896,11 @@ class BackfillBody(BaseModel):
     fields_allowlist: Optional[list[str]] = None
     concurrency: Optional[int] = 3
 
+class BackfillIdsBody(BaseModel):
+    preset_ids: list[str]
+    fields_allowlist: Optional[list[str]] = None
+    dry_run: Optional[bool] = False
+
 
 def _needs_metadata(p: dict) -> bool:
     if not isinstance(p, dict):
@@ -2981,6 +3020,85 @@ async def backfill_preset_metadata(body: BackfillBody) -> Dict[str, Any]:
             # Launch with bounded concurrency
             tasks = [process(p) for p in presets]
             await asyncio.gather(*tasks)
+            BACKFILL_JOBS[job_id].update({"state": "done"})
+            await broker.publish({"event": "preset_backfill_done", "job_id": job_id, "summary": BACKFILL_JOBS[job_id]})
+        except Exception as e:
+            BACKFILL_JOBS[job_id].update({"state": "error", "error": str(e)})
+            try:
+                await broker.publish({"event": "preset_backfill_done", "job_id": job_id, "summary": BACKFILL_JOBS[job_id]})
+            except Exception:
+                pass
+
+    asyncio.create_task(run())
+    return {"ok": True, "job_id": job_id, "queued": BACKFILL_JOBS[job_id]["total"], "dry_run": dry_run}
+
+
+@app.post("/presets/backfill_ids")
+async def backfill_preset_metadata_by_ids(body: BackfillIdsBody) -> Dict[str, Any]:
+    ids = [str(x).strip() for x in (body.preset_ids or []) if str(x).strip()]
+    if not ids:
+        raise HTTPException(400, "no_preset_ids")
+    fields_allow = list(body.fields_allowlist or [])
+    dry_run = bool(body.dry_run)
+    job_id = f"bf_ids_{int(time.time())}_{len(ids)}"
+    BACKFILL_JOBS[job_id] = {"state": "queued", "total": len(ids), "completed": 0, "updated": 0, "skipped": 0, "errors": 0}
+
+    async def run():
+        BACKFILL_JOBS[job_id].update({"state": "running"})
+        try:
+            updated = 0
+            skipped = 0
+            errors = 0
+            completed = 0
+
+            async def process(pid: str):
+                nonlocal updated, skipped, errors, completed
+                try:
+                    preset = STORE.get_preset(pid) or {}
+                    if not preset:
+                        skipped += 1; completed += 1
+                        await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": "skipped", "reason": "not_found"})
+                        return
+                    dname = preset.get("name") or preset.get("device_name") or pid
+                    dtype = preset.get("category") or preset.get("device_type") or "unknown"
+                    pvals = dict(preset.get("parameter_values") or {})
+                    if dry_run:
+                        completed += 1
+                        await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": "dry_run"})
+                        return
+                    meta = await _generate_preset_metadata_llm(device_name=dname, device_type=dtype, parameter_values=pvals)
+                    allowed = {"description", "audio_engineering", "natural_language_controls", "warnings", "genre_tags", "subcategory"}
+                    if fields_allow:
+                        allowed = allowed.intersection(set(fields_allow))
+                    updates: Dict[str, Any] = {}
+                    if isinstance(meta, dict):
+                        for k in allowed:
+                            if k in meta:
+                                updates[k] = meta[k]
+                    if updates:
+                        preset.update(updates)
+                        preset.setdefault("updated_at", int(time.time()))
+                        preset.setdefault("metadata_status", "ok")
+                        ok = STORE.save_preset(pid, preset, local_only=False)
+                        status = "updated" if ok else "error"
+                        if ok:
+                            updated += 1
+                        else:
+                            errors += 1
+                    else:
+                        status = "no_changes"; skipped += 1
+                    completed += 1
+                    await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": status, "updated_fields": list(updates.keys())})
+                except Exception as e:
+                    errors += 1; completed += 1
+                    await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": "error", "error": str(e)})
+                finally:
+                    BACKFILL_JOBS[job_id].update({"completed": completed, "updated": updated, "skipped": skipped, "errors": errors})
+                    await broker.publish({"event": "preset_backfill_progress", "job_id": job_id, "completed": completed, "total": len(ids), "updated": updated, "skipped": skipped, "errors": errors})
+
+            await broker.publish({"event": "preset_backfill_start", "job_id": job_id, "total": len(ids)})
+            for pid in ids:
+                await process(pid)
             BACKFILL_JOBS[job_id].update({"state": "done"})
             await broker.publish({"event": "preset_backfill_done", "job_id": job_id, "summary": BACKFILL_JOBS[job_id]})
         except Exception as e:
@@ -4042,7 +4160,7 @@ def save_as_user_preset(body: SaveUserPresetBody) -> Dict[str, Any]:
             parameter_values[str(nm)] = float(val)
 
     signature = _make_device_signature(device_name, params)
-    device_type = _detect_device_type(params)
+    device_type = _detect_device_type(params, device_name)
 
     preset_id = f"{device_type}_user_{body.preset_name.lower().replace(' ', '_')}"
     preset_data = {

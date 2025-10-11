@@ -121,6 +121,31 @@ class MappingStore:
                 traceback.print_exc()
             return None
 
+    # ---------- Prompt templates ----------
+    def get_prompt_template(self, device_type: str) -> Optional[str]:
+        """Fetch per-device-type prompt template from Firestore if enabled.
+
+        Collection: prompt_templates
+        Doc ID: device_type lowercased (e.g., 'delay', 'reverb')
+        Field: template (string)
+        """
+        if not self._enabled or not self._client:
+            return None
+        try:
+            dt = (device_type or "").strip().lower()
+            if not dt:
+                return None
+            doc = self._client.collection("prompt_templates").document(dt).get()
+            if not doc.exists:
+                return None
+            data = doc.to_dict() or {}
+            tpl = data.get("template")
+            if isinstance(tpl, str) and tpl.strip():
+                return tpl
+            return None
+        except Exception:
+            return None
+
     def delete_device_map(self, signature: str) -> bool:
         if not self._enabled or not self._client:
             return False
