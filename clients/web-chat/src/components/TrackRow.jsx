@@ -260,7 +260,7 @@ export default function TrackRow({
 
         {/* Devices (expand on demand, filter to effects kinds) */}
         <Box sx={{ mt: 0.5 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer' }}
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, cursor: 'pointer' }}
             onClick={async (e) => {
               e.stopPropagation();
               const next = !devicesOpen;
@@ -278,7 +278,7 @@ export default function TrackRow({
               (d.kind === 'unknown' && (t.type === 'audio'))
             ))
             .map(d => (
-              <Typography key={d.index} variant="caption" sx={{ display: 'block' }}>{d.name}</Typography>
+              <Typography key={d.index} variant="body2" sx={{ display: 'block', fontWeight: 500 }}>{d.name}</Typography>
             ))}
           {devicesOpen && Array.isArray(devices) && devices.filter(d => (
             d.kind === 'audio_effect' || d.kind === 'midi_effect' ||

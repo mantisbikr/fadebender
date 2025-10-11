@@ -1370,11 +1370,11 @@ function MasterDevicesList() {
         <Typography variant="caption" color="text.secondary">(tap to load)</Typography>
       )}
       <Box sx={{ mt: 0.5 }}>
-        <Typography variant="caption" sx={{ cursor: 'pointer' }} onClick={async () => {
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, cursor: 'pointer' }} onClick={async () => {
           try { const r = await apiService.getMasterDevices(); setDevices((r && r.data && r.data.devices) || []); } catch {}
         }}>Load devices</Typography>
         {Array.isArray(devices) && devices.length > 0 && devices.map(d => (
-          <Typography key={d.index} variant="caption" sx={{ display: 'block' }}>{d.name}</Typography>
+          <Typography key={d.index} variant="body2" sx={{ display: 'block', fontWeight: 500 }}>{d.name}</Typography>
         ))}
       </Box>
     </Box>
