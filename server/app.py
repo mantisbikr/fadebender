@@ -3708,19 +3708,22 @@ def _invert_fit_to_value(fit: dict, target_y: float, vmin: float, vmax: float) -
     t = (lambda a, b, y: (y - b) / a)
     ftype = fit.get("type")
     if ftype == "linear":
-        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        coeffs = fit.get("coeffs", {})
+        a = float(coeffs.get("a", 1.0)); b = float(coeffs.get("b", 0.0))
         x = t(a, b, target_y)
     elif ftype == "log":
-        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        coeffs = fit.get("coeffs", {})
+        a = float(coeffs.get("a", 1.0)); b = float(coeffs.get("b", 0.0))
         # y = a*ln(x)+b -> x = exp((y-b)/a)
         x = math.exp((target_y - b)/a) if a != 0 else vmin
     elif ftype == "exp":
-        # ln(y) = a*x + b -> x = (ln(y)-b)/a
-        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        # y = a * exp(b*x) -> x = ln(y/a) / b
+        coeffs = fit.get("coeffs", {})
+        a = float(coeffs.get("a", 1.0)); b = float(coeffs.get("b", 1.0))
         if target_y <= 0:
             x = vmin
         else:
-            x = (math.log(target_y) - b)/a if a != 0 else vmin
+            x = math.log(target_y / a) / b if (a != 0 and b != 0) else vmin
     else:
         # piecewise
         pts = fit.get("points") or []
