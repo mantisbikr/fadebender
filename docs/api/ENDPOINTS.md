@@ -24,6 +24,12 @@ Device Mapping (structure + analysis)
 - Fetch full mapping (grouping + fits) by signature: `curl -sS "http://127.0.0.1:8722/device_mapping?signature=<SIG>" | jq .`
 - Or derive from live indices: `curl -sS "http://127.0.0.1:8722/device_mapping?index=0&device=0" | jq .`
 - Import mapping (grouping, params_meta): `curl -sS -X POST http://127.0.0.1:8722/device_mapping/import -H 'Content-Type: application/json' --data-binary @analysis.json | jq .`
+- Validate names vs live (catch mismatches early): `curl -sS "http://127.0.0.1:8722/device_mapping/validate?index=0&device=0" | jq .`
+- Sanity probe (set by display, read back, restore):
+  - `curl -sS -X POST http://127.0.0.1:8722/device_mapping/sanity_probe -H 'Content-Type: application/json' -d '{"return_index":0,"device_index":0,"param_ref":"HiFilter Freq","target_display":"7000","restore":true}' | jq .`
+- List fitted params (quick QA): `curl -sS "http://127.0.0.1:8722/device_mapping/fits?signature=<SIG>" | jq .`
+- Enumerate labels for a quantized param (build label_map):
+  - `curl -sS "http://127.0.0.1:8722/device_mapping/enumerate_labels?index=0&device=0&param_ref=HiFilter%20Type" | jq .`
 
 Preset Capture & Apply
 - Capture current device as a preset (user/stock):
@@ -36,7 +42,7 @@ Preset Capture & Apply
 
 Direct Parameter Control
 - Set by index (fast path): `curl -sS -X POST http://127.0.0.1:8722/op/return/device/param -H 'Content-Type: application/json' -d '{"return_index":1,"device_index":0,"param_index":12,"value":0.58}' | jq .`
-- Set by name or display label (uses mapping):
+- Set by name or display label (uses mapping fits/labels when available):
   - Absolute numeric: `curl -sS -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"B","device_ref":"0","param_ref":"Feedback","target_value":0.6}' | jq .`
   - Display label/units: `curl -sS -X POST http://127.0.0.1:8722/op/return/param_by_name -H 'Content-Type: application/json' -d '{"return_ref":"B","device_ref":"0","param_ref":"Density","target_display":"High"}' | jq .`
 
@@ -57,4 +63,3 @@ Mixer (quick)
 Tips
 - Use letters for returns in name‑based ops: A/B/C… (e.g., `"return_ref":"B"`).
 - If something returns `{ok:false}`, ensure Ableton Live is running with the remote script enabled, or use `make dev-returns` to run the return‑aware UDP bridge.
-

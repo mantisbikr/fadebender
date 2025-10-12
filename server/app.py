@@ -1327,6 +1327,256 @@ def get_device_mapping(signature: Optional[str] = None, index: Optional[int] = N
     }
 
 
+@app.get("/device_mapping/validate")
+def validate_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    """Compare mapping names (masters, dependents, params_meta) with live param names.
+
+    Returns missing_in_live (declared in mapping but not seen live) and
+    unused_in_mapping (present live but not declared in mapping).
+    """
+    # Resolve signature and fetch live param names
+    sig = (signature or "").strip()
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = _make_device_signature(dname, live_params)
+    else:
+        # If signature provided, still fetch live names from either cached indices (if given) or skip
+        if index is not None and device is not None:
+            params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+            live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        else:
+            live_params = []
+
+    live_names = set(str(p.get("name", "")).strip() for p in (live_params or []))
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    if not mapping:
+        return {"ok": True, "signature": sig, "mapping_exists": False, "live_names": sorted(list(live_names))}
+
+    declared = set()
+    try:
+        for m in (mapping.get("grouping", {}) or {}).get("masters", []) or []:
+            declared.add(str(m))
+        for d, m in ((mapping.get("grouping", {}) or {}).get("dependents", {}) or {}).items():
+            declared.add(str(d))
+        for pm in mapping.get("params_meta", []) or []:
+            declared.add(str(pm.get("name", "")))
+    except Exception:
+        pass
+
+    missing_in_live = sorted([n for n in declared if n and n not in live_names])
+    unused_in_mapping = sorted([n for n in live_names if n and n not in declared])
+
+    return {
+        "ok": True,
+        "signature": sig,
+        "mapping_exists": True,
+        "missing_in_live": missing_in_live,
+        "unused_in_mapping": unused_in_mapping,
+        "counts": {"declared": len(declared), "live": len(live_names)},
+    }
+
+
+class SanityProbeBody(BaseModel):
+    return_index: int
+    device_index: int
+    param_ref: str  # name substring or index string
+    target_display: str
+    restore: Optional[bool] = True
+
+
+@app.post("/device_mapping/sanity_probe")
+def sanity_probe(body: SanityProbeBody) -> Dict[str, Any]:
+    """Set a param by display target using mapping, read back, and optionally restore previous value."""
+    ri = int(body.return_index); di = int(body.device_index)
+    # Resolve param index
+    pi = _resolve_param_index(ri, di, body.param_ref)
+    pr = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    params = ((pr or {}).get("data") or {}).get("params") or []
+    cur = next((p for p in params if int(p.get("index", -1)) == pi), None)
+    if not cur:
+        raise HTTPException(404, "param_not_found")
+    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
+    prev_x = float(cur.get("value", vmin))
+    pname = str(cur.get("name", ""))
+    # Compute signature and mapping
+    sig = _compute_signature_for(ri, di)
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    # Target parse
+    ty = _parse_target_display(body.target_display)
+    if ty is None and mapping:
+        # label path
+        pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == pname.lower()), None)
+        if pm and isinstance(pm.get("label_map"), dict):
+            lm = pm.get("label_map") or {}
+            for k, v in lm.items():
+                if str(k).strip().lower() == body.target_display.strip().lower():
+                    ty = None; prev_x = prev_x; x = max(vmin, min(vmax, float(v)))
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
+                    break
+    # Numeric path (with quick refinement)
+    if ty is not None:
+        x = prev_x
+        pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == pname.lower()), None) if mapping else None
+        if pm and isinstance(pm.get("fit"), dict):
+            x = _invert_fit_to_value(pm.get("fit") or {}, float(ty), vmin, vmax)
+        # initial set
+        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
+        # readback
+        rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+        rps = ((rb or {}).get("data") or {}).get("params") or []
+        newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+        applied_disp = str((newp or {}).get("display_value", ""))
+        applied_num = _parse_target_display(applied_disp)
+        # refine with small bisection if off
+        if applied_num is not None:
+            td = float(ty)
+            err0 = td - float(applied_num)
+            thresh = 0.02 * (abs(td) if td != 0 else 1.0)
+            if abs(err0) > thresh:
+                lo = vmin; hi = vmax; curx = x
+                if err0 < 0:  # actual > target -> decrease x
+                    hi = curx
+                else:
+                    lo = curx
+                for _ in range(6):
+                    mid = (lo + hi) / 2.0
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(mid)}, timeout=1.0)
+                    rb2 = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                    rps2 = ((rb2 or {}).get("data") or {}).get("params") or []
+                    newp2 = next((p for p in rps2 if int(p.get("index", -1)) == pi), None)
+                    applied_disp = str((newp2 or {}).get("display_value", ""))
+                    applied_num = _parse_target_display(applied_disp)
+                    if applied_num is None:
+                        break
+                    if abs(float(applied_num) - td) <= thresh:
+                        x = mid
+                        break
+                    if float(applied_num) > td:
+                        hi = mid
+                    else:
+                        lo = mid
+                    x = mid
+    else:
+        # label path already handled above; readback current
+        rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+        rps = ((rb or {}).get("data") or {}).get("params") or []
+        newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+        applied_disp = str((newp or {}).get("display_value", ""))
+        applied_num = _parse_target_display(applied_disp)
+    # Error report
+    err = None
+    td_final = _parse_target_display(body.target_display)
+    if td_final is not None and applied_num is not None:
+        err = float(td_final) - float(applied_num)
+    # Restore if requested
+    if bool(body.restore):
+        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(prev_x)}, timeout=1.0)
+    return {"ok": True, "signature": sig, "param": pname, "applied_display": applied_disp, "error": err}
+
+
+@app.get("/device_mapping/fits")
+def get_device_mapping_fits(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    """List fitted continuous parameters (name, fit type, coeffs, r2, confidence)."""
+    sig = (signature or "").strip()
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        # derive from live
+        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = _make_device_signature(dname, live_params)
+
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    if not mapping:
+        return {"ok": True, "signature": sig, "mapping_exists": False, "fits": []}
+    fits = []
+    for pm in (mapping.get("params_meta") or []):
+        try:
+            fit = pm.get("fit")
+            if isinstance(fit, dict):
+                fits.append({
+                    "name": pm.get("name"),
+                    "type": fit.get("type"),
+                    "coeffs": fit.get("coeffs"),
+                    "r2": fit.get("r2"),
+                    "confidence": pm.get("confidence"),
+                })
+        except Exception:
+            continue
+    # Sort by name for stable display
+    fits = sorted(fits, key=lambda x: str(x.get("name", "")))
+    return {"ok": True, "signature": sig, "count": len(fits), "fits": fits}
+
+
+@app.get("/device_mapping/enumerate_labels")
+def enumerate_param_labels(index: int, device: int, param_ref: str) -> Dict[str, Any]:
+    """Enumerate discrete labels for a quantized parameter by sweeping integer steps.
+
+    Restores the original value after sweep. Useful for building label_map.
+    """
+    ri = int(index); di = int(device)
+    # Resolve param index by substring or exact index string
+    try:
+        pi = _resolve_param_index(ri, di, param_ref)
+    except Exception:
+        raise HTTPException(404, "param_not_found")
+    # Read current params and capture bounds
+    pr = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    params = ((pr or {}).get("data") or {}).get("params") or []
+    cur = next((p for p in params if int(p.get("index", -1)) == pi), None)
+    if not cur:
+        raise HTTPException(404, "param_not_found")
+    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
+    prev = float(cur.get("value", vmin))
+    name = str(cur.get("name", ""))
+    # Sweep integer steps
+    labels = []
+    try:
+        import time as _t
+        lo = int(vmin); hi = int(vmax)
+        for step in range(lo, hi + 1):
+            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(step)}, timeout=1.0)
+            _t.sleep(0.15)
+            rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+            rps = ((rb or {}).get("data") or {}).get("params") or []
+            p2 = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+            disp = str((p2 or {}).get("display_value", ""))
+            labels.append({"step": step, "display": disp})
+    finally:
+        try:
+            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(prev)}, timeout=1.0)
+        except Exception:
+            pass
+    # Build a basic label_map suggestion (unique display -> first step)
+    label_map = {}
+    for item in labels:
+        d = item.get("display")
+        if d and d not in label_map:
+            label_map[d] = float(item.get("step", 0))
+    return {"ok": True, "param": name, "index": pi, "range": [int(vmin), int(vmax)], "samples": labels, "label_map_suggested": label_map}
+
+
 class ReturnMixerBody(BaseModel):
     return_index: int
     field: str  # 'volume' | 'pan' | 'mute' | 'solo'
@@ -3525,6 +3775,12 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     mapping = STORE.get_device_map(signature) if STORE.enabled else None
     if not mapping:
         mapping = STORE.get_device_map_local(signature)
+    # Fetch new device mapping (fits/labels) when available
+    new_map = None
+    try:
+        new_map = STORE.get_device_mapping(signature) if STORE.enabled else None
+    except Exception:
+        new_map = None
     # Try exact param match by name (with alias normalization)
     param_name = str(cur.get("name", ""))
     learned = None
@@ -3652,8 +3908,61 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
         labs = list({str(s.get("display","")) for s in (ln.get("samples") or []) if s.get("display") is not None})
         return len(labs) <= 2
 
-    # Handle explicit label first (including On/Off synonyms)
-    if label and learned:
+    # Prefer new mapping for label/fit inversion when available
+    pm_entry = None
+    try:
+        if new_map and isinstance(new_map.get("params_meta"), list):
+            for pme in new_map["params_meta"]:
+                if str(pme.get("name", "")).lower() == param_name.lower():
+                    pm_entry = pme
+                    break
+    except Exception:
+        pm_entry = None
+
+    # For quantized params with numeric string labels (e.g., "0.0", "1.0"),
+    # treat numeric target_y as a label lookup instead of a fit inversion
+    if target_y is not None and not label and pm_entry:
+        if str(pm_entry.get("control_type", "")).lower() == "quantized":
+            lm = pm_entry.get("label_map") or {}
+            # Check if this label_map has numeric string keys
+            numeric_key_found = False
+            for k in lm.keys():
+                try:
+                    float(str(k))
+                    numeric_key_found = True
+                    break
+                except:
+                    pass
+            # If so, treat target_y as a label string
+            if numeric_key_found:
+                label = str(target_y) if target_y == int(target_y) else f"{target_y:.1f}"
+                target_y = None
+
+    # Handle explicit label via new mapping label_map
+    handled_label = False
+    if label and pm_entry:
+        lm = pm_entry.get("label_map") or {}
+        for k, v in lm.items():
+            try:
+                if str(k).strip().lower() == label.lower():
+                    x = max(vmin, min(vmax, float(v)))
+                    handled_label = True
+                    break
+            except Exception:
+                continue
+        if not handled_label and str(pm_entry.get("control_type", "")).lower() == "binary":
+            l = label.strip().lower()
+            on_words = {"on","enable","enabled","true","1","yes"}
+            off_words = {"off","disable","disabled","false","0","no"}
+            if l in on_words:
+                x = vmax if vmax >= 1.0 else 1.0
+                handled_label = True
+            elif l in off_words:
+                x = vmin if vmin <= 0.0 else 0.0
+                handled_label = True
+
+    # Fallback: explicit label using legacy learned mapping samples
+    if label and learned and not handled_label:
         # Try exact label match from samples
         found = False
         for s in learned.get("samples", []) or []:
@@ -3677,6 +3986,12 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                         x = float(v)
                         found = True
                         break
+    elif target_y is not None and pm_entry and isinstance(pm_entry.get("fit"), dict):
+        # Numeric target via new mapping fit inversion
+        try:
+            x = _invert_fit_to_value(pm_entry.get("fit") or {}, float(target_y), vmin, vmax)
+        except Exception:
+            pass
     elif target_y is not None and learned:
         # Use shared conversion for display->normalized when mapping is available
         try:
