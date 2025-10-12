@@ -3820,8 +3820,35 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
             pass
 
     # Auto-enable group masters for dependents (except configured skips)
+    # Prefer new_map.grouping when available, fallback to legacy learned mapping
     try:
-        if learned:
+        master_name: str | None = None
+        skip_auto = False
+        desired_val = None
+
+        # NEW PATH: Use new_map.grouping if available
+        if new_map and isinstance(new_map.get("grouping"), dict):
+            grp = new_map.get("grouping") or {}
+            skip_list = [str(x).lower() for x in (grp.get("skip_auto_enable") or [])]
+
+            # Check if this param is a dependent
+            deps_map = grp.get("dependents") or {}
+            for dep_name, master_ref in deps_map.items():
+                if str(dep_name).lower() == param_name.lower():
+                    # Parse master_ref which can be "MasterName" or dict with name/active_when
+                    if isinstance(master_ref, dict):
+                        master_name = str(master_ref.get("name", ""))
+                        desired_val = master_ref.get("active_when")
+                    else:
+                        master_name = str(master_ref)
+
+                    # Check if this master should skip auto-enable
+                    if master_name and any(master_name.lower() == s or s in master_name.lower() for s in skip_list):
+                        skip_auto = True
+                    break
+
+        # LEGACY PATH: Use old learned mapping if new_map didn't provide grouping
+        elif learned:
             role = (learned.get("role") or "").lower()
             gname = (learned.get("group") or "").lower()
             if role == "dependent" and gname not in ("global", "output"):
@@ -3841,58 +3868,58 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                 # Respect per-device skip list (e.g., Freeze On)
                 skip_list = [str(x).lower() for x in (rules.get("skip_auto_enable") or [])]
                 if any(s in param_name.lower() for s in skip_list) or ("freeze" in param_name.lower()):
-                    raise Exception("skip_auto_enable")
+                    skip_auto = True
 
-                # First preference: config dependents mapping (exact or case-insensitive)
-                master_name: str | None = None
-                deps_map = rules.get("dependents") or {}
-                for dn, mn in deps_map.items():
-                    if str(dn).lower() == param_name.lower():
-                        master_name = str(mn)
-                        break
-                # If master name uses alternatives (A|B|C), choose the first available in current params
-                if master_name and "|" in master_name:
-                    alts = [s.strip() for s in master_name.split("|") if s.strip()]
-                    chosen = None
-                    for alt in alts:
-                        if any(str(pp.get("name","" )).lower() == alt.lower() for pp in p_list):
-                            chosen = alt
+                if not skip_auto:
+                    # First preference: config dependents mapping (exact or case-insensitive)
+                    deps_map = rules.get("dependents") or {}
+                    for dn, mn in deps_map.items():
+                        if str(dn).lower() == param_name.lower():
+                            master_name = str(mn)
                             break
-                    master_name = chosen or alts[0]
+                    # If master name uses alternatives (A|B|C), choose the first available in current params
+                    if master_name and "|" in master_name:
+                        alts = [s.strip() for s in master_name.split("|") if s.strip()]
+                        chosen = None
+                        for alt in alts:
+                            if any(str(pp.get("name","" )).lower() == alt.lower() for pp in p_list):
+                                chosen = alt
+                                break
+                        master_name = chosen or alts[0]
 
-                # Fallback: infer from stored groups metadata
-                if not master_name:
-                    groups = (mapping.get("groups") or []) if mapping else []
-                    for g in groups:
-                        deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
-                        if any(param_name.lower() == dn.lower() for dn in deps):
-                            mref = g.get("master") or {}
-                            master_name = str(mref.get("name")) if mref else None
+                    # Fallback: infer from stored groups metadata
+                    if not master_name:
+                        groups = (mapping.get("groups") or []) if mapping else []
+                        for g in groups:
+                            deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
+                            if any(param_name.lower() == dn.lower() for dn in deps):
+                                mref = g.get("master") or {}
+                                master_name = str(mref.get("name")) if mref else None
+                                break
+                    # Last resort: construct "<Base> On" switch
+                    if not master_name and " " in param_name:
+                        master_name = param_name.rsplit(" ", 1)[0] + " On"
+
+                    # Use per-dependent desired master value when provided
+                    dm = rules.get("dependent_master_values") or {}
+                    for k, v in dm.items():
+                        if str(k).lower() == param_name.lower():
+                            try:
+                                desired_val = float(v)
+                            except Exception:
+                                desired_val = None
                             break
-                # Last resort: construct "<Base> On" switch
-                if not master_name and " " in param_name:
-                    master_name = param_name.rsplit(" ", 1)[0] + " On"
 
-                # Use per-dependent desired master value when provided
-                desired_val = None
-                dm = rules.get("dependent_master_values") or {}
-                for k, v in dm.items():
-                    if str(k).lower() == param_name.lower():
-                        try:
-                            desired_val = float(v)
-                        except Exception:
-                            desired_val = None
-                        break
-
-                if master_name:
-                    for p in p_list:
-                        if str(p.get("name","")) .lower()== master_name.lower():
-                            master_idx = int(p.get("index", 0))
-                            mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
-                            # Binary toggles usually 0..1; prefer explicit desired_val else max/1.0
-                            mval = desired_val if desired_val is not None else (mmax if mmax >= 1.0 else 1.0)
-                            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
-                            break
+        # Actually enable the master if we found one
+        if master_name and not skip_auto:
+            for p in p_list:
+                if str(p.get("name","")) .lower()== master_name.lower():
+                    master_idx = int(p.get("index", 0))
+                    mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
+                    # Binary toggles usually 0..1; prefer explicit desired_val else max/1.0
+                    mval = desired_val if desired_val is not None else (mmax if mmax >= 1.0 else 1.0)
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
+                    break
     except Exception:
         pass
 
