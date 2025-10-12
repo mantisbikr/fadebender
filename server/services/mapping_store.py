@@ -12,16 +12,37 @@ class MappingStore:
         try:
             from google.cloud import firestore  # type: ignore
 
-            self._client = firestore.Client()
+            # Read database configuration from environment
+            project_id = os.getenv("FIRESTORE_PROJECT_ID")
+            database_id = os.getenv("FIRESTORE_DATABASE_ID", "(default)")
+
+            print(f"[MAPPING-STORE] DEBUG - Environment variables:")
+            print(f"  FIRESTORE_PROJECT_ID: {project_id}")
+            print(f"  FIRESTORE_DATABASE_ID: {database_id}")
+
+            # Initialize client with database parameter
+            if project_id and database_id and database_id != "(default)":
+                self._client = firestore.Client(project=project_id, database=database_id)
+                print(f"[MAPPING-STORE] Connected to Firestore: {project_id}/{database_id}")
+            elif project_id:
+                self._client = firestore.Client(project=project_id)
+                print(f"[MAPPING-STORE] Connected to Firestore: {project_id}/(default)")
+            else:
+                self._client = firestore.Client()
+                print(f"[MAPPING-STORE] Connected to Firestore: default project/database")
+
             self._enabled = True
             self._backend = "firestore"
-        except Exception:
+        except Exception as e:
+            print(f"[MAPPING-STORE] Failed to initialize Firestore: {e}")
+            import traceback
+            traceback.print_exc()
             self._client = None
             self._enabled = False
             self._backend = "disabled"
         # Local fallback dir for mappings
         try:
-            import pathlib, os
+            import pathlib
             # Prefer user cache dir to avoid dev server reloads on file changes
             local_dir = os.getenv("FB_LOCAL_MAP_DIR")
             if local_dir:
@@ -279,6 +300,52 @@ class MappingStore:
                 continue
         return count
 
+    # ---------- Device Mapping Storage (New Display-Value Architecture) ----------
+
+    def get_device_mapping(self, device_signature: str) -> Optional[Dict[str, Any]]:
+        """Get device mapping from Firestore.
+
+        Args:
+            device_signature: SHA1 hash of parameter structure
+
+        Returns:
+            Device mapping data or None
+        """
+        if not self._enabled or not self._client:
+            return None
+
+        try:
+            doc = self._client.collection("device_mappings").document(device_signature).get()
+            if not doc.exists:
+                return None
+            return doc.to_dict()
+        except Exception as e:
+            print(f"[MAPPING-STORE] Error getting device mapping: {e}")
+            return None
+
+    def save_device_mapping(self, device_signature: str, mapping_data: Dict[str, Any]) -> bool:
+        """Save device mapping to Firestore.
+
+        Args:
+            device_signature: SHA1 hash of parameter structure
+            mapping_data: Mapping metadata including param_structure
+
+        Returns:
+            True if saved successfully
+        """
+        if not self._enabled or not self._client:
+            print("[MAPPING-STORE] Firestore not enabled, skipping device mapping save")
+            return False
+
+        try:
+            doc = self._client.collection("device_mappings").document(device_signature)
+            doc.set(mapping_data, merge=True)
+            print(f"[MAPPING-STORE] ✓ Saved device mapping {device_signature}")
+            return True
+        except Exception as e:
+            print(f"[MAPPING-STORE] ✗ Failed to save device mapping: {e}")
+            return False
+
     # ---------- Preset Storage (Firestore + Local) ----------
 
     def save_preset(
@@ -302,10 +369,15 @@ class MappingStore:
         dbg_env = str(os.getenv("FB_DEBUG_FIRESTORE", "")).lower() in ("1","true","yes","on")
         dbg = bool(dbg_cfg or dbg_env)
 
-        # Always save locally first
-        local_ok = self._save_preset_local(preset_id, preset_data)
-        if dbg:
-            print(f"[DEBUG] Firestore: Local save {'✓' if local_ok else '✗'} for preset {preset_id}")
+        # Only save locally for user presets (not stock)
+        preset_type = preset_data.get("preset_type", "stock")
+        is_user_preset = preset_type == "user" or "_user_" in preset_id
+
+        local_ok = True
+        if is_user_preset:
+            local_ok = self._save_preset_local(preset_id, preset_data)
+            if dbg:
+                print(f"[DEBUG] Firestore: Local save {'✓' if local_ok else '✗'} for user preset {preset_id}")
 
         if local_only:
             if dbg:
@@ -322,15 +394,15 @@ class MappingStore:
             doc = self._client.collection("presets").document(preset_id)
             doc.set(preset_data, merge=True)
             if dbg:
-                print(f"[DEBUG] Firestore: Saved preset {preset_id}")
+                print(f"[DEBUG] Firestore: Saved preset {preset_id} (stock: Firestore only)")
             return True
         except Exception as e:
             if dbg:
                 print(f"[DEBUG] Firestore: Failed to save preset {preset_id}: {e}")
-            return local_ok  # At least local succeeded
+            return local_ok  # At least local succeeded for user presets
 
     def get_preset(self, preset_id: str) -> Optional[Dict[str, Any]]:
-        """Get preset from Firestore or local cache.
+        """Get preset from Firestore or local cache (user presets only).
 
         Args:
             preset_id: Preset identifier
@@ -343,15 +415,16 @@ class MappingStore:
             try:
                 doc = self._client.collection("presets").document(preset_id).get()
                 if doc.exists:
-                    data = doc.to_dict()
-                    # Cache locally
-                    self._save_preset_local(preset_id, data)
-                    return data
+                    return doc.to_dict()
             except Exception:
                 pass
 
-        # Fall back to local
-        return self._get_preset_local(preset_id)
+        # Fall back to local ONLY for user presets
+        is_user_preset = "_user_" in preset_id
+        if is_user_preset:
+            return self._get_preset_local(preset_id)
+
+        return None
 
     def list_presets(
         self,
@@ -406,8 +479,11 @@ class MappingStore:
             except Exception:
                 pass
 
-        # Fall back to local
-        return self._list_presets_local(device_type, structure_signature, preset_type)
+        # Fall back to local ONLY for user presets
+        if preset_type == "user":
+            return self._list_presets_local(device_type, structure_signature, preset_type)
+
+        return []
 
     def delete_preset(self, preset_id: str) -> bool:
         """Delete preset from Firestore and local storage.

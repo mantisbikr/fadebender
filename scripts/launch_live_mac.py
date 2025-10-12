@@ -51,8 +51,15 @@ def main() -> int:
     # Server should bind ABLETON_EVENT_PORT (default 19846); Live (RS) sends to ABLETON_UDP_CLIENT_HOST/PORT.
     env.setdefault("ABLETON_UDP_CLIENT_HOST", env.get("ABLETON_UDP_HOST", "127.0.0.1"))
     env.setdefault("ABLETON_UDP_CLIENT_PORT", os.getenv("ABLETON_EVENT_PORT", "19846"))
-    # Gate LOM listeners. Default to master-only for initial rollout.
-    env.setdefault("FADEBENDER_LISTENERS", os.getenv("FADEBENDER_LISTENERS", "master"))
+
+    # Gate LOM listeners. Must be set in .env - no fallback!
+    if "FADEBENDER_LISTENERS" not in env:
+        print("WARNING: FADEBENDER_LISTENERS not set! Please set it in .env")
+        print("Example: FADEBENDER_LISTENERS=tracks,returns")
+        print("Continuing without listeners enabled...")
+        env["FADEBENDER_LISTENERS"] = ""
+    else:
+        listeners = env["FADEBENDER_LISTENERS"]
 
     print(
         "Launching: {}\n  FADEBENDER_UDP_ENABLE=1 ABLETON_UDP_HOST={} ABLETON_UDP_PORT={} ABLETON_UDP_CLIENT_HOST={} ABLETON_UDP_CLIENT_PORT={} FADEBENDER_LISTENERS={}".format(

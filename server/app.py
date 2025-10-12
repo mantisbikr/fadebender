@@ -466,6 +466,26 @@ STORE = MappingStore()
 LEARN_JOBS: dict[str, dict] = {}
 BACKFILL_JOBS: dict[str, dict] = {}
 
+# --- Auto-capture dedupe for UI polling ---
+_CAPTURE_DEDUPE: dict[str, float] = {}
+
+def _should_capture_signature(sig: str, ttl_sec: float = 60.0) -> bool:
+    """Return True if we should trigger capture for this signature now.
+
+    Prevents repeated auto-capture on frequent UI polls for the same device
+    signature. TTL defaults to 60s; capture itself is idempotent and will
+    skip when sufficient values already exist.
+    """
+    try:
+        now = time.time()
+        last = _CAPTURE_DEDUPE.get(sig)
+        if last is not None and (now - last) < ttl_sec:
+            return False
+        _CAPTURE_DEDUPE[sig] = now
+        return True
+    except Exception:
+        return True
+
 @app.get("/events")
 async def events():
     q = await broker.subscribe()
@@ -958,8 +978,22 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     exists = False
     device_type = _detect_device_type(live_params, dname)
 
+    # Ensure base mapping exists immediately (synchronous) for responsive UI
     try:
-        # Check Firestore first (primary source), fall back to local cache
+        await _ensure_device_mapping(signature, device_type, live_params)
+    except Exception:
+        pass
+
+    # New base mapping (param_structure) existence check
+    mapping_exists = False
+    try:
+        new_map = STORE.get_device_mapping(signature)
+        mapping_exists = bool(new_map)
+    except Exception:
+        mapping_exists = False
+
+    try:
+        # Check legacy learned mapping (with samples) for backwards compatibility
         if STORE.enabled:
             m = STORE.get_device_map(signature)
         else:
@@ -975,19 +1009,26 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
                     exists = True
                     print(f"[DEBUG] Found learned param: {p.get('name')} with {len(sm)} samples")
                     break
-        print(f"[DEBUG] Final exists: {exists}")
+        print(f"[DEBUG] Final exists (learned): {exists}")
     except Exception as e:
         print(f"[DEBUG] Exception: {e}")
         exists = False
 
-    # If structure is learned, auto-capture preset in background (non-blocking)
-    if exists and device_type and dname:
-        # IMPORTANT: pass live_params (with 'value' fields), not learned mapping
-        asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, live_params))
+    # Auto-capture preset + ensure device mapping in background (non-blocking)
+    # Always trigger when we have device_type and name; capture flow is idempotent
+    # and will skip if a preset with sufficient values already exists.
+    if device_type and dname and _should_capture_signature(signature):
+        try:
+            asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, live_params))
+        except Exception:
+            pass
 
+    # Top-level existence should reflect either new base mapping OR learned mapping
     return {
         "ok": True,
-        "exists": exists,
+        "exists": bool(mapping_exists or exists),
+        "mapping_exists": bool(mapping_exists),
+        "learned_exists": bool(exists),
         "signature": signature,
         "backend": backend,
         "device_type": device_type,
@@ -1015,15 +1056,21 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
     # trigger auto-capture when a learned mapping exists.
     device_type = _detect_device_type(params, dname)
     data = None
+    # Ensure base mapping exists immediately so first UI poll goes green
     try:
-        # Check Firestore first (primary source), fall back to local cache
+        await _ensure_device_mapping(signature, device_type, params)
+    except Exception:
+        pass
+
+    try:
+        # Prefer legacy learned mapping summary when available
         if STORE.enabled:
             m = STORE.get_device_map(signature)
         else:
             m = STORE.get_device_map_local(signature)
         if m:
             plist = []
-            exists = False
+            learned_exists = False
             for p in m.get("params", []) or []:
                 plist.append({
                     "name": p.get("name"),
@@ -1040,27 +1087,69 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
                     "max": p.get("max"),
                 })
                 try:
-                    if not exists and len(p.get("samples") or []) >= 3:
-                        exists = True
+                    if not learned_exists and len(p.get("samples") or []) >= 3:
+                        learned_exists = True
                 except Exception:
                     pass
+            # Also consider base mapping presence when learned samples are empty
+            mapping_exists_flag = False
+            try:
+                nm = STORE.get_device_mapping(signature)
+                mapping_exists_flag = bool(nm)
+            except Exception:
+                mapping_exists_flag = False
             data = {
                 "device_name": m.get("device_name") or dname,
                 "signature": signature,
                 "groups": m.get("groups") or [],
                 "params": plist,
-                "exists": exists,
+                "exists": bool(learned_exists or mapping_exists_flag),
+                "learned_exists": learned_exists,
+                "mapping_exists": mapping_exists_flag,
             }
-            # If mapping exists, trigger background preset auto-capture
-            # so that calling only the summary endpoint can still save presets.
-            try:
-                if exists and device_type and dname:
-                    # Use live params with 'value' fields for capture
-                    asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
-            except Exception:
-                pass
+        else:
+            # Fall back to new base mapping existence; provide minimal summary
+            new_map = STORE.get_device_mapping(signature)
+            if new_map:
+                ps = new_map.get("param_structure") or []
+                data = {
+                    "device_name": dname,
+                    "signature": signature,
+                    "params": [{
+                        "name": p.get("name"),
+                        "index": p.get("index"),
+                        "min": p.get("min"),
+                        "max": p.get("max"),
+                        "sample_count": 0,
+                    } for p in ps],
+                    "exists": True,
+                    "mapping_exists": True,
+                    "learned_exists": False,
+                }
     except Exception as e:
         return {"ok": False, "error": str(e), "backend": backend}
+    # If neither learned nor base mapping is persisted, derive a minimal summary from live params
+    if data is None and params:
+        data = {
+            "device_name": dname,
+            "signature": signature,
+            "params": [{
+                "name": p.get("name"),
+                "index": p.get("index"),
+                "min": p.get("min"),
+                "max": p.get("max"),
+                "sample_count": 0,
+            } for p in params],
+            "exists": True,              # Treat as mapped for UI purposes
+            "mapping_exists": False,
+            "learned_exists": False,
+        }
+    # Unconditionally trigger background preset auto-capture + mapping ensure (deduped).
+    if device_type and dname and _should_capture_signature(signature):
+        try:
+            asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
+        except Exception:
+            pass
     # Top-level exists mirrors data.exists for convenience
     top_exists = bool((data or {}).get("exists")) if data else False
     return {"ok": True, "backend": backend, "signature": signature, "exists": top_exists, "data": data}
@@ -1733,6 +1822,70 @@ Expected JSON skeleton to fill (return exactly this object with content populate
         }
 
 
+async def _ensure_device_mapping(
+    device_signature: str,
+    device_type: str,
+    params: list[dict],
+) -> None:
+    """Create or update device mapping in Firestore.
+
+    Creates a device_mappings document with parameter structure on first preset capture.
+
+    Args:
+        device_signature: SHA1 hash of parameter structure
+        device_type: Device type (reverb, delay, etc.)
+        params: List of parameter dicts with index, name, min, max
+    """
+    try:
+        # Skip if params list is empty or too small (device in transition)
+        if not params or len(params) < 5:
+            print(f"[DEVICE-MAPPING] Skipping - insufficient params ({len(params or [])} params, need at least 5)")
+            return
+
+        # Check if device mapping already exists
+        mapping = STORE.get_device_mapping(device_signature)
+        if mapping:
+            print(f"[DEVICE-MAPPING] Device mapping already exists for {device_signature}")
+            return
+
+        print(f"[DEVICE-MAPPING] Creating new device mapping for {device_signature}")
+
+        # Build parameter structure from params
+        param_structure = []
+        for p in params:
+            param_info = {
+                "index": p.get("index"),
+                "name": p.get("name"),
+                "min": p.get("min", 0.0),
+                "max": p.get("max", 1.0),
+            }
+            param_structure.append(param_info)
+
+        # Create device mapping document
+        import time as _time
+        mapping_data = {
+            "device_signature": device_signature,
+            "device_type": device_type,
+            "param_structure": param_structure,
+            "param_count": len(param_structure),
+            "created_at": int(_time.time()),
+            "updated_at": int(_time.time()),
+            "metadata_status": "pending_analysis",  # Waiting for LLM analysis
+        }
+
+        # Save to Firestore
+        saved = STORE.save_device_mapping(device_signature, mapping_data)
+        if saved:
+            print(f"[DEVICE-MAPPING] ✓ Created device mapping with {len(param_structure)} parameters")
+        else:
+            print(f"[DEVICE-MAPPING] ✗ Failed to create device mapping")
+
+    except Exception as e:
+        print(f"[DEVICE-MAPPING] Error ensuring device mapping: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 async def _auto_capture_preset(
     return_index: int,
     device_index: int,
@@ -1776,17 +1929,10 @@ async def _auto_capture_preset(
                     print(f"[AUTO-CAPTURE] Ensured preset {preset_id} saved to Firestore")
             except Exception:
                 pass
-            # If values are sufficient, do not re-capture, but enqueue enrichment if not enriched yet
+            # If values are sufficient, do not re-capture
             if isinstance(pv, dict) and len(pv) >= 5:
-                # Enqueue cloud enrichment when not enriched
-                if status != "enriched" and version < 2:
-                    try:
-                        ok = enqueue_preset_enrich(preset_id, metadata_version=1)
-                        print(f"[AUTO-CAPTURE] Preset {preset_id} already exists; enqueued={ok}")
-                    except Exception:
-                        print(f"[AUTO-CAPTURE] Preset {preset_id} already exists; enqueue failed")
-                else:
-                    print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping (enriched)")
+                # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment
+                print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
                 return
             else:
                 print(f"[AUTO-CAPTURE] Preset {preset_id} exists but has {len(pv) if isinstance(pv, dict) else 0} values; refreshing")
@@ -1800,19 +1946,27 @@ async def _auto_capture_preset(
             print(f"[AUTO-CAPTURE] DEBUG - Has 'value'? {'value' in sample_param}")
             print(f"[AUTO-CAPTURE] DEBUG - Sample param: {sample_param}")
 
-        # Extract parameter values from provided params
+        # Extract parameter values AND display values from provided params
         parameter_values = {}
+        parameter_display_values = {}
         for p in params:
             param_name = p.get("name")
             param_value = p.get("value")
+            param_display = p.get("display_value")
+
             if param_name and param_value is not None:
                 parameter_values[param_name] = float(param_value)
+
+                # Store display value if available
+                if param_display is not None:
+                    parameter_display_values[param_name] = str(param_display)
+
                 # Debug: Show Sync/Time related params WITH display_value
                 if any(x in param_name for x in ['Sync', 'Time', '16th']):
-                    display_val = p.get("display_value", "N/A")
-                    print(f"[AUTO-CAPTURE] DEBUG - {param_name}: value={param_value}, display_value='{display_val}'")
+                    print(f"[AUTO-CAPTURE] DEBUG - {param_name}: value={param_value}, display_value='{param_display}'")
 
         print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
+        print(f"[AUTO-CAPTURE] Extracted {len(parameter_display_values)} parameter display values")
 
         # Generate metadata (fast-path optional)
         metadata = {}
@@ -1836,13 +1990,20 @@ async def _auto_capture_preset(
             "manufacturer": "Ableton",
             "daw": "Ableton Live",
             "structure_signature": structure_signature,
+            "device_signature": structure_signature,  # Alias for clarity
             "category": device_type,
             "preset_type": "stock",
             "parameter_values": parameter_values,
+            "parameter_display_values": parameter_display_values,  # NEW: Display values
             "values_status": "ok" if len(parameter_values) >= 5 else "pending",
+            "metadata_status": "captured",  # NEW: Track enrichment status
+            "captured_at": int(_time.time()),
             "updated_at": int(_time.time()),
             **metadata  # LLM-generated or pending_enrichment flag
         }
+
+        # Create/update device mapping (first time only per device signature)
+        await _ensure_device_mapping(structure_signature, device_type, params)
 
         # Save to Firestore (and local cache)
         saved = STORE.save_preset(preset_id, preset_data, local_only=False)
@@ -1862,15 +2023,19 @@ async def _auto_capture_preset(
                 })
             except Exception:
                 pass
-            # Enqueue cloud enrichment (Pub/Sub) if configured
-            try:
-                enqueued = enqueue_preset_enrich(preset_id, metadata_version=1)
-                if enqueued:
-                    print(f"[PUBSUB] ✓ Enqueued preset_enrich_requested for {preset_id}")
-                else:
-                    print(f"[PUBSUB] ⊘ Pub/Sub not configured (set PUBSUB_TOPIC in .env)")
-            except Exception as e:
-                print(f"[PUBSUB] ✗ Failed to enqueue: {e}")
+            # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment instead
+            # Enrichment will be done manually after all presets are captured:
+            # 1. Export presets with export_for_enrichment.py
+            # 2. Feed to ChatGPT with enrichment prompt
+            # 3. Apply results with apply_enrichments.py
+            # try:
+            #     enqueued = enqueue_preset_enrich(preset_id, metadata_version=1)
+            #     if enqueued:
+            #         print(f"[PUBSUB] ✓ Enqueued preset_enrich_requested for {preset_id}")
+            #     else:
+            #         print(f"[PUBSUB] ⊘ Pub/Sub not configured (set PUBSUB_TOPIC in .env)")
+            # except Exception as e:
+            #     print(f"[PUBSUB] ✗ Failed to enqueue: {e}")
             # Post-save verification and optional retry for empty values
             try:
                 asyncio.create_task(_verify_and_retry_preset(preset_id, return_index, device_index))
@@ -1942,11 +2107,15 @@ async def _verify_and_retry_preset(
         }, timeout=1.2)
         rparams = ((rd or {}).get("data") or {}).get("params") or []
         live_vals: Dict[str, float] = {}
+        live_disp: Dict[str, str] = {}
         for p in rparams:
             nm = p.get("name")
             val = p.get("value")
+            disp = p.get("display_value")
             if nm is not None and val is not None:
                 live_vals[str(nm)] = float(val)
+            if nm is not None and disp is not None:
+                live_disp[str(nm)] = str(disp)
 
         if live_vals:
             # merge into preset doc
@@ -1954,6 +2123,8 @@ async def _verify_and_retry_preset(
             preset["parameter_values"] = live_vals
             preset["values_status"] = "ok" if len(live_vals) >= min_params else "pending"
             preset["updated_at"] = int(_time.time())
+            if live_disp:
+                preset["parameter_display_values"] = live_disp
             STORE.save_preset(preset_id, preset, local_only=False)
 
         try:
@@ -2628,13 +2799,17 @@ def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
             detail=f"Device structure not learned. Please learn device first (signature: {signature})"
         )
 
-    # Extract current parameter values
+    # Extract current parameter values and display strings
     parameter_values = {}
+    parameter_display_values = {}
     for p in params:
         param_name = p.get("name")
         param_value = p.get("value")
+        param_display = p.get("display_value")
         if param_name and param_value is not None:
             parameter_values[param_name] = float(param_value)
+            if param_display is not None:
+                parameter_display_values[param_name] = str(param_display)
 
     # Detect device type
     device_type = _detect_device_type(params, body.preset_name)
@@ -2650,6 +2825,7 @@ def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
         "category": device_type,
         "preset_type": body.category,
         "parameter_values": parameter_values,
+        "parameter_display_values": parameter_display_values,
     }
 
     if body.description:
@@ -2824,7 +3000,7 @@ async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
     device_name = preset.get("name") or preset.get("device_name") or preset_id
     parameter_values = dict(preset.get("parameter_values") or {})
 
-    # Optionally refresh parameter values from live device
+    # Optionally refresh parameter values (and display values) from live device
     if body.update_values_from_live and body.return_index is not None and body.device_index is not None:
         try:
             rd = udp_request({
@@ -2834,13 +3010,20 @@ async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
             }, timeout=1.2)
             rparams = ((rd or {}).get("data") or {}).get("params") or []
             live_vals = {}
+            live_disp = {}
             for p in rparams:
                 nm = p.get("name")
                 val = p.get("value")
+                disp = p.get("display_value")
                 if nm is not None and val is not None:
                     live_vals[str(nm)] = float(val)
+                if nm is not None and disp is not None:
+                    live_disp[str(nm)] = str(disp)
             if live_vals:
                 parameter_values = live_vals
+            if live_disp:
+                # attach display values alongside normalized values
+                preset["parameter_display_values"] = live_disp
         except Exception:
             # keep existing values if live read fails
             pass

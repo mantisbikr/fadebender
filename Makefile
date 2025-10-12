@@ -22,6 +22,7 @@ help:
 	@echo "  make returns-status  - print return tracks/devices/params via server"
 	@echo "  make verify-vertex   - validate Vertex creds/model access"
 	@echo "  make index-knowledge - list discovered knowledge files/headings"
+	@echo "  make export-digest   - export per-signature digest to JSON (OUT=/path SIG=sha1 or RET=0 DEV=0)"
 	@echo "  make undo            - undo last mixer change via /op/undo_last"
 	@echo "  make redo            - redo last mixer change via /op/redo_last"
 	@echo "  make accept          - run acceptance checks against running services"
@@ -49,7 +50,7 @@ LOCAL_MAP_DIR ?= $(HOME)/.fadebender/param_maps
 
 run-server:
 		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR)"
-		FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
+		@set -a && [ -f .env ] && . ./.env && set +a && FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
 
 run-server-noreload:
 		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) (no-reload)"
@@ -154,7 +155,7 @@ outline:
 	@curl -sS --max-time 3 http://127.0.0.1:$${SERVER_PORT-8722}/project/outline | jq .
 
 launch-live:
-	@python3 scripts/launch_live_mac.py
+	@set -a && [ -f .env ] && . ./.env && set +a && python3 scripts/launch_live_mac.py
 
 live-dev: stop-udp install-remote launch-live
 
@@ -184,6 +185,16 @@ migrate-local-maps:
 
 list-local-maps:
 	@echo "Listing local maps in $(LOCAL_MAP_DIR)" && ls -la $(LOCAL_MAP_DIR) 2>/dev/null || echo "(none)"
+
+# ---- Export per-signature digest for LLM analysis ----
+export-digest:
+	@if [ -z "$(OUT)" ]; then echo "Usage: make export-digest OUT=/tmp/digest.json SIG=<sha1>|RET=<i> DEV=<j>"; exit 2; fi;
+	@if [ -n "$(SIG)" ]; then \
+		python3 scripts/export_signature_digest.py --signature $(SIG) --out $(OUT); \
+	else \
+		if [ -z "$(RET)" ] || [ -z "$(DEV)" ]; then echo "Provide SIG or RET and DEV"; exit 3; fi; \
+		python3 scripts/export_signature_digest.py --return $(RET) --device $(DEV) --out $(OUT); \
+	fi
 
 # ---- Master Controller ----
 run-controller:
