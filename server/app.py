@@ -1224,6 +1224,109 @@ def op_return_send(body: ReturnSendBody) -> Dict[str, Any]:
     return resp
 
 
+# ---------------- Device Mapping Import (LLM + Numeric Fits) ----------------
+
+class MappingImportBody(BaseModel):
+    signature: str
+    device_type: Optional[str] = None
+    grouping: Optional[dict] = None
+    params_meta: Optional[list] = None
+    sources: Optional[dict] = None
+    analysis_status: Optional[str] = None  # e.g., "partial_fits" | "analyzed"
+
+
+@app.post("/device_mapping/import")
+def import_device_mapping(body: MappingImportBody) -> Dict[str, Any]:
+    """Merge provided mapping analysis data into device_mappings for a signature.
+
+    - Creates mapping doc if missing via save_device_mapping()
+    - Merges top-level fields: device_type, grouping, params_meta, sources, analysis_status
+    - For params_meta, replaces the entire list (simple & safe)
+    Requires Firestore to be enabled in MappingStore.
+    """
+    sig = body.signature.strip()
+    if not sig:
+        raise HTTPException(400, "signature required")
+
+    if not STORE.enabled:
+        return {"ok": False, "error": "firestore_disabled"}
+
+    existing = STORE.get_device_mapping(sig) or {}
+    updated: Dict[str, Any] = dict(existing)
+    updated["device_signature"] = sig
+    if body.device_type:
+        updated["device_type"] = body.device_type
+    if body.grouping is not None:
+        updated["grouping"] = body.grouping
+    if body.params_meta is not None:
+        updated["params_meta"] = list(body.params_meta)
+    if body.sources is not None:
+        src = dict(updated.get("sources") or {})
+        src.update(dict(body.sources))
+        updated["sources"] = src
+    if body.analysis_status:
+        updated["analysis_status"] = body.analysis_status
+    try:
+        import time as _time
+        if "created_at" not in updated:
+            updated["created_at"] = int(_time.time())
+        updated["updated_at"] = int(_time.time())
+    except Exception:
+        pass
+
+    ok = STORE.save_device_mapping(sig, updated)
+    return {"ok": bool(ok), "signature": sig, "updated_fields": [k for k in ("device_type","grouping","params_meta","sources","analysis_status") if k in updated]}
+
+
+@app.get("/device_mapping")
+def get_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    """Fetch device mapping (grouping + params_meta) for a signature.
+
+    You can provide either:
+    - signature: SHA1 of structure
+    - or index (return_index) and device (device_index) to derive signature from live
+    """
+    sig = (signature or "").strip()
+    if not sig:
+        # derive from live indices
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = _make_device_signature(dname, live_params)
+
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    if not mapping:
+        # Return 200 with mapping_exists=False to aid UI/CLI
+        return {"ok": True, "signature": sig, "mapping_exists": False}
+
+    params_meta = mapping.get("params_meta") or []
+    fitted = [p.get("name") for p in params_meta if isinstance(p, dict) and isinstance(p.get("fit"), dict)]
+    missing_cont = [p.get("name") for p in params_meta if isinstance(p, dict) and (p.get("control_type") == "continuous") and (not p.get("fit"))]
+
+    return {
+        "ok": True,
+        "signature": sig,
+        "mapping_exists": True,
+        "mapping": mapping,
+        "summary": {
+            "params_meta_total": len(params_meta),
+            "fitted_count": len(fitted),
+            "fitted_names": fitted,
+            "missing_continuous": missing_cont,
+        },
+    }
+
+
 class ReturnMixerBody(BaseModel):
     return_index: int
     field: str  # 'volume' | 'pan' | 'mute' | 'solo'

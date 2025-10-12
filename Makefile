@@ -23,6 +23,8 @@ help:
 	@echo "  make verify-vertex   - validate Vertex creds/model access"
 	@echo "  make index-knowledge - list discovered knowledge files/headings"
 	@echo "  make export-digest   - export per-signature digest to JSON (OUT=/path SIG=sha1 or RET=0 DEV=0)"
+	@echo "  make import-mapping  - import mapping/grouping/params_meta from JSON (FILE=/path)"
+	@echo "  make fit-from-presets-apply - fit continuous params from presets and import (SIG=sha1 | RET=0 DEV=0)"
 	@echo "  make undo            - undo last mixer change via /op/undo_last"
 	@echo "  make redo            - redo last mixer change via /op/redo_last"
 	@echo "  make accept          - run acceptance checks against running services"
@@ -194,6 +196,18 @@ export-digest:
 	else \
 		if [ -z "$(RET)" ] || [ -z "$(DEV)" ]; then echo "Provide SIG or RET and DEV"; exit 3; fi; \
 		python3 scripts/export_signature_digest.py --return $(RET) --device $(DEV) --out $(OUT); \
+	fi
+
+import-mapping:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make import-mapping FILE=/path/analysis.json"; exit 2; fi;
+	python3 scripts/import_mapping_analysis.py --file $(FILE)
+
+fit-from-presets-apply:
+	@if [ -n "$(SIG)" ]; then \
+		python3 scripts/fit_params_from_presets.py --signature $(SIG) --import; \
+	else \
+		if [ -z "$(RET)" ] || [ -z "$(DEV)" ]; then echo "Provide SIG or RET and DEV"; exit 3; fi; \
+		python3 scripts/fit_params_from_presets.py --return $(RET) --device $(DEV) --import; \
 	fi
 
 # ---- Master Controller ----
