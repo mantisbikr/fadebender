@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps backup-firestore all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -33,6 +33,7 @@ help:
 	@echo "  make launch-live     - macOS: launch Ableton Live with UDP enabled"
 	@echo "  make live-dev        - stop UDP stub, install remote, launch Live"
 	@echo "  make run-bridge      - reminder for running Swift bridge in Xcode"
+	@echo "  make backup-firestore - backup device mapping from Firestore (SIG=sha1 OUT=path)"
 	@echo "  make all             - run NLP + Controller together"
 	@echo "  make clean           - remove Python venv and Node modules"
 
@@ -209,6 +210,15 @@ fit-from-presets-apply:
 		if [ -z "$(RET)" ] || [ -z "$(DEV)" ]; then echo "Provide SIG or RET and DEV"; exit 3; fi; \
 		python3 scripts/fit_params_from_presets.py --return $(RET) --device $(DEV) --import; \
 	fi
+
+# ---- Firestore Backup ----
+backup-firestore:
+	@if [ -z "$(SIG)" ] || [ -z "$(OUT)" ]; then \
+		echo "Usage: make backup-firestore SIG=<signature> OUT=<output-file>"; \
+		echo "Example: make backup-firestore SIG=64ccfc236b79371d0b45e913f81bf0f3a55c6db9 OUT=backups/reverb_\$$(date +%Y%m%d_%H%M%S).json"; \
+		exit 2; \
+	fi
+	@python3 scripts/backup_firestore_mapping.py --signature $(SIG) --output $(OUT)
 
 # ---- Master Controller ----
 run-controller:
