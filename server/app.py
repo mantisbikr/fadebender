@@ -3222,10 +3222,15 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
 
     # Get current device info
     devs = udp_request({"op": "get_return_devices", "return_index": ret_idx}, timeout=1.0)
-    if not devs or "devices" not in devs:
+    if not devs:
         raise HTTPException(status_code=404, detail="Return track not found")
 
-    devices = devs.get("devices", [])
+    # Unwrap response (may be wrapped in "data" field)
+    data = devs.get("data") if isinstance(devs, dict) and "data" in devs else devs
+    if not data or "devices" not in data:
+        raise HTTPException(status_code=404, detail="Return track not found")
+
+    devices = data.get("devices", [])
     if dev_idx >= len(devices):
         raise HTTPException(status_code=404, detail=f"Device index {dev_idx} out of range")
 
@@ -3234,10 +3239,15 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
 
     # Get current parameters
     params_resp = udp_request({"op": "get_return_device_params", "return_index": ret_idx, "device_index": dev_idx}, timeout=1.0)
-    if not params_resp or "params" not in params_resp:
+    if not params_resp:
         raise HTTPException(status_code=500, detail="Failed to get device parameters")
 
-    params = params_resp.get("params", [])
+    # Unwrap response (may be wrapped in "data" field)
+    params_data = params_resp.get("data") if isinstance(params_resp, dict) and "data" in params_resp else params_resp
+    if not params_data or "params" not in params_data:
+        raise HTTPException(status_code=500, detail="Failed to get device parameters")
+
+    params = params_data.get("params", [])
     current_signature = _make_device_signature(device_name, params)
     preset_signature = preset.get("structure_signature")
 
@@ -3252,6 +3262,8 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
     parameter_values = preset.get("parameter_values", {})
     applied = 0
     errors = []
+
+    import time
 
     for param_name, target_value in parameter_values.items():
         try:
@@ -3276,6 +3288,9 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
                 applied += 1
             else:
                 errors.append(f"Failed to set {param_name}")
+
+            # Small delay to prevent UDP flooding and allow Live to process
+            time.sleep(0.005)  # 5ms delay between parameters
 
         except Exception as e:
             errors.append(f"Error setting {param_name}: {str(e)}")
