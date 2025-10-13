@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps backup-firestore all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps backup-firestore cleanup-backups all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -34,6 +34,7 @@ help:
 	@echo "  make live-dev        - stop UDP stub, install remote, launch Live"
 	@echo "  make run-bridge      - reminder for running Swift bridge in Xcode"
 	@echo "  make backup-firestore - backup device mapping from Firestore (SIG=sha1 OUT=path)"
+	@echo "  make cleanup-backups  - keep only the 2 most recent database backups"
 	@echo "  make all             - run NLP + Controller together"
 	@echo "  make clean           - remove Python venv and Node modules"
 
@@ -219,6 +220,20 @@ backup-firestore:
 		exit 2; \
 	fi
 	@python3 scripts/backup_firestore_mapping.py --signature $(SIG) --output $(OUT)
+
+# ---- Cleanup Old Backups (keep only 2 most recent) ----
+cleanup-backups:
+	@echo "Cleaning up database backups (keeping 2 most recent)..."
+	@cd backups/database_backups && \
+	for db in default dev-display-value; do \
+		echo "Checking $$db backups..."; \
+		ls -t $${db}_*.json 2>/dev/null | tail -n +3 | while read f; do \
+			echo "  Removing: $$f"; \
+			rm "$$f"; \
+		done; \
+	done
+	@echo "Remaining backups:"
+	@ls -lht backups/database_backups/*.json 2>/dev/null || echo "  (none)"
 
 # ---- Master Controller ----
 run-controller:
