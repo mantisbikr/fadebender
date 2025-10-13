@@ -1,0 +1,1028 @@
+{
+  "created_at": 1760212147,
+  "analysis_status": "partial_fits",
+  "device_signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+  "device_type": "reverb",
+  "grouping": {
+    "skip_auto_enable": [
+      "Freeze On"
+    ],
+    "masters": [
+      "ER Spin On",
+      "Chorus On",
+      "LowShelf On",
+      "HiFilter On",
+      "Freeze On"
+    ],
+    "dependent_master_values": {
+      "HiFilter Freq": 1.0,
+      "ER Spin Rate": 1.0,
+      "LowShelf Freq": 1.0,
+      "ER Spin Amount": 1.0,
+      "Cut On": 1.0,
+      "LowShelf Gain": 1.0,
+      "Flat On": 1.0,
+      "Chorus Amount": 1.0,
+      "HiShelf Gain": 1.0,
+      "Chorus Rate": 1.0
+    },
+    "apply_order": [
+      "masters",
+      "quantized",
+      "dependents",
+      "continuous"
+    ],
+    "dependents": {
+      "HiFilter Freq": "HiFilter On",
+      "ER Spin Rate": "ER Spin On",
+      "LowShelf Freq": "LowShelf On",
+      "ER Spin Amount": "ER Spin On",
+      "Cut On": "Freeze On",
+      "LowShelf Gain": "LowShelf On",
+      "Flat On": "Freeze On",
+      "Chorus Amount": "Chorus On",
+      "HiShelf Gain": "HiFilter On",
+      "Chorus Rate": "Chorus On"
+    },
+    "requires_for_effect": {
+      "In Filter Width": {
+        "description": "Filter width only affects audio when at least one cut filter is enabled",
+        "any_of": [
+          "In LowCut On",
+          "In HighCut On"
+        ]
+      },
+      "In Filter Freq": {
+        "description": "Filter frequency only affects audio when at least one cut filter is enabled",
+        "any_of": [
+          "In LowCut On",
+          "In HighCut On"
+        ]
+      }
+    }
+  },
+  "metadata_status": "pending_analysis",
+  "param_structure": [
+    {
+      "min": 0.0,
+      "index": 0,
+      "max": 1.0,
+      "name": "Device On"
+    },
+    {
+      "min": 0.0,
+      "index": 1,
+      "max": 1.0,
+      "name": "Predelay"
+    },
+    {
+      "min": 0.0,
+      "index": 2,
+      "max": 1.0,
+      "name": "In LowCut On"
+    },
+    {
+      "min": 0.0,
+      "index": 3,
+      "max": 1.0,
+      "name": "In HighCut On"
+    },
+    {
+      "min": 0.0,
+      "index": 4,
+      "max": 1.0,
+      "name": "In Filter Freq"
+    },
+    {
+      "min": 0.0,
+      "index": 5,
+      "max": 1.0,
+      "name": "In Filter Width"
+    },
+    {
+      "min": 0.0,
+      "index": 6,
+      "max": 1.0,
+      "name": "ER Spin On"
+    },
+    {
+      "min": 0.0,
+      "index": 7,
+      "max": 1.0,
+      "name": "ER Spin Rate"
+    },
+    {
+      "min": 0.0,
+      "index": 8,
+      "max": 1.0,
+      "name": "ER Spin Amount"
+    },
+    {
+      "min": 0.0,
+      "index": 9,
+      "max": 1.0,
+      "name": "ER Shape"
+    },
+    {
+      "min": 0.0,
+      "index": 10,
+      "max": 1.0,
+      "name": "HiFilter On"
+    },
+    {
+      "min": 0.0,
+      "index": 11,
+      "max": 1.0,
+      "name": "HiFilter Type"
+    },
+    {
+      "min": 0.0,
+      "index": 12,
+      "max": 1.0,
+      "name": "HiFilter Freq"
+    },
+    {
+      "min": 0.0,
+      "index": 13,
+      "max": 1.0,
+      "name": "HiShelf Gain"
+    },
+    {
+      "min": 0.0,
+      "index": 14,
+      "max": 1.0,
+      "name": "LowShelf On"
+    },
+    {
+      "min": 0.0,
+      "index": 15,
+      "max": 1.0,
+      "name": "LowShelf Freq"
+    },
+    {
+      "min": 0.0,
+      "index": 16,
+      "max": 1.0,
+      "name": "LowShelf Gain"
+    },
+    {
+      "min": 0.0,
+      "index": 17,
+      "max": 1.0,
+      "name": "Chorus On"
+    },
+    {
+      "min": 0.0,
+      "index": 18,
+      "max": 1.0,
+      "name": "Chorus Rate"
+    },
+    {
+      "min": 0.0,
+      "index": 19,
+      "max": 1.0,
+      "name": "Chorus Amount"
+    },
+    {
+      "min": 0.0,
+      "index": 20,
+      "max": 1.0,
+      "name": "Decay Time"
+    },
+    {
+      "min": 0.0,
+      "index": 21,
+      "max": 1.0,
+      "name": "Diffusion"
+    },
+    {
+      "min": 0.0,
+      "index": 22,
+      "max": 1.0,
+      "name": "Scale"
+    },
+    {
+      "min": 0.0,
+      "index": 23,
+      "max": 1.0,
+      "name": "Freeze On"
+    },
+    {
+      "min": 0.0,
+      "index": 24,
+      "max": 1.0,
+      "name": "Flat On"
+    },
+    {
+      "min": 0.0,
+      "index": 25,
+      "max": 1.0,
+      "name": "Cut On"
+    },
+    {
+      "min": 0.0,
+      "index": 26,
+      "max": 1.0,
+      "name": "Room Size"
+    },
+    {
+      "min": 0.0,
+      "index": 27,
+      "max": 2.0,
+      "name": "Size Smoothing"
+    },
+    {
+      "min": 0.0,
+      "index": 28,
+      "max": 1.0,
+      "name": "Stereo Image"
+    },
+    {
+      "min": 0.0,
+      "index": 29,
+      "max": 3.0,
+      "name": "Density"
+    },
+    {
+      "min": 0.0,
+      "index": 30,
+      "max": 1.0,
+      "name": "Reflect Level"
+    },
+    {
+      "min": 0.0,
+      "index": 31,
+      "max": 1.0,
+      "name": "Diffuse Level"
+    },
+    {
+      "min": 0.0,
+      "index": 32,
+      "max": 1.0,
+      "name": "Dry/Wet"
+    }
+  ],
+  "sources": {
+    "preset_count": 52,
+    "fit_run_id": 1760321282,
+    "migration": "old_to_new_format"
+  },
+  "params_meta": [
+    {
+      "name": "Device On",
+      "index": 0,
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "max_display": 250.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.49964017340045835,
+          "b": 6.215727506669036
+        },
+        "type": "exp",
+        "r2": 0.9999985185535624
+      },
+      "confidence": 0.9999985185535624,
+      "min_display": 0.5,
+      "name": "Predelay"
+    },
+    {
+      "name": "HiFilter Type",
+      "control_type": "quantized",
+      "label_map": {
+        "Low-pass": 1.0,
+        "Shelving": 0.0
+      },
+      "labels": [
+        "Shelving",
+        "Low-pass"
+      ]
+    },
+    {
+      "name": "Size Smoothing",
+      "control_type": "quantized",
+      "label_map": {
+        "None": 0.0,
+        "Fast": 2.0,
+        "Slow": 1.0
+      },
+      "labels": [
+        "None",
+        "Slow",
+        "Fast"
+      ]
+    },
+    {
+      "max_display": 4.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 3.990432177881566,
+          "b": 0.010315591367316919
+        },
+        "type": "linear",
+        "r2": 0.9999920636747484
+      },
+      "confidence": 0.9999470911649893,
+      "min_display": 0.01,
+      "name": "Chorus Amount"
+    },
+    {
+      "max_display": 60000.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 200.07342974683237,
+          "b": 5.703262166313729
+        },
+        "type": "exp",
+        "r2": 0.9999999776335767
+      },
+      "confidence": 0.9999999776335767,
+      "min_display": 200.0,
+      "name": "Decay Time"
+    },
+    {
+      "max_display": 8.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.009534188238876501,
+          "b": 6.746358742835795
+        },
+        "type": "exp",
+        "r2": 0.999829955785207
+      },
+      "confidence": 0.999829955785207,
+      "min_display": 0.01,
+      "name": "Chorus Rate"
+    },
+    {
+      "max_display": 120.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 120.00177417257704,
+          "b": -0.0017295847592322389
+        },
+        "type": "linear",
+        "r2": 0.9999999943941945
+      },
+      "confidence": 0.9999999626279636,
+      "min_display": 0.0,
+      "name": "Stereo Image"
+    },
+    {
+      "max_display": 18000.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 50.00193763974532,
+          "b": 5.886066433914682
+        },
+        "type": "exp",
+        "r2": 0.9999999947039828
+      },
+      "confidence": 0.9999999947039828,
+      "min_display": 50.0,
+      "name": "In Filter Freq"
+    },
+    {
+      "name": "Cut On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "max_display": 500.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.2220550548018538,
+          "b": 7.719411703351299
+        },
+        "type": "exp",
+        "r2": 0.99999999911046
+      },
+      "confidence": 0.99999999911046,
+      "min_display": 0.22,
+      "name": "Room Size"
+    },
+    {
+      "name": "HiFilter On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "name": "ER Spin On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "name": "LowShelf On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "name": "Density",
+      "control_type": "quantized",
+      "label_map": {
+        "Low": 1.0,
+        "High": 3.0,
+        "Mid": 2.0,
+        "Sparse": 0.0
+      },
+      "labels": [
+        "Sparse",
+        "Low",
+        "Mid",
+        "High"
+      ]
+    },
+    {
+      "max_display": 100.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 100.09582463880498,
+          "b": -0.09468190279476799
+        },
+        "type": "linear",
+        "r2": 0.9999945924371627
+      },
+      "confidence": 0.9999639495810849,
+      "min_display": 0.0,
+      "name": "Dry/Wet"
+    },
+    {
+      "max_display": 1.3,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.0732785542,
+          "b": 2.8783115661
+        },
+        "type": "exp",
+        "r2": 0.9999470921
+      },
+      "confidence": 0.9999470921,
+      "min_display": 0.07,
+      "name": "ER Spin Rate"
+    },
+    {
+      "max_display": 1.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.7998135945663724,
+          "b": 0.2003853695819302
+        },
+        "type": "linear",
+        "r2": 0.9999579081939443
+      },
+      "confidence": 0.9997193879596286,
+      "min_display": 0.20000000298023224,
+      "name": "LowShelf Gain"
+    },
+    {
+      "max_display": 16000.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 19.99707294991866,
+          "b": 6.685026513908562
+        },
+        "type": "exp",
+        "r2": 0.9999999084176854
+      },
+      "confidence": 0.9999999084176854,
+      "min_display": 20.0,
+      "name": "HiFilter Freq"
+    },
+    {
+      "max_display": 6.0,
+      "control_type": "continuous",
+      "fit": {
+        "points": [
+          {
+            "y": -30.0,
+            "x": 0.0
+          },
+          {
+            "y": -22.0,
+            "x": 0.025
+          },
+          {
+            "y": -18.0,
+            "x": 0.05
+          },
+          {
+            "y": -15.0,
+            "x": 0.075
+          },
+          {
+            "y": -13.0,
+            "x": 0.1
+          },
+          {
+            "y": -11.0,
+            "x": 0.125
+          },
+          {
+            "y": -9.800000190734863,
+            "x": 0.15
+          },
+          {
+            "y": -8.5,
+            "x": 0.175
+          },
+          {
+            "y": -7.5,
+            "x": 0.2
+          },
+          {
+            "y": -6.5,
+            "x": 0.225
+          },
+          {
+            "y": -5.699999809265137,
+            "x": 0.25
+          },
+          {
+            "y": -4.900000095367432,
+            "x": 0.275
+          },
+          {
+            "y": -4.199999809265137,
+            "x": 0.3
+          },
+          {
+            "y": -3.5,
+            "x": 0.325
+          },
+          {
+            "y": -2.9000000953674316,
+            "x": 0.35
+          },
+          {
+            "y": -2.299999952316284,
+            "x": 0.375
+          },
+          {
+            "y": -1.7999999523162842,
+            "x": 0.4
+          },
+          {
+            "y": -1.2999999523162842,
+            "x": 0.425
+          },
+          {
+            "y": -0.800000011920929,
+            "x": 0.45
+          },
+          {
+            "y": -0.30000001192092896,
+            "x": 0.475
+          },
+          {
+            "y": 0.10000000149011612,
+            "x": 0.5
+          },
+          {
+            "y": 0.5,
+            "x": 0.525
+          },
+          {
+            "y": 0.8999999761581421,
+            "x": 0.55
+          },
+          {
+            "y": 1.2999999523162842,
+            "x": 0.575
+          },
+          {
+            "y": 1.600000023841858,
+            "x": 0.6
+          },
+          {
+            "y": 2.0,
+            "x": 0.625
+          },
+          {
+            "y": 2.299999952316284,
+            "x": 0.65
+          },
+          {
+            "y": 2.5999999046325684,
+            "x": 0.675
+          },
+          {
+            "y": 3.0,
+            "x": 0.7
+          },
+          {
+            "y": 3.299999952316284,
+            "x": 0.725
+          },
+          {
+            "y": 3.5,
+            "x": 0.75
+          },
+          {
+            "y": 3.799999952316284,
+            "x": 0.775
+          },
+          {
+            "y": 4.099999904632568,
+            "x": 0.8
+          },
+          {
+            "y": 4.400000095367432,
+            "x": 0.825
+          },
+          {
+            "y": 4.599999904632568,
+            "x": 0.85
+          },
+          {
+            "y": 4.900000095367432,
+            "x": 0.875
+          },
+          {
+            "y": 5.099999904632568,
+            "x": 0.9
+          },
+          {
+            "y": 5.300000190734863,
+            "x": 0.925
+          },
+          {
+            "y": 5.599999904632568,
+            "x": 0.95
+          },
+          {
+            "y": 5.800000190734863,
+            "x": 0.975
+          },
+          {
+            "y": 6.0,
+            "x": 1.0
+          }
+        ],
+        "type": "piecewise",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "min_display": -30.0,
+      "name": "Diffuse Level"
+    },
+    {
+      "name": "Flat On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "max_display": 1.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0003709626407513,
+          "b": -0.00024832130596755866
+        },
+        "type": "linear",
+        "r2": 0.9999604968210746
+      },
+      "confidence": 0.9997366454738307,
+      "min_display": 0.0,
+      "name": "ER Shape"
+    },
+    {
+      "max_display": 15000.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 20.012025287258734,
+          "b": 6.619342409646922
+        },
+        "type": "exp",
+        "r2": 0.9999999818588416
+      },
+      "confidence": 0.9999999818588416,
+      "min_display": 20.0,
+      "name": "LowShelf Freq"
+    },
+    {
+      "max_display": 96.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 95.95083052408262,
+          "b": 0.09307791498120264
+        },
+        "type": "linear",
+        "r2": 0.9999683551346825
+      },
+      "confidence": 0.999789034231217,
+      "min_display": 0.10000000149011612,
+      "name": "Diffusion"
+    },
+    {
+      "name": "Freeze On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "max_display": 55.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 2.0001153994,
+          "b": 3.3141646005
+        },
+        "type": "exp",
+        "r2": 0.9999999607
+      },
+      "confidence": 0.9999999607,
+      "min_display": 2.0,
+      "name": "ER Spin Amount"
+    },
+    {
+      "name": "In LowCut On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "name": "Chorus On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "max_display": 1.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.8005924377380139,
+          "b": 0.1995289632385018
+        },
+        "type": "linear",
+        "r2": 0.9998537208396638
+      },
+      "confidence": 0.9990248055977591,
+      "min_display": 0.20000000298023224,
+      "name": "HiShelf Gain"
+    },
+    {
+      "name": "In HighCut On",
+      "control_type": "binary",
+      "labels": [
+        "off",
+        "on"
+      ]
+    },
+    {
+      "max_display": 100.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 95.00553887394933,
+          "b": 5.0223442158594676
+        },
+        "type": "linear",
+        "r2": 0.9999651621985487
+      },
+      "confidence": 0.9997677479903249,
+      "min_display": 5.0,
+      "name": "Scale"
+    },
+    {
+      "max_display": 9.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 8.502129064250305,
+          "b": 0.49854704428901586
+        },
+        "type": "linear",
+        "r2": 0.9999973890934756
+      },
+      "confidence": 0.9999973890934756,
+      "min_display": 0.5,
+      "name": "In Filter Width"
+    },
+    {
+      "max_display": 6.0,
+      "control_type": "continuous",
+      "fit": {
+        "points": [
+          {
+            "y": -30.0,
+            "x": 0.0
+          },
+          {
+            "y": -22.0,
+            "x": 0.025
+          },
+          {
+            "y": -18.0,
+            "x": 0.05
+          },
+          {
+            "y": -15.0,
+            "x": 0.075
+          },
+          {
+            "y": -13.0,
+            "x": 0.1
+          },
+          {
+            "y": -11.0,
+            "x": 0.125
+          },
+          {
+            "y": -9.800000190734863,
+            "x": 0.15
+          },
+          {
+            "y": -8.5,
+            "x": 0.175
+          },
+          {
+            "y": -7.5,
+            "x": 0.2
+          },
+          {
+            "y": -6.5,
+            "x": 0.225
+          },
+          {
+            "y": -5.699999809265137,
+            "x": 0.25
+          },
+          {
+            "y": -4.900000095367432,
+            "x": 0.275
+          },
+          {
+            "y": -4.199999809265137,
+            "x": 0.3
+          },
+          {
+            "y": -3.5,
+            "x": 0.325
+          },
+          {
+            "y": -2.9000000953674316,
+            "x": 0.35
+          },
+          {
+            "y": -2.299999952316284,
+            "x": 0.375
+          },
+          {
+            "y": -1.7999999523162842,
+            "x": 0.4
+          },
+          {
+            "y": -1.2999999523162842,
+            "x": 0.425
+          },
+          {
+            "y": -0.800000011920929,
+            "x": 0.45
+          },
+          {
+            "y": -0.30000001192092896,
+            "x": 0.475
+          },
+          {
+            "y": 0.10000000149011612,
+            "x": 0.5
+          },
+          {
+            "y": 0.5,
+            "x": 0.525
+          },
+          {
+            "y": 0.8999999761581421,
+            "x": 0.55
+          },
+          {
+            "y": 1.2999999523162842,
+            "x": 0.575
+          },
+          {
+            "y": 1.600000023841858,
+            "x": 0.6
+          },
+          {
+            "y": 2.0,
+            "x": 0.625
+          },
+          {
+            "y": 2.299999952316284,
+            "x": 0.65
+          },
+          {
+            "y": 2.5999999046325684,
+            "x": 0.675
+          },
+          {
+            "y": 3.0,
+            "x": 0.7
+          },
+          {
+            "y": 3.299999952316284,
+            "x": 0.725
+          },
+          {
+            "y": 3.5,
+            "x": 0.75
+          },
+          {
+            "y": 3.799999952316284,
+            "x": 0.775
+          },
+          {
+            "y": 4.099999904632568,
+            "x": 0.8
+          },
+          {
+            "y": 4.400000095367432,
+            "x": 0.825
+          },
+          {
+            "y": 4.599999904632568,
+            "x": 0.85
+          },
+          {
+            "y": 4.900000095367432,
+            "x": 0.875
+          },
+          {
+            "y": 5.099999904632568,
+            "x": 0.9
+          },
+          {
+            "y": 5.300000190734863,
+            "x": 0.925
+          },
+          {
+            "y": 5.599999904632568,
+            "x": 0.95
+          },
+          {
+            "y": 5.800000190734863,
+            "x": 0.975
+          },
+          {
+            "y": 6.0,
+            "x": 1.0
+          }
+        ],
+        "type": "piecewise",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "min_display": -30.0,
+      "name": "Reflect Level"
+    }
+  ],
+  "updated_at": 1760321282,
+  "param_count": 33,
+  "_backup_metadata": {
+    "signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+    "database": "dev-display-value",
+    "timestamp": "2025-10-13T03:40:20.232625Z",
+    "params_meta_count": 33,
+    "params_subcollection_count": 0
+  }
+}
