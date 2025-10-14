@@ -466,6 +466,26 @@ STORE = MappingStore()
 LEARN_JOBS: dict[str, dict] = {}
 BACKFILL_JOBS: dict[str, dict] = {}
 
+# --- Auto-capture dedupe for UI polling ---
+_CAPTURE_DEDUPE: dict[str, float] = {}
+
+def _should_capture_signature(sig: str, ttl_sec: float = 60.0) -> bool:
+    """Return True if we should trigger capture for this signature now.
+
+    Prevents repeated auto-capture on frequent UI polls for the same device
+    signature. TTL defaults to 60s; capture itself is idempotent and will
+    skip when sufficient values already exist.
+    """
+    try:
+        now = time.time()
+        last = _CAPTURE_DEDUPE.get(sig)
+        if last is not None and (now - last) < ttl_sec:
+            return False
+        _CAPTURE_DEDUPE[sig] = now
+        return True
+    except Exception:
+        return True
+
 @app.get("/events")
 async def events():
     q = await broker.subscribe()
@@ -958,8 +978,22 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     exists = False
     device_type = _detect_device_type(live_params, dname)
 
+    # Ensure base mapping exists immediately (synchronous) for responsive UI
     try:
-        # Check Firestore first (primary source), fall back to local cache
+        await _ensure_device_mapping(signature, device_type, live_params)
+    except Exception:
+        pass
+
+    # New base mapping (param_structure) existence check
+    mapping_exists = False
+    try:
+        new_map = STORE.get_device_mapping(signature)
+        mapping_exists = bool(new_map)
+    except Exception:
+        mapping_exists = False
+
+    try:
+        # Check legacy learned mapping (with samples) for backwards compatibility
         if STORE.enabled:
             m = STORE.get_device_map(signature)
         else:
@@ -975,19 +1009,26 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
                     exists = True
                     print(f"[DEBUG] Found learned param: {p.get('name')} with {len(sm)} samples")
                     break
-        print(f"[DEBUG] Final exists: {exists}")
+        print(f"[DEBUG] Final exists (learned): {exists}")
     except Exception as e:
         print(f"[DEBUG] Exception: {e}")
         exists = False
 
-    # If structure is learned, auto-capture preset in background (non-blocking)
-    if exists and device_type and dname:
-        # IMPORTANT: pass live_params (with 'value' fields), not learned mapping
-        asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, live_params))
+    # Auto-capture preset + ensure device mapping in background (non-blocking)
+    # Always trigger when we have device_type and name; capture flow is idempotent
+    # and will skip if a preset with sufficient values already exists.
+    if device_type and dname and _should_capture_signature(signature):
+        try:
+            asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, live_params))
+        except Exception:
+            pass
 
+    # Top-level existence should reflect either new base mapping OR learned mapping
     return {
         "ok": True,
-        "exists": exists,
+        "exists": bool(mapping_exists or exists),
+        "mapping_exists": bool(mapping_exists),
+        "learned_exists": bool(exists),
         "signature": signature,
         "backend": backend,
         "device_type": device_type,
@@ -1015,15 +1056,21 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
     # trigger auto-capture when a learned mapping exists.
     device_type = _detect_device_type(params, dname)
     data = None
+    # Ensure base mapping exists immediately so first UI poll goes green
     try:
-        # Check Firestore first (primary source), fall back to local cache
+        await _ensure_device_mapping(signature, device_type, params)
+    except Exception:
+        pass
+
+    try:
+        # Prefer legacy learned mapping summary when available
         if STORE.enabled:
             m = STORE.get_device_map(signature)
         else:
             m = STORE.get_device_map_local(signature)
         if m:
             plist = []
-            exists = False
+            learned_exists = False
             for p in m.get("params", []) or []:
                 plist.append({
                     "name": p.get("name"),
@@ -1040,27 +1087,69 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
                     "max": p.get("max"),
                 })
                 try:
-                    if not exists and len(p.get("samples") or []) >= 3:
-                        exists = True
+                    if not learned_exists and len(p.get("samples") or []) >= 3:
+                        learned_exists = True
                 except Exception:
                     pass
+            # Also consider base mapping presence when learned samples are empty
+            mapping_exists_flag = False
+            try:
+                nm = STORE.get_device_mapping(signature)
+                mapping_exists_flag = bool(nm)
+            except Exception:
+                mapping_exists_flag = False
             data = {
                 "device_name": m.get("device_name") or dname,
                 "signature": signature,
                 "groups": m.get("groups") or [],
                 "params": plist,
-                "exists": exists,
+                "exists": bool(learned_exists or mapping_exists_flag),
+                "learned_exists": learned_exists,
+                "mapping_exists": mapping_exists_flag,
             }
-            # If mapping exists, trigger background preset auto-capture
-            # so that calling only the summary endpoint can still save presets.
-            try:
-                if exists and device_type and dname:
-                    # Use live params with 'value' fields for capture
-                    asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
-            except Exception:
-                pass
+        else:
+            # Fall back to new base mapping existence; provide minimal summary
+            new_map = STORE.get_device_mapping(signature)
+            if new_map:
+                ps = new_map.get("param_structure") or []
+                data = {
+                    "device_name": dname,
+                    "signature": signature,
+                    "params": [{
+                        "name": p.get("name"),
+                        "index": p.get("index"),
+                        "min": p.get("min"),
+                        "max": p.get("max"),
+                        "sample_count": 0,
+                    } for p in ps],
+                    "exists": True,
+                    "mapping_exists": True,
+                    "learned_exists": False,
+                }
     except Exception as e:
         return {"ok": False, "error": str(e), "backend": backend}
+    # If neither learned nor base mapping is persisted, derive a minimal summary from live params
+    if data is None and params:
+        data = {
+            "device_name": dname,
+            "signature": signature,
+            "params": [{
+                "name": p.get("name"),
+                "index": p.get("index"),
+                "min": p.get("min"),
+                "max": p.get("max"),
+                "sample_count": 0,
+            } for p in params],
+            "exists": True,              # Treat as mapped for UI purposes
+            "mapping_exists": False,
+            "learned_exists": False,
+        }
+    # Unconditionally trigger background preset auto-capture + mapping ensure (deduped).
+    if device_type and dname and _should_capture_signature(signature):
+        try:
+            asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
+        except Exception:
+            pass
     # Top-level exists mirrors data.exists for convenience
     top_exists = bool((data or {}).get("exists")) if data else False
     return {"ok": True, "backend": backend, "signature": signature, "exists": top_exists, "data": data}
@@ -1133,6 +1222,359 @@ def op_return_send(body: ReturnSendBody) -> Dict[str, Any]:
     except Exception:
         pass
     return resp
+
+
+# ---------------- Device Mapping Import (LLM + Numeric Fits) ----------------
+
+class MappingImportBody(BaseModel):
+    signature: str
+    device_type: Optional[str] = None
+    grouping: Optional[dict] = None
+    params_meta: Optional[list] = None
+    sources: Optional[dict] = None
+    analysis_status: Optional[str] = None  # e.g., "partial_fits" | "analyzed"
+
+
+@app.post("/device_mapping/import")
+def import_device_mapping(body: MappingImportBody) -> Dict[str, Any]:
+    """Merge provided mapping analysis data into device_mappings for a signature.
+
+    - Creates mapping doc if missing via save_device_mapping()
+    - Merges top-level fields: device_type, grouping, params_meta, sources, analysis_status
+    - For params_meta, replaces the entire list (simple & safe)
+    Requires Firestore to be enabled in MappingStore.
+    """
+    sig = body.signature.strip()
+    if not sig:
+        raise HTTPException(400, "signature required")
+
+    if not STORE.enabled:
+        return {"ok": False, "error": "firestore_disabled"}
+
+    existing = STORE.get_device_mapping(sig) or {}
+    updated: Dict[str, Any] = dict(existing)
+    updated["device_signature"] = sig
+    if body.device_type:
+        updated["device_type"] = body.device_type
+    if body.grouping is not None:
+        updated["grouping"] = body.grouping
+    if body.params_meta is not None:
+        updated["params_meta"] = list(body.params_meta)
+    if body.sources is not None:
+        src = dict(updated.get("sources") or {})
+        src.update(dict(body.sources))
+        updated["sources"] = src
+    if body.analysis_status:
+        updated["analysis_status"] = body.analysis_status
+    try:
+        import time as _time
+        if "created_at" not in updated:
+            updated["created_at"] = int(_time.time())
+        updated["updated_at"] = int(_time.time())
+    except Exception:
+        pass
+
+    ok = STORE.save_device_mapping(sig, updated)
+    return {"ok": bool(ok), "signature": sig, "updated_fields": [k for k in ("device_type","grouping","params_meta","sources","analysis_status") if k in updated]}
+
+
+@app.get("/device_mapping")
+def get_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    """Fetch device mapping (grouping + params_meta) for a signature.
+
+    You can provide either:
+    - signature: SHA1 of structure
+    - or index (return_index) and device (device_index) to derive signature from live
+    """
+    sig = (signature or "").strip()
+    if not sig:
+        # derive from live indices
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = _make_device_signature(dname, live_params)
+
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    if not mapping:
+        # Return 200 with mapping_exists=False to aid UI/CLI
+        return {"ok": True, "signature": sig, "mapping_exists": False}
+
+    params_meta = mapping.get("params_meta") or []
+    fitted = [p.get("name") for p in params_meta if isinstance(p, dict) and isinstance(p.get("fit"), dict)]
+    missing_cont = [p.get("name") for p in params_meta if isinstance(p, dict) and (p.get("control_type") == "continuous") and (not p.get("fit"))]
+
+    return {
+        "ok": True,
+        "signature": sig,
+        "mapping_exists": True,
+        "mapping": mapping,
+        "summary": {
+            "params_meta_total": len(params_meta),
+            "fitted_count": len(fitted),
+            "fitted_names": fitted,
+            "missing_continuous": missing_cont,
+        },
+    }
+
+
+@app.get("/device_mapping/validate")
+def validate_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    """Compare mapping names (masters, dependents, params_meta) with live param names.
+
+    Returns missing_in_live (declared in mapping but not seen live) and
+    unused_in_mapping (present live but not declared in mapping).
+    """
+    # Resolve signature and fetch live param names
+    sig = (signature or "").strip()
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = _make_device_signature(dname, live_params)
+    else:
+        # If signature provided, still fetch live names from either cached indices (if given) or skip
+        if index is not None and device is not None:
+            params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+            live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        else:
+            live_params = []
+
+    live_names = set(str(p.get("name", "")).strip() for p in (live_params or []))
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    if not mapping:
+        return {"ok": True, "signature": sig, "mapping_exists": False, "live_names": sorted(list(live_names))}
+
+    declared = set()
+    try:
+        for m in (mapping.get("grouping", {}) or {}).get("masters", []) or []:
+            declared.add(str(m))
+        for d, m in ((mapping.get("grouping", {}) or {}).get("dependents", {}) or {}).items():
+            declared.add(str(d))
+        for pm in mapping.get("params_meta", []) or []:
+            declared.add(str(pm.get("name", "")))
+    except Exception:
+        pass
+
+    missing_in_live = sorted([n for n in declared if n and n not in live_names])
+    unused_in_mapping = sorted([n for n in live_names if n and n not in declared])
+
+    return {
+        "ok": True,
+        "signature": sig,
+        "mapping_exists": True,
+        "missing_in_live": missing_in_live,
+        "unused_in_mapping": unused_in_mapping,
+        "counts": {"declared": len(declared), "live": len(live_names)},
+    }
+
+
+class SanityProbeBody(BaseModel):
+    return_index: int
+    device_index: int
+    param_ref: str  # name substring or index string
+    target_display: str
+    restore: Optional[bool] = True
+
+
+@app.post("/device_mapping/sanity_probe")
+def sanity_probe(body: SanityProbeBody) -> Dict[str, Any]:
+    """Set a param by display target using mapping, read back, and optionally restore previous value."""
+    ri = int(body.return_index); di = int(body.device_index)
+    # Resolve param index
+    pi = _resolve_param_index(ri, di, body.param_ref)
+    pr = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    params = ((pr or {}).get("data") or {}).get("params") or []
+    cur = next((p for p in params if int(p.get("index", -1)) == pi), None)
+    if not cur:
+        raise HTTPException(404, "param_not_found")
+    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
+    prev_x = float(cur.get("value", vmin))
+    pname = str(cur.get("name", ""))
+    # Compute signature and mapping
+    sig = _compute_signature_for(ri, di)
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    # Target parse
+    ty = _parse_target_display(body.target_display)
+    if ty is None and mapping:
+        # label path
+        pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == pname.lower()), None)
+        if pm and isinstance(pm.get("label_map"), dict):
+            lm = pm.get("label_map") or {}
+            for k, v in lm.items():
+                if str(k).strip().lower() == body.target_display.strip().lower():
+                    ty = None; prev_x = prev_x; x = max(vmin, min(vmax, float(v)))
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
+                    break
+    # Numeric path (with quick refinement)
+    if ty is not None:
+        x = prev_x
+        pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == pname.lower()), None) if mapping else None
+        if pm and isinstance(pm.get("fit"), dict):
+            x = _invert_fit_to_value(pm.get("fit") or {}, float(ty), vmin, vmax)
+        # initial set
+        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
+        # readback
+        rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+        rps = ((rb or {}).get("data") or {}).get("params") or []
+        newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+        applied_disp = str((newp or {}).get("display_value", ""))
+        applied_num = _parse_target_display(applied_disp)
+        # refine with small bisection if off
+        if applied_num is not None:
+            td = float(ty)
+            err0 = td - float(applied_num)
+            thresh = 0.02 * (abs(td) if td != 0 else 1.0)
+            if abs(err0) > thresh:
+                lo = vmin; hi = vmax; curx = x
+                if err0 < 0:  # actual > target -> decrease x
+                    hi = curx
+                else:
+                    lo = curx
+                for _ in range(6):
+                    mid = (lo + hi) / 2.0
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(mid)}, timeout=1.0)
+                    rb2 = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+                    rps2 = ((rb2 or {}).get("data") or {}).get("params") or []
+                    newp2 = next((p for p in rps2 if int(p.get("index", -1)) == pi), None)
+                    applied_disp = str((newp2 or {}).get("display_value", ""))
+                    applied_num = _parse_target_display(applied_disp)
+                    if applied_num is None:
+                        break
+                    if abs(float(applied_num) - td) <= thresh:
+                        x = mid
+                        break
+                    if float(applied_num) > td:
+                        hi = mid
+                    else:
+                        lo = mid
+                    x = mid
+    else:
+        # label path already handled above; readback current
+        rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+        rps = ((rb or {}).get("data") or {}).get("params") or []
+        newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+        applied_disp = str((newp or {}).get("display_value", ""))
+        applied_num = _parse_target_display(applied_disp)
+    # Error report
+    err = None
+    td_final = _parse_target_display(body.target_display)
+    if td_final is not None and applied_num is not None:
+        err = float(td_final) - float(applied_num)
+    # Restore if requested
+    if bool(body.restore):
+        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(prev_x)}, timeout=1.0)
+    return {"ok": True, "signature": sig, "param": pname, "applied_display": applied_disp, "error": err}
+
+
+@app.get("/device_mapping/fits")
+def get_device_mapping_fits(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    """List fitted continuous parameters (name, fit type, coeffs, r2, confidence)."""
+    sig = (signature or "").strip()
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        # derive from live
+        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = _make_device_signature(dname, live_params)
+
+    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
+    if not mapping:
+        return {"ok": True, "signature": sig, "mapping_exists": False, "fits": []}
+    fits = []
+    for pm in (mapping.get("params_meta") or []):
+        try:
+            fit = pm.get("fit")
+            if isinstance(fit, dict):
+                fits.append({
+                    "name": pm.get("name"),
+                    "type": fit.get("type"),
+                    "coeffs": fit.get("coeffs"),
+                    "r2": fit.get("r2"),
+                    "confidence": pm.get("confidence"),
+                })
+        except Exception:
+            continue
+    # Sort by name for stable display
+    fits = sorted(fits, key=lambda x: str(x.get("name", "")))
+    return {"ok": True, "signature": sig, "count": len(fits), "fits": fits}
+
+
+@app.get("/device_mapping/enumerate_labels")
+def enumerate_param_labels(index: int, device: int, param_ref: str) -> Dict[str, Any]:
+    """Enumerate discrete labels for a quantized parameter by sweeping integer steps.
+
+    Restores the original value after sweep. Useful for building label_map.
+    """
+    ri = int(index); di = int(device)
+    # Resolve param index by substring or exact index string
+    try:
+        pi = _resolve_param_index(ri, di, param_ref)
+    except Exception:
+        raise HTTPException(404, "param_not_found")
+    # Read current params and capture bounds
+    pr = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
+    params = ((pr or {}).get("data") or {}).get("params") or []
+    cur = next((p for p in params if int(p.get("index", -1)) == pi), None)
+    if not cur:
+        raise HTTPException(404, "param_not_found")
+    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
+    prev = float(cur.get("value", vmin))
+    name = str(cur.get("name", ""))
+    # Sweep integer steps
+    labels = []
+    try:
+        import time as _t
+        lo = int(vmin); hi = int(vmax)
+        for step in range(lo, hi + 1):
+            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(step)}, timeout=1.0)
+            _t.sleep(0.15)
+            rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
+            rps = ((rb or {}).get("data") or {}).get("params") or []
+            p2 = next((p for p in rps if int(p.get("index", -1)) == pi), None)
+            disp = str((p2 or {}).get("display_value", ""))
+            labels.append({"step": step, "display": disp})
+    finally:
+        try:
+            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(prev)}, timeout=1.0)
+        except Exception:
+            pass
+    # Build a basic label_map suggestion (unique display -> first step)
+    label_map = {}
+    for item in labels:
+        d = item.get("display")
+        if d and d not in label_map:
+            label_map[d] = float(item.get("step", 0))
+    return {"ok": True, "param": name, "index": pi, "range": [int(vmin), int(vmax)], "samples": labels, "label_map_suggested": label_map}
 
 
 class ReturnMixerBody(BaseModel):
@@ -1733,6 +2175,70 @@ Expected JSON skeleton to fill (return exactly this object with content populate
         }
 
 
+async def _ensure_device_mapping(
+    device_signature: str,
+    device_type: str,
+    params: list[dict],
+) -> None:
+    """Create or update device mapping in Firestore.
+
+    Creates a device_mappings document with parameter structure on first preset capture.
+
+    Args:
+        device_signature: SHA1 hash of parameter structure
+        device_type: Device type (reverb, delay, etc.)
+        params: List of parameter dicts with index, name, min, max
+    """
+    try:
+        # Skip if params list is empty or too small (device in transition)
+        if not params or len(params) < 5:
+            print(f"[DEVICE-MAPPING] Skipping - insufficient params ({len(params or [])} params, need at least 5)")
+            return
+
+        # Check if device mapping already exists
+        mapping = STORE.get_device_mapping(device_signature)
+        if mapping:
+            print(f"[DEVICE-MAPPING] Device mapping already exists for {device_signature}")
+            return
+
+        print(f"[DEVICE-MAPPING] Creating new device mapping for {device_signature}")
+
+        # Build parameter structure from params
+        param_structure = []
+        for p in params:
+            param_info = {
+                "index": p.get("index"),
+                "name": p.get("name"),
+                "min": p.get("min", 0.0),
+                "max": p.get("max", 1.0),
+            }
+            param_structure.append(param_info)
+
+        # Create device mapping document
+        import time as _time
+        mapping_data = {
+            "device_signature": device_signature,
+            "device_type": device_type,
+            "param_structure": param_structure,
+            "param_count": len(param_structure),
+            "created_at": int(_time.time()),
+            "updated_at": int(_time.time()),
+            "metadata_status": "pending_analysis",  # Waiting for LLM analysis
+        }
+
+        # Save to Firestore
+        saved = STORE.save_device_mapping(device_signature, mapping_data)
+        if saved:
+            print(f"[DEVICE-MAPPING] ✓ Created device mapping with {len(param_structure)} parameters")
+        else:
+            print(f"[DEVICE-MAPPING] ✗ Failed to create device mapping")
+
+    except Exception as e:
+        print(f"[DEVICE-MAPPING] Error ensuring device mapping: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 async def _auto_capture_preset(
     return_index: int,
     device_index: int,
@@ -1776,17 +2282,10 @@ async def _auto_capture_preset(
                     print(f"[AUTO-CAPTURE] Ensured preset {preset_id} saved to Firestore")
             except Exception:
                 pass
-            # If values are sufficient, do not re-capture, but enqueue enrichment if not enriched yet
+            # If values are sufficient, do not re-capture
             if isinstance(pv, dict) and len(pv) >= 5:
-                # Enqueue cloud enrichment when not enriched
-                if status != "enriched" and version < 2:
-                    try:
-                        ok = enqueue_preset_enrich(preset_id, metadata_version=1)
-                        print(f"[AUTO-CAPTURE] Preset {preset_id} already exists; enqueued={ok}")
-                    except Exception:
-                        print(f"[AUTO-CAPTURE] Preset {preset_id} already exists; enqueue failed")
-                else:
-                    print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping (enriched)")
+                # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment
+                print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
                 return
             else:
                 print(f"[AUTO-CAPTURE] Preset {preset_id} exists but has {len(pv) if isinstance(pv, dict) else 0} values; refreshing")
@@ -1800,19 +2299,27 @@ async def _auto_capture_preset(
             print(f"[AUTO-CAPTURE] DEBUG - Has 'value'? {'value' in sample_param}")
             print(f"[AUTO-CAPTURE] DEBUG - Sample param: {sample_param}")
 
-        # Extract parameter values from provided params
+        # Extract parameter values AND display values from provided params
         parameter_values = {}
+        parameter_display_values = {}
         for p in params:
             param_name = p.get("name")
             param_value = p.get("value")
+            param_display = p.get("display_value")
+
             if param_name and param_value is not None:
                 parameter_values[param_name] = float(param_value)
+
+                # Store display value if available
+                if param_display is not None:
+                    parameter_display_values[param_name] = str(param_display)
+
                 # Debug: Show Sync/Time related params WITH display_value
                 if any(x in param_name for x in ['Sync', 'Time', '16th']):
-                    display_val = p.get("display_value", "N/A")
-                    print(f"[AUTO-CAPTURE] DEBUG - {param_name}: value={param_value}, display_value='{display_val}'")
+                    print(f"[AUTO-CAPTURE] DEBUG - {param_name}: value={param_value}, display_value='{param_display}'")
 
         print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
+        print(f"[AUTO-CAPTURE] Extracted {len(parameter_display_values)} parameter display values")
 
         # Generate metadata (fast-path optional)
         metadata = {}
@@ -1836,13 +2343,20 @@ async def _auto_capture_preset(
             "manufacturer": "Ableton",
             "daw": "Ableton Live",
             "structure_signature": structure_signature,
+            "device_signature": structure_signature,  # Alias for clarity
             "category": device_type,
             "preset_type": "stock",
             "parameter_values": parameter_values,
+            "parameter_display_values": parameter_display_values,  # NEW: Display values
             "values_status": "ok" if len(parameter_values) >= 5 else "pending",
+            "metadata_status": "captured",  # NEW: Track enrichment status
+            "captured_at": int(_time.time()),
             "updated_at": int(_time.time()),
             **metadata  # LLM-generated or pending_enrichment flag
         }
+
+        # Create/update device mapping (first time only per device signature)
+        await _ensure_device_mapping(structure_signature, device_type, params)
 
         # Save to Firestore (and local cache)
         saved = STORE.save_preset(preset_id, preset_data, local_only=False)
@@ -1862,15 +2376,19 @@ async def _auto_capture_preset(
                 })
             except Exception:
                 pass
-            # Enqueue cloud enrichment (Pub/Sub) if configured
-            try:
-                enqueued = enqueue_preset_enrich(preset_id, metadata_version=1)
-                if enqueued:
-                    print(f"[PUBSUB] ✓ Enqueued preset_enrich_requested for {preset_id}")
-                else:
-                    print(f"[PUBSUB] ⊘ Pub/Sub not configured (set PUBSUB_TOPIC in .env)")
-            except Exception as e:
-                print(f"[PUBSUB] ✗ Failed to enqueue: {e}")
+            # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment instead
+            # Enrichment will be done manually after all presets are captured:
+            # 1. Export presets with export_for_enrichment.py
+            # 2. Feed to ChatGPT with enrichment prompt
+            # 3. Apply results with apply_enrichments.py
+            # try:
+            #     enqueued = enqueue_preset_enrich(preset_id, metadata_version=1)
+            #     if enqueued:
+            #         print(f"[PUBSUB] ✓ Enqueued preset_enrich_requested for {preset_id}")
+            #     else:
+            #         print(f"[PUBSUB] ⊘ Pub/Sub not configured (set PUBSUB_TOPIC in .env)")
+            # except Exception as e:
+            #     print(f"[PUBSUB] ✗ Failed to enqueue: {e}")
             # Post-save verification and optional retry for empty values
             try:
                 asyncio.create_task(_verify_and_retry_preset(preset_id, return_index, device_index))
@@ -1942,11 +2460,15 @@ async def _verify_and_retry_preset(
         }, timeout=1.2)
         rparams = ((rd or {}).get("data") or {}).get("params") or []
         live_vals: Dict[str, float] = {}
+        live_disp: Dict[str, str] = {}
         for p in rparams:
             nm = p.get("name")
             val = p.get("value")
+            disp = p.get("display_value")
             if nm is not None and val is not None:
                 live_vals[str(nm)] = float(val)
+            if nm is not None and disp is not None:
+                live_disp[str(nm)] = str(disp)
 
         if live_vals:
             # merge into preset doc
@@ -1954,6 +2476,8 @@ async def _verify_and_retry_preset(
             preset["parameter_values"] = live_vals
             preset["values_status"] = "ok" if len(live_vals) >= min_params else "pending"
             preset["updated_at"] = int(_time.time())
+            if live_disp:
+                preset["parameter_display_values"] = live_disp
             STORE.save_preset(preset_id, preset, local_only=False)
 
         try:
@@ -2628,13 +3152,17 @@ def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
             detail=f"Device structure not learned. Please learn device first (signature: {signature})"
         )
 
-    # Extract current parameter values
+    # Extract current parameter values and display strings
     parameter_values = {}
+    parameter_display_values = {}
     for p in params:
         param_name = p.get("name")
         param_value = p.get("value")
+        param_display = p.get("display_value")
         if param_name and param_value is not None:
             parameter_values[param_name] = float(param_value)
+            if param_display is not None:
+                parameter_display_values[param_name] = str(param_display)
 
     # Detect device type
     device_type = _detect_device_type(params, body.preset_name)
@@ -2650,6 +3178,7 @@ def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
         "category": device_type,
         "preset_type": body.category,
         "parameter_values": parameter_values,
+        "parameter_display_values": parameter_display_values,
     }
 
     if body.description:
@@ -2693,10 +3222,15 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
 
     # Get current device info
     devs = udp_request({"op": "get_return_devices", "return_index": ret_idx}, timeout=1.0)
-    if not devs or "devices" not in devs:
+    if not devs:
         raise HTTPException(status_code=404, detail="Return track not found")
 
-    devices = devs.get("devices", [])
+    # Unwrap response (may be wrapped in "data" field)
+    data = devs.get("data") if isinstance(devs, dict) and "data" in devs else devs
+    if not data or "devices" not in data:
+        raise HTTPException(status_code=404, detail="Return track not found")
+
+    devices = data.get("devices", [])
     if dev_idx >= len(devices):
         raise HTTPException(status_code=404, detail=f"Device index {dev_idx} out of range")
 
@@ -2705,10 +3239,15 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
 
     # Get current parameters
     params_resp = udp_request({"op": "get_return_device_params", "return_index": ret_idx, "device_index": dev_idx}, timeout=1.0)
-    if not params_resp or "params" not in params_resp:
+    if not params_resp:
         raise HTTPException(status_code=500, detail="Failed to get device parameters")
 
-    params = params_resp.get("params", [])
+    # Unwrap response (may be wrapped in "data" field)
+    params_data = params_resp.get("data") if isinstance(params_resp, dict) and "data" in params_resp else params_resp
+    if not params_data or "params" not in params_data:
+        raise HTTPException(status_code=500, detail="Failed to get device parameters")
+
+    params = params_data.get("params", [])
     current_signature = _make_device_signature(device_name, params)
     preset_signature = preset.get("structure_signature")
 
@@ -2723,6 +3262,8 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
     parameter_values = preset.get("parameter_values", {})
     applied = 0
     errors = []
+
+    import time
 
     for param_name, target_value in parameter_values.items():
         try:
@@ -2747,6 +3288,9 @@ def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
                 applied += 1
             else:
                 errors.append(f"Failed to set {param_name}")
+
+            # Small delay to prevent UDP flooding and allow Live to process
+            time.sleep(0.005)  # 5ms delay between parameters
 
         except Exception as e:
             errors.append(f"Error setting {param_name}: {str(e)}")
@@ -2824,7 +3368,7 @@ async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
     device_name = preset.get("name") or preset.get("device_name") or preset_id
     parameter_values = dict(preset.get("parameter_values") or {})
 
-    # Optionally refresh parameter values from live device
+    # Optionally refresh parameter values (and display values) from live device
     if body.update_values_from_live and body.return_index is not None and body.device_index is not None:
         try:
             rd = udp_request({
@@ -2834,13 +3378,20 @@ async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
             }, timeout=1.2)
             rparams = ((rd or {}).get("data") or {}).get("params") or []
             live_vals = {}
+            live_disp = {}
             for p in rparams:
                 nm = p.get("name")
                 val = p.get("value")
+                disp = p.get("display_value")
                 if nm is not None and val is not None:
                     live_vals[str(nm)] = float(val)
+                if nm is not None and disp is not None:
+                    live_disp[str(nm)] = str(disp)
             if live_vals:
                 parameter_values = live_vals
+            if live_disp:
+                # attach display values alongside normalized values
+                preset["parameter_display_values"] = live_disp
         except Exception:
             # keep existing values if live read fails
             pass
@@ -3171,20 +3722,25 @@ def _resolve_param_index(ri: int, di: int, ref: str) -> int:
 def _invert_fit_to_value(fit: dict, target_y: float, vmin: float, vmax: float) -> float:
     t = (lambda a, b, y: (y - b) / a)
     ftype = fit.get("type")
+    coeffs = fit.get("coeffs", {})
+
     if ftype == "linear":
-        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        a = float(coeffs.get("a", 1.0))
+        b = float(coeffs.get("b", 0.0))
         x = t(a, b, target_y)
     elif ftype == "log":
-        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        a = float(coeffs.get("a", 1.0))
+        b = float(coeffs.get("b", 0.0))
         # y = a*ln(x)+b -> x = exp((y-b)/a)
         x = math.exp((target_y - b)/a) if a != 0 else vmin
     elif ftype == "exp":
-        # ln(y) = a*x + b -> x = (ln(y)-b)/a
-        a = float(fit.get("a", 1.0)); b = float(fit.get("b", 0.0))
+        # y = a * exp(b*x) -> x = ln(y/a) / b
+        a = float(coeffs.get("a", 1.0))
+        b = float(coeffs.get("b", 1.0))
         if target_y <= 0:
             x = vmin
         else:
-            x = (math.log(target_y) - b)/a if a != 0 else vmin
+            x = math.log(target_y / a) / b if (a != 0 and b != 0) else vmin
     else:
         # piecewise
         pts = fit.get("points") or []
@@ -3239,6 +3795,12 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     mapping = STORE.get_device_map(signature) if STORE.enabled else None
     if not mapping:
         mapping = STORE.get_device_map_local(signature)
+    # Fetch new device mapping (fits/labels) when available
+    new_map = None
+    try:
+        new_map = STORE.get_device_mapping(signature) if STORE.enabled else None
+    except Exception:
+        new_map = None
     # Try exact param match by name (with alias normalization)
     param_name = str(cur.get("name", ""))
     learned = None
@@ -3278,8 +3840,35 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
             pass
 
     # Auto-enable group masters for dependents (except configured skips)
+    # Prefer new_map.grouping when available, fallback to legacy learned mapping
     try:
-        if learned:
+        master_name: str | None = None
+        skip_auto = False
+        desired_val = None
+
+        # NEW PATH: Use new_map.grouping if available
+        if new_map and isinstance(new_map.get("grouping"), dict):
+            grp = new_map.get("grouping") or {}
+            skip_list = [str(x).lower() for x in (grp.get("skip_auto_enable") or [])]
+
+            # Check if this param is a dependent
+            deps_map = grp.get("dependents") or {}
+            for dep_name, master_ref in deps_map.items():
+                if str(dep_name).lower() == param_name.lower():
+                    # Parse master_ref which can be "MasterName" or dict with name/active_when
+                    if isinstance(master_ref, dict):
+                        master_name = str(master_ref.get("name", ""))
+                        desired_val = master_ref.get("active_when")
+                    else:
+                        master_name = str(master_ref)
+
+                    # Check if this master should skip auto-enable
+                    if master_name and any(master_name.lower() == s or s in master_name.lower() for s in skip_list):
+                        skip_auto = True
+                    break
+
+        # LEGACY PATH: Use old learned mapping if new_map didn't provide grouping
+        elif learned:
             role = (learned.get("role") or "").lower()
             gname = (learned.get("group") or "").lower()
             if role == "dependent" and gname not in ("global", "output"):
@@ -3299,58 +3888,58 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                 # Respect per-device skip list (e.g., Freeze On)
                 skip_list = [str(x).lower() for x in (rules.get("skip_auto_enable") or [])]
                 if any(s in param_name.lower() for s in skip_list) or ("freeze" in param_name.lower()):
-                    raise Exception("skip_auto_enable")
+                    skip_auto = True
 
-                # First preference: config dependents mapping (exact or case-insensitive)
-                master_name: str | None = None
-                deps_map = rules.get("dependents") or {}
-                for dn, mn in deps_map.items():
-                    if str(dn).lower() == param_name.lower():
-                        master_name = str(mn)
-                        break
-                # If master name uses alternatives (A|B|C), choose the first available in current params
-                if master_name and "|" in master_name:
-                    alts = [s.strip() for s in master_name.split("|") if s.strip()]
-                    chosen = None
-                    for alt in alts:
-                        if any(str(pp.get("name","" )).lower() == alt.lower() for pp in p_list):
-                            chosen = alt
+                if not skip_auto:
+                    # First preference: config dependents mapping (exact or case-insensitive)
+                    deps_map = rules.get("dependents") or {}
+                    for dn, mn in deps_map.items():
+                        if str(dn).lower() == param_name.lower():
+                            master_name = str(mn)
                             break
-                    master_name = chosen or alts[0]
+                    # If master name uses alternatives (A|B|C), choose the first available in current params
+                    if master_name and "|" in master_name:
+                        alts = [s.strip() for s in master_name.split("|") if s.strip()]
+                        chosen = None
+                        for alt in alts:
+                            if any(str(pp.get("name","" )).lower() == alt.lower() for pp in p_list):
+                                chosen = alt
+                                break
+                        master_name = chosen or alts[0]
 
-                # Fallback: infer from stored groups metadata
-                if not master_name:
-                    groups = (mapping.get("groups") or []) if mapping else []
-                    for g in groups:
-                        deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
-                        if any(param_name.lower() == dn.lower() for dn in deps):
-                            mref = g.get("master") or {}
-                            master_name = str(mref.get("name")) if mref else None
+                    # Fallback: infer from stored groups metadata
+                    if not master_name:
+                        groups = (mapping.get("groups") or []) if mapping else []
+                        for g in groups:
+                            deps = [str(d.get("name","")) for d in (g.get("dependents") or [])]
+                            if any(param_name.lower() == dn.lower() for dn in deps):
+                                mref = g.get("master") or {}
+                                master_name = str(mref.get("name")) if mref else None
+                                break
+                    # Last resort: construct "<Base> On" switch
+                    if not master_name and " " in param_name:
+                        master_name = param_name.rsplit(" ", 1)[0] + " On"
+
+                    # Use per-dependent desired master value when provided
+                    dm = rules.get("dependent_master_values") or {}
+                    for k, v in dm.items():
+                        if str(k).lower() == param_name.lower():
+                            try:
+                                desired_val = float(v)
+                            except Exception:
+                                desired_val = None
                             break
-                # Last resort: construct "<Base> On" switch
-                if not master_name and " " in param_name:
-                    master_name = param_name.rsplit(" ", 1)[0] + " On"
 
-                # Use per-dependent desired master value when provided
-                desired_val = None
-                dm = rules.get("dependent_master_values") or {}
-                for k, v in dm.items():
-                    if str(k).lower() == param_name.lower():
-                        try:
-                            desired_val = float(v)
-                        except Exception:
-                            desired_val = None
-                        break
-
-                if master_name:
-                    for p in p_list:
-                        if str(p.get("name","")) .lower()== master_name.lower():
-                            master_idx = int(p.get("index", 0))
-                            mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
-                            # Binary toggles usually 0..1; prefer explicit desired_val else max/1.0
-                            mval = desired_val if desired_val is not None else (mmax if mmax >= 1.0 else 1.0)
-                            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
-                            break
+        # Actually enable the master if we found one
+        if master_name and not skip_auto:
+            for p in p_list:
+                if str(p.get("name","")) .lower()== master_name.lower():
+                    master_idx = int(p.get("index", 0))
+                    mmin = float(p.get("min", 0.0)); mmax = float(p.get("max", 1.0))
+                    # Binary toggles usually 0..1; prefer explicit desired_val else max/1.0
+                    mval = desired_val if desired_val is not None else (mmax if mmax >= 1.0 else 1.0)
+                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": master_idx, "value": float(mval)}, timeout=0.8)
+                    break
     except Exception:
         pass
 
@@ -3366,8 +3955,61 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
         labs = list({str(s.get("display","")) for s in (ln.get("samples") or []) if s.get("display") is not None})
         return len(labs) <= 2
 
-    # Handle explicit label first (including On/Off synonyms)
-    if label and learned:
+    # Prefer new mapping for label/fit inversion when available
+    pm_entry = None
+    try:
+        if new_map and isinstance(new_map.get("params_meta"), list):
+            for pme in new_map["params_meta"]:
+                if str(pme.get("name", "")).lower() == param_name.lower():
+                    pm_entry = pme
+                    break
+    except Exception:
+        pm_entry = None
+
+    # For quantized params with numeric string labels (e.g., "0.0", "1.0"),
+    # treat numeric target_y as a label lookup instead of a fit inversion
+    if target_y is not None and not label and pm_entry:
+        if str(pm_entry.get("control_type", "")).lower() == "quantized":
+            lm = pm_entry.get("label_map") or {}
+            # Check if this label_map has numeric string keys
+            numeric_key_found = False
+            for k in lm.keys():
+                try:
+                    float(str(k))
+                    numeric_key_found = True
+                    break
+                except:
+                    pass
+            # If so, treat target_y as a label string
+            if numeric_key_found:
+                label = str(target_y) if target_y == int(target_y) else f"{target_y:.1f}"
+                target_y = None
+
+    # Handle explicit label via new mapping label_map
+    handled_label = False
+    if label and pm_entry:
+        lm = pm_entry.get("label_map") or {}
+        for k, v in lm.items():
+            try:
+                if str(k).strip().lower() == label.lower():
+                    x = max(vmin, min(vmax, float(v)))
+                    handled_label = True
+                    break
+            except Exception:
+                continue
+        if not handled_label and str(pm_entry.get("control_type", "")).lower() == "binary":
+            l = label.strip().lower()
+            on_words = {"on","enable","enabled","true","1","yes"}
+            off_words = {"off","disable","disabled","false","0","no"}
+            if l in on_words:
+                x = vmax if vmax >= 1.0 else 1.0
+                handled_label = True
+            elif l in off_words:
+                x = vmin if vmin <= 0.0 else 0.0
+                handled_label = True
+
+    # Fallback: explicit label using legacy learned mapping samples
+    if label and learned and not handled_label:
         # Try exact label match from samples
         found = False
         for s in learned.get("samples", []) or []:
@@ -3391,6 +4033,12 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
                         x = float(v)
                         found = True
                         break
+    elif target_y is not None and pm_entry and isinstance(pm_entry.get("fit"), dict):
+        # Numeric target via new mapping fit inversion
+        try:
+            x = _invert_fit_to_value(pm_entry.get("fit") or {}, float(target_y), vmin, vmax)
+        except Exception:
+            pass
     elif target_y is not None and learned:
         # Use shared conversion for display->normalized when mapping is available
         try:

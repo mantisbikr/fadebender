@@ -1,0 +1,390 @@
+{
+  "device_signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+  "device_name": "Reverb",
+  "audio_knowledge": {
+    "Predelay": {
+      "audio_function": "Time delay before reverb starts after the direct sound",
+      "sonic_effect": {
+        "increasing": "Creates separation between dry signal and reverb; sounds clearer and more spacious",
+        "decreasing": "Reverb blends immediately with sound; tighter, more integrated"
+      },
+      "audio_principle": "Mimics natural acoustics where first reflections arrive after the initial sound travels to surfaces",
+      "typical_values": {
+        "vocals": "20-50ms for clarity and separation",
+        "drums": "0-10ms for tight, natural blend",
+        "pads": "30-80ms for depth and space",
+        "fast_tempo": "10-30ms to stay rhythmic",
+        "slow_tempo": "40-80ms for luxurious space"
+      },
+      "relationships": [
+        "Longer predelay + long decay = very spacious, ambient",
+        "Affects perception of room size - longer predelay suggests larger space"
+      ]
+    },
+
+    "Decay Time": {
+      "audio_function": "Duration of the reverb tail - how long it takes to fade out",
+      "sonic_effect": {
+        "increasing": "Longer, more sustained tail; ethereal, washy, atmospheric",
+        "decreasing": "Shorter, controlled tail; tighter, punchier, cleaner"
+      },
+      "audio_principle": "Simulates how quickly sound energy dissipates in a space based on absorption",
+      "typical_values": {
+        "tight_drums": "200-800ms",
+        "natural_room": "800-2000ms",
+        "vocals": "1500-3000ms",
+        "pads_ambient": "4000-15000ms",
+        "special_fx": "15000-60000ms"
+      },
+      "relationships": [
+        "Must balance with Dry/Wet - long decay needs less wet to avoid mud",
+        "Should scale with Room Size for realism",
+        "Interacts with tempo - too long causes rhythmic smearing"
+      ]
+    },
+
+    "Diffusion": {
+      "audio_function": "Controls the density and smoothness of reverb reflections",
+      "sonic_effect": {
+        "increasing": "Dense, smooth, creamy reverb texture; individual echoes blend together",
+        "decreasing": "Sparse, grainy texture; individual echoes more audible"
+      },
+      "audio_principle": "Simulates how many surfaces scatter sound and how evenly they do it",
+      "typical_values": {
+        "echo_chamber": "5-25 for distinct rhythmic echoes",
+        "natural_room": "40-65 for realistic space",
+        "smooth_plate": "75-96 for lush, dense reverb"
+      },
+      "relationships": [
+        "Higher diffusion softens early reflections",
+        "Works with Diffuse/Reflect levels to shape overall texture"
+      ]
+    },
+
+    "Scale": {
+      "audio_function": "Scales the perceived size of early reflections",
+      "sonic_effect": {
+        "increasing": "Early reflections suggest larger space; more spacious feel",
+        "decreasing": "Early reflections suggest smaller space; more intimate"
+      },
+      "audio_principle": "Adjusts the time spacing between early reflections without changing room size parameter",
+      "typical_values": {
+        "intimate": "5-30% for close, tight space",
+        "natural": "40-70% for realistic proportion",
+        "expansive": "80-100% for grand, open space"
+      },
+      "relationships": [
+        "Works closely with Room Size",
+        "Affects early reflection pattern without changing decay"
+      ]
+    },
+
+    "Room Size": {
+      "audio_function": "Defines the dimensions of the virtual acoustic space",
+      "sonic_effect": {
+        "increasing": "Larger space; longer initial reflections; more diffuse, distant sound",
+        "decreasing": "Smaller space; shorter reflections; tighter, more intimate sound"
+      },
+      "audio_principle": "Larger rooms have longer path lengths for sound reflections",
+      "typical_values": {
+        "vocal_booth": "5-20m",
+        "small_studio": "20-50m",
+        "concert_hall": "50-150m",
+        "cathedral": "150-500m"
+      },
+      "relationships": [
+        "Larger rooms typically need longer decay for realism",
+        "Works with Scale to fine-tune spatial character",
+        "Larger rooms benefit from higher diffusion"
+      ]
+    },
+
+    "Reflect Level": {
+      "audio_function": "Volume of early reflections relative to diffuse tail",
+      "sonic_effect": {
+        "increasing": "Emphasizes space character; more defined, present reflections",
+        "decreasing": "De-emphasizes space; more focus on smooth tail"
+      },
+      "audio_principle": "Early reflections define room character; diffuse tail provides sustain",
+      "typical_values": {
+        "define_space": "-3 to 0 dB (high reflect, lower diffuse)",
+        "smooth_wash": "-15 to -10 dB (low reflect, high diffuse)",
+        "balanced": "-6 to -3 dB"
+      },
+      "relationships": [
+        "Balance with Diffuse Level defines reverb character",
+        "High reflect level makes room size more apparent"
+      ]
+    },
+
+    "Diffuse Level": {
+      "audio_function": "Volume of diffuse reverb tail relative to early reflections",
+      "sonic_effect": {
+        "increasing": "Emphasizes smooth, sustained tail; more lush and ambient",
+        "decreasing": "Reduces tail presence; drier, more defined space"
+      },
+      "audio_principle": "Diffuse tail provides the 'wash' and sustain of reverb",
+      "typical_values": {
+        "clear_space": "-12 to -6 dB (low diffuse, high reflect)",
+        "lush_ambient": "-3 to 3 dB (high diffuse, lower reflect)",
+        "balanced": "-6 to -3 dB"
+      },
+      "relationships": [
+        "Balance with Reflect Level is key to reverb character",
+        "High diffuse level with long decay creates ambient wash"
+      ]
+    },
+
+    "In Filter Freq": {
+      "audio_function": "Cutoff frequency for input filtering before reverb processing",
+      "sonic_effect": {
+        "highpass": "Removes lows from reverb; cleaner, tighter low end",
+        "lowpass": "Removes highs from reverb; darker, warmer, more distant"
+      },
+      "audio_principle": "Filters the signal before it enters the reverb, shaping what gets reverberated",
+      "typical_values": {
+        "remove_low_mud": "High-pass at 100-300 Hz",
+        "darken_reverb": "Low-pass at 3000-8000 Hz",
+        "full_range": "Both filters off or wide open"
+      },
+      "relationships": [
+        "Different from output filtering - this affects what goes IN",
+        "Use with In Filter Width to control filter slope"
+      ]
+    },
+
+    "HiFilter Freq": {
+      "audio_function": "High frequency cutoff/shelf for reverb output",
+      "sonic_effect": {
+        "increasing": "Brighter, airier reverb; more present and modern",
+        "decreasing": "Darker, warmer reverb; more vintage or distant"
+      },
+      "audio_principle": "In nature, high frequencies absorb faster than lows in most spaces",
+      "typical_values": {
+        "vintage_dark": "2000-4000 Hz",
+        "natural": "6000-10000 Hz",
+        "bright_modern": "12000-16000 Hz"
+      },
+      "relationships": [
+        "Use with HiFilter Type (shelving vs low-pass)",
+        "Shelving is gentler, low-pass is more aggressive"
+      ]
+    },
+
+    "LowShelf Freq": {
+      "audio_function": "Low frequency shelf point for reverb output",
+      "sonic_effect": {
+        "boost": "Fuller, warmer reverb with more body and weight",
+        "cut": "Cleaner, tighter reverb; less mud in low end"
+      },
+      "audio_principle": "Controls low frequency content to manage clarity vs warmth",
+      "typical_values": {
+        "clear_vocal": "Cut at 200-300 Hz",
+        "warm_pad": "Boost at 80-150 Hz",
+        "clean_mix": "Slight cut at 100-200 Hz"
+      },
+      "relationships": [
+        "Use with LowShelf Gain to control amount of boost/cut",
+        "Often cut lows for clarity, boost for warmth"
+      ]
+    },
+
+    "Chorus Rate": {
+      "audio_function": "Speed of pitch modulation in reverb tail",
+      "sonic_effect": {
+        "increasing": "Faster wobble/vibrato; more obvious modulation",
+        "decreasing": "Slower, subtler movement; organic shimmer"
+      },
+      "audio_principle": "Adds movement and richness through pitch variation",
+      "typical_values": {
+        "subtle_shimmer": "0.01-0.1 Hz",
+        "gentle_movement": "0.1-0.5 Hz",
+        "obvious_chorus": "1-4 Hz",
+        "vibrato_effect": "4-8 Hz"
+      },
+      "relationships": [
+        "Works with Chorus Amount to control depth",
+        "Requires Chorus On to be active"
+      ]
+    },
+
+    "Chorus Amount": {
+      "audio_function": "Depth of pitch modulation in reverb tail",
+      "sonic_effect": {
+        "increasing": "More obvious pitch wobble; wider stereo; more 'chorus-y'",
+        "decreasing": "Subtler modulation; more natural"
+      },
+      "audio_principle": "Controls how far the pitch varies from original",
+      "typical_values": {
+        "subtle_width": "0.01-0.5",
+        "moderate_chorus": "0.5-1.5",
+        "obvious_effect": "1.5-4.0"
+      },
+      "relationships": [
+        "Higher amount with slow rate = dreamy shimmer",
+        "Lower amount with faster rate = subtle movement"
+      ]
+    },
+
+    "ER Spin Rate": {
+      "audio_function": "Speed of early reflection pattern rotation",
+      "sonic_effect": {
+        "increasing": "Faster spinning; more motion in stereo field",
+        "decreasing": "Slower, more stable stereo image"
+      },
+      "audio_principle": "Creates stereo movement by rotating the early reflection pattern",
+      "typical_values": {
+        "static": "0.07-0.2 Hz for barely perceptible movement",
+        "gentle_motion": "0.3-0.6 Hz",
+        "active_spin": "0.7-1.3 Hz"
+      },
+      "relationships": [
+        "Requires ER Spin On to be active",
+        "Works with ER Spin Amount to control depth"
+      ]
+    },
+
+    "ER Spin Amount": {
+      "audio_function": "Depth of early reflection stereo rotation",
+      "sonic_effect": {
+        "increasing": "Wider stereo movement; more dramatic panning",
+        "decreasing": "Subtler movement; more centered"
+      },
+      "audio_principle": "Controls how far the ER pattern moves in stereo field",
+      "typical_values": {
+        "subtle": "2-15",
+        "moderate": "15-35",
+        "extreme": "35-55"
+      },
+      "relationships": [
+        "Higher amount with slow rate = sweeping motion",
+        "Lower amount with faster rate = shimmer"
+      ]
+    },
+
+    "ER Shape": {
+      "audio_function": "Morphs early reflection pattern character",
+      "sonic_effect": {
+        "low": "Sharp, distinct reflections; hard surfaces",
+        "high": "Soft, diffuse reflections; absorptive surfaces"
+      },
+      "audio_principle": "Simulates different surface materials and their reflection patterns",
+      "typical_values": {
+        "hard_surfaces": "0.0-0.3 (tile, concrete, glass)",
+        "mixed": "0.3-0.7 (wood, mixed materials)",
+        "soft_surfaces": "0.7-1.0 (drapes, acoustic panels)"
+      },
+      "relationships": [
+        "Affects how room character is perceived",
+        "Interacts with overall diffusion setting"
+      ]
+    },
+
+    "Stereo Image": {
+      "audio_function": "Width of the stereo field for the reverb",
+      "sonic_effect": {
+        "increasing": "Wider stereo spread; more immersive and spacious",
+        "decreasing": "Narrower, more centered; mono at 0"
+      },
+      "audio_principle": "Controls left-right spread without affecting front-back depth",
+      "typical_values": {
+        "mono": "0",
+        "natural": "50-80",
+        "wide": "90-120"
+      },
+      "relationships": [
+        "Independent of Room Size (which affects depth)",
+        "Can narrow reverb while keeping dry signal wide"
+      ]
+    },
+
+    "Dry/Wet": {
+      "audio_function": "Balance between original (dry) and reverb (wet) signal",
+      "sonic_effect": {
+        "increasing": "More obvious reverb; sound pushed back in space",
+        "decreasing": "Subtler reverb; sound stays upfront"
+      },
+      "audio_principle": "Fundamental mix control for effect amount",
+      "typical_values": {
+        "subtle_ambience": "10-25%",
+        "noticeable_space": "30-50%",
+        "heavy_reverb": "60-80%",
+        "effect_processing": "100%"
+      },
+      "relationships": [
+        "Long decay needs less wet to avoid muddiness",
+        "Return track usually run 100% wet"
+      ]
+    },
+
+    "Density": {
+      "audio_function": "Controls reflection density in early and late reverb",
+      "sonic_effect": {
+        "sparse": "Individual echoes more audible; grainy texture",
+        "high": "Dense, smooth reverb; more reflections per second"
+      },
+      "audio_principle": "Simulates number of reflections happening in the space",
+      "typical_values": {
+        "Sparse": "Echo chamber, special effects",
+        "Low": "Natural rooms with distinct reflections",
+        "Mid": "Realistic dense spaces",
+        "High": "Smooth plates and halls"
+      },
+      "relationships": [
+        "Related to Diffusion but controls overall reflection count",
+        "Higher density generally smoother sound"
+      ]
+    },
+
+    "Freeze On": {
+      "audio_function": "Freezes the current reverb tail, sustaining it infinitely",
+      "sonic_effect": {
+        "on": "Current tail sustains forever; ambient drone pad",
+        "off": "Normal decay behavior"
+      },
+      "audio_principle": "Captures reverb tail and loops it for infinite sustain",
+      "typical_values": {
+        "ambient_pad": "Turn on to create sustained wash",
+        "normal": "Keep off for natural decay"
+      },
+      "relationships": [
+        "New audio doesn't enter while frozen",
+        "Creates pad-like textures from transients"
+      ]
+    },
+
+    "Cut On": {
+      "audio_function": "Cuts early reflections, leaving only diffuse tail",
+      "sonic_effect": {
+        "on": "Only smooth tail; no room character or early reflections",
+        "off": "Full reverb with early reflections and tail"
+      },
+      "audio_principle": "Removes spatial cues, creating pure ambience",
+      "typical_values": {
+        "ambient_wash": "On for pure tail texture",
+        "realistic_space": "Off to maintain room character"
+      },
+      "relationships": [
+        "Makes Reflect Level, ER parameters irrelevant when on",
+        "Useful for non-realistic ambient effects"
+      ]
+    },
+
+    "Flat On": {
+      "audio_function": "Flattens early reflection pattern over time",
+      "sonic_effect": {
+        "on": "Early reflections smooth out; less distinct space character",
+        "off": "Maintains defined early reflection pattern"
+      },
+      "audio_principle": "Blends discrete echoes into smooth reverb",
+      "typical_values": {
+        "smooth_reverb": "On for less pronounced room character",
+        "defined_space": "Off to keep room signature clear"
+      },
+      "relationships": [
+        "Affects how ER Shape and room character evolve",
+        "Creates smoother transition from early to late reverb"
+      ]
+    }
+  }
+}

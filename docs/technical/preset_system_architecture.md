@@ -144,25 +144,21 @@ Every parameter returned by Ableton includes:
 
 **The `display_value` field gives us exactly what the UI shows!**
 
-### Three-Pillar Strategy
+### Three-Pillar Strategy (Refined)
 
-#### Pillar 1: Display-Value Reading (Enrichment)
-- ✅ Use `display_value` directly - no conversion needed
-- ✅ Apply grouping rules to filter inactive params
-- ✅ Send accurate values to LLM
-- ✅ Perfect accuracy for reading/understanding
+#### Pillar 1: Truth From Live (Reading)
+- Use `display_value` directly — no conversion needed
+- Filter inactive/stale params via grouping rules
+- Enrichment consumes only `parameter_display_values`
 
-#### Pillar 2: Normalized-Value Storage (Future Manipulation)
-- ✅ Store `value` (normalized) for future manipulation
-- ✅ Use for preset switching (direct value application)
-- ✅ Enable parameter modification later
+#### Pillar 2: Direct Control (Writing)
+- Store normalized `value` for writes/preset switching
+- Apply parameters in grouping-aware order (masters → modes → dependents)
 
-#### Pillar 3: Smart Curve Fitting (On-Demand)
-- ✅ When user wants to SET "500ms", use 3-tier fallback:
-  1. Try curve from 32-preset analysis (if confident)
-  2. Try parameter type heuristic (Time → exp curve)
-  3. Just-in-time probing (probe 3-5 values, fit curve, use it)
-- ✅ System gets smarter over time as probing enriches database
+#### Pillar 3: Hybrid Learning (Offline)
+- Numeric fits computed deterministically from preset sets (linear/log/exp/piecewise)
+- LLM focuses on semantics: grouping, apply order, unit hints, label names
+- Low-confidence fits fall back to JIT probes at runtime
 
 ---
 
@@ -283,7 +279,7 @@ Define master/dependent parameter relationships:
 
 **Purpose:** Filter inactive/stale parameters before enrichment or display
 
-### Display Value Types
+### Display Value Types (Guidance For Fits)
 
 Parameters have different display formats across device types:
 
@@ -303,11 +299,11 @@ Parameters have different display formats across device types:
 
 ## 5. System Components
 
-### 5.1 Device Mapping Store
+### 5.1 Device Mapping Store (Schema Extensions)
 
 **Location:** `device_mappings/` collection in Firestore
 
-**Structure:**
+**Structure (base + analysis):**
 ```json
 {
   "signature": "9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1",
@@ -579,7 +575,7 @@ interface GroupingRules {
 
 ## 7. Workflows
 
-### 7.1 Device Discovery & Mapping
+### 7.1 Device Discovery & Mapping (Runtime)
 
 **Trigger:** User loads a device on a return track, opens device tray in UI
 
@@ -604,9 +600,9 @@ interface GroupingRules {
    b. Return existing mapping
 ```
 
-**No learning process needed!**
+No learning process needed for mapping. Learning happens offline.
 
-### 7.1.1 Offline Manual Device Analysis (Developer Workflow)
+### 7.1.1 Offline Device Analysis (LLM + Numeric Fits)
 
 **Purpose:** One-time manual process per device type to generate comprehensive device mapping with grouping rules and parameter metadata
 
@@ -627,57 +623,17 @@ STEP 1: Capture All Stock Presets to Firestore
    - Each with full param values and display values
    - Note the actual count (varies by device type)
 
-STEP 2: Export All Presets to Analysis Document
+STEP 2: Export Digest For Analysis (Compact)
 ------------------------------------------------
-1. Query Firestore for all presets matching device signature:
-   ```
-   presets.where('structure_signature', '==', signature)
-         .where('device_name', '==', 'Delay')
-         .get()
-   ```
+1) Run exporter (server running):
+   - By signature: `make export-digest SIG=<signature> OUT=/tmp/digest.json`
+   - By live device: `make export-digest RET=0 DEV=0 OUT=/tmp/digest.json`
 
-2. Generate THREE separate analysis documents:
+2) Feed the digest + 5–10 representative preset snippets + short manual excerpt + a couple UI images to the LLM.
 
-   **Document 1:** /tmp/device_structure_{device_name}.md
-   ```markdown
-   # Device Parameter Structure: {Device Name}
+3) Ask the LLM to produce grouping (masters/dependents/active_when), apply order, unit hints, label names.
 
-   ## Device Information
-   - Signature: {signature}
-   - Device Name: {device_name}
-   - Manufacturer: {manufacturer}
-   - Total Parameters: {param_count}
-   - Stock Preset Count: {count}
-
-   ## Parameter Structure
-   | Index | Name | Min | Max |
-   |-------|------|-----|-----|
-   | 0 | Device On | 0.0 | 1.0 |
-   | 1 | Delay Mode | 0.0 | 2.0 |
-   | ... | ... | ... | ... |
-   ```
-
-   **Document 2:** /tmp/device_presets_{device_name}.md
-   ```markdown
-   # Stock Preset Dumps: {Device Name}
-
-   Total Presets: {count}
-
-   ## Preset 1: {preset_name}
-   ```json
-   {
-     "parameter_values": {...},
-     "parameter_display_values": {...}
-   }
-   ```
-
-   ## Preset 2: {preset_name}
-   ```json
-   {
-     "parameter_values": {...},
-     "parameter_display_values": {...}
-   }
-   ```
+4) Run numeric fit selection offline (linear/log/exp/piecewise), validate R² and monotonicity, mark low-confidence with JIT probe fallback.
 
    (repeat for all available presets)
    ```
@@ -3682,7 +3638,28 @@ Response:
       "dependent_master_values": {},
       "skip_auto_enable": []
     }
-  }
+  ],
+
+  "grouping": {
+    "masters": ["Link", "L Sync", "R Sync", "Filter On"],
+    "dependents": { "L Time": "L Sync", "L 16th": "L Sync", "R Time": "Link", "R 16th": "Link" },
+    "dependent_master_values": { "L Time": 0.0, "L 16th": 1.0, "R Time": 0.0, "R 16th": 0.0 },
+    "apply_order": ["masters", "modes", "dependents"],
+    "skip_auto_enable": ["Freeze On"]
+  },
+
+  "params_meta": [
+    { "index": 6, "name": "L Time", "control_type": "continuous", "unit_hint": "ms", "labels": [],
+      "fit": {"type": "exp", "coeffs": {"a": 1.23, "b": 0.45, "c": 0.0}, "r2": 0.997}, "confidence": 0.9 },
+    { "index": 8, "name": "L 16th", "control_type": "quantized",
+      "labels": ["1 16th", "2 16ths", "3 16ths"], "label_map": {"1 16th": 0.0}, "fit": null, "confidence": 1.0 }
+  ],
+
+  "sources": { "preset_count": 32, "manual_refs": ["Ableton Live Manual – Delay"], "model": "gemini-2.5", "run_id": "2025-10-11T12:34:56Z" },
+
+  "analysis_status": "analyzed",
+  "schema_version": 2
+}
 }
 ```
 
@@ -3810,7 +3787,79 @@ This architecture document provides a comprehensive guide for implementing a **u
 
 ---
 
-**Document Version:** 1.0
+## Preset Immutability and User Modifications
+
+**Design Principle:** Stock presets are immutable; user modifications create isolated copies.
+
+### Stock Preset Protection
+
+**Stock presets are read-only:**
+- Stock presets captured from Ableton Live factory library
+- Stored in Firestore `presets` collection with `preset_type: "stock"`
+- **Cannot be modified by users** - any attempt to edit creates a copy
+- Ensures canonical reference presets remain pristine across all users
+
+### User Preset Workflow
+
+**Modification creates user-owned copy:**
+
+1. **User loads stock preset**
+   - Example: `reverb_ambience` (stock)
+   - User tweaks parameters in Live
+
+2. **User saves changes**
+   - System detects attempt to modify stock preset
+   - Creates new preset: `reverb_ambience_user_<username>` or `reverb_ambience_user_custom`
+   - User preset stored locally first (fast, offline-capable)
+   - Optionally synced to Firestore for multi-device access
+
+3. **User preset metadata**
+   ```json
+   {
+     "id": "reverb_ambience_user_johndoe",
+     "name": "Ambience (Custom)",
+     "preset_type": "user",
+     "base_preset": "reverb_ambience",
+     "owner": "johndoe",
+     "created_at": 1697234567,
+     "parameter_values": {...},
+     "parameter_display_values": {...}
+   }
+   ```
+
+### Storage Strategy
+
+**Stock Presets:**
+- Firestore only (no local cache)
+- Single source of truth
+- Shared across all users
+
+**User Presets:**
+- Local cache first (`~/.fadebender/param_maps/presets/{device}/user/`)
+- Optional Firestore sync (when online, user-specific collection)
+- Isolated per user
+
+### Implementation Checklist (Future)
+
+- [ ] Add validation in `save_preset()` to reject updates to stock presets
+- [ ] Add "Save As User Preset" endpoint
+- [ ] Generate user preset ID: `{device}_{name}_user_{username}`
+- [ ] Add user ownership metadata to user presets
+- [ ] UI: Show "read-only" indicator on stock presets
+- [ ] UI: "Save" button creates copy for stock, updates for user presets
+- [ ] Multi-user: User-specific Firestore collections or ownership filters
+
+### Benefits
+
+1. **Data Integrity:** Stock presets remain accurate canonical references
+2. **Multi-user Safe:** Each user's customizations are isolated
+3. **Offline Capable:** User presets cached locally
+4. **Sync Ready:** User presets can sync to Firestore when online
+5. **Audit Trail:** Base preset reference preserved in user preset metadata
+
+---
+
+**Document Version:** 1.1
 **Last Updated:** 2025-10-11
 **Author:** Architecture discussion between user and Claude
 **Review Status:** Pending user review

@@ -1,0 +1,1559 @@
+{
+  "tags": [],
+  "param_names": [
+    "Device On",
+    "Predelay",
+    "In LowCut On",
+    "In HighCut On",
+    "In Filter Freq",
+    "In Filter Width",
+    "ER Spin On",
+    "ER Spin Rate",
+    "ER Spin Amount",
+    "ER Shape",
+    "HiFilter On",
+    "HiFilter Type",
+    "HiFilter Freq",
+    "HiShelf Gain",
+    "LowShelf On",
+    "LowShelf Freq",
+    "LowShelf Gain",
+    "Chorus On",
+    "Chorus Rate",
+    "Chorus Amount",
+    "Decay Time",
+    "Diffusion",
+    "Scale",
+    "Freeze On",
+    "Flat On",
+    "Cut On",
+    "Room Size",
+    "Size Smoothing",
+    "Stereo Image",
+    "Density",
+    "Reflect Level",
+    "Diffuse Level",
+    "Dry/Wet"
+  ],
+  "requires_for_effect": {
+    "ER Spin Rate": {
+      "description": "ER Spin Rate only affects audio when ER Spin is enabled",
+      "any_of": [
+        "ER Spin On"
+      ]
+    },
+    "ER Spin Amount": {
+      "description": "ER Spin Amount only affects audio when ER Spin is enabled",
+      "any_of": [
+        "ER Spin On"
+      ]
+    },
+    "In Filter Width": {
+      "description": "Filter width only affects audio when at least one cut filter is enabled",
+      "any_of": [
+        "In LowCut On",
+        "In HighCut On"
+      ]
+    },
+    "In Filter Freq": {
+      "description": "Filter frequency only affects audio when at least one cut filter is enabled",
+      "any_of": [
+        "In LowCut On",
+        "In HighCut On"
+      ]
+    }
+  },
+  "device_type": "reverb",
+  "device_name": "Reverb",
+  "signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+  "groups": [
+    {
+      "master": {
+        "index": 23,
+        "name": "Freeze On"
+      },
+      "dependents": [
+        {
+          "index": 24,
+          "master": "Freeze On",
+          "name": "Flat On"
+        },
+        {
+          "index": 25,
+          "master": "Freeze On",
+          "name": "Cut On"
+        }
+      ],
+      "name": "Global"
+    },
+    {
+      "master": {
+        "index": 3,
+        "name": "In HighCut On"
+      },
+      "dependents": [
+        {
+          "index": 4,
+          "master": null,
+          "name": "In Filter Freq"
+        },
+        {
+          "index": 5,
+          "master": null,
+          "name": "In Filter Width"
+        }
+      ],
+      "name": "Input"
+    },
+    {
+      "master": {
+        "index": 6,
+        "name": "ER Spin On"
+      },
+      "dependents": [
+        {
+          "index": 7,
+          "master": "ER Spin On",
+          "name": "ER Spin Rate"
+        },
+        {
+          "index": 8,
+          "master": "ER Spin On",
+          "name": "ER Spin Amount"
+        }
+      ],
+      "name": "Early"
+    },
+    {
+      "master": {
+        "index": 14,
+        "name": "LowShelf On"
+      },
+      "dependents": [
+        {
+          "index": 11,
+          "master": "HiFilter On",
+          "name": "HiFilter Type"
+        },
+        {
+          "index": 12,
+          "master": "HiFilter On",
+          "name": "HiFilter Freq"
+        },
+        {
+          "index": 13,
+          "master": "HiShelf On",
+          "name": "HiShelf Gain"
+        },
+        {
+          "index": 15,
+          "master": "LowShelf On",
+          "name": "LowShelf Freq"
+        },
+        {
+          "index": 16,
+          "master": "LowShelf On",
+          "name": "LowShelf Gain"
+        }
+      ],
+      "name": "Tail"
+    },
+    {
+      "master": {
+        "index": 17,
+        "name": "Chorus On"
+      },
+      "dependents": [
+        {
+          "index": 18,
+          "master": "Chorus On",
+          "name": "Chorus Rate"
+        },
+        {
+          "index": 19,
+          "master": "Chorus On",
+          "name": "Chorus Amount"
+        }
+      ],
+      "name": "Chorus"
+    },
+    {
+      "master": null,
+      "dependents": [],
+      "name": "Output"
+    }
+  ],
+  "params_meta": [
+    {
+      "index": 0,
+      "control_type": "continuous",
+      "name": "Device On"
+    },
+    {
+      "index": 1,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9999990631538097,
+        "a": 6.215727506669036,
+        "b": -0.6938670928336955
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "vocals": "20-50ms for clarity and separation",
+          "fast_tempo": "10-30ms to stay rhythmic",
+          "slow_tempo": "40-80ms for luxurious space",
+          "drums": "0-10ms for tight, natural blend",
+          "pads": "30-80ms for depth and space"
+        },
+        "audio_principle": "Mimics natural acoustics where first reflections arrive after the initial sound travels to surfaces",
+        "audio_function": "Time delay before reverb starts after the direct sound",
+        "sonic_effect": {
+          "decreasing": "Reverb blends immediately with sound; tighter, more integrated",
+          "increasing": "Creates separation between dry signal and reverb; sounds clearer and more spacious"
+        },
+        "relationships": [
+          "Longer predelay + long decay = very spacious, ambient",
+          "Affects perception of room size - longer predelay suggests larger space"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999990631538097,
+      "name": "Predelay"
+    },
+    {
+      "index": 2,
+      "control_type": "continuous",
+      "name": "In LowCut On"
+    },
+    {
+      "index": 3,
+      "control_type": "continuous",
+      "name": "In HighCut On"
+    },
+    {
+      "index": 4,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9999998268335578,
+        "a": 5.886683370668829,
+        "b": 3.9116165327697683
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "full_range": "Both filters off or wide open",
+          "darken_reverb": "Low-pass at 3000-8000 Hz",
+          "remove_low_mud": "High-pass at 100-300 Hz"
+        },
+        "audio_principle": "Filters the signal before it enters the reverb, shaping what gets reverberated",
+        "audio_function": "Cutoff frequency for input filtering before reverb processing",
+        "sonic_effect": {
+          "lowpass": "Removes highs from reverb; darker, warmer, more distant",
+          "highpass": "Removes lows from reverb; cleaner, tighter low end"
+        },
+        "relationships": [
+          "Different from output filtering - this affects what goes IN",
+          "Use with In Filter Width to control filter slope"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999998268335578,
+      "name": "In Filter Freq"
+    },
+    {
+      "index": 5,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.99999855326421,
+        "a": 8.499930213552734,
+        "b": 0.5000348670557402
+      },
+      "max_display": null,
+      "min_display": null,
+      "confidence": 0.99999855326421,
+      "name": "In Filter Width"
+    },
+    {
+      "index": 6,
+      "control_type": "continuous",
+      "name": "ER Spin On"
+    },
+    {
+      "index": 7,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9996101785386536,
+        "a": 2.8722749479341276,
+        "b": -2.6092925711874018
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "static": "0.07-0.2 Hz for barely perceptible movement",
+          "active_spin": "0.7-1.3 Hz",
+          "gentle_motion": "0.3-0.6 Hz"
+        },
+        "audio_principle": "Creates stereo movement by rotating the early reflection pattern",
+        "audio_function": "Speed of early reflection pattern rotation",
+        "sonic_effect": {
+          "decreasing": "Slower, more stable stereo image",
+          "increasing": "Faster spinning; more motion in stereo field"
+        },
+        "relationships": [
+          "Requires ER Spin On to be active",
+          "Works with ER Spin Amount to control depth"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9996101785386536,
+      "name": "ER Spin Rate"
+    },
+    {
+      "index": 8,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9999996937759055,
+        "a": 3.314164600518842,
+        "b": 0.6932048785991327
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "subtle": "2-15",
+          "moderate": "15-35",
+          "extreme": "35-55"
+        },
+        "audio_principle": "Controls how far the ER pattern moves in stereo field",
+        "audio_function": "Depth of early reflection stereo rotation",
+        "sonic_effect": {
+          "decreasing": "Subtler movement; more centered",
+          "increasing": "Wider stereo movement; more dramatic panning"
+        },
+        "relationships": [
+          "Higher amount with slow rate = sweeping motion",
+          "Lower amount with faster rate = shimmer"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999996937759055,
+      "name": "ER Spin Amount"
+    },
+    {
+      "index": 9,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.9998618674725495,
+        "a": 1.0009756095915099,
+        "b": -0.00048780475032455406
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "hard_surfaces": "0.0-0.3 (tile, concrete, glass)",
+          "mixed": "0.3-0.7 (wood, mixed materials)",
+          "soft_surfaces": "0.7-1.0 (drapes, acoustic panels)"
+        },
+        "audio_principle": "Simulates different surface materials and their reflection patterns",
+        "audio_function": "Morphs early reflection pattern character",
+        "sonic_effect": {
+          "low": "Sharp, distinct reflections; hard surfaces",
+          "high": "Soft, diffuse reflections; absorptive surfaces"
+        },
+        "relationships": [
+          "Affects how room character is perceived",
+          "Interacts with overall diffusion setting"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9998618674725495,
+      "name": "ER Shape"
+    },
+    {
+      "index": 10,
+      "control_type": "continuous",
+      "name": "HiFilter On"
+    },
+    {
+      "index": 11,
+      "control_type": "continuous",
+      "name": "HiFilter Type"
+    },
+    {
+      "index": 12,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9999997229728659,
+        "a": 6.685026513908562,
+        "b": 2.995585910339351
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "bright_modern": "12000-16000 Hz",
+          "natural": "6000-10000 Hz",
+          "vintage_dark": "2000-4000 Hz"
+        },
+        "audio_principle": "In nature, high frequencies absorb faster than lows in most spaces",
+        "audio_function": "High frequency cutoff/shelf for reverb output",
+        "sonic_effect": {
+          "decreasing": "Darker, warmer reverb; more vintage or distant",
+          "increasing": "Brighter, airier reverb; more present and modern"
+        },
+        "relationships": [
+          "Use with HiFilter Type (shelving vs low-pass)",
+          "Shelving is gentler, low-pass is more aggressive"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999997229728659,
+      "name": "HiFilter Freq"
+    },
+    {
+      "index": 13,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.9999999999999963,
+        "a": 0.7999999977985743,
+        "b": 0.2000000009553356
+      },
+      "max_display": null,
+      "min_display": null,
+      "confidence": 0.9999999999999963,
+      "name": "HiShelf Gain"
+    },
+    {
+      "index": 14,
+      "control_type": "continuous",
+      "name": "LowShelf On"
+    },
+    {
+      "index": 15,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9999997354845571,
+        "a": 6.619342409646922,
+        "b": 2.996333357229934
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "clear_vocal": "Cut at 200-300 Hz",
+          "warm_pad": "Boost at 80-150 Hz",
+          "clean_mix": "Slight cut at 100-200 Hz"
+        },
+        "audio_principle": "Controls low frequency content to manage clarity vs warmth",
+        "audio_function": "Low frequency shelf point for reverb output",
+        "sonic_effect": {
+          "cut": "Cleaner, tighter reverb; less mud in low end",
+          "boost": "Fuller, warmer reverb with more body and weight"
+        },
+        "relationships": [
+          "Use with LowShelf Gain to control amount of boost/cut",
+          "Often cut lows for clarity, boost for warmth"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999997354845571,
+      "name": "LowShelf Freq"
+    },
+    {
+      "index": 16,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.9999999999999963,
+        "a": 0.7999999977985743,
+        "b": 0.2000000009553356
+      },
+      "max_display": null,
+      "min_display": null,
+      "confidence": 0.9999999999999963,
+      "name": "LowShelf Gain"
+    },
+    {
+      "index": 17,
+      "control_type": "continuous",
+      "name": "Chorus On"
+    },
+    {
+      "index": 18,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9987073292779787,
+        "a": 6.753006964780093,
+        "b": -4.657358728250813
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "subtle_shimmer": "0.01-0.1 Hz",
+          "vibrato_effect": "4-8 Hz",
+          "obvious_chorus": "1-4 Hz",
+          "gentle_movement": "0.1-0.5 Hz"
+        },
+        "audio_principle": "Adds movement and richness through pitch variation",
+        "audio_function": "Speed of pitch modulation in reverb tail",
+        "sonic_effect": {
+          "decreasing": "Slower, subtler movement; organic shimmer",
+          "increasing": "Faster wobble/vibrato; more obvious modulation"
+        },
+        "relationships": [
+          "Works with Chorus Amount to control depth",
+          "Requires Chorus On to be active"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9987073292779787,
+      "name": "Chorus Rate"
+    },
+    {
+      "index": 19,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.9999955055648891,
+        "a": 3.985365862682306,
+        "b": 0.012439017401495412
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "moderate_chorus": "0.5-1.5",
+          "subtle_width": "0.01-0.5",
+          "obvious_effect": "1.5-4.0"
+        },
+        "audio_principle": "Controls how far the pitch varies from original",
+        "audio_function": "Depth of pitch modulation in reverb tail",
+        "sonic_effect": {
+          "decreasing": "Subtler modulation; more natural",
+          "increasing": "More obvious pitch wobble; wider stereo; more 'chorus-y'"
+        },
+        "relationships": [
+          "Higher amount with slow rate = dreamy shimmer",
+          "Lower amount with faster rate = subtle movement"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999955055648891,
+      "name": "Chorus Amount"
+    },
+    {
+      "index": 20,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.9999999681271523,
+        "a": 5.703262166313729,
+        "b": 5.2986844478995945
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "natural_room": "800-2000ms",
+          "special_fx": "15000-60000ms",
+          "pads_ambient": "4000-15000ms",
+          "vocals": "1500-3000ms",
+          "tight_drums": "200-800ms"
+        },
+        "audio_principle": "Simulates how quickly sound energy dissipates in a space based on absorption",
+        "audio_function": "Duration of the reverb tail - how long it takes to fade out",
+        "sonic_effect": {
+          "decreasing": "Shorter, controlled tail; tighter, punchier, cleaner",
+          "increasing": "Longer, more sustained tail; ethereal, washy, atmospheric"
+        },
+        "relationships": [
+          "Must balance with Dry/Wet - long decay needs less wet to avoid mud",
+          "Should scale with Room Size for realism",
+          "Interacts with tempo - too long causes rhythmic smearing"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999999681271523,
+      "name": "Decay Time"
+    },
+    {
+      "index": 21,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.9999139872876244,
+        "a": 95.98606270427078,
+        "b": 0.019163772178211642
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "natural_room": "40-65 for realistic space",
+          "smooth_plate": "75-96 for lush, dense reverb",
+          "echo_chamber": "5-25 for distinct rhythmic echoes"
+        },
+        "audio_principle": "Simulates how many surfaces scatter sound and how evenly they do it",
+        "audio_function": "Controls the density and smoothness of reverb reflections",
+        "sonic_effect": {
+          "decreasing": "Sparse, grainy texture; individual echoes more audible",
+          "increasing": "Dense, smooth, creamy reverb texture; individual echoes blend together"
+        },
+        "relationships": [
+          "Higher diffusion softens early reflections",
+          "Works with Diffuse/Reflect levels to shape overall texture"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.9999139872876244,
+      "name": "Diffusion"
+    },
+    {
+      "index": 22,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.99990020168541,
+        "a": 95.0243902073505,
+        "b": 4.980487830132117
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "intimate": "5-30% for close, tight space",
+          "natural": "40-70% for realistic proportion",
+          "expansive": "80-100% for grand, open space"
+        },
+        "audio_principle": "Adjusts the time spacing between early reflections without changing room size parameter",
+        "audio_function": "Scales the perceived size of early reflections",
+        "sonic_effect": {
+          "decreasing": "Early reflections suggest smaller space; more intimate",
+          "increasing": "Early reflections suggest larger space; more spacious feel"
+        },
+        "relationships": [
+          "Works closely with Room Size",
+          "Affects early reflection pattern without changing decay"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.99990020168541,
+      "name": "Scale"
+    },
+    {
+      "audio_knowledge": {
+        "typical_values": {
+          "normal": "Keep off for natural decay",
+          "ambient_pad": "Turn on to create sustained wash"
+        },
+        "audio_principle": "Captures reverb tail and loops it for infinite sustain",
+        "audio_function": "Freezes the current reverb tail, sustaining it infinitely",
+        "sonic_effect": {
+          "on": "Current tail sustains forever; ambient drone pad",
+          "off": "Normal decay behavior"
+        },
+        "relationships": [
+          "New audio doesn't enter while frozen",
+          "Creates pad-like textures from transients"
+        ]
+      },
+      "index": 23,
+      "control_type": "continuous",
+      "name": "Freeze On"
+    },
+    {
+      "audio_knowledge": {
+        "typical_values": {
+          "defined_space": "Off to keep room signature clear",
+          "smooth_reverb": "On for less pronounced room character"
+        },
+        "audio_principle": "Blends discrete echoes into smooth reverb",
+        "audio_function": "Flattens early reflection pattern over time",
+        "sonic_effect": {
+          "on": "Early reflections smooth out; less distinct space character",
+          "off": "Maintains defined early reflection pattern"
+        },
+        "relationships": [
+          "Affects how ER Shape and room character evolve",
+          "Creates smoother transition from early to late reverb"
+        ]
+      },
+      "index": 24,
+      "control_type": "continuous",
+      "name": "Flat On"
+    },
+    {
+      "audio_knowledge": {
+        "typical_values": {
+          "ambient_wash": "On for pure tail texture",
+          "realistic_space": "Off to maintain room character"
+        },
+        "audio_principle": "Removes spatial cues, creating pure ambience",
+        "audio_function": "Cuts early reflections, leaving only diffuse tail",
+        "sonic_effect": {
+          "on": "Only smooth tail; no room character or early reflections",
+          "off": "Full reverb with early reflections and tail"
+        },
+        "relationships": [
+          "Makes Reflect Level, ER parameters irrelevant when on",
+          "Useful for non-realistic ambient effects"
+        ]
+      },
+      "index": 25,
+      "control_type": "continuous",
+      "name": "Cut On"
+    },
+    {
+      "index": 26,
+      "control_type": "continuous",
+      "fit": {
+        "type": "exp",
+        "r2": 0.999998381631965,
+        "a": 7.7181158428109145,
+        "b": -1.5039552273877306
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "concert_hall": "50-150m",
+          "vocal_booth": "5-20m",
+          "cathedral": "150-500m",
+          "small_studio": "20-50m"
+        },
+        "audio_principle": "Larger rooms have longer path lengths for sound reflections",
+        "audio_function": "Defines the dimensions of the virtual acoustic space",
+        "sonic_effect": {
+          "decreasing": "Smaller space; shorter reflections; tighter, more intimate sound",
+          "increasing": "Larger space; longer initial reflections; more diffuse, distant sound"
+        },
+        "relationships": [
+          "Larger rooms typically need longer decay for realism",
+          "Works with Scale to fine-tune spatial character",
+          "Larger rooms benefit from higher diffusion"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.999998381631965,
+      "name": "Room Size"
+    },
+    {
+      "index": 27,
+      "control_type": "continuous",
+      "fit": {
+        "points": [
+          {
+            "y": 0.0,
+            "x": 0.0
+          },
+          {
+            "y": 0.0,
+            "x": 0.05
+          },
+          {
+            "y": 0.0,
+            "x": 0.1
+          },
+          {
+            "y": 0.0,
+            "x": 0.15
+          },
+          {
+            "y": 0.0,
+            "x": 0.2
+          },
+          {
+            "y": 0.0,
+            "x": 0.25
+          },
+          {
+            "y": 0.0,
+            "x": 0.3
+          },
+          {
+            "y": 0.0,
+            "x": 0.35
+          },
+          {
+            "y": 0.0,
+            "x": 0.4
+          },
+          {
+            "y": 0.0,
+            "x": 0.45
+          },
+          {
+            "y": 0.0,
+            "x": 0.5
+          },
+          {
+            "y": 0.0,
+            "x": 0.55
+          },
+          {
+            "y": 0.0,
+            "x": 0.6
+          },
+          {
+            "y": 0.0,
+            "x": 0.65
+          },
+          {
+            "y": 0.0,
+            "x": 0.7
+          },
+          {
+            "y": 0.0,
+            "x": 0.75
+          },
+          {
+            "y": 0.0,
+            "x": 0.8
+          },
+          {
+            "y": 0.0,
+            "x": 0.85
+          },
+          {
+            "y": 0.0,
+            "x": 0.9
+          },
+          {
+            "y": 0.0,
+            "x": 0.95
+          },
+          {
+            "y": 1.0,
+            "x": 1.0
+          },
+          {
+            "y": 1.0,
+            "x": 1.05
+          },
+          {
+            "y": 1.0,
+            "x": 1.1
+          },
+          {
+            "y": 1.0,
+            "x": 1.15
+          },
+          {
+            "y": 1.0,
+            "x": 1.2
+          },
+          {
+            "y": 1.0,
+            "x": 1.25
+          },
+          {
+            "y": 1.0,
+            "x": 1.3
+          },
+          {
+            "y": 1.0,
+            "x": 1.35
+          },
+          {
+            "y": 1.0,
+            "x": 1.4
+          },
+          {
+            "y": 1.0,
+            "x": 1.45
+          },
+          {
+            "y": 1.0,
+            "x": 1.5
+          },
+          {
+            "y": 1.0,
+            "x": 1.55
+          },
+          {
+            "y": 1.0,
+            "x": 1.6
+          },
+          {
+            "y": 1.0,
+            "x": 1.65
+          },
+          {
+            "y": 1.0,
+            "x": 1.7
+          },
+          {
+            "y": 1.0,
+            "x": 1.75
+          },
+          {
+            "y": 1.0,
+            "x": 1.8
+          },
+          {
+            "y": 1.0,
+            "x": 1.85
+          },
+          {
+            "y": 1.0,
+            "x": 1.9
+          },
+          {
+            "y": 1.0,
+            "x": 1.95
+          },
+          {
+            "y": 2.0,
+            "x": 2.0
+          }
+        ],
+        "type": "piecewise",
+        "r2": 0.7557142857142856
+      },
+      "max_display": null,
+      "min_display": null,
+      "confidence": 0.7557142857142856,
+      "name": "Size Smoothing"
+    },
+    {
+      "index": 28,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 1.0,
+        "a": 120.00000000000001,
+        "b": -1.1091398802108881e-14
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "wide": "90-120",
+          "natural": "50-80",
+          "mono": "0"
+        },
+        "audio_principle": "Controls left-right spread without affecting front-back depth",
+        "audio_function": "Width of the stereo field for the reverb",
+        "sonic_effect": {
+          "decreasing": "Narrower, more centered; mono at 0",
+          "increasing": "Wider stereo spread; more immersive and spacious"
+        },
+        "relationships": [
+          "Independent of Room Size (which affects depth)",
+          "Can narrow reverb while keeping dry signal wide"
+        ]
+      },
+      "min_display": null,
+      "confidence": 1.0,
+      "name": "Stereo Image"
+    },
+    {
+      "index": 29,
+      "control_type": "continuous",
+      "fit": {
+        "points": [
+          {
+            "y": 0.0,
+            "x": 0.0
+          },
+          {
+            "y": 0.0,
+            "x": 0.07500000000000001
+          },
+          {
+            "y": 0.0,
+            "x": 0.15000000000000002
+          },
+          {
+            "y": 0.0,
+            "x": 0.22499999999999998
+          },
+          {
+            "y": 0.0,
+            "x": 0.30000000000000004
+          },
+          {
+            "y": 0.0,
+            "x": 0.375
+          },
+          {
+            "y": 0.0,
+            "x": 0.44999999999999996
+          },
+          {
+            "y": 0.0,
+            "x": 0.5249999999999999
+          },
+          {
+            "y": 0.0,
+            "x": 0.6000000000000001
+          },
+          {
+            "y": 0.0,
+            "x": 0.675
+          },
+          {
+            "y": 0.0,
+            "x": 0.75
+          },
+          {
+            "y": 0.0,
+            "x": 0.8250000000000001
+          },
+          {
+            "y": 0.0,
+            "x": 0.8999999999999999
+          },
+          {
+            "y": 0.0,
+            "x": 0.9750000000000001
+          },
+          {
+            "y": 1.0,
+            "x": 1.0499999999999998
+          },
+          {
+            "y": 1.0,
+            "x": 1.125
+          },
+          {
+            "y": 1.0,
+            "x": 1.2000000000000002
+          },
+          {
+            "y": 1.0,
+            "x": 1.275
+          },
+          {
+            "y": 1.0,
+            "x": 1.35
+          },
+          {
+            "y": 1.0,
+            "x": 1.4249999999999998
+          },
+          {
+            "y": 1.0,
+            "x": 1.5
+          },
+          {
+            "y": 1.0,
+            "x": 1.5750000000000002
+          },
+          {
+            "y": 1.0,
+            "x": 1.6500000000000001
+          },
+          {
+            "y": 1.0,
+            "x": 1.7249999999999999
+          },
+          {
+            "y": 1.0,
+            "x": 1.7999999999999998
+          },
+          {
+            "y": 1.0,
+            "x": 1.875
+          },
+          {
+            "y": 1.0,
+            "x": 1.9500000000000002
+          },
+          {
+            "y": 2.0,
+            "x": 2.0250000000000004
+          },
+          {
+            "y": 2.0,
+            "x": 2.0999999999999996
+          },
+          {
+            "y": 2.0,
+            "x": 2.175
+          },
+          {
+            "y": 2.0,
+            "x": 2.25
+          },
+          {
+            "y": 2.0,
+            "x": 2.325
+          },
+          {
+            "y": 2.0,
+            "x": 2.4000000000000004
+          },
+          {
+            "y": 2.0,
+            "x": 2.4749999999999996
+          },
+          {
+            "y": 2.0,
+            "x": 2.55
+          },
+          {
+            "y": 2.0,
+            "x": 2.625
+          },
+          {
+            "y": 2.0,
+            "x": 2.7
+          },
+          {
+            "y": 2.0,
+            "x": 2.7750000000000004
+          },
+          {
+            "y": 2.0,
+            "x": 2.8499999999999996
+          },
+          {
+            "y": 2.0,
+            "x": 2.925
+          },
+          {
+            "y": 3.0,
+            "x": 3.0
+          }
+        ],
+        "type": "piecewise",
+        "r2": 0.8909111361079864
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "Low": "Natural rooms with distinct reflections",
+          "Mid": "Realistic dense spaces",
+          "High": "Smooth plates and halls",
+          "Sparse": "Echo chamber, special effects"
+        },
+        "audio_principle": "Simulates number of reflections happening in the space",
+        "audio_function": "Controls reflection density in early and late reverb",
+        "sonic_effect": {
+          "high": "Dense, smooth reverb; more reflections per second",
+          "sparse": "Individual echoes more audible; grainy texture"
+        },
+        "relationships": [
+          "Related to Diffusion but controls overall reflection count",
+          "Higher density generally smoother sound"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.8909111361079864,
+      "name": "Density"
+    },
+    {
+      "index": 30,
+      "control_type": "continuous",
+      "fit": {
+        "points": [
+          {
+            "y": -30.0,
+            "x": 0.0
+          },
+          {
+            "y": -22.0,
+            "x": 0.025
+          },
+          {
+            "y": -18.0,
+            "x": 0.05
+          },
+          {
+            "y": -15.0,
+            "x": 0.075
+          },
+          {
+            "y": -13.0,
+            "x": 0.1
+          },
+          {
+            "y": -11.0,
+            "x": 0.125
+          },
+          {
+            "y": -9.800000190734863,
+            "x": 0.15
+          },
+          {
+            "y": -8.5,
+            "x": 0.175
+          },
+          {
+            "y": -7.5,
+            "x": 0.2
+          },
+          {
+            "y": -6.5,
+            "x": 0.225
+          },
+          {
+            "y": -5.699999809265137,
+            "x": 0.25
+          },
+          {
+            "y": -4.900000095367432,
+            "x": 0.275
+          },
+          {
+            "y": -4.199999809265137,
+            "x": 0.3
+          },
+          {
+            "y": -3.5,
+            "x": 0.325
+          },
+          {
+            "y": -2.9000000953674316,
+            "x": 0.35
+          },
+          {
+            "y": -2.299999952316284,
+            "x": 0.375
+          },
+          {
+            "y": -1.7999999523162842,
+            "x": 0.4
+          },
+          {
+            "y": -1.2999999523162842,
+            "x": 0.425
+          },
+          {
+            "y": -0.800000011920929,
+            "x": 0.45
+          },
+          {
+            "y": -0.30000001192092896,
+            "x": 0.475
+          },
+          {
+            "y": 0.10000000149011612,
+            "x": 0.5
+          },
+          {
+            "y": 0.5,
+            "x": 0.525
+          },
+          {
+            "y": 0.8999999761581421,
+            "x": 0.55
+          },
+          {
+            "y": 1.2999999523162842,
+            "x": 0.575
+          },
+          {
+            "y": 1.600000023841858,
+            "x": 0.6
+          },
+          {
+            "y": 2.0,
+            "x": 0.625
+          },
+          {
+            "y": 2.299999952316284,
+            "x": 0.65
+          },
+          {
+            "y": 2.5999999046325684,
+            "x": 0.675
+          },
+          {
+            "y": 3.0,
+            "x": 0.7
+          },
+          {
+            "y": 3.299999952316284,
+            "x": 0.725
+          },
+          {
+            "y": 3.5,
+            "x": 0.75
+          },
+          {
+            "y": 3.799999952316284,
+            "x": 0.775
+          },
+          {
+            "y": 4.099999904632568,
+            "x": 0.8
+          },
+          {
+            "y": 4.400000095367432,
+            "x": 0.825
+          },
+          {
+            "y": 4.599999904632568,
+            "x": 0.85
+          },
+          {
+            "y": 4.900000095367432,
+            "x": 0.875
+          },
+          {
+            "y": 5.099999904632568,
+            "x": 0.9
+          },
+          {
+            "y": 5.300000190734863,
+            "x": 0.925
+          },
+          {
+            "y": 5.599999904632568,
+            "x": 0.95
+          },
+          {
+            "y": 5.800000190734863,
+            "x": 0.975
+          },
+          {
+            "y": 6.0,
+            "x": 1.0
+          }
+        ],
+        "type": "piecewise",
+        "r2": 0.8067168162667857
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "balanced": "-6 to -3 dB",
+          "define_space": "-3 to 0 dB (high reflect, lower diffuse)",
+          "smooth_wash": "-15 to -10 dB (low reflect, high diffuse)"
+        },
+        "audio_principle": "Early reflections define room character; diffuse tail provides sustain",
+        "audio_function": "Volume of early reflections relative to diffuse tail",
+        "sonic_effect": {
+          "decreasing": "De-emphasizes space; more focus on smooth tail",
+          "increasing": "Emphasizes space character; more defined, present reflections"
+        },
+        "relationships": [
+          "Balance with Diffuse Level defines reverb character",
+          "High reflect level makes room size more apparent"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.8067168162667857,
+      "name": "Reflect Level"
+    },
+    {
+      "index": 31,
+      "control_type": "continuous",
+      "fit": {
+        "points": [
+          {
+            "y": -30.0,
+            "x": 0.0
+          },
+          {
+            "y": -22.0,
+            "x": 0.025
+          },
+          {
+            "y": -18.0,
+            "x": 0.05
+          },
+          {
+            "y": -15.0,
+            "x": 0.075
+          },
+          {
+            "y": -13.0,
+            "x": 0.1
+          },
+          {
+            "y": -11.0,
+            "x": 0.125
+          },
+          {
+            "y": -9.800000190734863,
+            "x": 0.15
+          },
+          {
+            "y": -8.5,
+            "x": 0.175
+          },
+          {
+            "y": -7.5,
+            "x": 0.2
+          },
+          {
+            "y": -6.5,
+            "x": 0.225
+          },
+          {
+            "y": -5.699999809265137,
+            "x": 0.25
+          },
+          {
+            "y": -4.900000095367432,
+            "x": 0.275
+          },
+          {
+            "y": -4.199999809265137,
+            "x": 0.3
+          },
+          {
+            "y": -3.5,
+            "x": 0.325
+          },
+          {
+            "y": -2.9000000953674316,
+            "x": 0.35
+          },
+          {
+            "y": -2.299999952316284,
+            "x": 0.375
+          },
+          {
+            "y": -1.7999999523162842,
+            "x": 0.4
+          },
+          {
+            "y": -1.2999999523162842,
+            "x": 0.425
+          },
+          {
+            "y": -0.800000011920929,
+            "x": 0.45
+          },
+          {
+            "y": -0.30000001192092896,
+            "x": 0.475
+          },
+          {
+            "y": 0.10000000149011612,
+            "x": 0.5
+          },
+          {
+            "y": 0.5,
+            "x": 0.525
+          },
+          {
+            "y": 0.8999999761581421,
+            "x": 0.55
+          },
+          {
+            "y": 1.2999999523162842,
+            "x": 0.575
+          },
+          {
+            "y": 1.600000023841858,
+            "x": 0.6
+          },
+          {
+            "y": 2.0,
+            "x": 0.625
+          },
+          {
+            "y": 2.299999952316284,
+            "x": 0.65
+          },
+          {
+            "y": 2.5999999046325684,
+            "x": 0.675
+          },
+          {
+            "y": 3.0,
+            "x": 0.7
+          },
+          {
+            "y": 3.299999952316284,
+            "x": 0.725
+          },
+          {
+            "y": 3.5,
+            "x": 0.75
+          },
+          {
+            "y": 3.799999952316284,
+            "x": 0.775
+          },
+          {
+            "y": 4.099999904632568,
+            "x": 0.8
+          },
+          {
+            "y": 4.400000095367432,
+            "x": 0.825
+          },
+          {
+            "y": 4.599999904632568,
+            "x": 0.85
+          },
+          {
+            "y": 4.900000095367432,
+            "x": 0.875
+          },
+          {
+            "y": 5.099999904632568,
+            "x": 0.9
+          },
+          {
+            "y": 5.300000190734863,
+            "x": 0.925
+          },
+          {
+            "y": 5.599999904632568,
+            "x": 0.95
+          },
+          {
+            "y": 5.800000190734863,
+            "x": 0.975
+          },
+          {
+            "y": 6.0,
+            "x": 1.0
+          }
+        ],
+        "type": "piecewise",
+        "r2": 0.8067168162667857
+      },
+      "max_display": null,
+      "audio_knowledge": {
+        "typical_values": {
+          "balanced": "-6 to -3 dB",
+          "clear_space": "-12 to -6 dB (low diffuse, high reflect)",
+          "lush_ambient": "-3 to 3 dB (high diffuse, lower reflect)"
+        },
+        "audio_principle": "Diffuse tail provides the 'wash' and sustain of reverb",
+        "audio_function": "Volume of diffuse reverb tail relative to early reflections",
+        "sonic_effect": {
+          "decreasing": "Reduces tail presence; drier, more defined space",
+          "increasing": "Emphasizes smooth, sustained tail; more lush and ambient"
+        },
+        "relationships": [
+          "Balance with Reflect Level is key to reverb character",
+          "High diffuse level with long decay creates ambient wash"
+        ]
+      },
+      "min_display": null,
+      "confidence": 0.8067168162667857,
+      "name": "Diffuse Level"
+    },
+    {
+      "index": 32,
+      "control_type": "continuous",
+      "fit": {
+        "type": "linear",
+        "r2": 0.9998751301061465,
+        "a": 100.06271777003485,
+        "b": -0.03135888501743111
+      },
+      "max_display": null,
+      "min_display": null,
+      "confidence": 0.9998751301061465,
+      "name": "Dry_Wet"
+    }
+  ],
+  "param_count": 33,
+  "_backup_metadata": {
+    "timestamp": "2025-10-12T21:01:50.535715",
+    "source": "firestore",
+    "includes_audio_knowledge": true
+  }
+}

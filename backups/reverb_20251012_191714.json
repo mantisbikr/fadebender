@@ -1,0 +1,708 @@
+{
+  "created_at": 1760212147,
+  "analysis_status": "partial_fits",
+  "device_signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+  "device_type": "reverb",
+  "grouping": {
+    "skip_auto_enable": [
+      "Freeze On"
+    ],
+    "masters": [
+      "ER Spin On",
+      "Chorus On",
+      "LowShelf On",
+      "HiFilter On",
+      "Freeze On"
+    ],
+    "dependent_master_values": {
+      "HiFilter Freq": 1.0,
+      "ER Spin Rate": 1.0,
+      "LowShelf Freq": 1.0,
+      "ER Spin Amount": 1.0,
+      "Cut On": 1.0,
+      "LowShelf Gain": 1.0,
+      "Flat On": 1.0,
+      "Chorus Amount": 1.0,
+      "HiShelf Gain": 1.0,
+      "Chorus Rate": 1.0
+    },
+    "apply_order": [
+      "masters",
+      "quantized",
+      "dependents",
+      "continuous"
+    ],
+    "dependents": {
+      "HiFilter Freq": "HiFilter On",
+      "ER Spin Rate": "ER Spin On",
+      "LowShelf Freq": "LowShelf On",
+      "ER Spin Amount": "ER Spin On",
+      "Cut On": "Freeze On",
+      "LowShelf Gain": "LowShelf On",
+      "Flat On": "Freeze On",
+      "Chorus Amount": "Chorus On",
+      "HiShelf Gain": "HiFilter On",
+      "Chorus Rate": "Chorus On"
+    },
+    "requires_for_effect": {
+      "In Filter Width": {
+        "description": "Filter width only affects audio when at least one cut filter is enabled",
+        "any_of": [
+          "In LowCut On",
+          "In HighCut On"
+        ]
+      },
+      "In Filter Freq": {
+        "description": "Filter frequency only affects audio when at least one cut filter is enabled",
+        "any_of": [
+          "In LowCut On",
+          "In HighCut On"
+        ]
+      }
+    }
+  },
+  "metadata_status": "pending_analysis",
+  "param_structure": [
+    {
+      "min": 0.0,
+      "index": 0,
+      "max": 1.0,
+      "name": "Device On"
+    },
+    {
+      "min": 0.0,
+      "index": 1,
+      "max": 1.0,
+      "name": "Predelay"
+    },
+    {
+      "min": 0.0,
+      "index": 2,
+      "max": 1.0,
+      "name": "In LowCut On"
+    },
+    {
+      "min": 0.0,
+      "index": 3,
+      "max": 1.0,
+      "name": "In HighCut On"
+    },
+    {
+      "min": 0.0,
+      "index": 4,
+      "max": 1.0,
+      "name": "In Filter Freq"
+    },
+    {
+      "min": 0.0,
+      "index": 5,
+      "max": 1.0,
+      "name": "In Filter Width"
+    },
+    {
+      "min": 0.0,
+      "index": 6,
+      "max": 1.0,
+      "name": "ER Spin On"
+    },
+    {
+      "min": 0.0,
+      "index": 7,
+      "max": 1.0,
+      "name": "ER Spin Rate"
+    },
+    {
+      "min": 0.0,
+      "index": 8,
+      "max": 1.0,
+      "name": "ER Spin Amount"
+    },
+    {
+      "min": 0.0,
+      "index": 9,
+      "max": 1.0,
+      "name": "ER Shape"
+    },
+    {
+      "min": 0.0,
+      "index": 10,
+      "max": 1.0,
+      "name": "HiFilter On"
+    },
+    {
+      "min": 0.0,
+      "index": 11,
+      "max": 1.0,
+      "name": "HiFilter Type"
+    },
+    {
+      "min": 0.0,
+      "index": 12,
+      "max": 1.0,
+      "name": "HiFilter Freq"
+    },
+    {
+      "min": 0.0,
+      "index": 13,
+      "max": 1.0,
+      "name": "HiShelf Gain"
+    },
+    {
+      "min": 0.0,
+      "index": 14,
+      "max": 1.0,
+      "name": "LowShelf On"
+    },
+    {
+      "min": 0.0,
+      "index": 15,
+      "max": 1.0,
+      "name": "LowShelf Freq"
+    },
+    {
+      "min": 0.0,
+      "index": 16,
+      "max": 1.0,
+      "name": "LowShelf Gain"
+    },
+    {
+      "min": 0.0,
+      "index": 17,
+      "max": 1.0,
+      "name": "Chorus On"
+    },
+    {
+      "min": 0.0,
+      "index": 18,
+      "max": 1.0,
+      "name": "Chorus Rate"
+    },
+    {
+      "min": 0.0,
+      "index": 19,
+      "max": 1.0,
+      "name": "Chorus Amount"
+    },
+    {
+      "min": 0.0,
+      "index": 20,
+      "max": 1.0,
+      "name": "Decay Time"
+    },
+    {
+      "min": 0.0,
+      "index": 21,
+      "max": 1.0,
+      "name": "Diffusion"
+    },
+    {
+      "min": 0.0,
+      "index": 22,
+      "max": 1.0,
+      "name": "Scale"
+    },
+    {
+      "min": 0.0,
+      "index": 23,
+      "max": 1.0,
+      "name": "Freeze On"
+    },
+    {
+      "min": 0.0,
+      "index": 24,
+      "max": 1.0,
+      "name": "Flat On"
+    },
+    {
+      "min": 0.0,
+      "index": 25,
+      "max": 1.0,
+      "name": "Cut On"
+    },
+    {
+      "min": 0.0,
+      "index": 26,
+      "max": 1.0,
+      "name": "Room Size"
+    },
+    {
+      "min": 0.0,
+      "index": 27,
+      "max": 2.0,
+      "name": "Size Smoothing"
+    },
+    {
+      "min": 0.0,
+      "index": 28,
+      "max": 1.0,
+      "name": "Stereo Image"
+    },
+    {
+      "min": 0.0,
+      "index": 29,
+      "max": 3.0,
+      "name": "Density"
+    },
+    {
+      "min": 0.0,
+      "index": 30,
+      "max": 1.0,
+      "name": "Reflect Level"
+    },
+    {
+      "min": 0.0,
+      "index": 31,
+      "max": 1.0,
+      "name": "Diffuse Level"
+    },
+    {
+      "min": 0.0,
+      "index": 32,
+      "max": 1.0,
+      "name": "Dry/Wet"
+    }
+  ],
+  "sources": {
+    "preset_count": 52,
+    "fit_run_id": 1760321282,
+    "migration": "old_to_new_format"
+  },
+  "params_meta": [
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 6.215291846768375,
+          "b": -0.6933508106178313
+        },
+        "type": "exp",
+        "r2": 0.9999960693033751
+      },
+      "confidence": 0.9999737953558345,
+      "name": "Predelay"
+    },
+    {
+      "name": "HiFilter Type",
+      "control_type": "quantized",
+      "label_map": {
+        "Low-pass": 1.0,
+        "Shelving": 0.0
+      },
+      "labels": [
+        "Shelving",
+        "Low-pass"
+      ]
+    },
+    {
+      "name": "Size Smoothing",
+      "control_type": "quantized",
+      "label_map": {
+        "None": 0.0,
+        "Fast": 2.0,
+        "Slow": 1.0
+      },
+      "labels": [
+        "None",
+        "Slow",
+        "Fast"
+      ]
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 3.990432177881566,
+          "b": 0.010315591367316919
+        },
+        "type": "linear",
+        "r2": 0.9999920636747484
+      },
+      "confidence": 0.9999470911649893,
+      "name": "Chorus Amount"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 5.703757267061132,
+          "b": 5.298346466691114
+        },
+        "type": "exp",
+        "r2": 0.9999999995374201
+      },
+      "confidence": 0.9999999969161344,
+      "name": "Decay Time"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 6.697853545438203,
+          "b": -4.61601232931594
+        },
+        "type": "exp",
+        "r2": 0.9999914997655319
+      },
+      "confidence": 0.999943331770213,
+      "name": "Chorus Rate"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 120.00177417257704,
+          "b": -0.0017295847592322389
+        },
+        "type": "linear",
+        "r2": 0.9999999943941945
+      },
+      "confidence": 0.9999999626279636,
+      "name": "Stereo Image"
+    },
+    {
+      "max_display": 18000.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 50.00193763974532,
+          "b": 5.886066433914682
+        },
+        "type": "exp",
+        "r2": 0.9999999947039828
+      },
+      "confidence": 0.9999999947039828,
+      "min_display": 50.0,
+      "name": "In Filter Freq"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "Cut On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 7.724244772509092,
+          "b": -1.5084515053515515
+        },
+        "type": "exp",
+        "r2": 0.9999982563354818
+      },
+      "confidence": 0.9999883755698787,
+      "name": "Room Size"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "HiFilter On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "ER Spin On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "LowShelf On"
+    },
+    {
+      "name": "Density",
+      "control_type": "quantized",
+      "label_map": {
+        "Low": 1.0,
+        "High": 3.0,
+        "Mid": 2.0,
+        "Sparse": 0.0
+      },
+      "labels": [
+        "Sparse",
+        "Low",
+        "Mid",
+        "High"
+      ]
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 100.09582463880498,
+          "b": -0.09468190279476799
+        },
+        "type": "linear",
+        "r2": 0.9999945924371627
+      },
+      "confidence": 0.9999639495810849,
+      "name": "Dry/Wet"
+    },
+    {
+      "max_display": 1.3,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.0732785542,
+          "b": 2.8783115661
+        },
+        "type": "exp",
+        "r2": 0.9999470921
+      },
+      "confidence": 0.9999470921,
+      "min_display": 0.07,
+      "name": "ER Spin Rate"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.7998135945663724,
+          "b": 0.2003853695819302
+        },
+        "type": "linear",
+        "r2": 0.9999579081939443
+      },
+      "confidence": 0.9997193879596286,
+      "name": "LowShelf Gain"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 6.685048722796434,
+          "b": 2.9953779911739047
+        },
+        "type": "exp",
+        "r2": 0.9999999849983918
+      },
+      "confidence": 0.999999899989279,
+      "name": "HiFilter Freq"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 8.420738617871047,
+          "b": 5.965919838578745
+        },
+        "type": "log",
+        "r2": 0.9998553884852245
+      },
+      "confidence": 0.99903592323483,
+      "name": "Diffuse Level"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "Flat On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0003709626407513,
+          "b": -0.00024832130596755866
+        },
+        "type": "linear",
+        "r2": 0.9999604968210746
+      },
+      "confidence": 0.9997366454738307,
+      "name": "ER Shape"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 6.620471512853585,
+          "b": 2.9956582736426642
+        },
+        "type": "exp",
+        "r2": 0.9999998974657619
+      },
+      "confidence": 0.9999993164384129,
+      "name": "LowShelf Freq"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 95.95083052408262,
+          "b": 0.09307791498120264
+        },
+        "type": "linear",
+        "r2": 0.9999683551346825
+      },
+      "confidence": 0.999789034231217,
+      "name": "Diffusion"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "Freeze On"
+    },
+    {
+      "max_display": 55.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 2.0001153994,
+          "b": 3.3141646005
+        },
+        "type": "exp",
+        "r2": 0.9999999607
+      },
+      "confidence": 0.9999999607,
+      "min_display": 2.0,
+      "name": "ER Spin Amount"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "In LowCut On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "Chorus On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 0.8005924377380139,
+          "b": 0.1995289632385018
+        },
+        "type": "linear",
+        "r2": 0.9998537208396638
+      },
+      "confidence": 0.9990248055977591,
+      "name": "HiShelf Gain"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 1.0,
+          "b": 0.0
+        },
+        "type": "linear",
+        "r2": 1.0
+      },
+      "confidence": 1.0,
+      "name": "In HighCut On"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 95.00553887394933,
+          "b": 5.0223442158594676
+        },
+        "type": "linear",
+        "r2": 0.9999651621985487
+      },
+      "confidence": 0.9997677479903249,
+      "name": "Scale"
+    },
+    {
+      "max_display": 9.0,
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 8.502129064250305,
+          "b": 0.49854704428901586
+        },
+        "type": "linear",
+        "r2": 0.9999973890934756
+      },
+      "confidence": 0.9999973890934756,
+      "min_display": 0.5,
+      "name": "In Filter Width"
+    },
+    {
+      "control_type": "continuous",
+      "fit": {
+        "coeffs": {
+          "a": 2.4579879036363317,
+          "b": 3.0804116099805205
+        },
+        "type": "log",
+        "r2": 0.9333240876815035
+      },
+      "confidence": 0.5554939178766904,
+      "name": "Reflect Level"
+    }
+  ],
+  "updated_at": 1760321282,
+  "param_count": 33,
+  "_backup_metadata": {
+    "signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+    "database": "dev-display-value",
+    "timestamp": "2025-10-13T02:17:16.433598Z",
+    "params_meta_count": 32,
+    "params_subcollection_count": 0
+  }
+}

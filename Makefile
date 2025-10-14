@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps backup-firestore cleanup-backups all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -22,6 +22,9 @@ help:
 	@echo "  make returns-status  - print return tracks/devices/params via server"
 	@echo "  make verify-vertex   - validate Vertex creds/model access"
 	@echo "  make index-knowledge - list discovered knowledge files/headings"
+	@echo "  make export-digest   - export per-signature digest to JSON (OUT=/path SIG=sha1 or RET=0 DEV=0)"
+	@echo "  make import-mapping  - import mapping/grouping/params_meta from JSON (FILE=/path)"
+	@echo "  make fit-from-presets-apply - fit continuous params from presets and import (SIG=sha1 | RET=0 DEV=0)"
 	@echo "  make undo            - undo last mixer change via /op/undo_last"
 	@echo "  make redo            - redo last mixer change via /op/redo_last"
 	@echo "  make accept          - run acceptance checks against running services"
@@ -30,6 +33,8 @@ help:
 	@echo "  make launch-live     - macOS: launch Ableton Live with UDP enabled"
 	@echo "  make live-dev        - stop UDP stub, install remote, launch Live"
 	@echo "  make run-bridge      - reminder for running Swift bridge in Xcode"
+	@echo "  make backup-firestore - backup device mapping from Firestore (SIG=sha1 OUT=path)"
+	@echo "  make cleanup-backups  - keep only the 2 most recent database backups"
 	@echo "  make all             - run NLP + Controller together"
 	@echo "  make clean           - remove Python venv and Node modules"
 
@@ -49,7 +54,7 @@ LOCAL_MAP_DIR ?= $(HOME)/.fadebender/param_maps
 
 run-server:
 		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR)"
-		FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
+		@set -a && [ -f .env ] && . ./.env && set +a && FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --host 127.0.0.1 --port $${SERVER_PORT-8722}
 
 run-server-noreload:
 		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) (no-reload)"
@@ -154,7 +159,7 @@ outline:
 	@curl -sS --max-time 3 http://127.0.0.1:$${SERVER_PORT-8722}/project/outline | jq .
 
 launch-live:
-	@python3 scripts/launch_live_mac.py
+	@set -a && [ -f .env ] && . ./.env && set +a && python3 scripts/launch_live_mac.py
 
 live-dev: stop-udp install-remote launch-live
 
@@ -184,6 +189,51 @@ migrate-local-maps:
 
 list-local-maps:
 	@echo "Listing local maps in $(LOCAL_MAP_DIR)" && ls -la $(LOCAL_MAP_DIR) 2>/dev/null || echo "(none)"
+
+# ---- Export per-signature digest for LLM analysis ----
+export-digest:
+	@if [ -z "$(OUT)" ]; then echo "Usage: make export-digest OUT=/tmp/digest.json SIG=<sha1>|RET=<i> DEV=<j>"; exit 2; fi;
+	@if [ -n "$(SIG)" ]; then \
+		python3 scripts/export_signature_digest.py --signature $(SIG) --out $(OUT); \
+	else \
+		if [ -z "$(RET)" ] || [ -z "$(DEV)" ]; then echo "Provide SIG or RET and DEV"; exit 3; fi; \
+		python3 scripts/export_signature_digest.py --return $(RET) --device $(DEV) --out $(OUT); \
+	fi
+
+import-mapping:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make import-mapping FILE=/path/analysis.json"; exit 2; fi;
+	python3 scripts/import_mapping_analysis.py --file $(FILE)
+
+fit-from-presets-apply:
+	@if [ -n "$(SIG)" ]; then \
+		python3 scripts/fit_params_from_presets.py --signature $(SIG) --import; \
+	else \
+		if [ -z "$(RET)" ] || [ -z "$(DEV)" ]; then echo "Provide SIG or RET and DEV"; exit 3; fi; \
+		python3 scripts/fit_params_from_presets.py --return $(RET) --device $(DEV) --import; \
+	fi
+
+# ---- Firestore Backup ----
+backup-firestore:
+	@if [ -z "$(SIG)" ] || [ -z "$(OUT)" ]; then \
+		echo "Usage: make backup-firestore SIG=<signature> OUT=<output-file>"; \
+		echo "Example: make backup-firestore SIG=64ccfc236b79371d0b45e913f81bf0f3a55c6db9 OUT=backups/reverb_\$$(date +%Y%m%d_%H%M%S).json"; \
+		exit 2; \
+	fi
+	@python3 scripts/backup_firestore_mapping.py --signature $(SIG) --output $(OUT)
+
+# ---- Cleanup Old Backups (keep only 2 most recent) ----
+cleanup-backups:
+	@echo "Cleaning up database backups (keeping 2 most recent)..."
+	@cd backups/database_backups && \
+	for db in default dev-display-value; do \
+		echo "Checking $$db backups..."; \
+		ls -t $${db}_*.json 2>/dev/null | tail -n +3 | while read f; do \
+			echo "  Removing: $$f"; \
+			rm "$$f"; \
+		done; \
+	done
+	@echo "Remaining backups:"
+	@ls -lht backups/database_backups/*.json 2>/dev/null || echo "  (none)"
 
 # ---- Master Controller ----
 run-controller:
