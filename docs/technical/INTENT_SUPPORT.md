@@ -1,74 +1,56 @@
-# Canonical Intent Support and UI Coverage
+# Intent Support
 
-This document tracks what the canonical intent layer supports, how the UI surfaces it, and example prompts to test.
+Status: v1 canonical executor implemented (absolute values, guardrails)
 
-Updated: Step 5 milestone
+This document tracks what the canonical intent layer supports, how to call it, and the roadmap to richer NL parsing.
 
-- Server endpoint: `POST /intent/parse`
-- Purpose: Parse NL text to a canonical, validated JSON intent (no execution)
-- UI: Shows an Intent card for every command before/alongside execution
+Key endpoints
+- `POST /intent/execute` — execute canonical intent with guardrails (new)
+- `POST /intent/parse` — parse NL to canonical (existing; rules/LLM pipeline to be updated later)
 
-Supported canonical intents
+Canonical Intent Schema (v1)
 
-- set_mixer
-  - Fields: `field` = `volume` | `pan`
-  - Target: `target.track.by` = `index` or `name`
-  - Value: `{ type: 'absolute'|'relative', amount: number, unit?: 'dB'|'%' }`
-  - Notes: `volume` defaults to `dB`, `pan` defaults to `%`
-- get_overview
-- get_track_status
+```
+{
+  "domain": "track|return|master|device|transport",
+  "action": "set",
+  "track_index": 0,
+  "return_index": null,
+  "device_index": null,
+  "field": "volume|pan|mute|solo|send|tempo",
+  "send_index": 0,
+  "param_index": 12,
+  "param_ref": "Dry/Wet",
+  "value": 0.75,
+  "unit": "normalized|percent|db|ms|hz|on|off",
+  "dry_run": false,
+  "clamp": true
+}
+```
 
-UI behavior
+Guardrails
+- Clamp to [min,max] for device params; [0,1] for sends/volume; [-1,1] for pan.
+- dB → Live float conversion for track/master volume when `unit = db`.
+- Auto-enable dependent masters heuristically (e.g., enable "HiFilter On" before setting "HiFilter Freq").
+- `dry_run = true` returns a preview payload without applying.
 
-- On submit, the client calls `/intent/parse` and renders a teal Intent card with:
-  - Human summary: e.g., `volume • Track 2 • relative +3 dB`
-  - “View Intent JSON” accordion with canonical JSON and raw LLM intent
-- Then the client calls `/chat` to preview/execute (auto‑exec currently: absolute volume only).
-- Help questions use `/help` and render a grounded answer with suggested intents (if provided).
+Examples
+- Track volume (dB):
+```
+{ "domain":"track","action":"set","track_index":3,"field":"volume","value":-6.0,"unit":"db" }
+```
 
-What executes today
+- Return device param by index:
+```
+{ "domain":"device","action":"set","return_index":1,"device_index":0,"param_index":12,"value":0.42 }
+```
 
-- Auto‑exec (server `/chat`):
-  - Absolute track volume (e.g., `set track 1 volume to -6 dB`)
-  - Absolute pan (e.g., `set track 2 pan to -20%` or `set track 2 pan to -0.2`)
-  - Requires UDP stub/bridge for `ok:true` (use `make udp-stub` to simulate)
-- Preview only:
-  - Relative volume (e.g., `increase track 2 volume by 3 dB`)
-  - Pan relative (mapped to canonical, not yet auto‑executed)
+- Return send level (percent):
+```
+{ "domain":"return","action":"set","return_index":0,"field":"send","send_index":1,"value":25,"unit":"percent" }
+```
 
-Examples to test
-
-- Canonical + auto‑exec
-  - Prompt: `set track 1 volume to -6 dB`
-  - Expect:
-    - Intent card: `volume • Track 1 • absolute -6 dB`
-    - Chat summary: `Set Track 1 volume to -6 dB`
-    - ok:true if UDP stub/bridge is running
-
-- Canonical + preview
-  - Prompt: `increase track 2 volume by 3 dB`
-  - Expect:
-    - Intent card: `volume • Track 2 • relative +3 dB`
-    - Chat summary: “I can auto‑execute only absolute track volume right now.”
-
-- Pan mapping (canonical only for now)
-  - Prompt: `pan track 3 left by 20%`
-  - Expect:
-    - Intent card: `pan • Track 3 • relative -20 %` (left is negative)
-    - Chat summary: unsupported for auto‑exec (until Step 6)
-
-How to view canonical intents via curl
-
-- Absolute: `curl -s -X POST http://127.0.0.1:8722/intent/parse -H 'Content-Type: application/json' -d '{"text":"set track 1 volume to -6 dB"}' | jq`
-- Relative: `curl -s -X POST http://127.0.0.1:8722/intent/parse -H 'Content-Type: application/json' -d '{"text":"increase track 2 volume by 3 dB"}' | jq`
-
-Next planned (Step 6)
-
-- UI confirm/preview toggle — added
-- Auto‑exec: pan absolute — added; relative volume via UDP readback — pending; basic sends — pending
-- Safety: clamping — in ops; `/op/undo_last` — added; rate limiting — added (50ms/key)
-
-Undo
-
-- Endpoint: `POST /op/undo_last`
-- Undoes the last successful mixer change with a known previous value.
+Roadmap
+- Relative and qualitative directives (slight/moderate/large/significant) with unit-aware step tables.
+- Lexicon-based token correction and rules-first NL parse; constrained LLM fallback on failure.
+- Mapping-driven dependency model (masters → modes → dependents) instead of heuristics.

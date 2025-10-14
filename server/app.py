@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from server.ableton.client_udp import request as udp_request, send as udp_send
+from server.services.ableton_client import request_op
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.knowledge import search_knowledge
 from server.services.intent_mapper import map_llm_to_canonical
@@ -39,6 +39,19 @@ from server.config.param_registry import (
     reload_param_registry,
 )
 from server.services.mapping_store import MappingStore
+from server.core.deps import set_store_instance
+from server.core.events import broker, emit_event, schedule_emit
+from server.api.events import router as events_router
+from server.api.health import router as health_router
+from server.api.transport import router as transport_router
+from server.api.config import router as config_router
+from server.api.master import router as master_router
+from server.api.tracks import router as tracks_router
+from server.api.returns import router as returns_router
+from server.api.ops import router as ops_router
+from server.api.device_mapping import router as device_mapping_router
+from server.api.presets import router as presets_router
+from server.api.intents import router as intents_router
 from server.cloud.enrich_queue import enqueue_preset_enrich
 import hashlib
 import math
@@ -194,6 +207,32 @@ def _build_groups_from_params(params: list[dict], device_name: str | None) -> li
 
 
 app = FastAPI(title="Fadebender Ableton Server", version="0.1.0")
+
+# Back-compat shim: route legacy udp_request-style calls via request_op
+def udp_request(msg: Dict[str, Any], timeout: float = 1.0):
+    try:
+        op = str((msg or {}).get("op", ""))
+        params = dict(msg or {})
+        params.pop("op", None)
+        return request_op(op, timeout=timeout, **params)
+    except Exception:
+        return None
+
+
+def _status_ttl_seconds(default: float = 1.0) -> float:
+    try:
+        env = os.getenv("FB_STATUS_TTL_SECONDS")
+        if env is not None and str(env).strip() != "":
+            v = float(env)
+            return max(0.0, v)
+    except Exception:
+        pass
+    try:
+        cfg = get_app_config()
+        v = cfg.get("server", {}).get("status_ttl_seconds", default)
+        return max(0.0, float(v))
+    except Exception:
+        return default
 
 # Load .env at server startup so Vertex/LLM config can come from file
 try:  # optional dependency
@@ -372,46 +411,35 @@ def _basic_metadata_fallback(device_name: str, device_type: str, parameter_value
         }
     }
 
+def _cors_origins() -> list[str]:
+    # Read from env: FB_CORS_ORIGINS as comma-separated list; if FB_ALLOW_ALL_CORS=1, allow '*'
+    allow_all = str(os.getenv("FB_ALLOW_ALL_CORS", "")).lower() in ("1", "true", "yes", "on")
+    if allow_all:
+        return ["*"]
+    env_val = os.getenv("FB_CORS_ORIGINS")
+    if env_val:
+        try:
+            vals = [v.strip() for v in env_val.split(",") if v.strip()]
+            if vals:
+                return vals
+        except Exception:
+            pass
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/llm/health")
-def llm_health() -> Dict[str, Any]:
-    """Quick LLM health: show resolved model/project/location and a JSON echo test.
-
-    Does not consume many tokens; intended for debugging env issues.
-    """
-    import traceback
-    model_name = os.getenv("LLM_MODEL") or os.getenv("VERTEX_MODEL") or "gemini-2.5-flash"
-    project = os.getenv("VERTEX_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("VERTEX_LOCATION") or "us-central1"
-    ok = False
-    error = None
-    tried = None
-    try:
-        _vertex_init_once()
-        from vertexai.generative_models import GenerativeModel  # type: ignore
-        m = GenerativeModel(model_name)
-        prompt = "Return a JSON object: {\"ok\": true, \"note\": \"healthcheck\"}"
-        r = m.generate_content(prompt, generation_config={"response_mime_type": "application/json", "max_output_tokens": 64, "temperature": 0.0})
-        txt = getattr(r, "text", "")
-        tried = bool(txt)
-        if txt:
-            import json as _json
-            data = _json.loads(txt)
-            if isinstance(data, dict) and data.get("ok") is True:
-                ok = True
-        if not ok:
-            error = "unexpected_response"
-    except Exception as e:
-        error = f"{e}\n{traceback.format_exc()}"
-    return {"ok": ok, "model": model_name, "project": project, "location": location, "tried_text": tried, "error": error}
+# llm/health is now provided by the health router
 
 
 # --- Simple safety state: undo + rate limiting ---
@@ -436,33 +464,8 @@ def _rate_limited(field: str, track_index: int) -> bool:
     return False
 
 # --- Simple SSE event broker ---
-class EventBroker:
-    def __init__(self) -> None:
-        self._subs: list[asyncio.Queue] = []
-        self._lock = asyncio.Lock()
-
-    async def subscribe(self) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue()
-        async with self._lock:
-            self._subs.append(q)
-        return q
-
-    async def publish(self, data: Dict[str, Any]) -> None:
-        async with self._lock:
-            for q in list(self._subs):
-                try:
-                    q.put_nowait(data)
-                except Exception:
-                    pass
-
-    async def unsubscribe(self, q: asyncio.Queue) -> None:
-        async with self._lock:
-            if q in self._subs:
-                self._subs.remove(q)
-
-
-broker = EventBroker()
 STORE = MappingStore()
+set_store_instance(STORE)
 LEARN_JOBS: dict[str, dict] = {}
 BACKFILL_JOBS: dict[str, dict] = {}
 
@@ -486,173 +489,39 @@ def _should_capture_signature(sig: str, ttl_sec: float = 60.0) -> bool:
     except Exception:
         return True
 
-@app.get("/events")
-async def events():
-    q = await broker.subscribe()
-    async def event_gen():
-        # Bootstrap: emit current master mixer values so clients seed immediately
-        try:
-            resp = udp_request({"op": "get_master_status"}, timeout=0.6)
-            data = (resp.get("data") if isinstance(resp, dict) else resp) if resp else None
-            mix = (data or {}).get("mixer") if isinstance(data, dict) else None
-            if isinstance(mix, dict):
-                for fld in ("volume", "pan", "cue"):
-                    val = mix.get(fld)
-                    if isinstance(val, (int, float)):
-                        payload = json.dumps({"event": "master_mixer_changed", "field": fld, "value": float(val)})
-                        yield "data: " + payload + "\n\n"
-        except Exception:
-            pass
-        try:
-            while True:
-                data = await q.get()
-                try:
-                    payload = json.dumps(data)
-                except Exception:
-                    payload = json.dumps({"malformed": True, "repr": str(data)})
-                yield "data: " + payload + "\n\n"
-        except asyncio.CancelledError:
-            await broker.unsubscribe(q)
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+app.include_router(events_router)
+app.include_router(transport_router)
+app.include_router(config_router)
+app.include_router(master_router)
+app.include_router(tracks_router)
+app.include_router(returns_router)
+app.include_router(device_mapping_router)
+app.include_router(presets_router)
+app.include_router(ops_router)
+app.include_router(intents_router)
 
 
-@app.get("/health")
-def server_health() -> Dict[str, Any]:
-    """Simple controller health endpoint for UI status."""
-    return {"status": "healthy", "service": "controller"}
+app.include_router(health_router)
 
 
-# ==================== Transport ====================
-
-@app.get("/transport")
-def get_transport_state() -> Dict[str, Any]:
-    resp = udp_request({"op": "get_transport"}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
+# Transport routes moved to server.api.transport
 
 
-class TransportBody(BaseModel):
-    action: str  # play|stop|record|metronome|tempo
-    value: Optional[float] = None  # used for tempo
+# Master routes moved to server.api.master
 
 
-@app.post("/transport")
-def set_transport(body: TransportBody) -> Dict[str, Any]:
-    msg: Dict[str, Any] = {"op": "set_transport", "action": str(body.action)}
-    if body.value is not None:
-        msg["value"] = float(body.value)
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "no response from remote script")
-    # broadcast minimal event
-    try:
-        schedule_emit({"event": "transport_changed", "action": str(body.action)})
-    except Exception:
-        pass
-    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+"""Config routes moved to server.api.config"""
 
 
-# ==================== Master ====================
-
-@app.get("/master/status")
-def get_master_status() -> Dict[str, Any]:
-    resp = udp_request({"op": "get_master_status"}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    # Assist UI: emit one-shot SSE with current values so Master tab seeds instantly
-    try:
-        mix = (data or {}).get("mixer") if isinstance(data, dict) else None
-        if isinstance(mix, dict):
-            for fld in ("volume", "pan", "cue"):
-                val = mix.get(fld)
-                if isinstance(val, (int, float)):
-                    schedule_emit({"event": "master_mixer_changed", "field": fld, "value": float(val)})
-    except Exception:
-        pass
-    return {"ok": True, "data": data}
+"""Param registry route moved to server.api.config"""
 
 
-class MasterMixerBody(BaseModel):
-    field: str  # 'volume' | 'pan' | 'cue'
-    value: float
-
-
-@app.post("/op/master/mixer")
-def op_master_mixer(body: MasterMixerBody) -> Dict[str, Any]:
-    if body.field not in ("volume", "pan", "cue"):
-        raise HTTPException(400, "invalid_field")
-    msg = {"op": "set_master_mixer", "field": body.field, "value": float(body.value)}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "master_mixer_changed", "field": body.field, "value": float(body.value)})
-    except Exception:
-        pass
-    return resp
-
-
-@app.get("/config")
-def app_config() -> Dict[str, Any]:
-    """Expose a subset of app config to clients (UI + aliases)."""
-    ui = get_ui_settings()
-    aliases = get_send_aliases()
-    debug = get_debug_settings()
-    return {"ok": True, "ui": ui, "aliases": {"sends": aliases}, "debug": debug}
-
-
-@app.post("/config/update")
-def app_config_update(body: Dict[str, Any]) -> Dict[str, Any]:
-    ui_in = (body or {}).get("ui") or {}
-    aliases_in = ((body or {}).get("aliases") or {}).get("sends") or {}
-    debug_in = (body or {}).get("debug") or {}
-    ui = set_ui_settings(ui_in) if ui_in else get_ui_settings()
-    aliases = set_send_aliases(aliases_in) if aliases_in else get_send_aliases()
-    debug = set_debug_settings(debug_in) if debug_in else get_debug_settings()
-    saved = cfg_save()
-    return {"ok": True, "saved": saved, "ui": ui, "aliases": {"sends": aliases}, "debug": debug}
-
-
-@app.post("/config/reload")
-def app_config_reload() -> Dict[str, Any]:
-    cfg = cfg_reload()
-    plc = reload_param_learn_config()
-    preg = reload_param_registry()
-    return {"ok": True, "config": cfg, "param_learn": plc, "param_registry": preg}
-
-
-@app.get("/param_registry")
-def get_param_registry_endpoint() -> Dict[str, Any]:
-    """Expose parameter registry for track/sends mappings to clients."""
-    try:
-        reg = get_param_registry()
-        return {"ok": True, "registry": reg}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-@app.get("/param_learn/config")
-def get_param_learn_cfg() -> Dict[str, Any]:
-    return {"ok": True, "config": get_param_learn_config()}
-
-
-@app.post("/param_learn/config")
-def set_param_learn_cfg(body: Dict[str, Any]) -> Dict[str, Any]:
-    cfg = set_param_learn_config(body or {})
-    saved = save_param_learn_config()
-    return {"ok": True, "saved": saved, "config": cfg}
+"""Param learn routes moved to server.api.config"""
 
 def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
     """Try to read previous mixer value from Ableton (if bridge supports it)."""
     try:
-        resp = udp_request({"op": "get_track_status", "track_index": int(track_index)}, timeout=0.4)
+        resp = request_op("get_track_status", timeout=0.4, track_index=int(track_index))
         if not resp:
             return None
         data = resp.get("data") or resp
@@ -691,129 +560,75 @@ class VolumeDbBody(BaseModel):
 
 @app.get("/ping")
 def ping() -> Dict[str, Any]:
-    resp = udp_request({"op": "ping"}, timeout=0.5)
+    resp = request_op("ping", timeout=0.5)
     ok = bool(resp and resp.get("ok", True))
     return {"ok": ok, "remote": resp}
 
 
 @app.get("/status")
 def status() -> Dict[str, Any]:
-    resp = udp_request({"op": "get_overview"}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    return resp
+    # short TTL cache to reduce poll churn
+    try:
+        now = time.time()
+        ttl = _status_ttl_seconds(1.0)
+        cache = globals().setdefault("_TTL_CACHE", {})  # type: ignore
+        ent = cache.get("status") if isinstance(cache, dict) else None
+        if ent and isinstance(ent, dict):
+            ts = float(ent.get("ts", 0.0))
+            if ttl > 0 and (now - ts) < ttl:
+                return ent.get("data")
+        resp = request_op("get_overview", timeout=1.0)
+        if not resp:
+            return {"ok": False, "error": "no response"}
+        cache["status"] = {"ts": now, "data": resp}
+        return resp
+    except Exception:
+        resp = request_op("get_overview", timeout=1.0)
+        if not resp:
+            return {"ok": False, "error": "no response"}
+        return resp
 
 
 @app.get("/project/outline")
 def project_outline() -> Dict[str, Any]:
     """Return lightweight project outline (tracks, selected track, scenes)."""
-    resp = udp_request({"op": "get_overview"}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    # Normalize to { ok, data }
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
-
-
-@app.get("/track/status")
-def track_status(index: int) -> Dict[str, Any]:
-    """Return per-track status (mixer values) for quick diagnostics."""
-    resp = udp_request({"op": "get_track_status", "track_index": int(index)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
-
-
-@app.get("/track/sends")
-def track_sends(index: int) -> Dict[str, Any]:
-    """Return sends for a track as { index, sends: [{index, name, value}] }"""
-    resp = udp_request({"op": "get_track_sends", "track_index": int(index)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
-
-
-# ==================== Track Routing & Monitor ====================
-
-class TrackRoutingSetBody(BaseModel):
-    track_index: int
-    monitor_state: Optional[str] = None  # "in" | "auto" | "off"
-    audio_from_type: Optional[str] = None
-    audio_from_channel: Optional[str] = None
-    audio_to_type: Optional[str] = None
-    audio_to_channel: Optional[str] = None
-    midi_from_type: Optional[str] = None
-    midi_from_channel: Optional[str] = None
-    midi_to_type: Optional[str] = None
-    midi_to_channel: Optional[str] = None
-
-
-@app.get("/track/routing")
-def get_track_routing(index: int) -> Dict[str, Any]:
-    """Get current routing + available options for a track (for LLM disambiguation)."""
-    resp = udp_request({"op": "get_track_routing", "track_index": int(index)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
-
-
-@app.post("/track/routing")
-def set_track_routing(body: TrackRoutingSetBody) -> Dict[str, Any]:
-    """Set routing and/or monitor state for a track. Any field can be omitted to leave unchanged.
-
-    Delegates to Remote Script op "set_track_routing" with provided keys only.
-    """
-    msg: Dict[str, Any] = {"op": "set_track_routing", "track_index": int(body.track_index)}
-    for k, v in body.dict().items():
-        if k == "track_index":
-            continue
-        if v is not None:
-            msg[k] = v
-    resp = udp_request(msg, timeout=1.2)
-    if not resp:
-        raise HTTPException(504, "no response from remote script")
     try:
-        schedule_emit({"event": "track_routing_changed", "track_index": int(body.track_index)})
-    except Exception:
-        pass
-    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
-
-
-@app.get("/returns")
-def get_returns() -> Dict[str, Any]:
-    resp = udp_request({"op": "get_return_tracks"}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
-
-
-@app.get("/return/sends")
-def get_return_sends(index: int) -> Dict[str, Any]:
-    """Read sends for a return track (if supported by bridge)."""
-    try:
-        resp = udp_request({"op": "get_return_sends", "return_index": int(index)}, timeout=1.0)
+        now = time.time()
+        ttl = _status_ttl_seconds(1.0)
+        cache = globals().setdefault("_TTL_CACHE", {})  # type: ignore
+        ent = cache.get("project_outline") if isinstance(cache, dict) else None
+        if ent and isinstance(ent, dict):
+            ts = float(ent.get("ts", 0.0))
+            if ttl > 0 and (now - ts) < ttl:
+                return ent.get("data")
+        resp = request_op("get_overview", timeout=1.0)
         if not resp:
             return {"ok": False, "error": "no response"}
-        data = resp.get("data") if isinstance(resp, dict) else None
-        if data is None:
-            data = resp
+        data = resp.get("data") if isinstance(resp, dict) else resp
+        out = {"ok": True, "data": data}
+        cache["project_outline"] = {"ts": now, "data": out}
+        return out
+    except Exception:
+        resp = request_op("get_overview", timeout=1.0)
+        if not resp:
+            return {"ok": False, "error": "no response"}
+        data = resp.get("data") if isinstance(resp, dict) else resp
         return {"ok": True, "data": data}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+
+
+# Track status moved to server.api.tracks
+
+
+# Track sends moved to server.api.tracks
+
+
+# Track routing moved to server.api.tracks
+
+
+# Returns listing moved to server.api.returns
+
+
+# Return sends moved to server.api.returns
 
 
 # ==================== Return Routing & Sends Mode ====================
@@ -825,403 +640,44 @@ class ReturnRoutingSetBody(BaseModel):
     sends_mode: Optional[str] = None  # "pre" | "post" (optional capability)
 
 
-@app.get("/return/routing")
-def get_return_routing(index: int) -> Dict[str, Any]:
-    """Get return track routing (Audio To) and available options if provided by RS."""
-    resp = udp_request({"op": "get_return_routing", "return_index": int(index)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
+# Return routing GET moved to server.api.returns
 
 
-@app.post("/return/routing")
-def set_return_routing(body: ReturnRoutingSetBody) -> Dict[str, Any]:
-    """Set return Audio To destination and/or sends mode if supported."""
-    msg: Dict[str, Any] = {"op": "set_return_routing", "return_index": int(body.return_index)}
-    for k, v in body.dict().items():
-        if k == "return_index":
-            continue
-        if v is not None:
-            msg[k] = v
-    resp = udp_request(msg, timeout=1.2)
-    if not resp:
-        raise HTTPException(504, "no response from remote script")
-    try:
-        schedule_emit({"event": "return_routing_changed", "return_index": int(body.return_index)})
-    except Exception:
-        pass
-    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+# Return routing POST moved to server.api.returns
 
 
-@app.get("/return/devices")
-def get_return_devices(index: int) -> Dict[str, Any]:
-    resp = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
+# Return devices moved to server.api.returns
 
 
 # ---------------- Track devices (Phase A - minimal) ----------------
 
-@app.get("/track/devices")
-def get_track_devices(index: int) -> Dict[str, Any]:
-    resp = udp_request({"op": "get_track_devices", "track_index": int(index)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else resp
-    return {"ok": True, "data": data}
+# Track devices moved to server.api.tracks
 
 
-@app.get("/track/device/params")
-def get_track_device_params(index: int, device: int) -> Dict[str, Any]:
-    resp = udp_request({"op": "get_track_device_params", "track_index": int(index), "device_index": int(device)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else resp
-    return {"ok": True, "data": data}
+# Track device params moved to server.api.tracks
 
 
-class TrackDeviceParamBody(BaseModel):
-    track_index: int
-    device_index: int
-    param_index: int
-    value: float
-
-
-@app.post("/op/track/device/param")
-def set_track_device_param(body: TrackDeviceParamBody) -> Dict[str, Any]:
-    msg = {"op": "set_track_device_param", "track_index": int(body.track_index), "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    # optional SSE
-    try:
-        schedule_emit({"event": "device_param_changed", "scope": "track", "track": int(body.track_index), "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)})
-    except Exception:
-        pass
-    return resp if isinstance(resp, dict) else {"ok": True}
+# Track device param set moved to server.api.tracks
 
 
 # ---------------- Master devices (Phase A - minimal) ----------------
 
-@app.get("/master/devices")
-def get_master_devices_endpoint() -> Dict[str, Any]:
-    resp = udp_request({"op": "get_master_devices"}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else resp
-    return {"ok": True, "data": data}
+"""Master devices moved to server.api.master"""
 
 
-@app.get("/master/device/params")
-def get_master_device_params_endpoint(device: int) -> Dict[str, Any]:
-    resp = udp_request({"op": "get_master_device_params", "device_index": int(device)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else resp
-    return {"ok": True, "data": data}
+"""Master device params moved to server.api.master"""
 
 
-class MasterDeviceParamBody(BaseModel):
-    device_index: int
-    param_index: int
-    value: float
+"""Master device param set moved to server.api.master"""
 
 
-@app.post("/op/master/device/param")
-def set_master_device_param(body: MasterDeviceParamBody) -> Dict[str, Any]:
-    msg = {"op": "set_master_device_param", "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "master_device_param_changed", "device_index": int(body.device_index), "param_index": int(body.param_index), "value": float(body.value)})
-    except Exception:
-        pass
-    return resp if isinstance(resp, dict) else {"ok": True}
+"""Return device params moved to server.api.returns"""
 
 
-@app.get("/return/device/params")
-def get_return_device_params(index: int, device: int) -> Dict[str, Any]:
-    resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.0)
-    if not resp:
-        return {"ok": False, "error": "no response"}
-    data = resp.get("data") if isinstance(resp, dict) else None
-    if data is None:
-        data = resp
-    return {"ok": True, "data": data}
+"""Return device map endpoints moved to server.api.device_mapping (removed)."""
 
 
-@app.get("/return/device/map")
-async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
-    """Return whether a learned mapping exists for this return device (by signature)."""
-    # Fetch device name and params to compute signature
-    devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    if dname is None:
-        return {"ok": False, "error": "device_not_found"}
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-    live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = _make_device_signature(dname, live_params)
-    backend = STORE.backend
-    exists = False
-    device_type = _detect_device_type(live_params, dname)
-
-    # Ensure base mapping exists immediately (synchronous) for responsive UI
-    try:
-        await _ensure_device_mapping(signature, device_type, live_params)
-    except Exception:
-        pass
-
-    # New base mapping (param_structure) existence check
-    mapping_exists = False
-    try:
-        new_map = STORE.get_device_mapping(signature)
-        mapping_exists = bool(new_map)
-    except Exception:
-        mapping_exists = False
-
-    try:
-        # Check legacy learned mapping (with samples) for backwards compatibility
-        if STORE.enabled:
-            m = STORE.get_device_map(signature)
-        else:
-            m = STORE.get_device_map_local(signature)
-
-        print(f"[DEBUG] get_device_map returned: {type(m)}, is_none: {m is None}")
-        learned_params = (m.get("params") or []) if m else []
-        if isinstance(learned_params, list):
-            # Consider learned only if at least one param has >= 3 samples
-            for p in learned_params:
-                sm = p.get("samples") or []
-                if isinstance(sm, list) and len(sm) >= 3:
-                    exists = True
-                    print(f"[DEBUG] Found learned param: {p.get('name')} with {len(sm)} samples")
-                    break
-        print(f"[DEBUG] Final exists (learned): {exists}")
-    except Exception as e:
-        print(f"[DEBUG] Exception: {e}")
-        exists = False
-
-    # Auto-capture preset + ensure device mapping in background (non-blocking)
-    # Always trigger when we have device_type and name; capture flow is idempotent
-    # and will skip if a preset with sufficient values already exists.
-    if device_type and dname and _should_capture_signature(signature):
-        try:
-            asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, live_params))
-        except Exception:
-            pass
-
-    # Top-level existence should reflect either new base mapping OR learned mapping
-    return {
-        "ok": True,
-        "exists": bool(mapping_exists or exists),
-        "mapping_exists": bool(mapping_exists),
-        "learned_exists": bool(exists),
-        "signature": signature,
-        "backend": backend,
-        "device_type": device_type,
-        "device_name": dname,
-    }
-
-
-@app.get("/return/device/map_summary")
-async def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
-    """Return a summary of a learned mapping: param names and sample counts."""
-    devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    if dname is None:
-        return {"ok": False, "error": "device_not_found"}
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = _make_device_signature(dname, params)
-    backend = STORE.backend
-    # Also detect device type from live params so we can optionally
-    # trigger auto-capture when a learned mapping exists.
-    device_type = _detect_device_type(params, dname)
-    data = None
-    # Ensure base mapping exists immediately so first UI poll goes green
-    try:
-        await _ensure_device_mapping(signature, device_type, params)
-    except Exception:
-        pass
-
-    try:
-        # Prefer legacy learned mapping summary when available
-        if STORE.enabled:
-            m = STORE.get_device_map(signature)
-        else:
-            m = STORE.get_device_map_local(signature)
-        if m:
-            plist = []
-            learned_exists = False
-            for p in m.get("params", []) or []:
-                plist.append({
-                    "name": p.get("name"),
-                    "index": p.get("index"),
-                    "sample_count": len(p.get("samples") or []),
-                    "quantized": bool(p.get("quantized", False)),
-                    "control_type": p.get("control_type"),
-                    "unit": p.get("unit"),
-                    "group": p.get("group"),
-                    "role": p.get("role"),
-                    "labels": p.get("labels") or [],
-                    "label_map": p.get("label_map"),
-                    "min": p.get("min"),
-                    "max": p.get("max"),
-                })
-                try:
-                    if not learned_exists and len(p.get("samples") or []) >= 3:
-                        learned_exists = True
-                except Exception:
-                    pass
-            # Also consider base mapping presence when learned samples are empty
-            mapping_exists_flag = False
-            try:
-                nm = STORE.get_device_mapping(signature)
-                mapping_exists_flag = bool(nm)
-            except Exception:
-                mapping_exists_flag = False
-            data = {
-                "device_name": m.get("device_name") or dname,
-                "signature": signature,
-                "groups": m.get("groups") or [],
-                "params": plist,
-                "exists": bool(learned_exists or mapping_exists_flag),
-                "learned_exists": learned_exists,
-                "mapping_exists": mapping_exists_flag,
-            }
-        else:
-            # Fall back to new base mapping existence; provide minimal summary
-            new_map = STORE.get_device_mapping(signature)
-            if new_map:
-                ps = new_map.get("param_structure") or []
-                data = {
-                    "device_name": dname,
-                    "signature": signature,
-                    "params": [{
-                        "name": p.get("name"),
-                        "index": p.get("index"),
-                        "min": p.get("min"),
-                        "max": p.get("max"),
-                        "sample_count": 0,
-                    } for p in ps],
-                    "exists": True,
-                    "mapping_exists": True,
-                    "learned_exists": False,
-                }
-    except Exception as e:
-        return {"ok": False, "error": str(e), "backend": backend}
-    # If neither learned nor base mapping is persisted, derive a minimal summary from live params
-    if data is None and params:
-        data = {
-            "device_name": dname,
-            "signature": signature,
-            "params": [{
-                "name": p.get("name"),
-                "index": p.get("index"),
-                "min": p.get("min"),
-                "max": p.get("max"),
-                "sample_count": 0,
-            } for p in params],
-            "exists": True,              # Treat as mapped for UI purposes
-            "mapping_exists": False,
-            "learned_exists": False,
-        }
-    # Unconditionally trigger background preset auto-capture + mapping ensure (deduped).
-    if device_type and dname and _should_capture_signature(signature):
-        try:
-            asyncio.create_task(_auto_capture_preset(index, device, dname, device_type, signature, params))
-        except Exception:
-            pass
-    # Top-level exists mirrors data.exists for convenience
-    top_exists = bool((data or {}).get("exists")) if data else False
-    return {"ok": True, "backend": backend, "signature": signature, "exists": top_exists, "data": data}
-
-
-class MapDeleteBody(BaseModel):
-    return_index: int
-    device_index: int
-
-
-@app.post("/return/device/map_delete")
-def delete_return_device_map(body: MapDeleteBody) -> Dict[str, Any]:
-    # Compute signature
-    devs = udp_request({"op": "get_return_devices", "return_index": int(body.return_index)}, timeout=1.0)
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(body.device_index):
-            dname = str(d.get("name", f"Device {body.device_index}"))
-            break
-    if dname is None:
-        raise HTTPException(404, "device_not_found")
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(body.return_index), "device_index": int(body.device_index)}, timeout=1.2)
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = _make_device_signature(dname, params)
-    ok = STORE.delete_device_map(signature) if STORE.enabled else False
-    return {"ok": ok, "signature": signature, "backend": STORE.backend}
-
-
-class ReturnDeviceParamBody(BaseModel):
-    return_index: int
-    device_index: int
-    param_index: int
-    value: float
-
-
-@app.post("/op/return/device/param")
-def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
-    msg = {"op": "set_return_device_param", **op.dict()}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "return_device_param_changed", "return": op.return_index, "device": op.device_index, "param": op.param_index})
-    except Exception:
-        pass
-    return resp
-
-
-class ReturnSendBody(BaseModel):
-    return_index: int
-    send_index: int
-    value: float
-
-
-@app.post("/op/return/send")
-def op_return_send(body: ReturnSendBody) -> Dict[str, Any]:
-    """Set a return track's send value (if supported by bridge)."""
-    msg = {
-        "op": "set_return_send",
-        "return_index": int(body.return_index),
-        "send_index": int(body.send_index),
-        "value": float(body.value),
-    }
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "return_send_changed", "return": int(body.return_index), "send_index": int(body.send_index)})
-    except Exception:
-        pass
-    return resp
+"""Map delete and return op bodies moved to server.api.* (removed duplicates)."""
 
 
 # ---------------- Device Mapping Import (LLM + Numeric Fits) ----------------
@@ -1235,157 +691,23 @@ class MappingImportBody(BaseModel):
     analysis_status: Optional[str] = None  # e.g., "partial_fits" | "analyzed"
 
 
-@app.post("/device_mapping/import")
+# moved: /device_mapping/import handled by server.api.device_mapping
 def import_device_mapping(body: MappingImportBody) -> Dict[str, Any]:
-    """Merge provided mapping analysis data into device_mappings for a signature.
-
-    - Creates mapping doc if missing via save_device_mapping()
-    - Merges top-level fields: device_type, grouping, params_meta, sources, analysis_status
-    - For params_meta, replaces the entire list (simple & safe)
-    Requires Firestore to be enabled in MappingStore.
-    """
-    sig = body.signature.strip()
-    if not sig:
-        raise HTTPException(400, "signature required")
-
-    if not STORE.enabled:
-        return {"ok": False, "error": "firestore_disabled"}
-
-    existing = STORE.get_device_mapping(sig) or {}
-    updated: Dict[str, Any] = dict(existing)
-    updated["device_signature"] = sig
-    if body.device_type:
-        updated["device_type"] = body.device_type
-    if body.grouping is not None:
-        updated["grouping"] = body.grouping
-    if body.params_meta is not None:
-        updated["params_meta"] = list(body.params_meta)
-    if body.sources is not None:
-        src = dict(updated.get("sources") or {})
-        src.update(dict(body.sources))
-        updated["sources"] = src
-    if body.analysis_status:
-        updated["analysis_status"] = body.analysis_status
-    try:
-        import time as _time
-        if "created_at" not in updated:
-            updated["created_at"] = int(_time.time())
-        updated["updated_at"] = int(_time.time())
-    except Exception:
-        pass
-
-    ok = STORE.save_device_mapping(sig, updated)
-    return {"ok": bool(ok), "signature": sig, "updated_fields": [k for k in ("device_type","grouping","params_meta","sources","analysis_status") if k in updated]}
+    # Keep a thin shim to avoid breaking any imports; delegate to router impl
+    from server.api.device_mapping import import_device_mapping as _imp
+    return _imp(body)
 
 
-@app.get("/device_mapping")
+# moved: /device_mapping handled by server.api.device_mapping
 def get_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    """Fetch device mapping (grouping + params_meta) for a signature.
-
-    You can provide either:
-    - signature: SHA1 of structure
-    - or index (return_index) and device (device_index) to derive signature from live
-    """
-    sig = (signature or "").strip()
-    if not sig:
-        # derive from live indices
-        if index is None or device is None:
-            raise HTTPException(400, "Provide signature or index+device")
-        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-        devices = ((devs or {}).get("data") or {}).get("devices") or []
-        dname = None
-        for d in devices:
-            if int(d.get("index", -1)) == int(device):
-                dname = str(d.get("name", f"Device {device}"))
-                break
-        if dname is None:
-            raise HTTPException(404, "device_not_found")
-        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-        sig = _make_device_signature(dname, live_params)
-
-    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
-    if not mapping:
-        # Return 200 with mapping_exists=False to aid UI/CLI
-        return {"ok": True, "signature": sig, "mapping_exists": False}
-
-    params_meta = mapping.get("params_meta") or []
-    fitted = [p.get("name") for p in params_meta if isinstance(p, dict) and isinstance(p.get("fit"), dict)]
-    missing_cont = [p.get("name") for p in params_meta if isinstance(p, dict) and (p.get("control_type") == "continuous") and (not p.get("fit"))]
-
-    return {
-        "ok": True,
-        "signature": sig,
-        "mapping_exists": True,
-        "mapping": mapping,
-        "summary": {
-            "params_meta_total": len(params_meta),
-            "fitted_count": len(fitted),
-            "fitted_names": fitted,
-            "missing_continuous": missing_cont,
-        },
-    }
+    from server.api.device_mapping import get_device_mapping as _get
+    return _get(signature=signature, index=index, device=device)
 
 
-@app.get("/device_mapping/validate")
+# moved: /device_mapping/validate handled by server.api.device_mapping
 def validate_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    """Compare mapping names (masters, dependents, params_meta) with live param names.
-
-    Returns missing_in_live (declared in mapping but not seen live) and
-    unused_in_mapping (present live but not declared in mapping).
-    """
-    # Resolve signature and fetch live param names
-    sig = (signature or "").strip()
-    if not sig:
-        if index is None or device is None:
-            raise HTTPException(400, "Provide signature or index+device")
-        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-        devices = ((devs or {}).get("data") or {}).get("devices") or []
-        dname = None
-        for d in devices:
-            if int(d.get("index", -1)) == int(device):
-                dname = str(d.get("name", f"Device {device}"))
-                break
-        if dname is None:
-            raise HTTPException(404, "device_not_found")
-        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-        sig = _make_device_signature(dname, live_params)
-    else:
-        # If signature provided, still fetch live names from either cached indices (if given) or skip
-        if index is not None and device is not None:
-            params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-            live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-        else:
-            live_params = []
-
-    live_names = set(str(p.get("name", "")).strip() for p in (live_params or []))
-    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
-    if not mapping:
-        return {"ok": True, "signature": sig, "mapping_exists": False, "live_names": sorted(list(live_names))}
-
-    declared = set()
-    try:
-        for m in (mapping.get("grouping", {}) or {}).get("masters", []) or []:
-            declared.add(str(m))
-        for d, m in ((mapping.get("grouping", {}) or {}).get("dependents", {}) or {}).items():
-            declared.add(str(d))
-        for pm in mapping.get("params_meta", []) or []:
-            declared.add(str(pm.get("name", "")))
-    except Exception:
-        pass
-
-    missing_in_live = sorted([n for n in declared if n and n not in live_names])
-    unused_in_mapping = sorted([n for n in live_names if n and n not in declared])
-
-    return {
-        "ok": True,
-        "signature": sig,
-        "mapping_exists": True,
-        "missing_in_live": missing_in_live,
-        "unused_in_mapping": unused_in_mapping,
-        "counts": {"declared": len(declared), "live": len(live_names)},
-    }
+    from server.api.device_mapping import validate_device_mapping as _val
+    return _val(signature=signature, index=index, device=device)
 
 
 class SanityProbeBody(BaseModel):
@@ -1396,185 +718,14 @@ class SanityProbeBody(BaseModel):
     restore: Optional[bool] = True
 
 
-@app.post("/device_mapping/sanity_probe")
-def sanity_probe(body: SanityProbeBody) -> Dict[str, Any]:
-    """Set a param by display target using mapping, read back, and optionally restore previous value."""
-    ri = int(body.return_index); di = int(body.device_index)
-    # Resolve param index
-    pi = _resolve_param_index(ri, di, body.param_ref)
-    pr = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
-    params = ((pr or {}).get("data") or {}).get("params") or []
-    cur = next((p for p in params if int(p.get("index", -1)) == pi), None)
-    if not cur:
-        raise HTTPException(404, "param_not_found")
-    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
-    prev_x = float(cur.get("value", vmin))
-    pname = str(cur.get("name", ""))
-    # Compute signature and mapping
-    sig = _compute_signature_for(ri, di)
-    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
-    # Target parse
-    ty = _parse_target_display(body.target_display)
-    if ty is None and mapping:
-        # label path
-        pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == pname.lower()), None)
-        if pm and isinstance(pm.get("label_map"), dict):
-            lm = pm.get("label_map") or {}
-            for k, v in lm.items():
-                if str(k).strip().lower() == body.target_display.strip().lower():
-                    ty = None; prev_x = prev_x; x = max(vmin, min(vmax, float(v)))
-                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
-                    break
-    # Numeric path (with quick refinement)
-    if ty is not None:
-        x = prev_x
-        pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == pname.lower()), None) if mapping else None
-        if pm and isinstance(pm.get("fit"), dict):
-            x = _invert_fit_to_value(pm.get("fit") or {}, float(ty), vmin, vmax)
-        # initial set
-        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(x)}, timeout=1.0)
-        # readback
-        rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
-        rps = ((rb or {}).get("data") or {}).get("params") or []
-        newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
-        applied_disp = str((newp or {}).get("display_value", ""))
-        applied_num = _parse_target_display(applied_disp)
-        # refine with small bisection if off
-        if applied_num is not None:
-            td = float(ty)
-            err0 = td - float(applied_num)
-            thresh = 0.02 * (abs(td) if td != 0 else 1.0)
-            if abs(err0) > thresh:
-                lo = vmin; hi = vmax; curx = x
-                if err0 < 0:  # actual > target -> decrease x
-                    hi = curx
-                else:
-                    lo = curx
-                for _ in range(6):
-                    mid = (lo + hi) / 2.0
-                    udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(mid)}, timeout=1.0)
-                    rb2 = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
-                    rps2 = ((rb2 or {}).get("data") or {}).get("params") or []
-                    newp2 = next((p for p in rps2 if int(p.get("index", -1)) == pi), None)
-                    applied_disp = str((newp2 or {}).get("display_value", ""))
-                    applied_num = _parse_target_display(applied_disp)
-                    if applied_num is None:
-                        break
-                    if abs(float(applied_num) - td) <= thresh:
-                        x = mid
-                        break
-                    if float(applied_num) > td:
-                        hi = mid
-                    else:
-                        lo = mid
-                    x = mid
-    else:
-        # label path already handled above; readback current
-        rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
-        rps = ((rb or {}).get("data") or {}).get("params") or []
-        newp = next((p for p in rps if int(p.get("index", -1)) == pi), None)
-        applied_disp = str((newp or {}).get("display_value", ""))
-        applied_num = _parse_target_display(applied_disp)
-    # Error report
-    err = None
-    td_final = _parse_target_display(body.target_display)
-    if td_final is not None and applied_num is not None:
-        err = float(td_final) - float(applied_num)
-    # Restore if requested
-    if bool(body.restore):
-        udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(prev_x)}, timeout=1.0)
-    return {"ok": True, "signature": sig, "param": pname, "applied_display": applied_disp, "error": err}
+"""/device_mapping/sanity_probe moved to server.api.device_mapping"""
 
 
-@app.get("/device_mapping/fits")
-def get_device_mapping_fits(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    """List fitted continuous parameters (name, fit type, coeffs, r2, confidence)."""
-    sig = (signature or "").strip()
-    if not sig:
-        if index is None or device is None:
-            raise HTTPException(400, "Provide signature or index+device")
-        # derive from live
-        devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-        devices = ((devs or {}).get("data") or {}).get("devices") or []
-        dname = None
-        for d in devices:
-            if int(d.get("index", -1)) == int(device):
-                dname = str(d.get("name", f"Device {device}"))
-                break
-        if dname is None:
-            raise HTTPException(404, "device_not_found")
-        params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-        sig = _make_device_signature(dname, live_params)
-
-    mapping = STORE.get_device_mapping(sig) if STORE.enabled else None
-    if not mapping:
-        return {"ok": True, "signature": sig, "mapping_exists": False, "fits": []}
-    fits = []
-    for pm in (mapping.get("params_meta") or []):
-        try:
-            fit = pm.get("fit")
-            if isinstance(fit, dict):
-                fits.append({
-                    "name": pm.get("name"),
-                    "type": fit.get("type"),
-                    "coeffs": fit.get("coeffs"),
-                    "r2": fit.get("r2"),
-                    "confidence": pm.get("confidence"),
-                })
-        except Exception:
-            continue
-    # Sort by name for stable display
-    fits = sorted(fits, key=lambda x: str(x.get("name", "")))
-    return {"ok": True, "signature": sig, "count": len(fits), "fits": fits}
+# moved: /device_mapping/fits handled by server.api.device_mapping
+"""/device_mapping/fits moved to server.api.device_mapping"""
 
 
-@app.get("/device_mapping/enumerate_labels")
-def enumerate_param_labels(index: int, device: int, param_ref: str) -> Dict[str, Any]:
-    """Enumerate discrete labels for a quantized parameter by sweeping integer steps.
-
-    Restores the original value after sweep. Useful for building label_map.
-    """
-    ri = int(index); di = int(device)
-    # Resolve param index by substring or exact index string
-    try:
-        pi = _resolve_param_index(ri, di, param_ref)
-    except Exception:
-        raise HTTPException(404, "param_not_found")
-    # Read current params and capture bounds
-    pr = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
-    params = ((pr or {}).get("data") or {}).get("params") or []
-    cur = next((p for p in params if int(p.get("index", -1)) == pi), None)
-    if not cur:
-        raise HTTPException(404, "param_not_found")
-    vmin = float(cur.get("min", 0.0)); vmax = float(cur.get("max", 1.0))
-    prev = float(cur.get("value", vmin))
-    name = str(cur.get("name", ""))
-    # Sweep integer steps
-    labels = []
-    try:
-        import time as _t
-        lo = int(vmin); hi = int(vmax)
-        for step in range(lo, hi + 1):
-            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(step)}, timeout=1.0)
-            _t.sleep(0.15)
-            rb = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
-            rps = ((rb or {}).get("data") or {}).get("params") or []
-            p2 = next((p for p in rps if int(p.get("index", -1)) == pi), None)
-            disp = str((p2 or {}).get("display_value", ""))
-            labels.append({"step": step, "display": disp})
-    finally:
-        try:
-            udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": pi, "value": float(prev)}, timeout=1.0)
-        except Exception:
-            pass
-    # Build a basic label_map suggestion (unique display -> first step)
-    label_map = {}
-    for item in labels:
-        d = item.get("display")
-        if d and d not in label_map:
-            label_map[d] = float(item.get("step", 0))
-    return {"ok": True, "param": name, "index": pi, "range": [int(vmin), int(vmax)], "samples": labels, "label_map_suggested": label_map}
+"""/device_mapping/enumerate_labels moved to server.api.device_mapping"""
 
 
 class ReturnMixerBody(BaseModel):
@@ -1583,24 +734,9 @@ class ReturnMixerBody(BaseModel):
     value: float
 
 
-@app.post("/op/return/mixer")
+"""/op/return/mixer moved to server.api.ops"""
 def op_return_mixer(body: ReturnMixerBody) -> Dict[str, Any]:
-    if body.field not in ("volume", "pan", "mute", "solo"):
-        raise HTTPException(400, "invalid_field")
-    msg = {
-        "op": "set_return_mixer",
-        "return_index": int(body.return_index),
-        "field": body.field,
-        "value": float(body.value),
-    }
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "return_mixer_changed", "return": int(body.return_index), "field": body.field})
-    except Exception:
-        pass
-    return resp
+    ...
 
 
 class LearnDeviceBody(BaseModel):
@@ -2505,6 +1641,8 @@ async def _verify_and_retry_preset(
 
 @app.post("/return/device/learn")
 def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
+    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
+        raise HTTPException(404, "legacy_disabled")
     """Sweep device params to build value->display mapping and store in Firestore.
 
     For each parameter, samples 'resolution' points between min..max, reading display_value.
@@ -2634,6 +1772,8 @@ class LearnStartBody(BaseModel):
 
 @app.post("/return/device/learn_start")
 async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
+    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
+        raise HTTPException(404, "legacy_disabled")
     import asyncio
     import uuid
 
@@ -2813,6 +1953,8 @@ class LearnQuickBody(BaseModel):
 
 @app.post("/return/device/learn_quick")
 def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
+    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
+        raise HTTPException(404, "legacy_disabled")
     """Fast learning using minimal anchors + heuristics. Saves locally + Firestore.
     Intended to complete in seconds for stock devices.
     """
@@ -3073,273 +2215,10 @@ def _fit_models(samples: list[dict]) -> dict | None:
     return {"type": "piecewise", "r2": best["r2"] if best else 0.0, "points": [{"x": x, "y": y} for x,y in pts]}
 
 
-@app.post("/mappings/fit")
-def fit_mapping(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
-    """Fit models for a learned local mapping and update the local file.
-
-    Provide either (index, device) to compute signature from Live, or a signature directly.
-    """
-    if not signature:
-        if index is None or device is None:
-            raise HTTPException(400, "index_device_or_signature_required")
-        signature = _compute_signature_for(int(index), int(device))
-    data = STORE.get_device_map_local(signature)
-    if not data:
-        return {"ok": False, "error": "no_local_map", "signature": signature}
-    params = data.get("params") or []
-    updated = 0
-    for p in params:
-        samples = p.get("samples") or []
-        fit = _fit_models(samples)
-        if fit:
-            p["fit"] = fit
-            updated += 1
-    device_type = _detect_device_type(params, device_name)
-    ok = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type}, params)
-    return {"ok": ok, "signature": signature, "updated": updated}
+"""/mappings/fit moved to server.api.device_mapping"""
 
 
-# ==================== Preset Endpoints ====================
-
-class CapturePresetBody(BaseModel):
-    return_index: int
-    device_index: int
-    preset_name: str
-    category: str = "stock"  # stock | user
-    description: Optional[str] = None
-
-
-@app.post("/return/device/capture_preset")
-def capture_preset(body: CapturePresetBody) -> Dict[str, Any]:
-    """Capture current device parameter values as a preset.
-
-    Does NOT learn the device structure - only captures parameter values.
-    Device must already be learned (structure signature must exist).
-    """
-    ret_idx = body.return_index
-    dev_idx = body.device_index
-
-    # Get device info
-    devs = udp_request({"op": "get_return_devices", "return_index": ret_idx}, timeout=1.0)
-    if not devs or "devices" not in devs:
-        raise HTTPException(status_code=404, detail="Return track not found")
-
-    devices = devs.get("devices", [])
-    if dev_idx >= len(devices):
-        raise HTTPException(status_code=404, detail=f"Device index {dev_idx} out of range")
-
-    device = devices[dev_idx]
-    device_name = device.get("name", "Unknown")
-
-    # Get parameters
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": ret_idx, "device_index": dev_idx}, timeout=1.0)
-    if not params_resp or "params" not in params_resp:
-        raise HTTPException(status_code=500, detail="Failed to get device parameters")
-
-    params = params_resp.get("params", [])
-
-    # Compute signature
-    signature = _make_device_signature(device_name, params)
-
-    # Check if structure is learned
-    mapping = STORE.get_device_map_local(signature)
-    if not mapping and STORE.enabled:
-        mapping = STORE.get_device_map(signature)
-
-    if not mapping:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Device structure not learned. Please learn device first (signature: {signature})"
-        )
-
-    # Extract current parameter values and display strings
-    parameter_values = {}
-    parameter_display_values = {}
-    for p in params:
-        param_name = p.get("name")
-        param_value = p.get("value")
-        param_display = p.get("display_value")
-        if param_name and param_value is not None:
-            parameter_values[param_name] = float(param_value)
-            if param_display is not None:
-                parameter_display_values[param_name] = str(param_display)
-
-    # Detect device type
-    device_type = _detect_device_type(params, body.preset_name)
-
-    # Create preset data (minimal version - can be enhanced with metadata later)
-    preset_id = f"{device_type}_{body.preset_name.lower().replace(' ', '_')}"
-    preset_data = {
-        "name": body.preset_name,
-        "device_name": device_name,
-        "manufacturer": "Ableton",  # Can be enhanced to detect
-        "daw": "Ableton Live",
-        "structure_signature": signature,
-        "category": device_type,
-        "preset_type": body.category,
-        "parameter_values": parameter_values,
-        "parameter_display_values": parameter_display_values,
-    }
-
-    if body.description:
-        preset_data["description"] = {"what": body.description}
-
-    # Save preset (Firestore + local)
-    print(f"[CAPTURE] Saving preset {preset_id}, category={body.category}, local_only={body.category == 'user'}")
-    saved = STORE.save_preset(preset_id, preset_data, local_only=(body.category == "user"))
-    print(f"[CAPTURE] Preset save result: {saved}")
-
-    return {
-        "ok": saved,
-        "preset_id": preset_id,
-        "device_name": device_name,
-        "device_type": device_type,
-        "signature": signature,
-        "param_count": len(parameter_values),
-    }
-
-
-class ApplyPresetBody(BaseModel):
-    return_index: int
-    device_index: int
-    preset_id: str
-
-
-@app.post("/return/device/apply_preset")
-def apply_preset(body: ApplyPresetBody) -> Dict[str, Any]:
-    """Apply preset parameter values to a device.
-
-    Device must have matching structure signature (same parameter layout).
-    """
-    ret_idx = body.return_index
-    dev_idx = body.device_index
-    preset_id = body.preset_id
-
-    # Get preset data
-    preset = STORE.get_preset(preset_id)
-    if not preset:
-        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
-
-    # Get current device info
-    devs = udp_request({"op": "get_return_devices", "return_index": ret_idx}, timeout=1.0)
-    if not devs:
-        raise HTTPException(status_code=404, detail="Return track not found")
-
-    # Unwrap response (may be wrapped in "data" field)
-    data = devs.get("data") if isinstance(devs, dict) and "data" in devs else devs
-    if not data or "devices" not in data:
-        raise HTTPException(status_code=404, detail="Return track not found")
-
-    devices = data.get("devices", [])
-    if dev_idx >= len(devices):
-        raise HTTPException(status_code=404, detail=f"Device index {dev_idx} out of range")
-
-    device = devices[dev_idx]
-    device_name = device.get("name", "Unknown")
-
-    # Get current parameters
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": ret_idx, "device_index": dev_idx}, timeout=1.0)
-    if not params_resp:
-        raise HTTPException(status_code=500, detail="Failed to get device parameters")
-
-    # Unwrap response (may be wrapped in "data" field)
-    params_data = params_resp.get("data") if isinstance(params_resp, dict) and "data" in params_resp else params_resp
-    if not params_data or "params" not in params_data:
-        raise HTTPException(status_code=500, detail="Failed to get device parameters")
-
-    params = params_data.get("params", [])
-    current_signature = _make_device_signature(device_name, params)
-    preset_signature = preset.get("structure_signature")
-
-    # Verify signature match
-    if current_signature != preset_signature:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Device structure mismatch. Current: {current_signature}, Preset: {preset_signature}"
-        )
-
-    # Apply parameter values
-    parameter_values = preset.get("parameter_values", {})
-    applied = 0
-    errors = []
-
-    import time
-
-    for param_name, target_value in parameter_values.items():
-        try:
-            # Find parameter by name
-            param = next((p for p in params if p.get("name") == param_name), None)
-            if not param:
-                errors.append(f"Parameter not found: {param_name}")
-                continue
-
-            param_index = param.get("index")
-
-            # Set parameter
-            result = udp_request({
-                "op": "set_return_device_param",
-                "return_index": ret_idx,
-                "device_index": dev_idx,
-                "param_index": param_index,
-                "value": float(target_value),
-            }, timeout=0.5)
-
-            if result and result.get("ok"):
-                applied += 1
-            else:
-                errors.append(f"Failed to set {param_name}")
-
-            # Small delay to prevent UDP flooding and allow Live to process
-            time.sleep(0.005)  # 5ms delay between parameters
-
-        except Exception as e:
-            errors.append(f"Error setting {param_name}: {str(e)}")
-
-    return {
-        "ok": applied > 0,
-        "preset_name": preset.get("name"),
-        "device_name": device_name,
-        "applied": applied,
-        "total": len(parameter_values),
-        "errors": errors if errors else None,
-    }
-
-
-@app.get("/presets")
-def list_presets(
-    device_type: Optional[str] = None,
-    structure_signature: Optional[str] = None,
-    preset_type: Optional[str] = None,
-) -> Dict[str, Any]:
-    """List available presets with optional filtering."""
-    presets = STORE.list_presets(device_type, structure_signature, preset_type)
-    return {
-        "presets": presets,
-        "count": len(presets),
-    }
-
-
-@app.get("/presets/{preset_id}")
-def get_preset_detail(preset_id: str) -> Dict[str, Any]:
-    """Get full preset details including metadata and parameter values."""
-    preset = STORE.get_preset(preset_id)
-    if not preset:
-        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
-    return preset
-
-
-@app.delete("/presets/{preset_id}")
-def delete_preset_endpoint(preset_id: str) -> Dict[str, Any]:
-    """Delete a preset (user presets only)."""
-    preset = STORE.get_preset(preset_id)
-    if preset and preset.get("preset_type") == "stock":
-        raise HTTPException(status_code=403, detail="Cannot delete stock presets")
-
-    deleted = STORE.delete_preset(preset_id)
-    return {"ok": deleted, "preset_id": preset_id}
-
-
-# ==================== End Preset Endpoints ====================
+"""Preset endpoints moved to server.api.presets (removed legacy stubs)."""
 
 
 class RefreshPresetBody(BaseModel):
@@ -3350,7 +2229,7 @@ class RefreshPresetBody(BaseModel):
     fields_allowlist: Optional[list[str]] = None
 
 
-@app.post("/presets/refresh_metadata")
+# moved: /presets/refresh_metadata handled by server.api.presets
 async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
     """Regenerate preset metadata via LLM and optionally refresh values from live device.
 
@@ -3775,7 +2654,7 @@ def _parse_target_display(s: str) -> Optional[float]:
         return None
 
 
-@app.post("/op/return/param_by_name")
+"""/op/return/param_by_name moved to server.api.ops"""
 def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     # Resolve indices
     ri = _resolve_return_index(body.return_ref)
@@ -4144,77 +3023,37 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
 
 @app.get("/return/device/learn_status")
 def learn_return_device_status(id: str) -> Dict[str, Any]:
+    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
+        raise HTTPException(404, "legacy_disabled")
     job = LEARN_JOBS.get(id)
     if not job:
         return {"ok": False, "error": "unknown_job"}
     return {"ok": True, **job}
 
 
-@app.post("/op/mixer")
+"""/op/mixer moved to server.api.ops"""
 def op_mixer(op: MixerOp) -> Dict[str, Any]:
-    msg = {"op": "set_mixer", **op.dict()}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    # publish SSE event (fire and forget)
-    try:
-        schedule_emit({"event": "mixer_changed", "track": op.track_index, "field": op.field})
-    except Exception:
-        pass
-    return resp
+    ...
 
 
-@app.post("/op/send")
+"""/op/send moved to server.api.ops"""
 def op_send(op: SendOp) -> Dict[str, Any]:
-    msg = {"op": "set_send", **op.dict()}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "send_changed", "track": op.track_index, "send_index": op.send_index})
-    except Exception:
-        pass
-    return resp
+    ...
 
 
-@app.post("/op/device/param")
+"""/op/device/param moved to server.api.ops"""
 def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
-    msg = {"op": "set_device_param", **op.dict()}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "device_param_changed", "track": op.track_index, "device": op.device_index, "param": op.param_index})
-    except Exception:
-        pass
-    return resp
+    ...
 
 
-@app.post("/op/volume_db")
+"""/op/volume_db moved to server.api.ops"""
 def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
-    float_value = db_to_live_float(body.db)
-    msg = {"op": "set_mixer", "track_index": int(body.track_index), "field": "volume", "value": float_value}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "mixer_changed", "track": int(body.track_index), "field": "volume"})
-    except Exception:
-        pass
-    return resp
+    ...
 
 
-@app.post("/op/select_track")
+"""/op/select_track moved to server.api.ops"""
 def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
-    msg = {"op": "select_track", "track_index": int(body.track_index)}
-    resp = udp_request(msg, timeout=1.0)
-    if not resp:
-        raise HTTPException(504, "No reply from Ableton Remote Script")
-    try:
-        schedule_emit({"event": "selection_changed", "track": int(body.track_index)})
-    except Exception:
-        pass
-    return resp
+    ...
 
 
 @app.post("/chat")
@@ -4923,49 +3762,7 @@ def _debug_enabled(name: str) -> bool:
     return False
 
 
-async def emit_event(payload: Dict[str, Any]) -> None:
-    # Drop duplicate master events (identical value) to prevent storms
-    try:
-        if isinstance(payload, dict) and payload.get("event") == "master_mixer_changed":
-            fld = str(payload.get("field") or "").strip()
-            val = payload.get("value")
-            if fld and isinstance(val, (int, float)):
-                v = float(val)
-                last = _MASTER_DEDUP.get(fld)
-                if last is not None:
-                    last_v, _last_ts = last
-                    # Exact or near-exact repeats are dropped
-                    if abs(v - last_v) <= 1e-7:
-                        return
-                _MASTER_DEDUP[fld] = (v, time.time())
-    except Exception:
-        # Never block emit on dedup errors
-        pass
-    if _debug_enabled("sse"):
-        try:
-            ename = payload.get("event")
-            meta = {k: v for k, v in payload.items() if k != "data"}
-            print(f"[SSE] Emitting {ename}: {json.dumps(meta)}")
-        except Exception:
-            print(f"[SSE] Emitting {payload}")
-    await broker.publish(payload)
-
-
-def schedule_emit(payload: Dict[str, Any]) -> None:
-    """Schedule an SSE emit safely from sync or async contexts without leaking coroutines."""
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(emit_event(payload))
-    except RuntimeError:
-        # No running loop in this thread; run emit_event synchronously
-        try:
-            asyncio.run(emit_event(payload))
-        except RuntimeError:
-            # Already inside a running loop but couldn't get it; last resort: fire and forget via ensure_future
-            try:
-                asyncio.ensure_future(emit_event(payload))
-            except Exception:
-                pass
+"""Emit helpers moved to server.core.events (emit_event, schedule_emit)"""
 
 
 _EVENT_THREAD: Optional[threading.Thread] = None

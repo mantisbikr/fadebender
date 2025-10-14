@@ -388,6 +388,11 @@ class ApiService {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/health`);
     return response.json();
   }
+
+  async checkControllerHealth() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/controller/health`);
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();

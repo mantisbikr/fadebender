@@ -147,10 +147,20 @@ export function useDAWControl() {
 
   const checkSystemHealth = useCallback(async () => {
     try {
-      const health = await apiService.checkHealth();
-      setSystemStatus(health);
+      const [server, controller] = await Promise.allSettled([
+        apiService.checkHealth(),
+        apiService.checkControllerHealth()
+      ]);
+      const status = (server.status === 'fulfilled' ? server.value : { status: 'error' }) || {};
+      if (controller.status === 'fulfilled' && controller.value) {
+        status.controller_status = controller.value.status;
+        status.controller_endpoint = controller.value.endpoint;
+      } else if (controller.status === 'rejected') {
+        status.controller_status = 'offline';
+      }
+      setSystemStatus(status);
     } catch (error) {
-      setSystemStatus({ status: 'error' });
+      setSystemStatus({ status: 'error', controller_status: 'offline' });
     }
   }, []);
 

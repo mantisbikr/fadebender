@@ -27,9 +27,9 @@ Device Mapping (structure + analysis)
 - Validate names vs live (catch mismatches early): `curl -sS "http://127.0.0.1:8722/device_mapping/validate?index=0&device=0" | jq .`
 - Sanity probe (set by display, read back, restore):
   - `curl -sS -X POST http://127.0.0.1:8722/device_mapping/sanity_probe -H 'Content-Type: application/json' -d '{"return_index":0,"device_index":0,"param_ref":"HiFilter Freq","target_display":"7000","restore":true}' | jq .`
-- List fitted params (quick QA): `curl -sS "http://127.0.0.1:8722/device_mapping/fits?signature=<SIG>" | jq .`
-- Enumerate labels for a quantized param (build label_map):
+ - Enumerate labels for a quantized param (build label_map):
   - `curl -sS "http://127.0.0.1:8722/device_mapping/enumerate_labels?index=0&device=0&param_ref=HiFilter%20Type" | jq .`
+   - Note: This briefly sweeps the parameter on the device to discover labels.
 
 Preset Capture & Apply
 - Capture current device as a preset (user/stock):
@@ -37,6 +37,7 @@ Preset Capture & Apply
   - `curl -sS -X POST http://127.0.0.1:8722/return/device/capture_preset -H 'Content-Type: application/json' -d '{"return_index":1,"device_index":0,"preset_name":"my_preset","category":"user"}' | jq .`
 - List presets (optionally by signature): `curl -sS "http://127.0.0.1:8722/presets?structure_signature=<SIG>" | jq .`
 - Get full preset doc: `curl -sS "http://127.0.0.1:8722/presets/<preset_id>" | jq .`
+- Delete a preset (user presets): `curl -sS -X DELETE http://127.0.0.1:8722/presets/<preset_id> | jq .`
 - Apply a preset to a device: `curl -sS -X POST http://127.0.0.1:8722/return/device/apply_preset -H 'Content-Type: application/json' -d '{"return_index":1,"device_index":0,"preset_id":"reverb_cathedral"}' | jq .`
 - Refresh preset metadata/values from live: `curl -sS -X POST http://127.0.0.1:8722/presets/refresh_metadata -H 'Content-Type: application/json' -d '{"preset_id":"reverb_cathedral","update_values_from_live":true,"return_index":1,"device_index":0}' | jq .`
 

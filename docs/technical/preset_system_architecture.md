@@ -1,6 +1,6 @@
 # Preset System Architecture - Universal Display-Value Based Approach
 
-**Status:** Design Document
+**Status:** Design Document (structure-first minimal capture active)
 **Date:** 2025-10-11
 **Purpose:** Comprehensive guide for LLM-based implementation of universal display-value preset system for ALL device types (Delay, Reverb, Compressor, EQ, etc.)
 **Scope:** Device-agnostic architecture applicable to any Ableton Live device
@@ -16,6 +16,8 @@
 2. **Analysis Phase:** Device analyzed by LLM, device mapping updated with metadata
 3. **Enrichment Phase:** Bulk enrichment triggered for all captured presets
 4. **Result:** All presets enriched with accurate, grouping-aware metadata
+
+Note (current behavior): The server runs in a minimal mode by default — it only ensures device mapping structure and captures base presets (values + display values) opportunistically. No LLM enrichment runs unless explicitly triggered or enabled. This keeps UI responsive (green state) with reliable data while deferring semantics.
 
 ---
 

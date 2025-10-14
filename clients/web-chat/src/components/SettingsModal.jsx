@@ -58,7 +58,8 @@ export default function SettingsModal({ open, onClose, confirmExecute, setConfir
           </Box>
           {systemStatus && (
             <Box sx={{ fontSize: 12, color: 'text.secondary' }}>
-              <div>Controller: {systemStatus.status || 'unknown'}</div>
+              <div>Server: {systemStatus.status || 'unknown'}</div>
+              <div>Controller: {systemStatus.controller_status || 'unknown'}</div>
             </Box>
           )}
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
