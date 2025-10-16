@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from server.core.events import broker
 from server.services.ableton_client import request_op, data_or_raw
+import re as _re
 
 
 router = APIRouter()
@@ -86,6 +87,60 @@ def get_track_device_params(index: int, device: int) -> Dict[str, Any]:
     return {"ok": True, "data": data_or_raw(resp)}
 
 
+def _parse_num(s: str) -> float | None:
+    try:
+        m = _re.search(r"-?\d+(?:\.\d+)?", str(s))
+        return float(m.group(0)) if m else None
+    except Exception:
+        return None
+
+
+@router.get("/track/device/param_lookup")
+def track_device_param_lookup(index: int, device: int, param_ref: str) -> Dict[str, Any]:
+    """Lookup a track device parameter by name substring and report display + on/off state.
+
+    Returns same shape as /return/device/param_lookup.
+    """
+    pr = request_op("get_track_device_params", timeout=1.0, track_index=int(index), device_index=int(device))
+    if not pr:
+        return {"ok": False, "error": "no response"}
+    params = ((pr or {}).get("data") or {}).get("params") or []
+    pref = str(param_ref or "").strip().lower()
+    cands = [p for p in params if pref in str(p.get("name", "")).lower()]
+    if not cands:
+        return {"ok": False, "match_type": "not_found"}
+    if len(cands) > 1:
+        return {"ok": False, "match_type": "ambiguous", "candidates": [p.get("name") for p in cands]}
+    p = cands[0]
+    name = p.get("name")
+    val = float(p.get("value", 0.0))
+    vmin = float(p.get("min", 0.0)); vmax = float(p.get("max", 1.0))
+    disp = p.get("display_value")
+    disp_num = _parse_num(disp)
+    nlc = str(name or "").lower()
+    is_toggle_like = nlc.endswith(" on") or nlc.endswith(" enabled") or nlc.endswith(" enable")
+    is_on = None
+    try:
+        if is_toggle_like:
+            is_on = abs(val - vmax) <= 1e-6
+    except Exception:
+        is_on = None
+    return {
+        "ok": True,
+        "match_type": "unique",
+        "param": {
+            "name": name,
+            "index": p.get("index"),
+            "value": val,
+            "min": vmin,
+            "max": vmax,
+            "display_value": disp,
+            "display_num": disp_num,
+            "is_on": is_on,
+        },
+    }
+
+
 class TrackDeviceParamBody(BaseModel):
     track_index: int
     device_index: int
@@ -117,4 +172,3 @@ def set_track_device_param(body: TrackDeviceParamBody) -> Dict[str, Any]:
     except Exception:
         pass
     return resp if isinstance(resp, dict) else {"ok": True}
-

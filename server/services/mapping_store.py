@@ -624,3 +624,49 @@ class MappingStore:
             return False
         except Exception:
             return False
+
+    # ---------- Mixer Parameter Mappings ----------
+
+    def get_mixer_param_mapping(self, param_name: str) -> Optional[Dict[str, Any]]:
+        """Get mixer parameter mapping (e.g., pan, volume) from Firestore.
+
+        Args:
+            param_name: Parameter name ("pan", "volume", etc.)
+
+        Returns:
+            Mixer parameter mapping with display_value_presets or None
+        """
+        if not self._enabled or not self._client:
+            return None
+
+        try:
+            doc = self._client.collection("mixer_mappings").document(param_name).get()
+            if not doc.exists:
+                return None
+            return doc.to_dict()
+        except Exception as e:
+            print(f"[MAPPING-STORE] Error getting mixer param mapping: {e}")
+            return None
+
+    def save_mixer_param_mapping(self, param_name: str, mapping_data: Dict[str, Any]) -> bool:
+        """Save mixer parameter mapping to Firestore.
+
+        Args:
+            param_name: Parameter name ("pan", "volume", etc.)
+            mapping_data: Mapping metadata including display_value_presets
+
+        Returns:
+            True if saved successfully
+        """
+        if not self._enabled or not self._client:
+            print("[MAPPING-STORE] Firestore not enabled, skipping mixer param mapping save")
+            return False
+
+        try:
+            doc = self._client.collection("mixer_mappings").document(param_name)
+            doc.set(mapping_data, merge=True)
+            print(f"[MAPPING-STORE] ✓ Saved mixer param mapping for {param_name}")
+            return True
+        except Exception as e:
+            print(f"[MAPPING-STORE] ✗ Failed to save mixer param mapping: {e}")
+            return False

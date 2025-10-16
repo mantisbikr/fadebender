@@ -207,6 +207,30 @@ def _invert_fit_to_value(fit: dict, target_y: float, vmin: float, vmax: float) -
     return max(vmin, min(vmax, float(x)))
 
 
+def _convert_unit_value(value: float, src: Optional[str], dest: Optional[str]) -> float:
+    """Convert a numeric display value between basic units when needed.
+
+    Supported conversions: ms<->s, Hz<->kHz, pass-through for percent.
+    Unknown pairs return the original value.
+    """
+    s = (src or "").strip().lower()
+    d = (dest or "").strip().lower()
+    if not s or not d or s == d:
+        return float(value)
+    v = float(value)
+    if s == "ms" and d == "s":
+        return v / 1000.0
+    if s == "s" and d == "ms":
+        return v * 1000.0
+    if s == "khz" and d == "hz":
+        return v * 1000.0
+    if s == "hz" and d == "khz":
+        return v / 1000.0
+    if s in ("percent", "%") and d in ("percent", "%"):
+        return v
+    return v
+
+
 def _get_mixer_display_range(field: str):
     """Get display range (min, max) for a mixer field from Firestore mapping.
 
@@ -465,7 +489,11 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         x = float(intent.value if intent.value is not None else vmin)
         # If display provided, try mapping via params_meta fit/labels; fallback to refine if not dry_run
         used_display = False
-        target_display = intent.display if intent.display is not None else (str(intent.value) if (intent.unit or "").lower() == "display" and intent.value is not None else None)
+        unit_lc = (intent.unit or "").lower().strip()
+        target_display = intent.display if intent.display is not None else (str(intent.value) if unit_lc == "display" and intent.value is not None else None)
+        # Treat common display units as display-mode if value provided
+        if target_display is None and unit_lc in ("ms", "s", "hz", "khz", "db", "%", "percent", "on", "off") and intent.value is not None:
+            target_display = str(intent.value)
         if target_display is not None:
             used_display = True
             # Compute signature and fetch mapping
@@ -486,14 +514,23 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             # Label resolution (non-numeric)
             if pm and isinstance(pm.get("label_map"), dict) and ty is None:
                 lm = pm.get("label_map") or {}
-                for k, v in lm.items():
-                    if str(k).strip().lower() == target_display.strip().lower():
-                        x = float(v)
-                        break
+                lnorm = target_display.strip().lower()
+                if lnorm in {"on", "enable", "enabled", "true", "1", "yes"}:
+                    x = vmax
+                elif lnorm in {"off", "disable", "disabled", "false", "0", "no"}:
+                    x = vmin
+                else:
+                    for k, v in lm.items():
+                        if str(k).strip().lower() == lnorm:
+                            x = float(v)
+                            break
             # Numeric display
             elif ty is not None:
                 if pm and isinstance(pm.get("fit"), dict):
-                    x = _invert_fit_to_value(pm.get("fit") or {}, float(ty), vmin, vmax)
+                    # Align input numeric with params_meta unit if provided
+                    pm_unit = (pm.get("unit") or "").strip().lower()
+                    ty_aligned = _convert_unit_value(float(ty), unit_lc or pm_unit, pm_unit)
+                    x = _invert_fit_to_value(pm.get("fit") or {}, float(ty_aligned), vmin, vmax)
                 else:
                     # No fit; if dry_run, preview only
                     if intent.dry_run:
@@ -544,9 +581,14 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                                 x = (lo + hi) / 2.0
                     except Exception:
                         pass
-        # Basic unit handling for device when numeric value passed: percent scales within [vmin,vmax]
-        if not used_display and (intent.unit or "").lower() in ("percent", "%"):
-            x = vmin + (vmax - vmin) * _clamp(x, 0.0, 100.0) / 100.0
+        # Basic unit handling for device when numeric value passed: if mapping exists and unit is display-like, use fit; else percent scales within [vmin,vmax]
+        if not used_display and unit_lc in ("percent", "%", "ms", "s", "hz", "khz"):
+            if pm and isinstance(pm.get("fit"), dict) and unit_lc not in ("percent", "%"):
+                pm_unit = (pm.get("unit") or "").strip().lower()
+                ty2 = _convert_unit_value(float(x), unit_lc, pm_unit)
+                x = _invert_fit_to_value(pm.get("fit") or {}, float(ty2), vmin, vmax)
+            elif unit_lc in ("percent", "%"):
+                x = vmin + (vmax - vmin) * _clamp(x, 0.0, 100.0) / 100.0
         # Optional dependency enable
         master_toggle = _auto_enable_master_if_needed(params, str(sel.get("name", "")))
         preview: Dict[str, Any] = {"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(_clamp(x, vmin, vmax) if intent.clamp else x)}
@@ -627,9 +669,23 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 pass
         if not used_display and (intent.unit or "").lower() in ("percent", "%"):
             x = vmin + (vmax - vmin) * _clamp(x, 0.0, 100.0) / 100.0
+        # Optional dependency enable (heuristic) for track devices
+        master_toggle = _auto_enable_master_if_needed(params, str(sel.get("name", "")))
         preview = {"op": "set_device_param", "track_index": ti, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(_clamp(x, vmin, vmax) if intent.clamp else x)}
+        if master_toggle is not None:
+            preview["pre"] = {
+                "op": "set_device_param",
+                "track_index": ti,
+                "device_index": di,
+                "param_index": int(master_toggle.get("index", 0)),
+                "value": float(master_toggle.get("max", 1.0)),
+                "note": "auto_enable_master"
+            }
         if intent.dry_run:
             return {"ok": True, "preview": preview}
+        if preview.get("pre"):
+            pre = preview["pre"]
+            request_op("set_device_param", timeout=1.0, **{k: pre[k] for k in ("track_index","device_index","param_index","value")})
         resp = request_op("set_device_param", timeout=1.0, track_index=ti, device_index=di, param_index=int(sel.get("index", 0)), value=float(preview["value"]))
         if not resp:
             raise HTTPException(504, "no_reply")

@@ -3,54 +3,60 @@ Volume conversion utilities for Ableton Live API (shared package).
 """
 from __future__ import annotations
 
-import os
-import re
 from typing import List, Tuple
+from google.cloud import firestore
 
 _MAP_DB2F: List[Tuple[float, float]] = []  # (db, float)
 _MAP_F2DB: List[Tuple[float, float]] = []  # (float, db)
+_SEND_MAP_DB2F: List[Tuple[float, float]] = []  # (db, float) for sends
+_SEND_MAP_F2DB: List[Tuple[float, float]] = []  # (float, db) for sends
 
 
 def _try_load_mapping() -> None:
-    """Load docs/volume_map.csv if present, robust to accidental RTF wrappers.
+    """Load volume mappings from Firestore dev-display-value database.
 
-    Expected logical content is lines with two numeric columns: db, float
+    Loads both 'volume' and 'send' mappings from mixer_mappings collection.
+    Fails with clear error if mappings are not found.
     """
-    global _MAP_DB2F, _MAP_F2DB
+    global _MAP_DB2F, _MAP_F2DB, _SEND_MAP_DB2F, _SEND_MAP_F2DB
     if _MAP_DB2F:
         return
-    repo_root = os.getenv("FB_REPO_ROOT") or os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-    candidates = [
-        os.path.join(repo_root, "docs", "volume_map.csv"),
-        os.path.join(repo_root, "../docs", "volume_map.csv"),
-    ]
-    path = None
-    for p in candidates:
-        if os.path.exists(p):
-            path = p
-            break
-    if not path:
-        return
+
     try:
-        pairs: List[Tuple[float, float]] = []
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                nums = re.findall(r"[-+]?\d+(?:\.\d+)?", line)
-                if len(nums) < 2:
-                    continue
-                try:
-                    db = float(nums[0]); val = float(nums[1])
-                except Exception:
-                    continue
-                pairs.append((db, val))
-        pairs = sorted({(round(db, 6), round(val, 9)) for db, val in pairs})
-        pairs = [(db, val) for db, val in pairs if -80.0 <= db <= 12.0 and 0.0 <= val <= 1.0]
-        pairs.sort(key=lambda x: x[0])
-        if len(pairs) >= 4:
-            _MAP_DB2F = pairs
-            _MAP_F2DB = sorted([(v, d) for d, v in pairs], key=lambda x: x[0])
-    except Exception:
-        pass
+        db = firestore.Client(database='dev-display-value')
+
+        # Load volume mapping (for tracks, returns, master)
+        volume_doc = db.collection('mixer_mappings').document('volume').get()
+        if not volume_doc.exists:
+            raise RuntimeError(
+                "Volume mapping not found in Firestore! "
+                "Run: python3 scripts/upload_mixer_mappings.py"
+            )
+
+        volume_data = volume_doc.to_dict()
+        mapping = volume_data.get('mapping', [])
+
+        if len(mapping) < 4:
+            raise RuntimeError(
+                f"Invalid volume mapping in Firestore: only {len(mapping)} points found, need at least 4"
+            )
+
+        _MAP_DB2F = [(point['db'], point['float']) for point in mapping]
+        _MAP_F2DB = sorted([(point['float'], point['db']) for point in mapping], key=lambda x: x[0])
+
+        # Load send mapping
+        send_doc = db.collection('mixer_mappings').document('send').get()
+        if send_doc.exists:
+            send_data = send_doc.to_dict()
+            send_mapping = send_data.get('mapping', [])
+            _SEND_MAP_DB2F = [(point['db'], point['float']) for point in send_mapping]
+            _SEND_MAP_F2DB = sorted([(point['float'], point['db']) for point in send_mapping], key=lambda x: x[0])
+
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load mixer mappings from Firestore: {e}\n"
+            "Make sure you've run: python3 scripts/upload_mixer_mappings.py"
+        ) from e
 
 
 def _interp_x(y: float, pts: List[Tuple[float, float]]) -> float:
@@ -78,35 +84,53 @@ def _interp_x(y: float, pts: List[Tuple[float, float]]) -> float:
 
 
 def db_to_live_float(db_value: float) -> float:
+    """Convert dB to Live float value (0.0-1.0) for track/return/master volume.
+
+    Range: -60dB to +6dB
+    Uses accurate mapping from Firestore (measured from Ableton Live 12).
+    Raises RuntimeError if mapping not loaded.
+    """
     _try_load_mapping()
+    if not _MAP_DB2F:
+        raise RuntimeError("Volume mapping not loaded from Firestore")
+
     db_clamped = max(-60.0, min(6.0, float(db_value)))
-    if _MAP_DB2F:
-        y = db_clamped
-        pts = [(d, v) for d, v in _MAP_DB2F]
-        f = _interp_x(y, pts)
-        return max(0.0, min(1.0, float(f)))
-    float_value = 0.85 - (0.025 * abs(db_clamped))
-    return max(0.0, min(1.0, float_value))
+    pts = [(d, v) for d, v in _MAP_DB2F]
+    f = _interp_x(db_clamped, pts)
+    return max(0.0, min(1.0, float(f)))
 
 
 def live_float_to_db(float_value: float) -> float:
+    """Convert Live float value (0.0-1.0) to dB for track/return/master volume.
+
+    Range: -60dB to +6dB
+    Uses accurate mapping from Firestore (measured from Ableton Live 12).
+    Raises RuntimeError if mapping not loaded.
+    """
     _try_load_mapping()
+    if not _MAP_F2DB:
+        raise RuntimeError("Volume mapping not loaded from Firestore")
+
     float_clamped = max(0.0, min(1.0, float(float_value)))
-    if _MAP_F2DB:
-        y = float_clamped
-        pts = [(v, d) for v, d in _MAP_F2DB]
-        d_b = _interp_x(y, pts)
-        return max(-60.0, min(6.0, float(d_b)))
-    if float_clamped <= 0.001:
-        return -60.0
-    db_value = -(0.85 - float_clamped) / 0.025
-    return max(-60.0, min(6.0, db_value))
+    pts = [(v, d) for v, d in _MAP_F2DB]
+    d_b = _interp_x(float_clamped, pts)
+    return max(-60.0, min(6.0, float(d_b)))
 
 
 def db_to_live_float_send(db_value: float) -> float:
+    """Convert dB to Live float value for send levels.
+
+    Range: -60dB to 0dB (sends have +6dB offset relative to tracks)
+    Uses accurate mapping from Firestore (measured from Ableton Live 12).
+    """
     return db_to_live_float(float(db_value) + 6.0)
 
 
 def live_float_to_db_send(float_value: float) -> float:
+    """Convert Live float value to dB for send levels.
+
+    Range: -60dB to 0dB (sends have +6dB offset relative to tracks)
+    Uses accurate mapping from Firestore (measured from Ableton Live 12).
+    """
     return live_float_to_db(float_value) - 6.0
 
