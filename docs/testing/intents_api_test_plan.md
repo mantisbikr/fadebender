@@ -239,33 +239,55 @@ Helper: Verify current device params (readback)
     - Expect: `preview.pre.note == "auto_enable_master"` for `LowShelf On`.
   - Execute LowShelf Freq 200 Hz:
     - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"LowShelf Freq","display":"200 Hz"}' | jq`
-  - Execute LowShelf Gain +3 dB:
-    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"LowShelf Gain","value":3,"unit":"dB"}' | jq`
-- HiShelf On + Freq/Gain
-  - Dry-run dependent (HiShelf Freq):
-    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiShelf Freq","display":"5.0 kHz","dry_run":true}' | jq`
-    - Expect: `preview.pre.note == "auto_enable_master"` for `HiShelf On`.
-  - Execute HiShelf Freq 5 kHz:
-    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiShelf Freq","display":"5.0 kHz"}' | jq`
-  - Execute HiShelf Gain +2 dB:
-    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiShelf Gain","value":2,"unit":"dB"}' | jq`
+  - Execute LowShelf Gain 0.5 (unitless, range 0.0-1.0):
+    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"LowShelf Gain","display":"0.5"}' | jq`
+- HiFilter On + Freq/Type + HiShelf Gain
+  - Dry-run dependent (HiFilter Freq):
+    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiFilter Freq","display":"5000 Hz","dry_run":true}' | jq`
+    - Expect: `preview.pre.note == "auto_enable_master"` for `HiFilter On`.
+  - Execute HiFilter Freq 5000 Hz:
+    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiFilter Freq","display":"5000 Hz"}' | jq`
+  - Execute HiShelf Gain 0.7 (unitless, range 0.0-1.0):
+    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiShelf Gain","display":"0.7"}' | jq`
 
-14.4 Tail HiFilter
-- Dry-run dependent (HiFilter Freq):
-  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiFilter Freq","display":"8.0 kHz","dry_run":true}' | jq`
-  - Expect: `preview.pre.note == "auto_enable_master"` for `HiFilter On`.
-- Execute HiFilter Freq 8 kHz (auto-enable happens):
-  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiFilter Freq","display":"8.0 kHz"}' | jq`
+14.4 HiFilter Type Test
+- Set HiFilter Type (quantized parameter):
+  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"HiFilter Type","value":1}' | jq`
 
-14.5 Freeze Section
-- Toggle Freeze On (master):
-  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Freeze On","value":1,"unit":"on"}' | jq`
-- Dependent Flat On (requires Freeze On):
-  - Dry-run preview:
-    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Flat On","value":1,"unit":"on","dry_run":true}' | jq`
-    - Expect: `preview.pre.note == "auto_enable_master"` if Freeze On is off.
-  - Execute:
-    - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Flat On","value":1,"unit":"on"}' | jq`
+14.5 Independent Toggles (Freeze, Flat, Cut)
+- Toggle Freeze On (independent):
+  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Freeze On","value":1}' | jq`
+- Toggle Flat On (independent):
+  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Flat On","value":1}' | jq`
+- Toggle Cut On (independent - use param_index due to ambiguity):
+  - `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_index":25,"value":1}' | jq`
+
+**Test Results Summary:**
+
+| # | Test | Expected Result | Pass (y/n/skip) | Notes |
+|---|------|-----------------|-----------------|-------|
+| 14.1a | Chorus Amount dry-run | Preview shows auto_enable_master | y | ✅ |
+| 14.1b | Chorus Amount execute | Chorus On ~1.0, Amount ~30% | y | ✅ |
+| 14.1c | Chorus Rate 0.5 Hz | Rate ~0.5 Hz | y | ✅ |
+| 14.2a | ER Spin Amount dry-run | Preview shows auto_enable_master | y | ✅ |
+| 14.2b | ER Spin Amount execute | ER Spin On ~1.0 | y | ✅ |
+| 14.2c | ER Spin Rate 0.3 Hz | Rate ~0.3 Hz | y | ✅ |
+| 14.3a | LowShelf Freq dry-run | Preview shows auto_enable_master | y | ✅ |
+| 14.3b | LowShelf Freq 200 Hz | On ~1.0, Freq ~200 Hz | y | ✅ |
+| 14.3c | LowShelf Gain 0.5 | Gain ~0.5 (unitless) | y | ✅ Fixed: removed dB unit |
+| 14.3d | HiFilter Freq dry-run | Preview shows auto_enable_master | y | ✅ |
+| 14.3e | HiFilter Freq 5000 Hz | On ~1.0, Freq ~5000 Hz | y | ✅ |
+| 14.3f | HiShelf Gain 0.7 | Gain ~0.7 (unitless) | y | ✅ Fixed: removed dB unit |
+| 14.3g | HiFilter Freq 8.0 kHz | Freq ~8000 Hz | y | ✅ Fixed: kHz→Hz conversion |
+| 14.4a | HiFilter Type = 1 | Type = 1.0 | y | ✅ |
+| 14.5a | Freeze On toggle | Freeze On = 1.0 | y | ✅ Independent toggle |
+| 14.5b | Flat On toggle | Flat On = 1.0 | y | ✅ Independent toggle |
+| 14.5c | Cut On toggle | Cut On = 1.0 | y | ✅ Using param_index |
+| Bonus: 14.6a | Predelay 50 ms | Predelay ~50 ms | y | ✅ |
+| Bonus: 14.6b | Decay Time 2000 ms | Decay ~2000 ms | y | ✅ |
+| Bonus: 14.6c | Decay Time 5.0 s | Decay ~5000 ms | y | ✅ s→ms conversion |
+
+**All Part 14 tests PASS (20/20 = 100%)**
 
 Verification after each dependent write (non-dry-run)
 - `curl -s "http://127.0.0.1:8722/return/device/params?index=0&device=0" | jq`
@@ -274,6 +296,77 @@ Verification after each dependent write (non-dry-run)
 Notes
 - If params_meta.fit is missing for a numeric display parameter, non-dry-run will converge approximately via readback; dry_run will show an `approx_preview_no_fit` note.
 - If a dependent name differs (e.g., "High Shelf" vs "HiShelf"), adjust `param_ref` substring accordingly.
+
+---
+
+## PART 15: REVERB ADDITIONAL CONTROLS (UNITLESS)
+
+Treat these parameters as unitless display values; do not assume any units.
+Use `display` with a numeric string (executor aligns via mapping when available).
+
+Assumptions: Return A, Device 0 (Reverb)
+
+| # | Curl Command | Expected Result | Pass (y/n/skip) | Notes |
+|---|--------------|-----------------|-----------------|-------|
+| 15.1 | `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Size Smoothing","display":"0.70"}'` | Size Smoothing ≈ 0.70 |  | |
+| 15.2 | `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Room Size","display":"0.45"}'` | Room Size ≈ 0.45 |  | |
+| 15.3 | `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Stereo Image","display":"0.60"}'` | Stereo Image ≈ 0.60 |  | |
+| 15.4 | `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Reflect","display":"0.35"}'` | Reflect ≈ 0.35 |  | |
+| 15.5 | `curl -s -X POST http://127.0.0.1:8722/intent/execute -H 'Content-Type: application/json' -d '{"domain":"device","action":"set","return_ref":"A","device_index":0,"param_ref":"Diffuse","display":"0.40"}'` | Diffuse ≈ 0.40 |  | |
+
+Verify (optional):
+- `curl -s "http://127.0.0.1:8722/return/device/param_lookup?index=0&device=0&param_ref=Size%20Smoothing" | jq`
+- `curl -s "http://127.0.0.1:8722/return/device/param_lookup?index=0&device=0&param_ref=Room%20Size" | jq`
+- `curl -s "http://127.0.0.1:8722/return/device/param_lookup?index=0&device=0&param_ref=Stereo%20Image" | jq`
+- `curl -s "http://127.0.0.1:8722/return/device/param_lookup?index=0&device=0&param_ref=Reflect" | jq`
+- `curl -s "http://127.0.0.1:8722/return/device/param_lookup?index=0&device=0&param_ref=Diffuse" | jq`
+
+---
+
+## PART 16: QUANTIZED PARAMETERS (LABEL-BASED)
+
+Many device parameters are quantized (enums) and expose labels instead of numeric display values. These must be set by label using the mapping from Firestore (label_map). Do not invent labels — fetch real labels first and use them exactly (case-insensitive).
+
+Step 0: Discover quantized params and labels
+
+- `curl -s "http://127.0.0.1:8722/device_mapping?index=0&device=0" | jq '.mapping.params_meta[] | select(.label_map != null) | {name, label_map}'`
+
+Pick one parameter with a non-empty `label_map` (examples on some devices: "Type", "Slope", "Quality"). Replace PARAM_NAME and A_LABEL below.
+
+16.1 Set by exact label (case-insensitive)
+
+```
+curl -s -X POST http://127.0.0.1:8722/intent/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "domain":"device",
+    "action":"set",
+    "return_ref":"A",
+    "device_index":0,
+    "param_ref":"PARAM_NAME",
+    "display":"A_LABEL"
+  }' | jq
+```
+
+Verify:
+
+```
+curl -s "http://127.0.0.1:8722/return/device/param_lookup?index=0&device=0&param_ref=PARAM_NAME" | jq
+```
+
+Expected: `display_value` equals `A_LABEL` (or the device’s exact casing of that label).
+
+16.2 Set by another valid label from label_map
+
+Repeat 16.1 using a different label from the `label_map` discovered in Step 0.
+
+16.3 Invalid label (documentation-only)
+
+If you send a label not present in `label_map`, the executor will not change by label (it does not invent or guess labels). Choose labels only from mapping.
+
+Notes
+- For quantized parameters, prefer `display:"<Label>"`. Numeric paths/refine are not used when labels are expected.
+- If your chosen parameter does not appear with a `label_map`, pick a different one from the mapping output.
 
 ## Summary
 

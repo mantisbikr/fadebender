@@ -11,6 +11,7 @@ from server.services.mapping_utils import make_device_signature
 import math
 import re as _re
 from server.volume_utils import db_to_live_float, db_to_live_float_send
+from server.config.app_config import get_app_config
 
 
 router = APIRouter()
@@ -37,7 +38,8 @@ class CanonicalIntent(BaseModel):
     param_ref: Optional[str] = None         # device param lookup by name (contains match)
 
     # Value + unit (absolute only in v1)
-    value: Optional[float] = None
+    # For routing intents, value may be an object with routing keys
+    value: Optional[Any] = None
     unit: Optional[str] = None             # db|percent|normalized|ms|hz|on|off
     # For device params: accept display strings (e.g., "245 ms", "5.0 kHz", "High")
     display: Optional[str] = None
@@ -45,6 +47,20 @@ class CanonicalIntent(BaseModel):
     # Options
     dry_run: bool = False
     clamp: bool = True
+
+
+class ReadIntent(BaseModel):
+    domain: Domain = Field(..., description="Scope: track|return|master|device|transport")
+    # Targets (one of):
+    track_index: Optional[int] = None
+    return_index: Optional[int] = None
+    return_ref: Optional[str] = None
+    device_index: Optional[int] = None
+
+    # Selection
+    field: Optional[str] = None            # mixer field for track/return/master
+    param_index: Optional[int] = None      # device param index (preferred)
+    param_ref: Optional[str] = None        # device param name contains
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -157,6 +173,34 @@ def _auto_enable_master_if_needed(params: list[dict], target_param_name: str) ->
     return None
 
 
+def _master_from_mapping(mapping: dict | None, params: list[dict], target_param_name: str) -> Optional[dict]:
+    """Resolve a master toggle strictly via Firestore mapping.grouping.
+
+    Uses mapping.grouping.dependents { dependent_name: master_name } (case-insensitive exact match).
+    Returns the master param dict if found, else None. No heuristics.
+    """
+    if not mapping:
+        return None
+    try:
+        grp = mapping.get("grouping") or {}
+        deps = grp.get("dependents") or {}
+        dep_key = None
+        dep_lc = str(target_param_name or "").strip().lower()
+        for k in deps.keys():
+            if str(k).strip().lower() == dep_lc:
+                dep_key = k
+                break
+        if dep_key is None:
+            return None
+        master_name = str(deps.get(dep_key) or "").strip().lower()
+        for p in params:
+            if str(p.get("name", "")).strip().lower() == master_name:
+                return p
+    except Exception:
+        return None
+    return None
+
+
 def _parse_target_display(s: str) -> Optional[float]:
     try:
         m = _re.search(r"-?\d+(?:\.\d+)?", str(s))
@@ -229,6 +273,23 @@ def _convert_unit_value(value: float, src: Optional[str], dest: Optional[str]) -
     if s in ("percent", "%") and d in ("percent", "%"):
         return v
     return v
+
+
+def _detect_display_unit(disp: str) -> Optional[str]:
+    s = (disp or "").lower()
+    if " khz" in s or "khz" in s:
+        return "khz"
+    if " hz" in s or s.endswith("hz"):
+        return "hz"
+    if " ms" in s or s.endswith("ms"):
+        return "ms"
+    if s.endswith(" s") or s.endswith("sec") or s.endswith(" seconds") or s.endswith("s"):
+        return "s"
+    if "db" in s:
+        return "db"
+    if "%" in s:
+        return "%"
+    return None
 
 
 def _get_mixer_display_range(field: str):
@@ -307,6 +368,155 @@ def _resolve_mixer_display_value(field: str, display: str) -> Optional[float]:
 def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
     d = intent.domain
     field = intent.field or ""
+    # Track routing execute
+    if d == "track" and field == "routing" and intent.track_index is not None:
+        ti = int(intent.track_index)
+        # Build payload from optional kwargs on intent (only known keys will be passed through)
+        allowed = {
+            "monitor_state": None,
+            "audio_from_type": None,
+            "audio_from_channel": None,
+            "audio_to_type": None,
+            "audio_to_channel": None,
+            "midi_from_type": None,
+            "midi_from_channel": None,
+            "midi_to_type": None,
+            "midi_to_channel": None,
+        }
+        # Pydantic model doesn't carry arbitrary fields; support passing values via unit/display for now is not relevant.
+        # Instead, accept these fields via value semantics is out-of-scope; expect clients to call set routing via dedicated API.
+        # For intents, we allow attaching a dict under 'value' when field==routing.
+        payload = {}
+        if isinstance(intent.value, dict):
+            for k in allowed.keys():
+                v = intent.value.get(k)
+                if v is not None:
+                    payload[k] = v
+        # Validate against available options to avoid sending unsupported values to Live
+        cur = request_op("get_track_routing", timeout=1.0, track_index=ti) or {}
+        data_cur = (cur.get("data") or cur) if isinstance(cur, dict) else {}
+        opts = (data_cur or {}).get("options") or {}
+        cfg = get_app_config()
+        aliases = (cfg.get("routing_aliases") or {}).get("track", {})
+        # Helper: normalize against options with case-insensitive match + alias map
+        def _normalize_choice(val, option_key):
+            if val is None:
+                return None
+            arr = opts.get(option_key) or []
+            lower_map = {str(x).strip().lower(): str(x) for x in arr}
+            v_in = str(val).strip()
+            v_l = v_in.lower()
+            if v_l in lower_map:
+                return lower_map[v_l]
+            # Alias map: aliases[option_key] is a dict of alias->canonical
+            try:
+                ali = ((aliases.get(option_key)) or {})
+                target = ali.get(v_l)
+                if target:
+                    t_l = str(target).strip().lower()
+                    if t_l in lower_map:
+                        return lower_map[t_l]
+            except Exception:
+                pass
+            return None
+        # Normalize and validate each provided routing key
+        if "audio_to_type" in payload:
+            norm = _normalize_choice(payload.get("audio_to_type"), "audio_to_types")
+            if norm is None:
+                return {"ok": False, "error": "invalid_audio_to_type", "requested": payload.get("audio_to_type"), "allowed": opts.get("audio_to_types")}
+            payload["audio_to_type"] = norm
+        if "audio_to_channel" in payload:
+            norm = _normalize_choice(payload.get("audio_to_channel"), "audio_to_channels")
+            if norm is None:
+                return {"ok": False, "error": "invalid_audio_to_channel", "requested": payload.get("audio_to_channel"), "allowed": opts.get("audio_to_channels")}
+            payload["audio_to_channel"] = norm
+        if "audio_from_type" in payload:
+            norm = _normalize_choice(payload.get("audio_from_type"), "audio_from_types")
+            if norm is None:
+                return {"ok": False, "error": "invalid_audio_from_type", "requested": payload.get("audio_from_type"), "allowed": opts.get("audio_from_types")}
+            payload["audio_from_type"] = norm
+        if "audio_from_channel" in payload:
+            norm = _normalize_choice(payload.get("audio_from_channel"), "audio_from_channels")
+            if norm is None:
+                return {"ok": False, "error": "invalid_audio_from_channel", "requested": payload.get("audio_from_channel"), "allowed": opts.get("audio_from_channels")}
+            payload["audio_from_channel"] = norm
+        if "midi_from_type" in payload:
+            norm = _normalize_choice(payload.get("midi_from_type"), "midi_from_types")
+            if norm is None:
+                return {"ok": False, "error": "invalid_midi_from_type", "requested": payload.get("midi_from_type"), "allowed": opts.get("midi_from_types")}
+            payload["midi_from_type"] = norm
+        if "midi_from_channel" in payload:
+            norm = _normalize_choice(payload.get("midi_from_channel"), "midi_from_channels")
+            if norm is None:
+                return {"ok": False, "error": "invalid_midi_from_channel", "requested": payload.get("midi_from_channel"), "allowed": opts.get("midi_from_channels")}
+            payload["midi_from_channel"] = norm
+        if "midi_to_type" in payload:
+            norm = _normalize_choice(payload.get("midi_to_type"), "midi_to_types")
+            if norm is None:
+                return {"ok": False, "error": "invalid_midi_to_type", "requested": payload.get("midi_to_type"), "allowed": opts.get("midi_to_types")}
+            payload["midi_to_type"] = norm
+        if "midi_to_channel" in payload:
+            norm = _normalize_choice(payload.get("midi_to_channel"), "midi_to_channels")
+            if norm is None:
+                return {"ok": False, "error": "invalid_midi_to_channel", "requested": payload.get("midi_to_channel"), "allowed": opts.get("midi_to_channels")}
+            payload["midi_to_channel"] = norm
+        if intent.dry_run:
+            return {"ok": True, "preview": {"current": (cur.get("data") or cur), "apply": {"track_index": ti, **payload}}}
+        resp = request_op("set_track_routing", timeout=1.2, track_index=ti, **payload)
+        if not resp:
+            raise HTTPException(504, "no_reply")
+        return resp
+    # Return routing execute
+    if d == "return" and field == "routing" and intent.return_index is not None:
+        ri = int(intent.return_index)
+        allowed = {"audio_to_type": None, "audio_to_channel": None, "sends_mode": None}
+        payload = {}
+        if isinstance(intent.value, dict):
+            for k in allowed.keys():
+                v = intent.value.get(k)
+                if v is not None:
+                    payload[k] = v
+        # Validate choices against options
+        cur = request_op("get_return_routing", timeout=1.0, return_index=ri) or {}
+        data_cur = (cur.get("data") or cur) if isinstance(cur, dict) else {}
+        opts = (data_cur or {}).get("options") or {}
+        cfg = get_app_config()
+        aliases = (cfg.get("routing_aliases") or {}).get("return", {})
+        def _normalize_choice(val, option_key):
+            if val is None:
+                return None
+            arr = opts.get(option_key) or []
+            lower_map = {str(x).strip().lower(): str(x) for x in arr}
+            v_in = str(val).strip(); v_l = v_in.lower()
+            if v_l in lower_map:
+                return lower_map[v_l]
+            try:
+                ali = ((aliases.get(option_key)) or {})
+                target = ali.get(v_l)
+                if target:
+                    t_l = str(target).strip().lower()
+                    if t_l in lower_map:
+                        return lower_map[t_l]
+            except Exception:
+                pass
+            return None
+        if "audio_to_type" in payload:
+            norm = _normalize_choice(payload.get("audio_to_type"), "audio_to_types")
+            if norm is None:
+                return {"ok": False, "error": "invalid_audio_to_type", "requested": payload.get("audio_to_type"), "allowed": opts.get("audio_to_types")}
+            payload["audio_to_type"] = norm
+        if "audio_to_channel" in payload:
+            norm = _normalize_choice(payload.get("audio_to_channel"), "audio_to_channels")
+            if norm is None:
+                return {"ok": False, "error": "invalid_audio_to_channel", "requested": payload.get("audio_to_channel"), "allowed": opts.get("audio_to_channels")}
+            payload["audio_to_channel"] = norm
+        if intent.dry_run:
+            cur = request_op("get_return_routing", timeout=1.0, return_index=ri) or {}
+            return {"ok": True, "preview": {"current": (cur.get("data") or cur), "apply": {"return_index": ri, **payload}}}
+        resp = request_op("set_return_routing", timeout=1.2, return_index=ri, **payload)
+        if not resp:
+            raise HTTPException(504, "no_reply")
+        return resp
     # Track mixer
     if d == "track" and field in ("volume", "pan", "mute", "solo"):
         if intent.track_index is None:
@@ -491,6 +701,9 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         used_display = False
         unit_lc = (intent.unit or "").lower().strip()
         target_display = intent.display if intent.display is not None else (str(intent.value) if unit_lc == "display" and intent.value is not None else None)
+        # Initialize mapping and pm to None (may be set later if display value is used)
+        mapping = None
+        pm = None
         # Treat common display units as display-mode if value provided
         if target_display is None and unit_lc in ("ms", "s", "hz", "khz", "db", "%", "percent", "on", "off") and intent.value is not None:
             target_display = str(intent.value)
@@ -529,7 +742,9 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 if pm and isinstance(pm.get("fit"), dict):
                     # Align input numeric with params_meta unit if provided
                     pm_unit = (pm.get("unit") or "").strip().lower()
-                    ty_aligned = _convert_unit_value(float(ty), unit_lc or pm_unit, pm_unit)
+                    # Detect unit from display string if unit_lc is empty
+                    input_unit = unit_lc or _detect_display_unit(target_display) or pm_unit
+                    ty_aligned = _convert_unit_value(float(ty), input_unit, pm_unit)
                     x = _invert_fit_to_value(pm.get("fit") or {}, float(ty_aligned), vmin, vmax)
                 else:
                     # No fit; if dry_run, preview only
@@ -555,8 +770,16 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                         p1s = ((rb1 or {}).get("data") or {}).get("params") or []
                         p1 = next((p for p in p1s if int(p.get("index", -1)) == int(sel.get("index", 0))), None)
                         d1 = _parse_target_display(str((p1 or {}).get("display_value", "")))
+                        # Align target numeric to readback display units if needed
+                        target = float(ty)
+                        try:
+                            rb_unit = _detect_display_unit(str((p1 or {}).get("display_value", ""))) or _detect_display_unit(str((p0 or {}).get("display_value", "")))
+                            if rb_unit:
+                                target = _convert_unit_value(target, unit_lc or rb_unit, rb_unit)
+                        except Exception:
+                            pass
                         if d0 is not None and d1 is not None:
-                            lo = vmin; hi = vmax; target = float(ty)
+                            lo = vmin; hi = vmax
                             # Ensure bounds order based on monotonicity
                             inc = d1 > d0
                             for _ in range(8):
@@ -589,8 +812,8 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 x = _invert_fit_to_value(pm.get("fit") or {}, float(ty2), vmin, vmax)
             elif unit_lc in ("percent", "%"):
                 x = vmin + (vmax - vmin) * _clamp(x, 0.0, 100.0) / 100.0
-        # Optional dependency enable
-        master_toggle = _auto_enable_master_if_needed(params, str(sel.get("name", "")))
+        # Optional dependency enable (mapping only)
+        master_toggle = _master_from_mapping(mapping, params, str(sel.get("name", "")))
         preview: Dict[str, Any] = {"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(_clamp(x, vmin, vmax) if intent.clamp else x)}
         if master_toggle is not None:
             preview["pre"] = {
@@ -643,8 +866,18 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 p1 = next((p for p in p1s if int(p.get("index", -1)) == int(sel.get("index", 0))), None)
                 d1 = _parse_target_display(str((p1 or {}).get("display_value", "")))
                 ty = _parse_target_display(target_display)
-                if d0 is not None and d1 is not None and ty is not None:
-                    lo = vmin; hi = vmax; target = float(ty); inc = d1 > d0
+                # Align target to readback unit if detectable
+                target = float(ty) if ty is not None else None
+                try:
+                    if target is not None:
+                        rb_unit = _detect_display_unit(str((p1 or {}).get("display_value", ""))) or _detect_display_unit(str((p0 or {}).get("display_value", "")))
+                        if rb_unit:
+                            unit_lc_td = (intent.unit or "").lower().strip()
+                            target = _convert_unit_value(float(target), unit_lc_td or rb_unit, rb_unit)
+                except Exception:
+                    pass
+                if d0 is not None and d1 is not None and target is not None:
+                    lo = vmin; hi = vmax; inc = d1 > d0
                     for _ in range(8):
                         mid = (lo + hi) / 2.0
                         request_op("set_device_param", timeout=1.0, track_index=ti, device_index=di, param_index=int(sel.get("index", 0)), value=float(mid))
@@ -654,12 +887,12 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                         dmid = _parse_target_display(str((pmid or {}).get("display_value", "")))
                         if dmid is None:
                             break
-                        err = abs(dmid - target)
+                        err = abs(dmid - float(target))
                         thresh = 0.02 * (abs(target) if target != 0 else 1.0)
                         if err <= thresh:
                             x = mid
                             break
-                        if (dmid < target and inc) or (dmid > target and not inc):
+                        if (dmid < float(target) and inc) or (dmid > float(target) and not inc):
                             lo = mid
                         else:
                             hi = mid
@@ -669,26 +902,130 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 pass
         if not used_display and (intent.unit or "").lower() in ("percent", "%"):
             x = vmin + (vmax - vmin) * _clamp(x, 0.0, 100.0) / 100.0
-        # Optional dependency enable (heuristic) for track devices
-        master_toggle = _auto_enable_master_if_needed(params, str(sel.get("name", "")))
+        # Mapping-only policy: do not auto-enable for track devices (no mapping source yet)
         preview = {"op": "set_device_param", "track_index": ti, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(_clamp(x, vmin, vmax) if intent.clamp else x)}
-        if master_toggle is not None:
-            preview["pre"] = {
-                "op": "set_device_param",
-                "track_index": ti,
-                "device_index": di,
-                "param_index": int(master_toggle.get("index", 0)),
-                "value": float(master_toggle.get("max", 1.0)),
-                "note": "auto_enable_master"
-            }
         if intent.dry_run:
             return {"ok": True, "preview": preview}
-        if preview.get("pre"):
-            pre = preview["pre"]
-            request_op("set_device_param", timeout=1.0, **{k: pre[k] for k in ("track_index","device_index","param_index","value")})
         resp = request_op("set_device_param", timeout=1.0, track_index=ti, device_index=di, param_index=int(sel.get("index", 0)), value=float(preview["value"]))
         if not resp:
             raise HTTPException(504, "no_reply")
         return resp
 
     raise HTTPException(400, "unsupported_intent")
+
+
+@router.post("/intent/read")
+def read_intent(intent: ReadIntent) -> Dict[str, Any]:
+    d = intent.domain
+    if d == "track" and intent.track_index is not None and intent.field == "routing":
+        ti = int(intent.track_index)
+        cur = request_op("get_track_routing", timeout=1.0, track_index=ti)
+        if not cur:
+            raise HTTPException(504, "no_reply")
+        return {"ok": True, "data": (cur.get("data") or cur)}
+    if d == "return" and intent.return_index is not None and intent.field == "routing":
+        ri = int(intent.return_index)
+        cur = request_op("get_return_routing", timeout=1.0, return_index=ri)
+        if not cur:
+            raise HTTPException(504, "no_reply")
+        return {"ok": True, "data": (cur.get("data") or cur)}
+    # Track mixer fields
+    if d == "track" and intent.track_index is not None and intent.field in ("volume", "pan", "mute", "solo"):
+        ti = int(intent.track_index)
+        st = request_op("get_track_status", timeout=1.0, track_index=ti)
+        data = (st or {}).get("data") or st or {}
+        mix = data.get("mixer") or {}
+        val = mix.get(intent.field)
+        return {"ok": True, "field": intent.field, "normalized_value": val, "display_value": None}
+    # Track send
+    if d == "track" and intent.track_index is not None and intent.field == "send" and intent.param_index is not None:
+        ti = int(intent.track_index)
+        si = int(intent.param_index)
+        rs = request_op("get_track_sends", timeout=1.0, track_index=ti)
+        data = (rs or {}).get("data") or rs or {}
+        sends = data.get("sends") or []
+        send = next((s for s in sends if int(s.get("index", -1)) == si), None)
+        return {"ok": True, "field": "send", "send_index": si, "normalized_value": (send or {}).get("value"), "display_value": (send or {}).get("display_value")}
+    # Return mixer fields
+    if d == "return" and intent.return_index is not None and intent.field in ("volume", "pan", "mute", "solo"):
+        ri = int(intent.return_index)
+        rs = request_op("get_return_tracks", timeout=1.0)
+        data = (rs or {}).get("data") or rs or {}
+        rets = data.get("returns") or []
+        ret = next((r for r in rets if int(r.get("index", -1)) == ri), None)
+        mix = (ret or {}).get("mixer") or {}
+        val = mix.get(intent.field)
+        return {"ok": True, "field": intent.field, "normalized_value": val, "display_value": None}
+    # Return send
+    if d == "return" and intent.return_index is not None and intent.field == "send" and intent.param_index is not None:
+        ri = int(intent.return_index)
+        si = int(intent.param_index)
+        rs = request_op("get_return_sends", timeout=1.0, return_index=ri)
+        data = (rs or {}).get("data") or rs or {}
+        sends = data.get("sends") or []
+        send = next((s for s in sends if int(s.get("index", -1)) == si), None)
+        return {"ok": True, "field": "send", "send_index": si, "normalized_value": (send or {}).get("value"), "display_value": (send or {}).get("display_value")}
+    # Master mixer
+    if d == "master" and intent.field in ("volume", "pan"):
+        ms = request_op("get_master_status", timeout=1.0)
+        data = (ms or {}).get("data") or ms or {}
+        mix = data.get("mixer") or {}
+        val = mix.get(intent.field)
+        return {"ok": True, "field": intent.field, "normalized_value": val, "display_value": None}
+    # Device parameter (return device)
+    if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
+        ri = _resolve_return_index(intent)
+        di = int(intent.device_index)
+        pr = request_op("get_return_device_params", timeout=1.2, return_index=ri, device_index=di)
+        params = ((pr or {}).get("data") or {}).get("params") or []
+        if not params:
+            raise HTTPException(404, "params_not_found")
+        sel = _resolve_param(params, intent.param_index, intent.param_ref)
+        # Mapping meta
+        store = get_store()
+        devs = request_op("get_return_devices", timeout=1.0, return_index=ri)
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = next((str(dv.get("name", "")) for dv in devices if int(dv.get("index", -1)) == di), f"Device {di}")
+        sig = make_device_signature(dname, params)
+        mapping = None
+        pm = None
+        try:
+            mapping = store.get_device_mapping(sig) if store.enabled else None
+            if mapping:
+                pm = next((pme for pme in (mapping.get("params_meta") or []) if str(pme.get("name", "")).lower() == str(sel.get("name", "")).lower()), None)
+        except Exception:
+            pm = None
+        return {
+            "ok": True,
+            "unit": (pm.get("unit") if isinstance(pm, dict) else None),
+            "min": sel.get("min"),
+            "max": sel.get("max"),
+            "normalized_value": sel.get("value"),
+            "display_value": sel.get("display_value"),
+            "has_fit": bool(isinstance(pm, dict) and isinstance(pm.get("fit"), dict)),
+            "has_label_map": bool(isinstance(pm, dict) and isinstance(pm.get("label_map"), dict)),
+            "param_name": sel.get("name"),
+            "param_index": sel.get("index"),
+        }
+    # Device parameter (track device)
+    if d == "device" and intent.track_index is not None and intent.device_index is not None:
+        ti = int(intent.track_index)
+        di = int(intent.device_index)
+        pr = request_op("get_track_device_params", timeout=1.2, track_index=ti, device_index=di)
+        params = ((pr or {}).get("data") or {}).get("params") or []
+        if not params:
+            raise HTTPException(404, "params_not_found")
+        sel = _resolve_param(params, intent.param_index, intent.param_ref)
+        return {
+            "ok": True,
+            "unit": None,
+            "min": sel.get("min"),
+            "max": sel.get("max"),
+            "normalized_value": sel.get("value"),
+            "display_value": sel.get("display_value"),
+            "has_fit": False,
+            "has_label_map": False,
+            "param_name": sel.get("name"),
+            "param_index": sel.get("index"),
+        }
+    raise HTTPException(400, "unsupported_read")
