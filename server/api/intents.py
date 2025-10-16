@@ -61,6 +61,9 @@ class ReadIntent(BaseModel):
     field: Optional[str] = None            # mixer field for track/return/master
     param_index: Optional[int] = None      # device param index (preferred)
     param_ref: Optional[str] = None        # device param name contains
+    # For send reads (track/return)
+    send_index: Optional[int] = None
+    send_ref: Optional[str] = None
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -923,8 +926,8 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         if not cur:
             raise HTTPException(504, "no_reply")
         return {"ok": True, "data": (cur.get("data") or cur)}
-    if d == "return" and intent.return_index is not None and intent.field == "routing":
-        ri = int(intent.return_index)
+    if d == "return" and (intent.return_index is not None or intent.return_ref is not None) and intent.field == "routing":
+        ri = _letter_to_index(intent.return_ref) if intent.return_ref is not None else int(intent.return_index)  # 0-based
         cur = request_op("get_return_routing", timeout=1.0, return_index=ri)
         if not cur:
             raise HTTPException(504, "no_reply")
@@ -935,43 +938,158 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         st = request_op("get_track_status", timeout=1.0, track_index=ti)
         data = (st or {}).get("data") or st or {}
         mix = data.get("mixer") or {}
-        val = mix.get(intent.field)
-        return {"ok": True, "field": intent.field, "normalized_value": val, "display_value": None}
+        field = str(intent.field)
+        # Track mute/solo are top-level in get_track_status result
+        if field in ("mute", "solo"):
+            raw = data.get(field)
+            norm = 1.0 if bool(raw) else 0.0 if raw is not None else None
+            disp = "On" if norm == 1.0 else ("Off" if norm == 0.0 else None)
+            return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
+        raw = mix.get(field)
+        # Volume display in dB
+        if field == "volume":
+            from server.volume_utils import live_float_to_db
+            disp = None
+            if raw is not None:
+                try:
+                    dbv = live_float_to_db(float(raw))
+                    disp = f"{dbv:.1f} dB"
+                except Exception:
+                    disp = None
+            return {"ok": True, "field": field, "normalized_value": raw, "display_value": disp}
+        # Pan normalize to 0..1 and display as L/R/C
+        if field == "pan":
+            pan_raw = float(raw) if raw is not None else None
+            disp = None
+            norm = None
+            if pan_raw is not None:
+                # Convert from [-1,1] to [0,1]
+                norm = (pan_raw + 1.0) / 2.0
+                if abs(pan_raw) < 0.01:
+                    disp = "C"
+                else:
+                    amt = int(round(abs(pan_raw) * 100))
+                    disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
+            return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
+        # Fallback
+        return {"ok": True, "field": field, "normalized_value": raw, "display_value": None}
     # Track send
-    if d == "track" and intent.track_index is not None and intent.field == "send" and intent.param_index is not None:
+    if d == "track" and intent.track_index is not None and intent.field == "send":
         ti = int(intent.track_index)
-        si = int(intent.param_index)
+        # Support send_ref (A/B/C...) or send_index; fallback to param_index for compatibility
+        if intent.send_ref is not None:
+            si = _letter_to_index(str(intent.send_ref))
+        elif intent.send_index is not None:
+            si = int(intent.send_index)
+        elif intent.param_index is not None:
+            si = int(intent.param_index)
+        else:
+            raise HTTPException(400, "send_index_or_send_ref_required")
         rs = request_op("get_track_sends", timeout=1.0, track_index=ti)
         data = (rs or {}).get("data") or rs or {}
         sends = data.get("sends") or []
         send = next((s for s in sends if int(s.get("index", -1)) == si), None)
-        return {"ok": True, "field": "send", "send_index": si, "normalized_value": (send or {}).get("value"), "display_value": (send or {}).get("display_value")}
+        raw = (send or {}).get("value")
+        disp = (send or {}).get("display_value")
+        if disp is None and raw is not None:
+            try:
+                from server.volume_utils import live_float_to_db_send
+                disp = f"{live_float_to_db_send(float(raw)):.1f} dB"
+            except Exception:
+                disp = None
+        return {"ok": True, "field": "send", "send_index": si, "normalized_value": raw, "display_value": disp}
     # Return mixer fields
-    if d == "return" and intent.return_index is not None and intent.field in ("volume", "pan", "mute", "solo"):
-        ri = int(intent.return_index)
+    if d == "return" and (intent.return_index is not None or intent.return_ref is not None) and intent.field in ("volume", "pan", "mute", "solo"):
+        ri = _letter_to_index(intent.return_ref) if intent.return_ref is not None else int(intent.return_index)
         rs = request_op("get_return_tracks", timeout=1.0)
         data = (rs or {}).get("data") or rs or {}
         rets = data.get("returns") or []
         ret = next((r for r in rets if int(r.get("index", -1)) == ri), None)
         mix = (ret or {}).get("mixer") or {}
-        val = mix.get(intent.field)
-        return {"ok": True, "field": intent.field, "normalized_value": val, "display_value": None}
+        field = str(intent.field)
+        raw = mix.get(field)
+        # Volume dB formatting
+        if field == "volume":
+            from server.volume_utils import live_float_to_db
+            disp = None
+            if raw is not None:
+                try:
+                    dbv = live_float_to_db(float(raw))
+                    disp = f"{dbv:.1f} dB"
+                except Exception:
+                    disp = None
+            return {"ok": True, "field": field, "normalized_value": raw, "display_value": disp}
+        if field == "pan":
+            pan_raw = float(raw) if raw is not None else None
+            disp = None
+            norm = None
+            if pan_raw is not None:
+                norm = (pan_raw + 1.0) / 2.0
+                if abs(pan_raw) < 0.01:
+                    disp = "C"
+                else:
+                    amt = int(round(abs(pan_raw) * 100))
+                    disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
+            return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
+        if field in ("mute", "solo"):
+            norm = 1.0 if bool(raw) else 0.0 if raw is not None else None
+            disp = "On" if norm == 1.0 else ("Off" if norm == 0.0 else None)
+            return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
+        return {"ok": True, "field": field, "normalized_value": raw, "display_value": None}
     # Return send
-    if d == "return" and intent.return_index is not None and intent.field == "send" and intent.param_index is not None:
-        ri = int(intent.return_index)
-        si = int(intent.param_index)
+    if d == "return" and (intent.return_index is not None or intent.return_ref is not None) and intent.field == "send":
+        ri = _letter_to_index(intent.return_ref) if intent.return_ref is not None else int(intent.return_index)
+        if intent.send_ref is not None:
+            si = _letter_to_index(str(intent.send_ref))
+        elif intent.send_index is not None:
+            si = int(intent.send_index)
+        elif intent.param_index is not None:
+            si = int(intent.param_index)
+        else:
+            raise HTTPException(400, "send_index_or_send_ref_required")
         rs = request_op("get_return_sends", timeout=1.0, return_index=ri)
         data = (rs or {}).get("data") or rs or {}
         sends = data.get("sends") or []
         send = next((s for s in sends if int(s.get("index", -1)) == si), None)
-        return {"ok": True, "field": "send", "send_index": si, "normalized_value": (send or {}).get("value"), "display_value": (send or {}).get("display_value")}
+        raw = (send or {}).get("value")
+        disp = (send or {}).get("display_value")
+        if disp is None and raw is not None:
+            try:
+                from server.volume_utils import live_float_to_db_send
+                disp = f"{live_float_to_db_send(float(raw)):.1f} dB"
+            except Exception:
+                disp = None
+        return {"ok": True, "field": "send", "send_index": si, "normalized_value": raw, "display_value": disp}
     # Master mixer
     if d == "master" and intent.field in ("volume", "pan"):
         ms = request_op("get_master_status", timeout=1.0)
         data = (ms or {}).get("data") or ms or {}
         mix = data.get("mixer") or {}
-        val = mix.get(intent.field)
-        return {"ok": True, "field": intent.field, "normalized_value": val, "display_value": None}
+        field = str(intent.field)
+        raw = mix.get(field)
+        if field == "volume":
+            from server.volume_utils import live_float_to_db
+            disp = None
+            if raw is not None:
+                try:
+                    dbv = live_float_to_db(float(raw))
+                    disp = f"{dbv:.1f} dB"
+                except Exception:
+                    disp = None
+            return {"ok": True, "field": field, "normalized_value": raw, "display_value": disp}
+        if field == "pan":
+            pan_raw = float(raw) if raw is not None else None
+            norm = None
+            disp = None
+            if pan_raw is not None:
+                norm = (pan_raw + 1.0) / 2.0
+                if abs(pan_raw) < 0.01:
+                    disp = "C"
+                else:
+                    amt = int(round(abs(pan_raw) * 100))
+                    disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
+            return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
+        return {"ok": True, "field": field, "normalized_value": raw, "display_value": None}
     # Device parameter (return device)
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
         ri = _resolve_return_index(intent)
