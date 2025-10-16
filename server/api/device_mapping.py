@@ -363,6 +363,58 @@ def validate_device_mapping(signature: Optional[str] = None, index: Optional[int
     return {"ok": True, "signature": sig, "mapping_exists": True, "missing_in_live": missing_in_live, "unused_in_mapping": unused_in_mapping, "counts": {"declared": len(declared), "live": len(live_names)}}
 
 
+@router.get("/device_mapping/validate_grouping")
+def validate_grouping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
+    sig = (signature or "").strip()
+    live_params: list[dict] = []
+    device_name: str = ""
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "Provide signature or index+device")
+        devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        if dname is None:
+            raise HTTPException(404, "device_not_found")
+        params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        device_name = dname
+        sig = make_device_signature(dname, live_params)
+    else:
+        if index is not None and device is not None:
+            params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
+            live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+    store = get_store()
+    mapping = store.get_device_mapping(sig) if store.enabled else None
+    if not mapping:
+        return {"ok": True, "signature": sig, "mapping_exists": False, "reason": "no_mapping"}
+    grp = mapping.get("grouping") or {}
+    deps = grp.get("dependents") or {}
+    live_names = set(str(p.get("name", "")).strip().lower() for p in (live_params or []))
+    results = []
+    unresolved = {"missing_dependent": [], "missing_master": []}
+    for dep, master in deps.items():
+        dep_lc = str(dep).strip().lower()
+        mas_lc = str(master).strip().lower()
+        dep_ok = dep_lc in live_names
+        mas_ok = mas_lc in live_names
+        if not dep_ok:
+            unresolved["missing_dependent"].append(dep)
+        if not mas_ok:
+            unresolved["missing_master"].append(master)
+        results.append({
+            "dependent_name": dep,
+            "master_name": master,
+            "dependent_live_exists": bool(dep_ok),
+            "master_live_exists": bool(mas_ok),
+        })
+    return {"ok": True, "signature": sig, "device_name": device_name or mapping.get("device_name"), "grouping_count": len(deps), "results": results, "unresolved": unresolved}
+
+
 # --- Helpers for name/index resolution and numeric parsing ---
 
 def _resolve_param_index(ri: int, di: int, ref: str) -> int:
