@@ -51,3 +51,6 @@ references/
 credentials/
 **/credentials/
 **/*-credentials.json
+
+# Database backups
+backups/database_backups/*.json
