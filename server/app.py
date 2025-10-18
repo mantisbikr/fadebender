@@ -52,6 +52,7 @@ from server.api.ops import router as ops_router
 from server.api.device_mapping import router as device_mapping_router
 from server.api.presets import router as presets_router
 from server.api.intents import router as intents_router
+from server.api.overview import router as overview_router
 from server.cloud.enrich_queue import enqueue_preset_enrich
 import hashlib
 import math
@@ -499,6 +500,7 @@ app.include_router(device_mapping_router)
 app.include_router(presets_router)
 app.include_router(ops_router)
 app.include_router(intents_router)
+app.include_router(overview_router)
 
 
 app.include_router(health_router)
@@ -545,6 +547,7 @@ class ChatBody(BaseModel):
 
 class HelpBody(BaseModel):
     query: str
+    context: Optional[Dict[str, Any]] = None
 
 
 class IntentParseBody(BaseModel):
@@ -3716,6 +3719,105 @@ def help_endpoint(body: HelpBody) -> Dict[str, Any]:
             "set reverb wet on track 1 to 20%",
         ])
 
+    # Sends and routing guidance
+    if any(k in q for k in ["send", "sends", "routing", "route"]):
+        suggested.extend([
+            "set track 1 send A to -12 dB",
+            "set return A send B to 25%",
+            "set track 2 send B to 15%",
+        ])
+        # If no snippets matched, produce a concise, grounded answer about sends
+        if not snippets:
+            answer = (
+                "Sends control how much signal is sent to return tracks (A/B/…).\n"
+                "- Track sends: use intents like ‘set track 1 send A to -12 dB’ or ‘25%’.\n"
+                "- Return→Return sends: available only if enabled in Live Preferences; then use ‘set Return A send B to 20%’.\n"
+                "- Read sends: /return/sends?index=0 or /track/sends?index=1; formatted readbacks via /intent/read.\n"
+                "- Pre/Post: see Return routing via /return/routing (field ‘sends_mode’)."
+            )
+            return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
+
+    # Live-set aware helpers
+    ctx = body.context or {}
+    try:
+        # Normalize indices from context if present
+        ri = ctx.get("return_index")
+        if ri is None and isinstance(ctx.get("return_ref"), str):
+            ri = max(0, ord(str(ctx.get("return_ref")).strip().upper()[0]) - ord('A'))
+        di = ctx.get("device_index")
+        # Device parameter listing
+        if any(k in q for k in ["what parameters", "what params", "what can i control", "list parameters", "list params"]):
+            if ri is not None and di is not None:
+                pr = request_op("get_return_device_params", timeout=1.0, return_index=int(ri), device_index=int(di)) or {}
+                params = ((pr.get("data") or pr) if isinstance(pr, dict) else pr).get("params", [])
+                devs = request_op("get_return_devices", timeout=0.8, return_index=int(ri)) or {}
+                devs_list = ((devs.get("data") or devs) if isinstance(devs, dict) else devs).get("devices", [])
+                dname = next((str(d.get("name","")) for d in devs_list if int(d.get("index",-1)) == int(di)), f"Device {di}")
+                ans = f"Parameters on Return {chr(ord('A')+int(ri))} • {dname}:\n"
+                names = [str(p.get("name","")) for p in params]
+                ans += ", ".join(names[:40])
+                return {"ok": True, "answer": ans, "suggested_intents": suggested}
+        # Preset listing for current device
+        if any(k in q for k in ["what presets", "list presets", "presets available"]):
+            if ri is not None and di is not None:
+                # Build signature for filtering if possible
+                pr = request_op("get_return_device_params", timeout=1.0, return_index=int(ri), device_index=int(di)) or {}
+                params = ((pr.get("data") or pr) if isinstance(pr, dict) else pr).get("params", [])
+                devs = request_op("get_return_devices", timeout=0.8, return_index=int(ri)) or {}
+                devs_list = ((devs.get("data") or devs) if isinstance(devs, dict) else devs).get("devices", [])
+                dname = next((str(d.get("name","")) for d in devs_list if int(d.get("index",-1)) == int(di)), f"Device {di}")
+                sig = make_device_signature(dname, params)
+                store = get_store()
+                device_type = ""
+                mapping = store.get_device_mapping(sig) if store.enabled else None
+                if mapping:
+                    device_type = str((mapping.get("device_type") or "")).lower()
+                presets = store.list_presets(device_type=device_type or None, structure_signature=sig) if store.enabled else []
+                if presets:
+                    ids = [p.get("id") for p in presets[:15]]
+                    ans = f"Presets for {dname}:\n" + ", ".join([str(x) for x in ids])
+                else:
+                    ans = f"No presets found for {dname}."
+                return {"ok": True, "answer": ans, "suggested_intents": suggested}
+        # What does param/group do?
+        m = re.search(r"what\s+does\s+(.+?)\s+do\??", q)
+        if m and (ri is not None and di is not None):
+            query_name = m.group(1).strip().lower()
+            pr = request_op("get_return_device_params", timeout=1.0, return_index=int(ri), device_index=int(di)) or {}
+            params = ((pr.get("data") or pr) if isinstance(pr, dict) else pr).get("params", [])
+            devs = request_op("get_return_devices", timeout=0.8, return_index=int(ri)) or {}
+            devs_list = ((devs.get("data") or devs) if isinstance(devs, dict) else devs).get("devices", [])
+            dname = next((str(d.get("name","")) for d in devs_list if int(d.get("index",-1)) == int(di)), f"Device {di}")
+            sig = make_device_signature(dname, params)
+            store = get_store()
+            mapping = store.get_device_mapping(sig) if store.enabled else None
+            if mapping:
+                pm = mapping.get("params") or []
+                # Firestore schema stores list of param docs under 'params'
+                # Fallback: use live params if mapping missing
+                meta_list = pm if pm else []
+                # Try to resolve by exact or contains
+                cand = []
+                for p in meta_list:
+                    nm = str(p.get("name",""))
+                    if query_name == nm.lower() or query_name in nm.lower():
+                        cand.append(p)
+                if cand:
+                    p0 = cand[0]
+                    desc = []
+                    unit = p0.get("unit")
+                    qz = p0.get("quantized")
+                    labels = p0.get("labels") or (list((p0.get("label_map") or {}).keys()) if p0.get("label_map") else None)
+                    rng = (p0.get("min"), p0.get("max")) if (p0.get("min") is not None and p0.get("max") is not None) else None
+                    if unit: desc.append(f"unit: {unit}")
+                    if rng: desc.append(f"range: {rng[0]}–{rng[1]}")
+                    if qz: desc.append("quantized")
+                    if labels: desc.append(f"labels: {', '.join([str(x) for x in labels][:12])}")
+                    answer = f"{p0.get('name')} — " + "; ".join(desc) if desc else f"{p0.get('name')} — no extra metadata available"
+                    return {"ok": True, "answer": answer, "suggested_intents": suggested}
+    except Exception:
+        pass
+
     answer = None
     if snippets:
         answer = "\n\n".join(snippets[:2])
@@ -3742,9 +3844,25 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
 
     canonical, errors = map_llm_to_canonical(raw_intent)
     if canonical is None:
-        return {"ok": False, "errors": errors, "raw_intent": raw_intent}
+        # Attempt to provide clarifying choices from snapshot
+        try:
+            ov = request_op("get_overview", timeout=1.0) or {}
+            data = (ov.get("data") or ov) if isinstance(ov, dict) else ov
+            tracks = data.get("tracks") or []
+            rs = request_op("get_return_tracks", timeout=1.0) or {}
+            rdata = (rs.get("data") or rs) if isinstance(rs, dict) else rs
+            rets = rdata.get("returns") or []
+            question = "Which track or return do you mean?"
+            choices = {
+                "tracks": [{"index": int(t.get("index",0)), "name": t.get("name") } for t in tracks],
+                "returns": [{"index": int(r.get("index",0)), "name": r.get("name"), "letter": chr(ord('A')+int(r.get("index",0))) } for r in rets],
+            }
+            clar = {"intent": "clarification_needed", "question": question, "choices": choices, "context": body.context}
+            return {"ok": False, "errors": errors, "raw_intent": clar}
+        except Exception:
+            return {"ok": False, "errors": errors, "raw_intent": raw_intent}
 
-    return {"ok": True, "intent": canonical.dict(), "raw_intent": raw_intent}
+    return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 class SelectTrackBody(BaseModel):
     track_index: int
 def _debug_enabled(name: str) -> bool:

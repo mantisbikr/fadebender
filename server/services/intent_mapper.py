@@ -2,38 +2,75 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from server.models.intents import (
-    ByRef,
-    TrackTarget,
-    ValueSpec,
-    SetMixerIntent,
-    CanonicalIntent,
-)
+_MIXER_PARAM_ALIASES = {
+    # mixer field aliases → canonical
+    "vol": "volume",
+    "level": "volume",
+    "gain": "volume",
+    "loudness": "volume",
+    "pan": "pan",
+    "balance": "pan",
+    "mute": "mute",
+    "unmute": "mute",
+    "solo": "solo",
+    "unsolo": "solo",
+}
+
+def _normalize_mixer_param(name: str) -> str:
+    n = (name or "").strip().lower()
+    return _MIXER_PARAM_ALIASES.get(n, n)
 
 
-def _parse_track_ref(raw: Any) -> Optional[ByRef]:
-    if raw is None:
-        return None
-    # Accept formats: "Track N", N (int), "N"
+def _parse_track_target(track_str: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """Parse track string and return (domain, target_fields).
+
+    Returns:
+        ("track", {"track_index": 1}) for "Track 1"
+        ("return", {"return_ref": "A"}) for "Return A"
+        ("master", {}) for "Master"
+        (None, None) if invalid
+    """
+    if not track_str:
+        return None, None
+
     try:
-        if isinstance(raw, int):
-            return ByRef(by="index", value=int(raw))
-        s = str(raw).strip()
+        s = str(track_str).strip()
+
+        # Track N → domain "track", track_index
         if s.lower().startswith("track "):
             n = int(s.split()[1])
-            return ByRef(by="index", value=n)
+            return "track", {"track_index": n}
+
+        # Return A/B/C → domain "return", return_ref
+        if s.lower().startswith("return "):
+            letter = s.split()[1].upper()
+            return "return", {"return_ref": letter}
+
+        # Master → domain "master"
+        if s.lower() == "master":
+            return "master", {}
+
+        # Plain digit → assume track index
         if s.isdigit():
-            return ByRef(by="index", value=int(s))
-        # Otherwise treat as name
-        return ByRef(by="name", value=s)
+            return "track", {"track_index": int(s)}
+
+        # Otherwise treat as track by index if it's a number
+        try:
+            idx = int(s)
+            return "track", {"track_index": idx}
+        except:
+            pass
+
     except Exception:
-        return None
+        pass
+
+    return None, None
 
 
-def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[CanonicalIntent], List[str]]:
-    """Map the current LLM intent JSON into a canonical intent.
+def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """Map the LLM intent JSON into a canonical intent dict.
 
-    Returns (canonical_intent | None, errors[])
+    Returns (canonical_intent_dict | None, errors[])
     """
     errors: List[str] = []
 
@@ -47,35 +84,73 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Canonical
         return None, errors
 
     target = targets[0] if targets else {}
-    track_ref = _parse_track_ref(target.get("track"))
-    if not track_ref:
+    track_str = target.get("track")
+    domain, target_fields = _parse_track_target(track_str)
+
+    if not domain or target_fields is None:
         errors.append("missing_or_invalid_track")
         return None, errors
 
     parameter = (target.get("parameter") or "").lower()
+    parameter = _normalize_mixer_param(parameter)
+    plugin = target.get("plugin")
     op_type = (op.get("type") or "").lower()
     value = op.get("value")
     unit = op.get("unit")
 
-    # Simple support: map volume/pan to set_mixer
-    if parameter in ("volume", "pan"):
-        if op_type not in ("absolute", "relative"):
-            errors.append("invalid_op_type")
-            return None, errors
-        try:
-            amount = float(value)
-        except Exception:
-            errors.append("invalid_value_amount")
-            return None, errors
+    # Validate operation type and value (only absolute supported for now)
+    if op_type != "absolute":
+        errors.append(f"unsupported_op_type:{op_type}")
+        return None, errors
 
-        mix = SetMixerIntent(
-            target=TrackTarget(track=track_ref),
-            field=parameter,  # type: ignore[arg-type]
-            value=ValueSpec(type=op_type, amount=amount, unit=unit),
-        )
-        return mix, []
+    try:
+        amount = float(value)
+    except Exception:
+        errors.append("invalid_value_amount")
+        return None, errors
 
-    # TODO: map plugin params to set_device_param in future steps
+    # Mixer controls: volume, pan, mute, solo
+    if parameter in ("volume", "pan", "mute", "solo"):
+        intent = {
+            "domain": domain,
+            "action": "set",
+            "field": parameter,
+            "value": amount,
+            "unit": unit,
+            **target_fields
+        }
+        return intent, []
+
+    # Send controls: "send A", "send B", etc.
+    if parameter.startswith("send ") or parameter in ("send", "sends"):
+        if not parameter.startswith("send "):
+            # Try to extract trailing letter from raw text if provided, else require client to add send_ref downstream
+            pass
+        send_letter = parameter.split()[-1].upper()  # Extract "A", "B", etc.
+        intent = {
+            "domain": domain,
+            "action": "set",
+            "field": "send",
+            "send_ref": send_letter,
+            "value": amount,
+            "unit": unit,
+            **target_fields
+        }
+        return intent, []
+
+    # Device parameters: if plugin is specified
+    if plugin:
+        intent = {
+            "domain": "device",
+            "action": "set",
+            "param_ref": parameter,
+            "value": amount,
+            "unit": unit,
+            **target_fields
+        }
+        # Need device_index - for now use 0 (first device on track/return)
+        intent["device_index"] = 0
+        return intent, []
+
     errors.append(f"unsupported_parameter:{parameter}")
     return None, errors
-

@@ -15,8 +15,8 @@ from config.llm_config import get_llm_project_id, get_llm_api_key, get_default_m
 
 def _build_daw_prompt(query: str) -> str:
     return (
-        "You are an expert DAW (Digital Audio Workstation) command interpreter. "
-        "Parse natural language commands into structured JSON for controlling music production software.\n\n"
+        "You are an expert DAW (Digital Audio Workstation) command interpreter for Ableton Live. "
+        "Parse natural language commands into structured JSON for controlling tracks, returns, master, devices, and effects.\n\n"
         "Return strictly valid JSON with this structure:\n"
         "{\n"
         "  \"intent\": \"set_parameter\" | \"relative_change\" | \"question_response\" | \"clarification_needed\",\n"
@@ -24,7 +24,7 @@ def _build_daw_prompt(query: str) -> str:
         "  \"operation\": {\"type\": \"absolute|relative\", \"value\": 2, \"unit\": \"dB\"},\n"
         "  \"meta\": {\"utterance\": \"original command\", \"confidence\": 0.95}\n"
         "}\n\n"
-        "For questions/problems, use:\n"
+        "For questions/help, use:\n"
         "{\n"
         "  \"intent\": \"question_response\",\n"
         "  \"answer\": \"helpful response with actionable suggestions\",\n"
@@ -38,12 +38,48 @@ def _build_daw_prompt(query: str) -> str:
         "  \"context\": {\"action\": \"increase\", \"parameter\": \"volume\"},\n"
         "  \"meta\": {\"utterance\": \"original command\", \"confidence\": 0.9}\n"
         "}\n\n"
-        "Examples:\n"
-        "- \"increase track 2 volume by 3 dB\" → set_parameter with relative change\n"
-        "- \"the vocals are too soft\" → question_response with helpful suggestions and suggested_intents like [\"set track 1 volume to -6 dB\", \"increase track 1 volume by 6 dB\"]\n"
-        "- \"boost vocals\" → clarification_needed asking which track\n"
-        "- \"how do I make my drums punchier?\" → question_response with EQ/compression advice and suggested_intents for specific adjustments\n\n"
-        "Important: For question_response, always include 2-4 specific, actionable suggested_intents that users can click to execute.\n\n"
+        "SUPPORTED COMMANDS:\n\n"
+        "## Track Controls (use \"Track N\" format):\n"
+        "- Volume: \"set track 1 volume to -6 dB\", \"increase track 2 volume by 3 dB\"\n"
+        "- Pan: \"pan track 2 50% left\", \"pan track 1 25% right\", \"center track 3\"\n"
+        "- Mute: \"mute track 1\", \"unmute track 2\"\n"
+        "- Solo: \"solo track 1\", \"unsolo track 2\"\n"
+        "- Sends: \"set track 1 send A to -12 dB\", \"set track 2 send B to -6 dB\" (use letter A, B, C, etc.)\n\n"
+        "## Return Track Controls (use \"Return A/B/C\" format with letters):\n"
+        "- Volume: \"set return A volume to -3 dB\", \"increase return B volume by 2 dB\"\n"
+        "- Pan: \"pan return A 30% left\"\n"
+        "- Mute: \"mute return B\", \"unmute return A\"\n"
+        "- Solo: \"solo return A\"\n"
+        "- Sends: \"set return A send B to -10 dB\"\n\n"
+        "## Master Track Controls:\n"
+        "- Volume: \"set master volume to -3 dB\", \"increase master volume by 1 dB\"\n"
+        "- Pan: \"pan master 10% right\"\n\n"
+        "## Device Parameters (plugin is device name, parameter is knob/control):\n"
+        "- \"set return A reverb decay to 2 seconds\" → {\"track\": \"Return A\", \"plugin\": \"reverb\", \"parameter\": \"decay\"}\n"
+        "- \"set track 1 compressor threshold to -12 dB\" → {\"track\": \"Track 1\", \"plugin\": \"compressor\", \"parameter\": \"threshold\"}\n"
+        "- \"increase return B delay time by 50 ms\" → relative change for delay device\n"
+        "- \"set return A reverb predelay to 20 ms\", \"set track 2 eq gain to 3 dB\"\n\n"
+        "## Help/Questions:\n"
+        "- \"how do I control sends?\" → question_response with explanation and examples\n"
+        "- \"what does reverb decay do?\" → question_response explaining the parameter\n"
+        "- \"the vocals are too soft\" → question_response with suggested_intents for volume adjustments\n\n"
+        "IMPORTANT RULES:\n"
+        "1. Return tracks ALWAYS use letters: \"Return A\", \"Return B\", \"Return C\" (never \"Return 1\")\n"
+        "2. Sends ALWAYS use letters: \"send A\", \"send B\" (never \"send 1\")\n"
+        "3. Regular tracks use numbers: \"Track 1\", \"Track 2\"\n"
+        "4. For device parameters, set \"plugin\" to the device name (reverb, compressor, eq, delay, etc.)\n"
+        "5. Solo/mute/unmute/unsolo are set_parameter commands with value 1 (on) or 0 (off)\n"
+        "6. Pan values: -50 to +50 (negative = left, positive = right, 0 = center)\n"
+        "7. For question_response, ALWAYS include 2-4 specific suggested_intents\n"
+        "8. Only use clarification_needed when the command is truly ambiguous (e.g., \"boost vocals\" without specifying track)\n\n"
+        "EXAMPLES:\n"
+        "- \"solo track 1\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"solo\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
+        "- \"mute track 2\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 2\", \"plugin\": null, \"parameter\": \"mute\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
+        "- \"set return A volume to -3 dB\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return A\", \"plugin\": null, \"parameter\": \"volume\"}], \"operation\": {\"type\": \"absolute\", \"value\": -3, \"unit\": \"dB\"}}\n"
+        "- \"set track 1 send A to -12 dB\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"send A\"}], \"operation\": {\"type\": \"absolute\", \"value\": -12, \"unit\": \"dB\"}}\n"
+        "- \"set return A reverb decay to 2 seconds\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return A\", \"plugin\": \"reverb\", \"parameter\": \"decay\"}], \"operation\": {\"type\": \"absolute\", \"value\": 2, \"unit\": \"seconds\"}}\n"
+        "- \"how do I control sends?\" → {\"intent\": \"question_response\", \"answer\": \"You can control sends by specifying the track and send letter...\", \"suggested_intents\": [\"set track 1 send A to -12 dB\", \"increase track 2 send B by 3 dB\"]}\n"
+        "- \"boost vocals\" → {\"intent\": \"clarification_needed\", \"question\": \"Which track contains the vocals?\", \"context\": {\"action\": \"increase\", \"parameter\": \"volume\"}}\n\n"
         f"Command: {query}\n"
         "JSON:"
     )
@@ -107,22 +143,39 @@ def interpret_daw_command(query: str, model_preference: str | None = None, stric
 def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any]:
     """Simple rule-based fallback parser for basic DAW commands."""
     q = query.lower().strip()
+    # Light typo corrections to improve robustness when LLM is unavailable
+    typo_map = {
+        'retrun': 'return', 'retun': 'return',
+        'revreb': 'reverb', 'reverbb': 'reverb', 'revebr': 'reverb', 'reverv': 'reverb',
+        'strereo': 'stereo', 'streo': 'stereo', 'stere': 'stereo',
+    }
+    for k, v in typo_map.items():
+        q = __import__('re').sub(rf"\b{k}\b", v, q)
 
-    # Absolute volume set: "set track 1 volume to -6 dB"
-    # Also accept variants like "set the volume of track 1 to -6db"
+    # Absolute volume set: "set track 1 volume to -6 dB" (unit optional: dB, %, or normalized)
+    # Also accept variants like "set the volume of track 1 to -6db", or without unit: "set track 1 volume to 0.5"
     try:
         import re
-        abs_match = re.search(r"(?:set|make|adjust|change)\s+(?:the\s+)?(?:volume\s+of\s+)?track\s+(\d+)\s+(?:volume\s+)?(?:to|at)\s+(-?\d+(?:\.\d+)?)\s*d\s*b\b", q)
+        # Generalized pattern with optional unit (db|%); if absent, leave unit None (treated as normalized)
+        abs_match = re.search(r"(?:set|make|adjust|change)\s+(?:the\s+)?(?:volume\s+of\s+)?track\s+(\d+)\s+(?:volume\s+)?(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
         if not abs_match:
             # Variant: "track 1 volume to -6 dB" (missing leading verb)
-            abs_match = re.search(r"track\s+(\d+)\s+volume\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)\s*d\s*b\b", q)
+            abs_match = re.search(r"track\s+(\d+)\s+volume\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
         if abs_match:
             track_num = int(abs_match.group(1))
             value = float(abs_match.group(2))
+            unit = abs_match.group(3)
+            unit_out = None
+            if unit:
+                unit_l = unit.lower()
+                if unit_l in ("db",):
+                    unit_out = "dB"
+                elif unit_l in ("%", "percent"):
+                    unit_out = "%"
             return {
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "volume"}],
-                "operation": {"type": "absolute", "value": value, "unit": "dB"},
+                "operation": {"type": "absolute", "value": value, "unit": unit_out},
                 "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
             }
     except Exception:
@@ -162,6 +215,134 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "pan"}],
                 "operation": {"type": "absolute", "value": pan_val, "unit": "%"},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
+    # Return device parameter by name (common ones): e.g., "set return A reverb stereo image to 50 [degrees|%]"
+    try:
+        import re
+        m = re.search(r"\bset\s+return\s+([a-d])\b.*?(stereo\s+image|decay|predelay|dry\s*/\s*wet|dry\s*wet|dry|wet)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°))?\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            pname = m.group(2)
+            value = float(m.group(3))
+            unit_raw = m.group(4)
+            # Normalize param name
+            pname_norm_map = {
+                'stereo image': 'Stereo Image',
+                'decay': 'Decay',
+                'predelay': 'Predelay',
+                'dry / wet': 'Dry/Wet',
+                'dry wet': 'Dry/Wet',
+                'dry': 'Dry/Wet',
+                'wet': 'Dry/Wet',
+            }
+            pn = ' '.join(pname.split()).lower()
+            pn = pn.replace('dry / wet', 'dry / wet').replace('dry wet', 'dry / wet')
+            param_ref = pname_norm_map.get(pn, pname.title())
+            # Normalize unit
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms', 'millisecond', 'milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            return {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': 'reverb', 'parameter': param_ref }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+    except Exception:
+        pass
+
+    # Solo/Mute toggles
+    try:
+        import re
+        m = re.search(r"\b(solo|unsolo|mute|unmute)\s+track\s+(\d+)\b", q)
+        if m:
+            action = m.group(1).lower()
+            track_num = int(m.group(2))
+            param = 'solo' if 'solo' in action else 'mute'
+            value = 0.0 if action in ('unsolo', 'unmute') else 1.0
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": param}],
+                "operation": {"type": "absolute", "value": value, "unit": None},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
+    # Sends control (track): set track N send A to X [dB|%]
+    try:
+        import re
+        m = re.search(r"\bset\s+track\s+(\d+)\s+(?:send\s+)?([a-d])\b.*?\bto\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+        if m:
+            track_num = int(m.group(1))
+            send_ref = m.group(2).upper()
+            value = float(m.group(3))
+            unit = m.group(4)
+            unit_out = None
+            if unit:
+                unit_l = unit.lower()
+                if unit_l in ("db",): unit_out = "dB"
+                elif unit_l in ("%", "percent"): unit_out = "%"
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": f"send {send_ref}"}],
+                "operation": {"type": "absolute", "value": value, "unit": unit_out},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
+    # Sends control (return): set return A send B to X [dB|%]
+    try:
+        import re
+        m = re.search(r"\bset\s+return\s+([a-d])\s+(?:send\s+)?([a-d])\b.*?\bto\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            send_ref = m.group(2).upper()
+            value = float(m.group(3))
+            unit = m.group(4)
+            unit_out = None
+            if unit:
+                unit_l = unit.lower()
+                if unit_l in ("db",): unit_out = "dB"
+                elif unit_l in ("%", "percent"): unit_out = "%"
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": f"send {send_ref}"}],
+                "operation": {"type": "absolute", "value": value, "unit": unit_out},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
+    # Return volume absolute: set return A volume to -3 dB
+    try:
+        import re
+        m = re.search(r"\bset\s+return\s+([a-d])\s+volume\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            value = float(m.group(2))
+            unit = m.group(3)
+            unit_out = None
+            if unit:
+                unit_l = unit.lower()
+                if unit_l in ("db",): unit_out = "dB"
+                elif unit_l in ("%", "percent"): unit_out = "%"
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": "volume"}],
+                "operation": {"type": "absolute", "value": value, "unit": unit_out},
                 "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
             }
     except Exception:

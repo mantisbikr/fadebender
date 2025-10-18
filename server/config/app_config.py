@@ -30,6 +30,9 @@ def _load() -> Dict[str, Any]:
             "sidebar_width_px": 360,
             "default_sidebar_tab": "tracks",
         },
+        "features": {
+            "use_intents_for_chat": True,  # Use /intent/execute for chat commands (default enabled)
+        },
         "server": {
             "send_aliases": {
                 "reverb": 0,
@@ -98,6 +101,10 @@ def get_debug_settings() -> Dict[str, Any]:
     return dict(_load().get("debug", {}))
 
 
+def get_feature_flags() -> Dict[str, Any]:
+    return dict(_load().get("features", {}))
+
+
 def set_debug_settings(debug: Dict[str, Any]) -> Dict[str, Any]:
     cfg = _load()
     if not isinstance(debug, dict):
@@ -106,6 +113,16 @@ def set_debug_settings(debug: Dict[str, Any]) -> Dict[str, Any]:
     for k, v in debug.items():
         cur[str(k).lower()] = bool(v)
     return get_debug_settings()
+
+
+def set_feature_flags(features: Dict[str, Any]) -> Dict[str, Any]:
+    cfg = _load()
+    if not isinstance(features, dict):
+        return get_feature_flags()
+    cur = cfg.setdefault("features", {})
+    for k, v in features.items():
+        cur[str(k)] = bool(v) if isinstance(v, (bool, int)) else v
+    return get_feature_flags()
 
 
 def set_send_aliases(aliases: Dict[str, int]) -> Dict[str, int]:

@@ -22,6 +22,8 @@ import {
   LiveHelp as HelpIcon
 } from '@mui/icons-material';
 import ClickAwayAccordion from './ClickAwayAccordion.jsx';
+import ParamAccordion from './ParamAccordion.jsx';
+import SingleParamEditor from './SingleParamEditor.jsx';
 
 export default function ChatMessage({ message, onSuggestedIntent }) {
   const renderHelpResponse = (data) => {
@@ -146,7 +148,7 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
   };
 
   const formatContent = () => {
-    // Canonical intent card
+    // Canonical intent card (simplified, no JSON details)
     if (message.type === 'intent' && message.data) {
       const intent = message.data;
       const trackRef = intent?.target?.track;
@@ -169,43 +171,8 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
       return (
         <Box>
           <Typography variant="body1" fontWeight="medium" gutterBottom>
-            {human || 'Canonical Intent'}
+            {human || 'Command'}
           </Typography>
-          <ClickAwayAccordion title="View Intent JSON">
-            <Box component="pre" sx={{
-              fontSize: '0.75rem',
-              overflow: 'auto',
-              bgcolor: 'action.hover',
-              color: 'text.primary',
-              p: 1,
-              borderRadius: 1,
-              fontFamily: 'monospace',
-              border: '1px solid',
-              borderColor: 'divider'
-            }}>
-              {JSON.stringify(intent, null, 2)}
-            </Box>
-            {message.raw && (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Raw LLM intent
-                </Typography>
-                <Box component="pre" sx={{
-                  fontSize: '0.75rem',
-                  overflow: 'auto',
-                  bgcolor: 'action.hover',
-                  color: 'text.primary',
-                  p: 1,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  border: '1px solid',
-                  borderColor: 'divider'
-                }}>
-                  {JSON.stringify(message.raw, null, 2)}
-                </Box>
-              </>
-            )}
-          </ClickAwayAccordion>
         </Box>
       );
     }
@@ -215,30 +182,28 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
       console.log('Help question message:', message);
     }
 
-    // Handle success type messages (from /chat endpoint) — show clean summary only
+    // Handle success type messages (from /chat or /intent) — show clean summary only
     if (message.type === 'success' && message.data) {
       return (
         <Box>
           <Typography variant="body1" fontWeight="medium" gutterBottom>
             {message.content}
           </Typography>
-          {message.data && (
-            <ClickAwayAccordion title="View Details">
-              <Box component="pre" sx={{
-                fontSize: '0.75rem',
-                overflow: 'auto',
-                bgcolor: 'action.hover',
-                color: 'text.primary',
-                p: 1,
-                borderRadius: 1,
-                fontFamily: 'monospace',
-                border: '1px solid',
-                borderColor: 'divider'
-              }}>
-                {JSON.stringify(message.data, null, 2)}
-              </Box>
-            </ClickAwayAccordion>
+          {/* If capabilities are present, render grouped param accordion */}
+          {message.data && message.data.capabilities && (
+            <ParamAccordion
+              capabilities={message.data.capabilities}
+              onParamClick={(p) => {
+                // Bubble up a suggestion to read current value and propose change
+                const caps = message.data.capabilities;
+                const letter = (typeof caps.return_index === 'number') ? String.fromCharCode('A'.charCodeAt(0) + caps.return_index) : 'A';
+                const deviceName = caps.device_name || '';
+                const payload = `__READ_PARAM__|${letter}|${caps.device_index}|${p.name}|${deviceName}`;
+                onSuggestedIntent?.(payload);
+              }}
+            />
           )}
+          {/* No full editors here; editors render in intent cards after selecting a param */}
         </Box>
       );
     }
@@ -264,9 +229,18 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
 
     // Handle info type messages (from /help endpoint or other sources)
     if (message.type === 'info' && message.data) {
-      // Render help responses if present
+      // Render help responses; include inline param editor if present
       if (message.data.answer || message.data.suggested_intents) {
-        return renderHelpResponse(message.data);
+        return (
+          <Box>
+            {renderHelpResponse(message.data)}
+            {message.data.param_editor && (
+              <Box sx={{ mt: 2 }}>
+                <SingleParamEditor editor={message.data.param_editor} onSuggestedIntent={onSuggestedIntent} />
+              </Box>
+            )}
+          </Box>
+        );
       }
 
       // Skip noisy unsupported previews without a clear summary
@@ -307,21 +281,12 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
             </Alert>
           )}
 
-          <ClickAwayAccordion title="View Details">
-            <Box component="pre" sx={{
-              fontSize: '0.75rem',
-              overflow: 'auto',
-              bgcolor: 'action.hover',
-              color: 'text.primary',
-              p: 1,
-              borderRadius: 1,
-              fontFamily: 'monospace',
-              border: '1px solid',
-              borderColor: 'divider'
-            }}>
-              {JSON.stringify(message.data, null, 2)}
+          {/* Omit JSON details to keep chat compact; render editor if provided */}
+          {message.data.param_editor && (
+            <Box sx={{ mt: 2 }}>
+              <SingleParamEditor editor={message.data.param_editor} onSuggestedIntent={onSuggestedIntent} />
             </Box>
-          </ClickAwayAccordion>
+          )}
         </Box>
       );
     }

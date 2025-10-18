@@ -1,8 +1,12 @@
 {
   "debug": {
-    "auto_capture": true,
-    "firestore": true,
+    "auto_capture": false,
+    "firestore": false,
     "sse": false
+  },
+  "features": {
+    "display_only_io": true,
+    "use_intents_for_chat": true
   },
   "server": {
     "send_aliases": {

@@ -25,7 +25,11 @@ class TextProcessor {
       'siks': 'six', 'sevn': 'seven', 'ate': 'eight',
 
       // Effects and instruments
-      'reverb': 'reverb', 'revreb': 'reverb', 'reverbb': 'reverb', 'teh': 'the',
+      'reverb': 'reverb', 'revreb': 'reverb', 'reverbb': 'reverb', 'revebr': 'reverb', 'reverv': 'reverb', 'teh': 'the',
+      // Returns and common misspellings
+      'retrun': 'return', 'retun': 'return',
+      // Stereo misspellings
+      'strereo': 'stereo', 'streo': 'stereo', 'stere': 'stereo',
       'piano': 'piano', 'pian': 'piano', 'paino': 'piano',
 
       // dB and percentages
@@ -75,12 +79,18 @@ class TextProcessor {
       'loud', 'quiet', 'soft', 'hard', 'wet', 'dry', 'left', 'right', 'center',
       'up', 'down', 'add', 'remove', 'turn', 'adjust', 'change', 'modify',
       'more', 'less', 'higher', 'lower', 'boost', 'cut', 'mute', 'solo',
-      'db', 'percent', '%', 'amount', 'bit', 'little', 'much', 'lot'
+      'db', 'percent', '%', 'amount', 'bit', 'little', 'much', 'lot',
+      // Sends/routing/help terms
+      'send', 'sends', 'routing', 'route', 'control', 'help', 'how', 'guide'
     ];
 
     const hasKeyword = dawKeywords.some(keyword => text.includes(keyword));
 
     if (!hasKeyword) {
+      // Allow help-style queries to pass through to /help
+      if (text.includes('how') || text.includes('help')) {
+        return { valid: true };
+      }
       return { valid: false, error: 'Not a recognized DAW command' };
     }
 

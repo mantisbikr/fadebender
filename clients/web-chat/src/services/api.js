@@ -61,6 +61,12 @@ class ApiService {
     if (!response.ok) throw new Error(`Config fetch failed: ${response.statusText}`);
     return response.json();
   }
+
+  async getSnapshot() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/snapshot`);
+    if (!response.ok) throw new Error(`Snapshot failed: ${response.statusText}`);
+    return response.json();
+  }
   async updateAppConfig(payload) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config/update`, {
       method: 'POST',
@@ -88,6 +94,32 @@ class ApiService {
       throw new Error(`Intent parse failed: ${response.status} ${response.statusText}`);
     }
 
+    return response.json();
+  }
+
+  async executeCanonicalIntent(intent) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(intent)
+    });
+    const contentType = response.headers.get('content-type') || '';
+    let body = null;
+    try { body = contentType.includes('application/json') ? await response.json() : await response.text(); } catch {}
+    if (!response.ok) {
+      const detail = (body && body.detail) ? body.detail : (typeof body === 'string' ? body : `${response.status} ${response.statusText}`);
+      throw new Error(detail || 'Intent execute failed');
+    }
+    return body;
+  }
+
+  async readIntent(body) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) throw new Error(`Intent read failed: ${response.status} ${response.statusText}`);
     return response.json();
   }
   async parseCommand(text, context = null, model = 'gemini-flash') {
@@ -133,12 +165,12 @@ class ApiService {
     return response.json();
   }
 
-  async getHelp(query) {
+  async getHelp(query, context = null) {
     // Route help to server which uses local knowledge base
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/help`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query, context })
     });
 
     if (!response.ok) {
@@ -271,6 +303,11 @@ class ApiService {
   async getReturnDeviceParams(index, device) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/params?index=${index}&device=${device}`);
     if (!response.ok) throw new Error(`Return device params failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getReturnDeviceCapabilities(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/capabilities?index=${index}&device=${device}`);
+    if (!response.ok) throw new Error(`Return device capabilities failed: ${response.statusText}`);
     return response.json();
   }
   async getReturnDeviceMap(index, device) {

@@ -11,6 +11,8 @@ from server.config.app_config import (
     set_send_aliases,
     get_debug_settings,
     set_debug_settings,
+    get_feature_flags,
+    set_feature_flags,
     reload_config as cfg_reload,
     save_config as cfg_save,
 )
@@ -35,7 +37,8 @@ def app_config() -> Dict[str, Any]:
     ui = get_ui_settings()
     aliases = get_send_aliases()
     debug = get_debug_settings()
-    return {"ok": True, "ui": ui, "aliases": {"sends": aliases}, "debug": debug}
+    features = get_feature_flags()
+    return {"ok": True, "ui": ui, "aliases": {"sends": aliases}, "debug": debug, "features": features}
 
 
 @router.post("/config/update")
@@ -43,11 +46,13 @@ def app_config_update(body: Dict[str, Any]) -> Dict[str, Any]:
     ui_in = (body or {}).get("ui") or {}
     aliases_in = ((body or {}).get("aliases") or {}).get("sends") or {}
     debug_in = (body or {}).get("debug") or {}
+    features_in = (body or {}).get("features") or {}
     ui = set_ui_settings(ui_in) if ui_in else get_ui_settings()
     aliases = set_send_aliases(aliases_in) if aliases_in else get_send_aliases()
     debug = set_debug_settings(debug_in) if debug_in else get_debug_settings()
+    features = set_feature_flags(features_in) if features_in else get_feature_flags()
     saved = cfg_save()
-    return {"ok": True, "saved": saved, "ui": ui, "aliases": {"sends": aliases}, "debug": debug}
+    return {"ok": True, "saved": saved, "ui": ui, "aliases": {"sends": aliases}, "debug": debug, "features": features}
 
 
 @router.post("/config/reload")
@@ -78,4 +83,3 @@ def set_param_learn_cfg(body: Dict[str, Any]) -> Dict[str, Any]:
     cfg = set_param_learn_config(body or {})
     saved = save_param_learn_config()
     return {"ok": True, "saved": saved, "config": cfg}
-
