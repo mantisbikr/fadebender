@@ -1,7 +1,12 @@
 # Device Mapping Automation Roadmap
 
-**Current state**: Manual process, 4 hours per device
+**Current state**: Semi-automated process, 5-6 hours per device (includes structure initialization + audio knowledge)
 **Goal**: Automate 80% of the workflow, reduce to 30-60 minutes of human oversight
+
+**Recent Updates (2025-10-18):**
+- ✅ Created `scripts/initialize_device_structure.py` - Converts learn_device output to complete Reverb-style format (sections, grouping, params_meta)
+- ✅ Created `scripts/apply_audio_knowledge.py` - Applies curated audio knowledge from JSON to Firestore
+- ⏳ Still needed: Full automation of parameter classification, boundary detection, and testing
 
 ---
 

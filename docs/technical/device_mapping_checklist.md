@@ -1,6 +1,6 @@
 # Device Mapping Checklist
 
-Quick reference for mapping a new device. Target: **4 hours from start to finish**.
+Quick reference for mapping a new device. Target: **5-6 hours from start to finish** (includes new structure initialization + audio knowledge).
 
 ---
 
@@ -45,14 +45,40 @@ Quick reference for mapping a new device. Target: **4 hours from start to finish
 
 - [ ] Learn device structure: `POST /return/learn_device`
 - [ ] Verify device signature created in Firestore
-- [ ] Capture all presets: `POST /return/auto_capture_presets`
+- [ ] Capture all presets + screenshots: `POST /return/auto_capture_presets`
 - [ ] Check status: `GET /return/device/mapping_status`
 - [ ] Verify: `preset_count > 35` and each param has 35+ samples
-- [ ] Export digest: `make export-digest SIG=<sig> OUT=/tmp/device.json`
+- [ ] Gather device documentation (e.g., `knowledge/ableton-live/audio-effects/delay.md`)
+- [ ] Gather manual text with grouping hints (if available)
 
 ---
 
-## Phase 2: Classification (30 min)
+## Phase 2: Initialize Device Structure (30-45 min) **NEW**
+
+### Run Initialization Script
+- [ ] `python3 scripts/initialize_device_structure.py --signature <sig> --device-doc knowledge/ableton-live/audio-effects/<device>.md`
+- [ ] Script analyzes params + docs and proposes complete structure
+
+### Review Proposed Structure
+- [ ] Review `sections` (descriptions, sonic_focus, technical_notes)
+- [ ] Review `grouping` (masters, dependents, dependent_master_values, apply_order, requires_for_effect)
+- [ ] Review `params_meta` (control_type, **units**, labels, min/max)
+
+### Confirm/Correct Structure
+- [ ] **Sections**: Add/remove/rename sections as needed
+- [ ] **Grouping**: Correct masters/dependents
+- [ ] **Units**: Confirm or change units for each parameter (ms vs s, Hz, dB, %)
+- [ ] **Labels**: Confirm quantized parameter labels
+- [ ] **Control types**: Correct any misclassified parameters
+
+### Apply Structure
+- [ ] Save corrections to `structure_confirmed.json`
+- [ ] `python3 scripts/initialize_device_structure.py --signature <sig> --apply structure_confirmed.json`
+- [ ] Verify Firestore has `sections`, `grouping`, `params_meta` in main document
+
+---
+
+## Phase 3: Classification & Boundaries (30 min)
 
 For each parameter in `/tmp/device.json`:
 
@@ -82,7 +108,7 @@ For each continuous param:
 
 ---
 
-## Phase 3: Fitting (2 hours)
+## Phase 4: Fitting (2 hours)
 
 ### For Each Continuous Parameter:
 
@@ -118,7 +144,7 @@ For each continuous param:
 
 ---
 
-## Phase 4: Metadata (30 min)
+## Phase 5: Verify Metadata (30 min)
 
 ### Build params_meta
 - [ ] All parameters present (check count matches Live)
@@ -146,7 +172,7 @@ assert len(missing_range) == 0, f"Missing ranges: {missing_range}"
 
 ---
 
-## Phase 5: Testing (1 hour)
+## Phase 6: Testing (1 hour)
 
 ### Test Binary Parameters
 For each binary param:
@@ -212,7 +238,42 @@ test_continuous("decay time", [200, 1000, 20000, 60000])
 
 ---
 
-## Phase 6: Finalization (30 min)
+## Phase 7: Audio Knowledge Curation (30-60 min) **NEW**
+
+### Research All Parameters
+- [ ] Create `data/audio_knowledge/<device>_accurate.json`
+- [ ] For each parameter, research from authoritative sources:
+  - [ ] Official Ableton documentation
+  - [ ] Ableton forum discussions
+  - [ ] Technical DSP knowledge
+  - [ ] Production blogs (Sound on Sound, Beat Production)
+
+### Structure Audio Knowledge
+For each parameter:
+- [ ] `audio_function`: Brief technical description
+- [ ] `sonic_effect.increasing`: What happens when increasing
+- [ ] `sonic_effect.decreasing`: What happens when decreasing
+- [ ] `technical_detail`: DSP/algorithm details (optional)
+- [ ] `use_cases`: When/why to use (production scenarios)
+- [ ] `typical_values`: Value ranges with context
+
+### Quality Check
+- [ ] Technically accurate (actual DSP behavior, not vague)
+- [ ] Specific (uses precise terms: modulation, filtering, etc.)
+- [ ] Contextual (explains *why* and *when* to use)
+- [ ] Measurable (numeric ranges, units, typical values)
+- [ ] Avoid: vague terms, misleading metaphors, generic descriptions
+
+### Apply to Firestore
+- [ ] Dry run: `python3 scripts/apply_audio_knowledge.py data/audio_knowledge/<device>_accurate.json --dry-run`
+- [ ] Review changes
+- [ ] Apply: `python3 scripts/apply_audio_knowledge.py data/audio_knowledge/<device>_accurate.json`
+- [ ] Verify in WebUI tooltips
+- [ ] Test chat responses use correct knowledge
+
+---
+
+## Phase 8: Finalization (30 min)
 
 ### Backup
 - [ ] `make backup-firestore SIG=<sig> OUT=backups/<device>_$(date +%Y%m%d_%H%M%S).json`
@@ -227,6 +288,7 @@ test_continuous("decay time", [200, 1000, 20000, 60000])
 
 ### Commit
 ```bash
+# Commit device mapping
 git add backups/<device>_*.json
 git commit -m "feat(devices): complete <Device Name> mapping
 
@@ -236,21 +298,32 @@ git commit -m "feat(devices): complete <Device Name> mapping
 - Signature: <signature>
 
 Closes #<issue-number> (if applicable)"
+
+# Commit audio knowledge
+git add data/audio_knowledge/<device>_accurate.json
+git commit -m "feat(audio-knowledge): add research-based knowledge for <Device Name>
+
+- Curated knowledge for all <N> parameters
+- Sources: Ableton docs, forums, technical DSP knowledge
+- Applied to dev-display-value database"
 ```
 
-- [ ] Commit created
+- [ ] Both commits created
 - [ ] Push to remote
 
 ---
 
 ## Final Verification
 
-- [ ] Total params in params_meta matches Live param count
-- [ ] All continuous params R² > 0.999 (or 1.0 for piecewise)
-- [ ] All continuous params have min_display and max_display
-- [ ] All params tested and working
-- [ ] Backup exists in git
-- [ ] Total time: < 4 hours ✅
+- [ ] **Structure**: `sections`, `grouping`, `params_meta` all complete in Firestore
+- [ ] **Parameters**: Total params in params_meta matches Live param count
+- [ ] **Fitting**: All continuous params R² > 0.999 (or 1.0 for piecewise)
+- [ ] **Ranges**: All continuous params have min_display and max_display
+- [ ] **Units**: All parameters have correct units confirmed
+- [ ] **Testing**: All params tested and working
+- [ ] **Audio Knowledge**: All params have accurate, researched knowledge
+- [ ] **Backup**: Mapping and audio knowledge backed up to git
+- [ ] Total time: < 6 hours ✅
 
 ---
 
@@ -312,12 +385,15 @@ Use this to stay on target:
 | Phase | Target | Actual | Notes |
 |-------|--------|--------|-------|
 | Pre-flight | 5 min | __ | |
+| KB Reconciliation | 15 min | __ | IF manual docs exist |
 | Learning & Capture | 30 min | __ | |
-| Classification | 30 min | __ | |
+| **Initialize Structure** | **30-45 min** | __ | **NEW** |
+| Classification & Boundaries | 30 min | __ | |
 | Fitting | 2 hours | __ | |
-| Metadata | 30 min | __ | |
+| Verify Metadata | 30 min | __ | |
 | Testing | 1 hour | __ | |
+| **Audio Knowledge** | **30-60 min** | __ | **NEW** |
 | Finalization | 30 min | __ | |
-| **TOTAL** | **4 hours** | __ | |
+| **TOTAL** | **5.5-6.5 hours** | __ | |
 
-**Target: < 4 hours for complete mapping**
+**Target: < 6.5 hours for complete mapping** (includes new structure + audio knowledge phases)

@@ -69,7 +69,7 @@ If you have the Ableton Live manual section for the device (e.g., `docs/kb/rever
 - Add device to Return Track A (index 0), Device 0
 - Verify via: `GET /return/device/params?index=0&device=0`
 
-### 1.2 Capture Device Structure
+### 1.2 Capture Device Signature & Structure
 ```bash
 # Learn the device (captures parameter structure)
 POST /return/learn_device
@@ -79,10 +79,22 @@ POST /return/learn_device
 }
 ```
 
-**What this does:**
-- Creates device signature (SHA1 hash of param names/order)
-- Stores basic structure in Firestore `device_mappings` collection
-- Creates empty `params` subcollection
+**What this creates in Firestore:**
+```json
+{
+  "device_name": "Reverb",
+  "signature": "64ccfc...",
+  "param_count": 33,
+  "param_names": ["Device On", "Predelay", ...],
+  "device_type": "unknown",
+  "groups": []  // Empty - will populate in Phase 2
+}
+```
+
+**Plus params subcollection** (`device_mappings/<sig>/params/<param_name>`):
+- Basic param metadata (name, index, min, max)
+- Empty samples array (filled in next step)
+- Null control_type, unit, fit (populated later)
 
 ### 1.3 Load and Capture Factory Presets
 ```bash
@@ -98,6 +110,7 @@ POST /return/auto_capture_presets
 - For EACH factory preset:
   - All parameter normalized values (0-1)
   - All parameter display values (strings from Live)
+  - Screenshot of device (stored in GCS, linked to preset)
 - Stores as `samples` array in Firestore `params` subcollection
 - Typically 40-50 samples per parameter
 
@@ -112,18 +125,145 @@ Should show:
 - `preset_count: 40+`
 - Each param should have 40+ samples
 
+### 1.4 Gather Device Documentation
+You provide:
+- Device documentation file (e.g., `knowledge/ableton-live/audio-effects/delay.md`)
+- Manual text sections with grouping hints
+- Any known parameter relationships (master/dependent)
+
+**What you need to provide:**
+- Technical descriptions of parameter groups
+- Expected units for parameters (ms, Hz, dB, %)
+- Special behaviors or dependencies
+
 ---
 
-## Phase 2: Parameter Classification (30 min)
+## Phase 2: Initialize Device Structure (30-45 min)
 
-### 2.1 Review All Parameters
+**NEW: This phase converts learn_device output to complete Reverb-style format**
+
+### 2.1 Run Structure Initialization Script
+
+```bash
+# Initialize device structure with proposed sections/grouping
+python3 scripts/initialize_device_structure.py \
+  --signature <device_signature> \
+  --device-doc knowledge/ableton-live/audio-effects/<device>.md \
+  --manual-text "Optional manual text with grouping hints"
+```
+
+**What this script does:**
+1. Reads params from subcollection (with samples)
+2. Analyzes device doc + manual text for grouping hints
+3. Proposes complete structure:
+   - `sections` (with descriptions, sonic_focus, technical_notes)
+   - `grouping` (masters, dependents, dependent_master_values, apply_order, requires_for_effect)
+   - `params_meta` (with proposed control_type, unit, labels)
+4. **Outputs JSON for your review**
+
+### 2.2 Review Proposed Structure
+
+The script outputs a JSON proposal like this:
+
+```json
+{
+  "device_name": "Delay",
+  "signature": "abc123...",
+  "sections": {
+    "Device": {
+      "technical_name": "Device",
+      "description": "Device on/off control",
+      "sonic_focus": "Enable or disable the entire effect",
+      "parameters": ["Device On"],
+      "technical_notes": []
+    },
+    "Delay Timing": {
+      "technical_name": "Delay Timing",
+      "description": "Control delay time and synchronization",
+      "sonic_focus": "Rhythmic timing of echoes",
+      "parameters": ["Delay Time", "Sync Mode", "Time Unit"],
+      "technical_notes": ["Sync Mode syncs delay to project tempo"]
+    }
+  },
+  "grouping": {
+    "masters": ["Sync Mode", "Filter On"],
+    "dependents": {
+      "Filter Freq": "Filter On",
+      "Filter Q": "Filter On"
+    },
+    "dependent_master_values": {
+      "Filter Freq": 1.0,
+      "Filter Q": 1.0
+    },
+    "apply_order": ["masters", "quantized", "dependents", "continuous"]
+  },
+  "params_meta": [
+    {
+      "name": "Delay Time",
+      "index": 1,
+      "control_type": "continuous",
+      "unit": "ms",  // ← CONFIRM THIS
+      "min_display": 0.1,
+      "max_display": 10000.0
+    },
+    {
+      "name": "Filter Type",
+      "index": 5,
+      "control_type": "quantized",
+      "unit": null,
+      "labels": ["Low-pass", "High-pass", "Band-pass"]
+    }
+  ]
+}
+```
+
+### 2.3 Confirm or Correct Structure
+
+**You respond with corrections:**
+- Sections: Add/remove/rename sections
+- Grouping: Correct masters/dependents
+- **Units**: Confirm or change units for each parameter
+- Labels: Confirm quantized parameter labels
+- Control types: Correct any misclassified parameters
+
+**Example corrections:**
+```
+Changes needed:
+1. Delay Time unit should be "s" not "ms"
+2. Add "Stereo" section with Width, Pan Left, Pan Right
+3. Remove "Time Unit" from masters (it's just a display preference)
+4. Add requires_for_effect: Sync Rate needs Sync Mode = On
+```
+
+### 2.4 Apply Confirmed Structure
+
+```bash
+# Apply your confirmed structure to Firestore
+python3 scripts/initialize_device_structure.py \
+  --signature <device_signature> \
+  --apply structure_confirmed.json
+```
+
+**What this updates in Firestore:**
+- Adds `sections` to main document
+- Adds `grouping` to main document
+- Creates `params_meta` array in main document (NOT subcollection)
+- Params subcollection remains for fitting reference
+
+---
+
+## Phase 3: Parameter Classification & Boundary Detection (30 min)
+
+**Now that structure is confirmed, classify parameters and detect boundaries**
+
+### 3.1 Review All Parameters
 
 Get current state from Live:
 ```bash
 curl http://127.0.0.1:8722/return/device/params?index=0&device=0 | jq .
 ```
 
-For each parameter, classify as:
+For each parameter, classify as (already proposed in Phase 2, now verify):
 
 #### **Binary Toggle** (on/off, 0.0/1.0)
 - Examples: "Device On", "Chorus On", "Filter On"
@@ -172,7 +312,7 @@ POST /op/return/device/param {"return_index": 0, "device_index": 0, "param_index
 
 ---
 
-## Phase 3: Fit Continuous Parameters (2 hours)
+## Phase 4: Fit Continuous Parameters (2 hours)
 
 ### 3.1 Choose Fit Type
 
@@ -330,11 +470,12 @@ This will:
 
 ---
 
-## Phase 4: Create Metadata in Firestore (30 min)
+## Phase 5: Verify and Test Mappings (1 hour)
 
-### 4.1 Build params_meta Array
+### 5.1 Verify params_meta Completeness
 
-All device metadata lives in `params_meta` field (not `params` subcollection - that's just for samples).
+**NOTE:** params_meta was already created in Phase 2 and updated with fits in Phase 4.
+Now verify all fields are complete:
 
 **Binary parameter:**
 ```json
@@ -456,7 +597,7 @@ Check all parameters have required fields:
 
 ---
 
-## Phase 5: Testing & Validation (1 hour)
+## Phase 6: Testing & Validation (1 hour)
 
 ### 5.1 Test Each Parameter Type
 
@@ -540,15 +681,114 @@ xy_pairs.append((1.0, MAX_DISPLAY))  # x=1 should give MAX
 
 ---
 
-## Phase 6: Documentation & Backup (30 min)
+## Phase 7: Audio Knowledge Curation (30-60 min)
 
-### 6.1 Backup to Git
+### 7.1 Research All Parameters
+
+Use the research-based audio knowledge curation approach (see `docs/methodology/AUDIO_KNOWLEDGE_CURATION.md`).
+
+**Create device audio knowledge JSON:**
+
+```bash
+# Create data/audio_knowledge/<device>_accurate.json
+```
+
+**Structure:**
+
+```json
+{
+  "device_name": "<Device Name>",
+  "device_signature": "<firestore_doc_id>",
+  "source": "Researched from Ableton forums, official docs, technical DSP knowledge",
+  "last_updated": "YYYY-MM-DD",
+  "parameters": {
+    "<Param Name>": {
+      "audio_function": "Brief technical description of what parameter controls",
+      "sonic_effect": {
+        "increasing": "Precise description when increasing",
+        "decreasing": "Precise description when decreasing"
+      },
+      "technical_detail": "DSP/algorithm details (optional)",
+      "use_cases": [
+        "When and why to use this parameter",
+        "Production scenarios"
+      ],
+      "typical_values": {
+        "label": "Value range with context"
+      }
+    }
+  }
+}
+```
+
+### 7.2 Research Sources
+
+For each parameter, gather information from:
+
+**Primary Sources (Best):**
+
+- Official Ableton documentation
+- Ableton forum discussions with staff/experts
+- Technical audio DSP textbooks
+
+**Secondary Sources (Good):**
+
+- Reputable production blogs (Sound on Sound, Beat Production, etc.)
+- Expert tutorials and courses
+- Industry-standard algorithm references
+
+**Avoid:**
+
+- Generic LLM generation without research
+- Unverified forum speculation
+- Marketing copy without technical substance
+
+### 7.3 Quality Guidelines
+
+**✅ Good Audio Knowledge:**
+
+- Technically accurate (describes actual DSP/algorithm behavior)
+- Specific (uses precise terms: modulation, filtering, compression ratio)
+- Contextual (explains *why* and *when* to use parameter)
+- Measurable (includes numeric ranges, units, typical values)
+
+**❌ Poor Audio Knowledge:**
+
+- Vague ("Makes it sound better/worse")
+- Metaphorical without substance ("Spinning," "warming," "opening up")
+- Generic (could apply to any parameter)
+- Misleading (uses wrong technical terms)
+
+### 7.4 Apply Audio Knowledge to Firestore
+
+```bash
+# Preview changes (dry run)
+python3 scripts/apply_audio_knowledge.py data/audio_knowledge/<device>_accurate.json --dry-run
+
+# Apply all parameters
+python3 scripts/apply_audio_knowledge.py data/audio_knowledge/<device>_accurate.json
+
+# Apply single parameter
+python3 scripts/apply_audio_knowledge.py data/audio_knowledge/<device>_accurate.json --param "<Param Name>"
+```
+
+### 7.5 Verify in WebUI
+
+- Check tooltips show accurate information
+- Test chat responses reference correct knowledge
+- Verify parameter descriptions are helpful
+
+---
+
+## Phase 8: Documentation & Backup (30 min)
+
+### 8.1 Backup to Git
 
 ```bash
 # Backup the mapping
 make backup-firestore SIG=<signature> OUT=backups/device_$(date +%Y%m%d_%H%M%S).json
 
-# Commit
+# Commit device mapping
 git add backups/device_*.json
 git commit -m "feat(devices): complete mapping for <Device Name>
 
@@ -556,9 +796,17 @@ git commit -m "feat(devices): complete mapping for <Device Name>
 - All continuous params have fits (9 exp, 9 linear, 2 piecewise)
 - All tested and verified working
 - Signature: <signature>"
+
+# Commit audio knowledge
+git add data/audio_knowledge/<device>_accurate.json
+git commit -m "feat(audio-knowledge): add research-based knowledge for <Device Name>
+
+- Curated knowledge for all <N> parameters
+- Sources: Ableton docs, forums, technical DSP knowledge
+- Applied to dev-display-value database"
 ```
 
-### 6.2 Document Special Cases
+### 8.2 Document Special Cases
 
 Create docs entry if device has:
 - Non-standard parameter interactions
@@ -629,7 +877,7 @@ doc_ref.update({"params_meta": params_meta})
 
 ---
 
-## Time Budget (4.25 hours total)
+## Time Budget (5-6 hours total)
 
 0. **Knowledge Base Reconciliation** (15 min) - IF manual documentation available
    - Get actual param names from Live
@@ -639,43 +887,71 @@ doc_ref.update({"params_meta": params_meta})
 
 1. **Device Learning & Preset Capture** (30 min)
    - Load device, learn structure
-   - Capture all factory presets
+   - Capture all factory presets + screenshots
+   - Gather device documentation
    - Verify we have good sample coverage
 
-2. **Parameter Classification** (30 min)
-   - Review all params
-   - Classify as binary/quantized/continuous
-   - Determine boundary values
+2. **Initialize Device Structure** (30-45 min) - **NEW**
+   - Run initialization script with device docs
+   - Review proposed sections, grouping, params_meta
+   - Confirm or correct structure (units, grouping, labels)
+   - Apply confirmed structure to Firestore
 
-3. **Fit Continuous Parameters** (2 hours)
+3. **Parameter Classification & Boundary Detection** (30 min)
+   - Verify auto-classified parameters
+   - Detect boundaries for continuous params
+   - Probe Live for missing boundaries
+
+4. **Fit Continuous Parameters** (2 hours)
    - Choose fit types
    - Run fitting scripts with boundary points
    - Verify R² > 0.999
    - Test inversions
 
-4. **Create Metadata in Firestore** (30 min)
-   - Build complete params_meta array
-   - Ensure all fields present
-   - Verify completeness
-
-5. **Testing & Validation** (1 hour)
+5. **Verify and Test Mappings** (1 hour)
+   - Verify params_meta completeness
    - Test each parameter type
    - Test boundaries and mid-points
    - Fix any issues
-   - Verify all 33+ params work
 
-6. **Documentation & Backup** (30 min)
+6. **Testing & Validation** (1 hour)
+   - Test all parameters (binary/quantized/continuous)
+   - Verify all params work correctly
+   - Fix any edge cases
+
+7. **Audio Knowledge Curation** (30-60 min) - **NEW**
+   - Research all parameters from authoritative sources
+   - Create audio_knowledge JSON
+   - Apply to Firestore
+   - Verify in WebUI
+
+8. **Documentation & Backup** (30 min)
    - Backup to git
-   - Create docs for special cases
-   - Commit with descriptive message
+   - Commit device mapping
+   - Commit audio knowledge
+   - Document special cases
 
-**Note**: Phase 0 saves 2-4 hours of debugging time later, so total time remains ~4 hours effective.
+**Total: 5.5-6.5 hours**  (includes new structure initialization + audio knowledge phases)
+
+**Note**: Phase 0 saves 2-4 hours of debugging time later. Phases 2 and 7 are new but streamline the overall process.
 
 ---
 
 ## Scripts & Tools
 
 ### Key Scripts
+
+**NEW - Device Structure:**
+
+- `scripts/initialize_device_structure.py` - **NEW** - Convert learn_device output to complete Reverb-style format (sections, grouping, params_meta)
+
+**NEW - Audio Knowledge:**
+
+- `scripts/apply_audio_knowledge.py` - **NEW** - Apply curated audio knowledge from JSON to Firestore
+- `scripts/update_audio_knowledge.py` - Experimental LLM-assisted research tool
+
+**Existing - Parameter Fitting:**
+
 - `scripts/fit_params_from_presets.py` - Auto-fit all continuous params
 - `scripts/export_signature_digest.py` - Export mapping for analysis
 - `scripts/import_mapping_analysis.py` - Import corrected mapping
@@ -704,17 +980,38 @@ GET  /return/device/params                 # Get all params from Live
 
 A device mapping is complete when:
 
-✅ All parameters in params_meta (33 for Reverb)
-✅ All binary params have labels
-✅ All quantized params have label_map
-✅ All continuous params have:
+✅ **Structure** - Complete Reverb-style format:
+  - `sections` with descriptions, sonic_focus, technical_notes
+  - `grouping` with masters, dependents, dependent_master_values, apply_order
+  - `params_meta` array in main document (not subcollection)
+
+✅ **Parameters** - All params in params_meta (33 for Reverb):
+  - All binary params have labels
+  - All quantized params have label_map
+  - All continuous params have fit, confidence, min_display, max_display
+  - All units confirmed and correct
+
+✅ **Fitting** - All continuous params:
   - fit (type, coeffs/points, r2)
   - confidence > 0.999
   - min_display and max_display
-✅ All parameters tested at min/mid/max values
-✅ All test results within 1% of target
-✅ Mapping backed up to git
-✅ No missing or incorrectly classified params
+
+✅ **Testing** - All parameters tested:
+  - All parameters tested at min/mid/max values
+  - All test results within 1% of target
+  - No missing or incorrectly classified params
+
+✅ **Audio Knowledge** - All params have accurate knowledge:
+  - audio_function (technical description)
+  - sonic_effect (increasing/decreasing)
+  - technical_detail, use_cases, typical_values (when applicable)
+  - Researched from authoritative sources
+
+✅ **Documentation** - Complete backup and commits:
+  - Mapping backed up to git
+  - Device mapping committed
+  - Audio knowledge JSON committed
+  - Special cases documented
 
 ---
 
