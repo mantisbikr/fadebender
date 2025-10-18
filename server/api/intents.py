@@ -560,6 +560,19 @@ def _generate_device_param_summary(
     increased = new_value > old_value
     direction_word = "increased" if increased else ("decreased" if new_value < old_value else "set")
 
+    # Format numeric portion of display to max 2 decimals
+    try:
+        s = str(new_display)
+        m = _re.search(r"-?\d+(?:\.\d+)?", s)
+        if m:
+            num = float(m.group(0))
+            rounded = round(num, 2)
+            # Trim trailing zeros
+            num_str = (f"{rounded:.2f}").rstrip('0').rstrip('.')
+            new_display = s[:m.start()] + num_str + s[m.end():]
+    except Exception:
+        pass
+
     # Base summary
     summary = f"Set {param_name} on {location} to {new_display}."
 
@@ -1366,7 +1379,8 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
                 if abs(pan_raw) < 0.01:
                     disp = "C"
                 else:
-                    amt = int(round(abs(pan_raw) * 100))
+                    # Use -50..+50 display scale for pan
+                    amt = int(round(abs(pan_raw) * 50))
                     disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
             out = {"ok": True, "field": field, "display_value": disp}
             if not display_only_io:
@@ -1438,7 +1452,8 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
                 if abs(pan_raw) < 0.01:
                     disp = "C"
                 else:
-                    amt = int(round(abs(pan_raw) * 100))
+                    # Use -50..+50 display scale for pan
+                    amt = int(round(abs(pan_raw) * 50))
                     disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
             out = {"ok": True, "field": field, "display_value": disp}
             if not display_only_io:
@@ -1508,7 +1523,8 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
                 if abs(pan_raw) < 0.01:
                     disp = "C"
                 else:
-                    amt = int(round(abs(pan_raw) * 100))
+                    # Use -50..+50 display scale for pan
+                    amt = int(round(abs(pan_raw) * 50))
                     disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
             return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
         return {"ok": True, "field": field, "normalized_value": raw, "display_value": None}

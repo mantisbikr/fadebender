@@ -79,18 +79,38 @@ export function useDAWControl() {
             param_ref: paramName
           });
           const makeDV = (r) => {
-            const disp = r?.display_value;
-            const unit = r?.unit;
-            if (disp != null && disp !== '') return unit ? `${disp} ${unit}`.trim() : String(disp);
-            if (r?.normalized_value != null) return String(r.normalized_value);
+            const unit = r?.unit || '';
+            let disp = r?.display_value;
+            if (disp != null && disp !== '') {
+              const s = String(disp);
+              const m = s.match(/-?\d+(?:\.\d+)?/);
+              if (m) {
+                const num = parseFloat(m[0]);
+                const rounded = Math.round(num * 100) / 100;
+                const numStr = (rounded.toFixed(2)).replace(/\.?0+$/, '');
+                disp = s.slice(0, m.index) + numStr + s.slice(m.index + m[0].length);
+              }
+              return unit ? `${disp} ${unit}`.trim() : String(disp);
+            }
+            if (r?.normalized_value != null) {
+              const x = Number(r.normalized_value);
+              const rounded = Math.round(x * 100) / 100;
+              return String((rounded.toFixed(2)).replace(/\.?0+$/, ''));
+            }
             return '';
           };
           const dv = makeDV(result);
 
           // Build min/max display range info
           let rangeInfo = '';
-          if (result.min_display && result.max_display) {
-            rangeInfo = ` Range: ${result.min_display} to ${result.max_display}.`;
+          if (result.min_display != null && result.max_display != null) {
+            const fmt = (n) => {
+              const x = Number(n);
+              if (!Number.isFinite(x)) return String(n);
+              const r2 = Math.round(x * 100) / 100;
+              return (r2.toFixed(2)).replace(/\.?0+$/, '');
+            };
+            rangeInfo = ` Range: ${fmt(result.min_display)} to ${fmt(result.max_display)}.`;
           }
 
           // Build answer with sonic context if available
