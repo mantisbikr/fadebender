@@ -1,0 +1,600 @@
+{
+  "device_name": "Reverb",
+  "device_signature": "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+  "source": "Researched from Ableton forums, Beat Production guide, Remember Music Ideas blog, and technical reverb DSP knowledge",
+  "last_updated": "2025-10-17",
+  "parameters": {
+    "Device On": {
+      "audio_function": "Master bypass switch for entire reverb device",
+      "sonic_effect": {
+        "increasing": "Enables reverb processing; adds spatial depth and ambience to signal",
+        "decreasing": "Bypasses all reverb processing; passes dry signal through unchanged"
+      },
+      "use_cases": [
+        "Quick A/B comparison of dry vs processed signal",
+        "Automation for creative reverb drops",
+        "CPU conservation when reverb not needed"
+      ],
+      "typical_values": {
+        "off": "Bypass - no reverb processing",
+        "on": "Active - full reverb processing"
+      }
+    },
+    "Predelay": {
+      "audio_function": "Time delay before sound reaches first reflective surface and reverb begins",
+      "sonic_effect": {
+        "increasing": "Longer gap between dry signal and reverb onset; preserves transient clarity; simulates larger distance to walls",
+        "decreasing": "Immediate reverb onset; tighter coupling with source; can muddy transients in fast material"
+      },
+      "technical_detail": "Predelay simulates the time sound travels before hitting first reflective surface. Critical for separating direct sound from reverb tail.",
+      "use_cases": [
+        "Preserve vocal/instrument attack transients (1-25ms typical)",
+        "Create sense of space and distance",
+        "Prevent muddiness in dense mixes",
+        "Sync reverb timing to tempo (calculated delays)"
+      ],
+      "typical_values": {
+        "tight": "0-10ms for intimate, close sound",
+        "natural": "10-25ms for realistic room simulation",
+        "distant": "50-100ms+ for larger spaces or creative effects"
+      }
+    },
+    "In LowCut On": {
+      "audio_function": "Enables high-pass filter on input signal before reverb processing",
+      "sonic_effect": {
+        "increasing": "Activates low frequency filtering; removes bass from reverb for cleaner, thinner character",
+        "decreasing": "Bypasses filter; allows full frequency spectrum into reverb including bass"
+      },
+      "use_cases": [
+        "Prevent muddy low-end buildup in reverb",
+        "Keep bass dry and focused",
+        "Create space in dense mixes",
+        "Save CPU when not needed"
+      ],
+      "typical_values": {
+        "off": "Full spectrum reverb",
+        "on": "Use with In Filter Freq to control cutoff point"
+      }
+    },
+    "In HighCut On": {
+      "audio_function": "Enables low-pass filter on input signal before reverb processing",
+      "sonic_effect": {
+        "increasing": "Activates high frequency filtering; removes treble/sparkle from reverb for darker, warmer character",
+        "decreasing": "Bypasses filter; allows full frequency spectrum into reverb including highs"
+      },
+      "use_cases": [
+        "Create darker, vintage-style reverb",
+        "Reduce harsh high-frequency reflections",
+        "Match reverb tone to source material",
+        "Save CPU when not needed"
+      ],
+      "typical_values": {
+        "off": "Bright, full-spectrum reverb",
+        "on": "Use with In Filter Freq to control cutoff point"
+      }
+    },
+    "In Filter Freq": {
+      "audio_function": "Sets cutoff frequency for input high-pass or low-pass filter",
+      "sonic_effect": {
+        "increasing": "Moves cutoff higher; with lowcut removes more bass, with highcut darkens less",
+        "decreasing": "Moves cutoff lower; with lowcut removes less bass, with highcut darkens more"
+      },
+      "technical_detail": "Works in conjunction with In LowCut/HighCut switches. Single control serves both filters depending on which is active.",
+      "use_cases": [
+        "Tune reverb frequency response to source",
+        "Match reverb character to mix",
+        "Create frequency-specific spatial effects"
+      ],
+      "typical_values": {
+        "lowcut": "100-300Hz to remove bass mud",
+        "highcut": "3-8kHz for natural darkening"
+      }
+    },
+    "In Filter Width": {
+      "audio_function": "Controls filter slope steepness (Q/resonance) for input filters",
+      "sonic_effect": {
+        "increasing": "Wider, gentler slope; more gradual frequency transition; natural sound",
+        "decreasing": "Narrower, steeper slope; sharper frequency cutoff; more pronounced filtering effect"
+      },
+      "technical_detail": "Adjusts bandwidth/Q factor of input filters. Narrower width creates more resonant peak at cutoff frequency.",
+      "use_cases": [
+        "Fine-tune filter character",
+        "Create resonant filter effects",
+        "Match filter slope to musical context"
+      ],
+      "typical_values": {
+        "wide": "Gentle, natural filtering",
+        "narrow": "Sharp, resonant filtering with character"
+      }
+    },
+    "ER Spin On": {
+      "audio_function": "Master enable switch for early reflection modulation",
+      "sonic_effect": {
+        "increasing": "Enables ER timing modulation; activates chorus-like movement in early reflections",
+        "decreasing": "Disables modulation; early reflections remain static and unmodulated"
+      },
+      "use_cases": [
+        "Add life and movement to early reflections",
+        "Prevent static, digital-sounding reflections",
+        "Create more natural, organic reverb character"
+      ],
+      "typical_values": {
+        "off": "Static, precise early reflections",
+        "on": "Use with ER Spin Rate and Amount to control modulation"
+      }
+    },
+    "ER Spin Rate": {
+      "audio_function": "Modulates early reflection timing with a low-frequency sine wave to add chorus-like movement",
+      "sonic_effect": {
+        "increasing": "More timing variation in early reflections; stronger chorus/phasing effect; increased perceived complexity and diffusion",
+        "decreasing": "Less modulation; more static, distinct early reflections; cleaner but potentially more artificial sound"
+      },
+      "technical_detail": "Low-frequency sine wave modulates ER delay timing (2-55ms depth at 0.07-1.3Hz rate). Inspired by Lexicon 480L reverb algorithm. Creates cyclic delay variations that prevent metallic, static early reflections.",
+      "use_cases": [
+        "Add naturalness to algorithmic reverb",
+        "Prevent metallic, static early reflections",
+        "Create richer, more complex reverb character",
+        "Emulate natural room variations"
+      ],
+      "typical_values": {
+        "subtle_movement": "0.07-0.2 Hz for barely perceptible modulation",
+        "recommended": "~1.0 Hz, ~10ms depth for balanced natural sound",
+        "pronounced_effect": "1.0-1.3 Hz, 20-55ms depth for obvious modulation"
+      }
+    },
+    "ER Spin Amount": {
+      "audio_function": "Controls modulation depth (intensity) of early reflection timing variations",
+      "sonic_effect": {
+        "increasing": "Deeper timing modulation; more pronounced chorus/phasing effect; wider pitch variations",
+        "decreasing": "Shallower modulation; subtle movement; minimal pitch deviation"
+      },
+      "technical_detail": "Sets peak deviation in milliseconds for ER delay modulation. Works with ER Spin Rate to determine modulation character.",
+      "use_cases": [
+        "Fine-tune modulation intensity",
+        "Balance naturalness vs effect strength",
+        "Match modulation depth to source material"
+      ],
+      "typical_values": {
+        "subtle": "Low values for barely audible movement",
+        "moderate": "Medium values for natural complexity",
+        "extreme": "High values for obvious, creative effects"
+      }
+    },
+    "ER Shape": {
+      "audio_function": "Controls blend between early reflections and diffuse reverb tail",
+      "sonic_effect": {
+        "increasing": "Smoother transition from ER to tail; more cohesive, flowing reverb; less distinct early reflections",
+        "decreasing": "Distinct separation between ER and tail; gap in reverb onset; more articulated early reflections; potentially less natural"
+      },
+      "technical_detail": "Adjusts crossfade timing and energy distribution between early reflection pattern and diffusion network.",
+      "use_cases": [
+        "Create smooth, natural reverb decay",
+        "Emphasize or de-emphasize early reflections",
+        "Match reverb character to room type",
+        "Adjust reverb articulation"
+      ],
+      "typical_values": {
+        "separated": "Low values for distinct ER stage",
+        "blended": "High values for smooth, continuous reverb"
+      }
+    },
+    "HiFilter On": {
+      "audio_function": "Enables high-frequency filtering in the diffusion network (reverb tail)",
+      "sonic_effect": {
+        "increasing": "Activates treble control; allows shaping of high-frequency decay",
+        "decreasing": "Bypasses filter; natural high-frequency decay"
+      },
+      "use_cases": [
+        "Simulate absorptive materials (curtains, furniture)",
+        "Create darker, warmer reverb tails",
+        "Match reverb to room acoustic character",
+        "Save CPU when not needed"
+      ],
+      "typical_values": {
+        "off": "Natural, bright decay",
+        "on": "Use HiFilter Type, Freq, and Gain to shape highs"
+      }
+    },
+    "HiFilter Type": {
+      "audio_function": "Selects high-frequency filter algorithm (shelf or cut)",
+      "sonic_effect": {
+        "increasing": "Switches between filter types; different high-frequency decay characteristics",
+        "decreasing": "Alternative filter type with different slope and character"
+      },
+      "technical_detail": "Offers different filter topologies for high-frequency attenuation in reverb tail. Shelf typically provides gentler slopes, cut provides sharper transitions.",
+      "use_cases": [
+        "Match filter character to desired sound",
+        "Simulate different room absorption types",
+        "Fine-tune high-frequency decay curve"
+      ],
+      "typical_values": {
+        "shelf": "Gentle, natural high-frequency rolloff",
+        "cut": "Sharper, more pronounced darkening"
+      }
+    },
+    "HiFilter Freq": {
+      "audio_function": "Sets frequency point where high-frequency filtering begins in reverb tail",
+      "sonic_effect": {
+        "increasing": "Higher cutoff; filters less treble; brighter, more airy reverb tail",
+        "decreasing": "Lower cutoff; filters more treble; darker, warmer reverb tail"
+      },
+      "technical_detail": "Determines frequency above which attenuation occurs. Simulates frequency-dependent absorption in real rooms.",
+      "use_cases": [
+        "Simulate natural room absorption",
+        "Create vintage-style dark reverb",
+        "Match reverb brightness to source",
+        "Prevent harsh high-frequency buildup"
+      ],
+      "typical_values": {
+        "dark": "2-4kHz for warm, vintage character",
+        "natural": "5-8kHz for balanced decay",
+        "bright": "10kHz+ for minimal darkening"
+      }
+    },
+    "HiShelf Gain": {
+      "audio_function": "Controls amount of high-frequency attenuation in reverb tail when using shelf filter",
+      "sonic_effect": {
+        "increasing": "More high-frequency energy in tail; brighter, more sparkly reverb",
+        "decreasing": "Less high-frequency energy; darker, more damped reverb tail"
+      },
+      "technical_detail": "Adjusts amplitude of frequencies above HiFilter Freq. Negative values attenuate (typical), positive values boost.",
+      "use_cases": [
+        "Fine-tune reverb brightness",
+        "Simulate room absorption characteristics",
+        "Balance reverb tone in mix"
+      ],
+      "typical_values": {
+        "damped": "Negative values for natural darkening",
+        "neutral": "0dB for flat response",
+        "boosted": "Positive values for enhanced highs (rare)"
+      }
+    },
+    "LowShelf On": {
+      "audio_function": "Enables low-frequency filtering in the diffusion network (reverb tail)",
+      "sonic_effect": {
+        "increasing": "Activates bass control; allows shaping of low-frequency decay",
+        "decreasing": "Bypasses filter; natural low-frequency decay"
+      },
+      "use_cases": [
+        "Prevent muddy low-end buildup in reverb tail",
+        "Simulate bass absorption in rooms",
+        "Create tighter, cleaner reverb",
+        "Save CPU when not needed"
+      ],
+      "typical_values": {
+        "off": "Full-range reverb tail",
+        "on": "Use LowShelf Freq and Gain to shape bass"
+      }
+    },
+    "LowShelf Freq": {
+      "audio_function": "Sets frequency point where low-frequency filtering begins in reverb tail",
+      "sonic_effect": {
+        "increasing": "Higher cutoff; filters more bass range; thinner, tighter reverb tail",
+        "decreasing": "Lower cutoff; filters only deep bass; fuller, warmer reverb tail"
+      },
+      "technical_detail": "Determines frequency below which attenuation occurs. Controls bass energy distribution in reverb decay.",
+      "use_cases": [
+        "Prevent low-end mud in dense mixes",
+        "Match reverb weight to source",
+        "Create space in low-frequency range",
+        "Simulate room bass absorption"
+      ],
+      "typical_values": {
+        "tight": "300-500Hz for thin, articulate reverb",
+        "balanced": "150-250Hz for natural low-end",
+        "full": "Below 100Hz to preserve bass warmth"
+      }
+    },
+    "LowShelf Gain": {
+      "audio_function": "Controls amount of low-frequency attenuation in reverb tail when using shelf filter",
+      "sonic_effect": {
+        "increasing": "More low-frequency energy in tail; warmer, fuller, potentially muddier reverb",
+        "decreasing": "Less low-frequency energy; tighter, cleaner, thinner reverb tail"
+      },
+      "technical_detail": "Adjusts amplitude of frequencies below LowShelf Freq. Negative values attenuate (typical), positive values boost.",
+      "use_cases": [
+        "Balance reverb warmth vs clarity",
+        "Prevent low-frequency buildup",
+        "Match reverb weight to mix context"
+      ],
+      "typical_values": {
+        "tight": "Negative values for clean, articulate reverb",
+        "neutral": "0dB for flat response",
+        "warm": "Slightly negative for controlled warmth"
+      }
+    },
+    "Chorus On": {
+      "audio_function": "Master enable switch for diffusion network modulation",
+      "sonic_effect": {
+        "increasing": "Enables pitch/timing modulation in reverb tail; adds shimmer and movement",
+        "decreasing": "Disables modulation; static, precise reverb tail"
+      },
+      "use_cases": [
+        "Add richness and complexity to reverb tail",
+        "Create lush, evolving reverb character",
+        "Prevent static, digital-sounding diffusion",
+        "Emulate natural room variations"
+      ],
+      "typical_values": {
+        "off": "Clean, static reverb tail",
+        "on": "Use Chorus Rate and Amount to control modulation"
+      }
+    },
+    "Chorus Rate": {
+      "audio_function": "Controls modulation speed of diffusion network (reverb tail)",
+      "sonic_effect": {
+        "increasing": "Faster modulation; more active, shimmering reverb tail; can sound unstable at extremes",
+        "decreasing": "Slower modulation; subtle, gentle movement; more natural character"
+      },
+      "technical_detail": "LFO rate controlling pitch/delay modulation in diffusion network. Similar to ER Spin but affects tail instead of early reflections.",
+      "use_cases": [
+        "Add shimmer to reverb tail",
+        "Create evolving, organic reverb character",
+        "Match modulation speed to tempo or mood"
+      ],
+      "typical_values": {
+        "subtle": "Low Hz for barely perceptible movement",
+        "moderate": "0.5-2Hz for natural complexity",
+        "fast": "High Hz for obvious shimmer effect"
+      }
+    },
+    "Chorus Amount": {
+      "audio_function": "Controls modulation depth (intensity) of diffusion network variations",
+      "sonic_effect": {
+        "increasing": "Deeper modulation; more pronounced shimmer and pitch variation; richer, more complex tail",
+        "decreasing": "Shallower modulation; subtle movement; cleaner, more focused tail"
+      },
+      "technical_detail": "Sets peak deviation for diffusion network modulation. Works with Chorus Rate to determine overall modulation character.",
+      "use_cases": [
+        "Fine-tune tail complexity",
+        "Balance naturalness vs special effect",
+        "Add depth without overwhelming signal"
+      ],
+      "typical_values": {
+        "subtle": "Low values for gentle enhancement",
+        "moderate": "Medium values for noticeable richness",
+        "extreme": "High values for pronounced shimmer"
+      }
+    },
+    "Decay Time": {
+      "audio_function": "Controls how long reverb tail takes to decay to -60dB (1/1000th of initial volume)",
+      "sonic_effect": {
+        "increasing": "Longer reverb tail; more sustained ambience; larger perceived space; can muddy fast material",
+        "decreasing": "Shorter reverb tail; tighter, more controlled; smaller perceived space; cleaner in dense mixes"
+      },
+      "technical_detail": "Fundamental reverb parameter setting RT60 (Reverberation Time). Critical for establishing space size and reverb density.",
+      "use_cases": [
+        "Match reverb length to tempo and arrangement",
+        "Create intimate vs spacious character",
+        "Control reverb density and clarity",
+        "Simulate specific room types"
+      ],
+      "typical_values": {
+        "tight": "0.5-1.5s for intimate, controlled spaces",
+        "medium": "1.5-3s for natural room ambience",
+        "long": "3-8s for large halls and dramatic effects",
+        "infinite": "Maximum + Freeze for pad-like sustain"
+      }
+    },
+    "Diffusion": {
+      "audio_function": "Controls density and complexity of reflection pattern in diffusion network",
+      "sonic_effect": {
+        "increasing": "Denser, smoother reverb tail; more complex reflection pattern; less discrete echoes; silkier sound",
+        "decreasing": "Sparser, more distinct reflections; more granular texture; potential echo artifacts; less smooth"
+      },
+      "technical_detail": "Adjusts number and timing of reflections in diffusion algorithm. Higher values increase computation for smoother decay.",
+      "use_cases": [
+        "Create smooth, lush reverb character",
+        "Simulate different room types (smooth vs discrete)",
+        "Balance CPU usage vs quality",
+        "Control reverb texture and density"
+      ],
+      "typical_values": {
+        "sparse": "Low % for discrete, rhythmic reflections",
+        "natural": "50-75% for balanced character",
+        "dense": "85-100% for smooth, lush reverb"
+      }
+    },
+    "Scale": {
+      "audio_function": "Adjusts reflection density in conjunction with room size and diffusion",
+      "sonic_effect": {
+        "increasing": "More reflections at given size; denser, more complex pattern; can increase flutter at small sizes",
+        "decreasing": "Fewer reflections; sparser, more open pattern; cleaner but potentially less realistic"
+      },
+      "technical_detail": "Fine-tunes diffusion network complexity. Most noticeable with smaller room sizes. Can create flanger-like effects when automated with small sizes.",
+      "use_cases": [
+        "Fine-tune reverb density",
+        "Create special effects (flanger-like)",
+        "Adjust complexity for different sources",
+        "Balance smoothness vs clarity"
+      ],
+      "typical_values": {
+        "sparse": "Low % for open, spacious character",
+        "balanced": "50-70% for natural density",
+        "dense": "High % for complex, rich reverb"
+      }
+    },
+    "Freeze On": {
+      "audio_function": "Captures and sustains current diffusion network state indefinitely; disables input and sets decay to infinite",
+      "sonic_effect": {
+        "increasing": "Freezes reverb tail; creates infinite sustain; no new input processed; existing reverb sustains endlessly",
+        "decreasing": "Normal operation; input processed; natural decay according to Decay Time parameter"
+      },
+      "technical_detail": "Disables reverb input and sets internal feedback to 100%, creating infinite loop of diffusion network state. Use with Cut and Flat for control.",
+      "use_cases": [
+        "Create ambient pads and textures",
+        "Build tension in arrangements",
+        "Isolate reverb tail for sound design",
+        "Create reverb swells and risers"
+      ],
+      "typical_values": {
+        "off": "Normal reverb operation",
+        "on": "Infinite sustain; use Cut/Flat for control"
+      }
+    },
+    "Flat On": {
+      "audio_function": "When Freeze active, maintains frozen frequency balance vs allowing natural frequency decay",
+      "sonic_effect": {
+        "increasing": "Frozen spectrum remains constant; all frequencies sustain equally; static tone color",
+        "decreasing": "Frozen spectrum gradually loses energy according to filter settings; natural darkening over time"
+      },
+      "technical_detail": "Bypasses Hi/Low Shelf filters during freeze. When off, frozen reverb still undergoes frequency-dependent decay.",
+      "use_cases": [
+        "Maintain exact tone color when frozen",
+        "Create evolving vs static freeze textures",
+        "Control frozen reverb character"
+      ],
+      "typical_values": {
+        "off": "Gradual frequency decay while frozen",
+        "on": "Static frequency balance while frozen"
+      }
+    },
+    "Cut On": {
+      "audio_function": "When Freeze active, prevents new signal accumulation when unfreezing and re-freezing",
+      "sonic_effect": {
+        "increasing": "Clears frozen reverb before capturing new freeze; prevents buildup",
+        "decreasing": "Allows multiple freeze captures to layer; accumulates reverb content with each freeze"
+      },
+      "technical_detail": "Determines whether diffusion network resets when entering freeze mode. Off allows additive freeze layering.",
+      "use_cases": [
+        "Create layered, complex freeze textures",
+        "Prevent freeze buildup and overload",
+        "Control freeze capture behavior"
+      ],
+      "typical_values": {
+        "off": "Additive freeze layers",
+        "on": "Clean freeze captures"
+      }
+    },
+    "Room Size": {
+      "audio_function": "Controls perceived room volume/dimensions; fundamental space parameter",
+      "sonic_effect": {
+        "increasing": "Larger perceived space; longer reflection spacing; more open, expansive character; potential for flutter at extremes",
+        "decreasing": "Smaller perceived space; tighter reflections; more intimate, focused character; can sound metallic at minimum"
+      },
+      "technical_detail": "Adjusts all-pass filter delays in diffusion network. Affects reflection timing and spacing throughout algorithm.",
+      "use_cases": [
+        "Set fundamental room character",
+        "Match reverb to musical context",
+        "Create special effects via automation",
+        "Simulate specific room types"
+      ],
+      "typical_values": {
+        "small": "Tight, intimate spaces; vocal booths, small rooms",
+        "medium": "Natural room ambience; studios, living rooms",
+        "large": "Expansive spaces; halls, cathedrals, canyons"
+      }
+    },
+    "Size Smoothing": {
+      "audio_function": "Controls interpolation quality when Room Size changes via automation or modulation",
+      "sonic_effect": {
+        "increasing": "Smoother room size transitions; reduced pitch artifacts; higher CPU usage",
+        "decreasing": "More artifacts during size changes; audible pitch shifts; lower CPU usage"
+      },
+      "technical_detail": "Adjusts algorithm used for interpolating all-pass delays during size changes. Higher quality prevents doppler-like pitch shifts.",
+      "use_cases": [
+        "Smooth automated room size changes",
+        "Create special effects (choose low quality for pitch artifacts)",
+        "Balance quality vs CPU load"
+      ],
+      "typical_values": {
+        "basic": "Fast switching, audible artifacts",
+        "smooth": "Interpolated, minimal artifacts"
+      }
+    },
+    "Stereo Image": {
+      "audio_function": "Controls spatial width of stereo reverb field from mono to wide stereo",
+      "sonic_effect": {
+        "increasing": "Wider stereo field; more spacious, immersive character; greater L/R separation; more realistic room simulation at high settings",
+        "decreasing": "Narrower stereo field; more focused, centered image; mono at minimum; artificial, unnatural character at very low settings"
+      },
+      "technical_detail": "Adjusts decorrelation between L/R channels and stereo width of diffusion network. 0% = mono, 100% = maximum width.",
+      "use_cases": [
+        "Create immersive stereo ambience",
+        "Adjust reverb width to mix context",
+        "Prevent excessive stereo spreading",
+        "Match reverb width to source material"
+      ],
+      "typical_values": {
+        "mono": "0% for centered reverb",
+        "natural": "50-75% for realistic stereo imaging",
+        "wide": "85-100% for expansive, immersive spaces"
+      }
+    },
+    "Density": {
+      "audio_function": "Selects discrete algorithm preset affecting overall reflection pattern density",
+      "sonic_effect": {
+        "increasing": "Higher density preset; more complex reflection patterns; smoother, more lush character",
+        "decreasing": "Lower density preset; sparser reflections; more discrete, granular character"
+      },
+      "technical_detail": "Quantized parameter selecting different diffusion network configurations. Works with Scale and Diffusion for fine control.",
+      "use_cases": [
+        "Choose base diffusion complexity",
+        "Match reverb character to source",
+        "Balance smoothness vs articulation"
+      ],
+      "typical_values": {
+        "low": "Sparse, discrete reflections",
+        "medium": "Balanced reflection density",
+        "high": "Dense, smooth reverb character"
+      }
+    },
+    "Reflect Level": {
+      "audio_function": "Controls output level of early reflections in dB",
+      "sonic_effect": {
+        "increasing": "Louder early reflections; more emphasis on room geometry; stronger spatial cues; can overpower tail",
+        "decreasing": "Quieter early reflections; less room character; smoother blend with tail; potential loss of spatial definition"
+      },
+      "technical_detail": "Adjusts amplitude of early reflection stage relative to diffusion network. Critical balance for realistic room simulation.",
+      "use_cases": [
+        "Balance ER vs tail prominence",
+        "Emphasize or de-emphasize room character",
+        "Adjust spatial definition",
+        "Fine-tune reverb mix"
+      ],
+      "typical_values": {
+        "subtle": "-20 to -10dB for smooth, tail-focused reverb",
+        "balanced": "-10 to 0dB for natural room character",
+        "prominent": "0 to +6dB for emphasized spatial cues"
+      }
+    },
+    "Diffuse Level": {
+      "audio_function": "Controls output level of diffusion network (reverb tail) in dB",
+      "sonic_effect": {
+        "increasing": "Louder reverb tail; more sustained ambience; denser, more present reverb; can overwhelm ER",
+        "decreasing": "Quieter reverb tail; less sustained ambience; emphasis on early reflections; cleaner, drier character"
+      },
+      "technical_detail": "Adjusts amplitude of diffusion network relative to early reflections. Essential for balancing reverb character.",
+      "use_cases": [
+        "Balance tail vs ER prominence",
+        "Control reverb density and sustain",
+        "Adjust ambience level",
+        "Fine-tune reverb mix"
+      ],
+      "typical_values": {
+        "dry": "-20 to -10dB for room emphasis over tail",
+        "balanced": "-10 to 0dB for natural reverb character",
+        "lush": "0 to +6dB for prominent, sustaining ambience"
+      }
+    },
+    "Dry/Wet": {
+      "audio_function": "Controls mix balance between unprocessed (dry) signal and reverb (wet) signal",
+      "sonic_effect": {
+        "increasing": "More reverb in mix; more spatial depth; can drown out dry signal; appropriate for send/return use at 100%",
+        "decreasing": "Less reverb in mix; more present, dry signal; tighter, more focused sound; no reverb at 0%"
+      },
+      "technical_detail": "Standard wet/dry mix control. 0% = dry only, 100% = wet only. Use 100% wet on return tracks, variable on inserts.",
+      "use_cases": [
+        "Set at 100% for send/return reverb (standard)",
+        "Variable mix for insert reverb (less common)",
+        "Parallel processing techniques",
+        "Quick reverb amount adjustments"
+      ],
+      "typical_values": {
+        "send": "100% wet (return track standard)",
+        "insert": "10-40% wet (insert use)",
+        "parallel": "100% wet with track level control"
+      }
+    }
+  }
+}
