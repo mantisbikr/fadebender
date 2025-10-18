@@ -182,12 +182,12 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
             "mapping_exists": mapping_exists,
         }
     else:
-        # Check new base mapping (param_structure) in Firestore
+        # Check new base mapping (params_meta) in Firestore
         try:
             new_map = store.get_device_mapping(signature)
             if new_map:
                 mapping_exists = True
-                ps = new_map.get("param_structure") or []
+                pm = new_map.get("params_meta") or []
                 data = {
                     "device_name": dname,
                     "signature": signature,
@@ -197,7 +197,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
                         "min": p.get("min"),
                         "max": p.get("max"),
                         "sample_count": 0,
-                    } for p in ps],
+                    } for p in pm],
                     "exists": True,
                     "mapping_exists": True,
                     "learned_exists": False,
