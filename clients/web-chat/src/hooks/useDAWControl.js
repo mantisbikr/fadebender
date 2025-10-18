@@ -348,7 +348,8 @@ export function useDAWControl() {
             // If it's a mixer op, fetch mixer capabilities for the relevant entity
             try {
               if (ci.domain === 'track' && typeof ci.track_index === 'number' && ci.field) {
-                const caps = await apiService.getTrackMixerCapabilities(Number(ci.track_index));
+                // Canonical track_index is 1-based; capabilities expect 0-based
+                const caps = await apiService.getTrackMixerCapabilities(Number(ci.track_index) - 1);
                 if (caps && caps.ok) mixerCapabilities = caps.data;
               } else if (ci.domain === 'return' && (typeof ci.return_index === 'number' || typeof ci.return_ref === 'string') && ci.field) {
                 const ri = typeof ci.return_index === 'number' ? Number(ci.return_index) : (ci.return_ref ? (ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)) : 0);

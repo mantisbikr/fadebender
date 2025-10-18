@@ -16,13 +16,26 @@ export default function SingleMixerParamEditor({ editor }) {
   const commit = async (val) => {
     setBusy(true);
     try {
+      // Use canonical intents path for unit/display-aware conversion
+      const field = param.name;
       if (entity_type === 'track') {
-        await apiService.setMixer(Number(index_ref), param.name, Number(val));
+        // execute_intent expects 1-based track_index
+        const ti1 = Number(index_ref) + 1;
+        const payload = { domain: 'track', field, track_index: ti1 };
+        if (field === 'volume') { payload.value = Number(val); payload.unit = 'db'; }
+        else { payload.value = Number(val); }
+        await apiService.executeCanonicalIntent(payload);
       } else if (entity_type === 'return') {
         const ri = index_ref.charCodeAt(0) - 'A'.charCodeAt(0);
-        await apiService.setReturnMixer(ri, param.name, Number(val));
+        const payload = { domain: 'return', field, return_index: ri };
+        if (field === 'volume') { payload.value = Number(val); payload.unit = 'db'; }
+        else { payload.value = Number(val); }
+        await apiService.executeCanonicalIntent(payload);
       } else if (entity_type === 'master') {
-        await apiService.setMasterMixer(param.name, Number(val));
+        const payload = { domain: 'master', field };
+        if (field === 'volume' || field === 'cue') { payload.value = Number(val); payload.unit = 'db'; }
+        else { payload.value = Number(val); }
+        await apiService.executeCanonicalIntent(payload);
       }
     } finally { setBusy(false); }
   };
@@ -91,4 +104,3 @@ export default function SingleMixerParamEditor({ editor }) {
     </Box>
   );
 }
-
