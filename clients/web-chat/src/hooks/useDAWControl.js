@@ -144,21 +144,21 @@ export function useDAWControl() {
               })
               .filter(Boolean); // Remove any null entries
           }
-          // For continuous parameters with min/max, suggest low/mid/high based on range
-          else if (deviceRef && result.min !== undefined && result.max !== undefined && result.unit) {
-            const min = result.min;
-            const max = result.max;
+          // For continuous parameters: suggest low/mid/high using display range when available
+          else if (deviceRef && (result.min_display !== undefined || result.min !== undefined) && (result.max_display !== undefined || result.max !== undefined)) {
+            const min = (result.min_display !== undefined) ? Number(result.min_display) : Number(result.min);
+            const max = (result.max_display !== undefined) ? Number(result.max_display) : Number(result.max);
             const mid = (min + max) / 2;
-            const unit = result.unit;
+            const unit = result.unit || '';
             // Format numbers to max 2 decimal places, remove trailing zeros
             const formatNum = (n) => {
               const rounded = Math.round(n * 100) / 100;
               return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(2).replace(/\.?0+$/, '');
             };
             suggested_intents = [
-              `set Return ${letter} ${deviceRef} ${paramName} to ${formatNum(min)} ${unit}`,
-              `set Return ${letter} ${deviceRef} ${paramName} to ${formatNum(mid)} ${unit}`,
-              `set Return ${letter} ${deviceRef} ${paramName} to ${formatNum(max)} ${unit}`
+              `set Return ${letter} ${deviceRef} ${paramName} to ${formatNum(min)}${unit ? ' ' + unit : ''}`,
+              `set Return ${letter} ${deviceRef} ${paramName} to ${formatNum(mid)}${unit ? ' ' + unit : ''}`,
+              `set Return ${letter} ${deviceRef} ${paramName} to ${formatNum(max)}${unit ? ' ' + unit : ''}`
             ];
           }
           // No fallback - only suggest commands if we have proper metadata
