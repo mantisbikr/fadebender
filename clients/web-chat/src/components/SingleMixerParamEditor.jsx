@@ -1,17 +1,45 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider } from '@mui/material';
 import { apiService } from '../services/api.js';
 
 export default function SingleMixerParamEditor({ editor }) {
   const { entity_type, index_ref, title, param } = editor;
   const [busy, setBusy] = useState(false);
-  const [value, setValue] = useState(() => {
-    const v = param?.current_display ?? param?.current_value;
+
+  const parsePanDisplay = (s, fallbackNorm, minD, maxD) => {
+    const str = String(s || '').trim();
+    if (!str) {
+      const norm = Number(fallbackNorm);
+      if (Number.isFinite(norm)) {
+        const scale = Math.max(Math.abs(Number(minD ?? -50)), Math.abs(Number(maxD ?? 50)));
+        return (norm * 2.0 - 1.0) * scale;
+      }
+      return 0;
+    }
+    if (/^c$/i.test(str)) return 0;
+    const m = str.match(/(-?\d+(?:\.\d+)?)(\s*[LR])?/i);
+    if (!m) return 0;
+    const num = Number(m[1]);
+    const side = (m[2] || '').toUpperCase();
+    if (side.includes('L')) return -Math.abs(num);
+    if (side.includes('R')) return Math.abs(num);
+    return num;
+  };
+
+  const initialValue = useMemo(() => {
+    if (!param) return 0;
+    if ((param.name || '').toLowerCase() === 'pan') {
+      return parsePanDisplay(param.current_display, param.current_value, param.min_display, param.max_display);
+    }
+    const v = param.current_display ?? param.current_value;
     const n = Number(v);
     if (Number.isFinite(n)) return n;
     const m = String(v || '').match(/-?\d+(?:\.\d+)?/);
     return m ? Number(m[0]) : 0;
-  });
+  }, [param]);
+
+  const [value, setValue] = useState(initialValue);
+  useEffect(() => { setValue(initialValue); }, [initialValue]);
 
   const commit = async (val) => {
     setBusy(true);
@@ -50,11 +78,20 @@ export default function SingleMixerParamEditor({ editor }) {
   if (!param || !param.control_type) return null;
 
   if (computedType === 'toggle') {
-    const on = /on/i.test(String(param.current_display)) || Number(param.current_value) >= 0.99;
+    const initialToggleOn = useMemo(() => {
+      const disp = String(param.current_display || '');
+      if (/^on$/i.test(disp)) return true;
+      if (/^off$/i.test(disp)) return false;
+      const num = Number(param.current_value);
+      if (Number.isFinite(num)) return num >= 0.5;
+      return false;
+    }, [param]);
+    const [toggleOn, setToggleOn] = useState(initialToggleOn);
+    useEffect(() => { setToggleOn(initialToggleOn); }, [initialToggleOn]);
     return (
       <Box>
         <FormControlLabel
-          control={<Switch checked={!!on} onChange={async (e) => commit(e.target.checked ? 1 : 0)} disabled={busy} />}
+          control={<Switch checked={toggleOn} onChange={async (e) => { setToggleOn(e.target.checked); await commit(e.target.checked ? 1 : 0); }} disabled={busy} />}
           label={title || param.name}
         />
       </Box>
