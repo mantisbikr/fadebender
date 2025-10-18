@@ -1,0 +1,854 @@
+[
+  {
+    "index": 0,
+    "name": "Device On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 1,
+    "name": "Predelay",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "ms",
+    "current_min_display": 0.5,
+    "current_max_display": 250,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "vocals": "20-50ms for clarity and separation",
+      "fast_tempo": "10-30ms to stay rhythmic",
+      "slow_tempo": "40-80ms for luxurious space",
+      "drums": "0-10ms for tight, natural blend",
+      "pads": "30-80ms for depth and space"
+    },
+    "NEW_unit": "ms",
+    "NEW_min_display": 0.5,
+    "NEW_max_display": 250,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 11,
+    "name": "HiFilter Type",
+    "control_type": "quantized",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "Shelving",
+      "Low-pass"
+    ],
+    "current_label_map": {
+      "Low-pass": 1,
+      "Shelving": 0
+    },
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "Shelving",
+      "Low-pass"
+    ],
+    "NEW_label_map": {
+      "Low-pass": 1,
+      "Shelving": 0
+    }
+  },
+  {
+    "index": 27,
+    "name": "Size Smoothing",
+    "control_type": "quantized",
+    "normalized_min": 0.0,
+    "normalized_max": 2.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "None",
+      "Slow",
+      "Fast"
+    ],
+    "current_label_map": {
+      "None": 0,
+      "Fast": 2,
+      "Slow": 1
+    },
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "None",
+      "Slow",
+      "Fast"
+    ],
+    "NEW_label_map": {
+      "None": 0,
+      "Fast": 2,
+      "Slow": 1
+    }
+  },
+  {
+    "index": 19,
+    "name": "Chorus Amount",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": 0.01,
+    "current_max_display": 4,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": {
+      "moderate_chorus": "0.5-1.5",
+      "subtle_width": "0.01-0.5",
+      "obvious_effect": "1.5-4.0"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": 0.01,
+    "NEW_max_display": 4,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 20,
+    "name": "Decay Time",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "ms",
+    "current_min_display": 200,
+    "current_max_display": 60000,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "natural_room": "800-2000ms",
+      "special_fx": "15000-60000ms",
+      "pads_ambient": "4000-15000ms",
+      "vocals": "1500-3000ms",
+      "tight_drums": "200-800ms"
+    },
+    "NEW_unit": "ms",
+    "NEW_min_display": 200,
+    "NEW_max_display": 60000,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 18,
+    "name": "Chorus Rate",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "Hz",
+    "current_min_display": 0.01,
+    "current_max_display": 8,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "subtle_shimmer": "0.01-0.1 Hz",
+      "vibrato_effect": "4-8 Hz",
+      "obvious_chorus": "1-4 Hz",
+      "gentle_movement": "0.1-0.5 Hz"
+    },
+    "NEW_unit": "Hz",
+    "NEW_min_display": 0.01,
+    "NEW_max_display": 8,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 28,
+    "name": "Stereo Image",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "degrees",
+    "current_min_display": 0,
+    "current_max_display": 120,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": {
+      "wide": "90-120",
+      "natural": "50-80",
+      "mono": "0"
+    },
+    "NEW_unit": "degrees",
+    "NEW_min_display": 0,
+    "NEW_max_display": 120,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 4,
+    "name": "In Filter Freq",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "Hz",
+    "current_min_display": 50,
+    "current_max_display": 18000,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "full_range": "Both filters off or wide open",
+      "darken_reverb": "Low-pass at 3000-8000 Hz",
+      "remove_low_mud": "High-pass at 100-300 Hz"
+    },
+    "NEW_unit": "Hz",
+    "NEW_min_display": 50,
+    "NEW_max_display": 18000,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 25,
+    "name": "Cut On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": {
+      "ambient_wash": "On for pure tail texture",
+      "realistic_space": "Off to maintain room character"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 26,
+    "name": "Room Size",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": 0.22,
+    "current_max_display": 500,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "concert_hall": "50-150m",
+      "vocal_booth": "5-20m",
+      "cathedral": "150-500m",
+      "small_studio": "20-50m"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": 0.22,
+    "NEW_max_display": 500,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 10,
+    "name": "HiFilter On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 6,
+    "name": "ER Spin On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 14,
+    "name": "LowShelf On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 29,
+    "name": "Density",
+    "control_type": "quantized",
+    "normalized_min": 0.0,
+    "normalized_max": 3.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "Sparse",
+      "Low",
+      "Mid",
+      "High"
+    ],
+    "current_label_map": {
+      "Low": 1,
+      "Mid": 2,
+      "High": 3,
+      "Sparse": 0
+    },
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": {
+      "Low": "Natural rooms with distinct reflections",
+      "Mid": "Realistic dense spaces",
+      "High": "Smooth plates and halls",
+      "Sparse": "Echo chamber, special effects"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "Sparse",
+      "Low",
+      "Mid",
+      "High"
+    ],
+    "NEW_label_map": {
+      "Low": 1,
+      "Mid": 2,
+      "High": 3,
+      "Sparse": 0
+    }
+  },
+  {
+    "index": 32,
+    "name": "Dry/Wet",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "dB",
+    "current_min_display": 0,
+    "current_max_display": 100,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": null,
+    "NEW_unit": "dB",
+    "NEW_min_display": 0,
+    "NEW_max_display": 100,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 7,
+    "name": "ER Spin Rate",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": 0.07,
+    "current_max_display": 1.3,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "static": "0.07-0.2 Hz for barely perceptible movement",
+      "active_spin": "0.7-1.3 Hz",
+      "gentle_motion": "0.3-0.6 Hz"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": 0.07,
+    "NEW_max_display": 1.3,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 16,
+    "name": "LowShelf Gain",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "",
+    "current_min_display": 0.20000000298023224,
+    "current_max_display": 1,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": null,
+    "NEW_unit": "",
+    "NEW_min_display": 0.20000000298023224,
+    "NEW_max_display": 1,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 12,
+    "name": "HiFilter Freq",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "Hz",
+    "current_min_display": 20,
+    "current_max_display": 16000,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "bright_modern": "12000-16000 Hz",
+      "natural": "6000-10000 Hz",
+      "vintage_dark": "2000-4000 Hz"
+    },
+    "NEW_unit": "Hz",
+    "NEW_min_display": 20,
+    "NEW_max_display": 16000,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 31,
+    "name": "Diffuse Level",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "dB",
+    "current_min_display": -30,
+    "current_max_display": 6,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "piecewise",
+    "typical_values": {
+      "balanced": "-6 to -3 dB",
+      "lush_ambient": "-3 to 3 dB (high diffuse, lower reflect)",
+      "clear_space": "-12 to -6 dB (low diffuse, high reflect)"
+    },
+    "NEW_unit": "dB",
+    "NEW_min_display": -30,
+    "NEW_max_display": 6,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 24,
+    "name": "Flat On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": {
+      "defined_space": "Off to keep room signature clear",
+      "smooth_reverb": "On for less pronounced room character"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 9,
+    "name": "ER Shape",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": 0,
+    "current_max_display": 1,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": {
+      "hard_surfaces": "0.0-0.3 (tile, concrete, glass)",
+      "mixed": "0.3-0.7 (wood, mixed materials)",
+      "soft_surfaces": "0.7-1.0 (drapes, acoustic panels)"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": 0,
+    "NEW_max_display": 1,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 15,
+    "name": "LowShelf Freq",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "Hz",
+    "current_min_display": 20,
+    "current_max_display": 15000,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "clear_vocal": "Cut at 200-300 Hz",
+      "warm_pad": "Boost at 80-150 Hz",
+      "clean_mix": "Slight cut at 100-200 Hz"
+    },
+    "NEW_unit": "Hz",
+    "NEW_min_display": 20,
+    "NEW_max_display": 15000,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 21,
+    "name": "Diffusion",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "%",
+    "current_min_display": 0.10000000149011612,
+    "current_max_display": 96,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": {
+      "natural_room": "40-65 for realistic space",
+      "smooth_plate": "75-96 for lush, dense reverb",
+      "echo_chamber": "5-25 for distinct rhythmic echoes"
+    },
+    "NEW_unit": "%",
+    "NEW_min_display": 0.10000000149011612,
+    "NEW_max_display": 96,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 23,
+    "name": "Freeze On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": {
+      "normal": "Keep off for natural decay",
+      "ambient_pad": "Turn on to create sustained wash"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 8,
+    "name": "ER Spin Amount",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": 2,
+    "current_max_display": 55,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "exp",
+    "typical_values": {
+      "subtle": "2-15",
+      "extreme": "35-55",
+      "moderate": "15-35"
+    },
+    "NEW_unit": null,
+    "NEW_min_display": 2,
+    "NEW_max_display": 55,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 2,
+    "name": "In LowCut On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 17,
+    "name": "Chorus On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 13,
+    "name": "HiShelf Gain",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "",
+    "current_min_display": 0.20000000298023224,
+    "current_max_display": 1,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": null,
+    "NEW_unit": "",
+    "NEW_min_display": 0.20000000298023224,
+    "NEW_max_display": 1,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 3,
+    "name": "In HighCut On",
+    "control_type": "binary",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": null,
+    "current_max_display": null,
+    "current_labels": [
+      "off",
+      "on"
+    ],
+    "current_label_map": null,
+    "has_fit": false,
+    "fit_type": null,
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": null,
+    "NEW_max_display": null,
+    "NEW_labels": [
+      "off",
+      "on"
+    ],
+    "NEW_label_map": null
+  },
+  {
+    "index": 22,
+    "name": "Scale",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "%",
+    "current_min_display": 5,
+    "current_max_display": 100,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": {
+      "intimate": "5-30% for close, tight space",
+      "natural": "40-70% for realistic proportion",
+      "expansive": "80-100% for grand, open space"
+    },
+    "NEW_unit": "%",
+    "NEW_min_display": 5,
+    "NEW_max_display": 100,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 5,
+    "name": "In Filter Width",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": null,
+    "current_min_display": 0.5,
+    "current_max_display": 9,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "linear",
+    "typical_values": null,
+    "NEW_unit": null,
+    "NEW_min_display": 0.5,
+    "NEW_max_display": 9,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  },
+  {
+    "index": 30,
+    "name": "Reflect Level",
+    "control_type": "continuous",
+    "normalized_min": 0.0,
+    "normalized_max": 1.0,
+    "current_unit": "dB",
+    "current_min_display": -30,
+    "current_max_display": 6,
+    "current_labels": null,
+    "current_label_map": null,
+    "has_fit": true,
+    "fit_type": "piecewise",
+    "typical_values": {
+      "balanced": "-6 to -3 dB",
+      "smooth_wash": "-15 to -10 dB (low reflect, high diffuse)",
+      "define_space": "-3 to 0 dB (high reflect, lower diffuse)"
+    },
+    "NEW_unit": "dB",
+    "NEW_min_display": -30,
+    "NEW_max_display": 6,
+    "NEW_labels": null,
+    "NEW_label_map": null
+  }
+]
