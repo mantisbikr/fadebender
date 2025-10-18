@@ -670,3 +670,26 @@ class MappingStore:
         except Exception as e:
             print(f"[MAPPING-STORE] ✗ Failed to save mixer param mapping: {e}")
             return False
+
+    def get_mixer_channel_mapping(self, entity_type: str) -> Optional[Dict[str, Any]]:
+        """Get consolidated mixer channel mapping (track/return/master) from Firestore.
+
+        Args:
+            entity_type: Entity type ("track", "return", or "master")
+
+        Returns:
+            Mixer channel mapping with params_meta or None
+        """
+        if not self._enabled or not self._client:
+            return None
+
+        try:
+            doc_id = f"{entity_type}_channel"
+            doc = self._client.collection("mixer_mappings").document(doc_id).get()
+            if not doc.exists:
+                # Fall back to old structure
+                return None
+            return doc.to_dict()
+        except Exception as e:
+            print(f"[MAPPING-STORE] Error getting mixer channel mapping: {e}")
+            return None
