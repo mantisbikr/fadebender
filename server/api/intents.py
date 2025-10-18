@@ -324,6 +324,105 @@ def _detect_display_unit(disp: str) -> Optional[str]:
     return None
 
 
+def _get_mixer_param_meta(entity_type: str, param_name: str) -> Optional[Dict[str, Any]]:
+    """Get parameter metadata from consolidated mixer channel mapping.
+
+    Args:
+        entity_type: Entity type ("track", "return", or "master")
+        param_name: Parameter name ("volume", "pan", "mute", "solo", "sends", "cue")
+
+    Returns:
+        Parameter metadata dict from params_meta or None if not found
+    """
+    try:
+        store = get_store()
+        if not store.enabled:
+            return None
+
+        channel = store.get_mixer_channel_mapping(entity_type)
+        if not channel:
+            return None
+
+        params_meta = channel.get("params_meta", [])
+        return next((p for p in params_meta if p.get("name") == param_name), None)
+    except Exception:
+        return None
+
+
+def _apply_mixer_fit_inverse(param_meta: Dict[str, Any], display_value: float) -> Optional[float]:
+    """Convert display value to normalized using fit formula (inverse direction).
+
+    Args:
+        param_meta: Parameter metadata from params_meta
+        display_value: Display value (e.g., -6.0 for dB, 25.0 for pan)
+
+    Returns:
+        Normalized value (0.0-1.0 for volume/cue, -1.0 to 1.0 for pan) or None if no fit
+    """
+    fit = param_meta.get("fit", {})
+    fit_type = fit.get("type")
+    coeffs = fit.get("coeffs", {})
+
+    if fit_type == "power":
+        # Power law: normalized = ((display - min_db) / range_db) ** gamma
+        # Inverse: display = min_db + range_db * (normalized ** (1/gamma))
+        min_db = coeffs.get("min_db")
+        max_db = coeffs.get("max_db")
+        gamma = coeffs.get("gamma")
+        range_db = coeffs.get("range_db", max_db - min_db if (max_db and min_db) else None)
+
+        if min_db is None or range_db is None or gamma is None:
+            return None
+
+        # Forward: dB → normalized
+        normalized = ((display_value - min_db) / range_db) ** gamma
+        return max(0.0, min(1.0, normalized))
+
+    elif fit_type == "linear":
+        # Linear: normalized = display_value / scale
+        scale = coeffs.get("scale", 50.0)
+        normalized = display_value / scale
+        return max(-1.0, min(1.0, normalized))  # Pan range
+
+    return None
+
+
+def _apply_mixer_fit_forward(param_meta: Dict[str, Any], normalized_value: float) -> Optional[float]:
+    """Convert normalized value to display using fit formula (forward direction).
+
+    Args:
+        param_meta: Parameter metadata from params_meta
+        normalized_value: Normalized value (0.0-1.0 for volume/cue, -1.0 to 1.0 for pan)
+
+    Returns:
+        Display value (e.g., -6.0 for dB, 25.0 for pan) or None if no fit
+    """
+    fit = param_meta.get("fit", {})
+    fit_type = fit.get("type")
+    coeffs = fit.get("coeffs", {})
+
+    if fit_type == "power":
+        # Power law inverse: display = min_db + range_db * (normalized ** (1/gamma))
+        min_db = coeffs.get("min_db")
+        max_db = coeffs.get("max_db")
+        gamma = coeffs.get("gamma")
+        range_db = coeffs.get("range_db", max_db - min_db if (max_db and min_db) else None)
+
+        if min_db is None or range_db is None or gamma is None:
+            return None
+
+        display = min_db + range_db * (normalized_value ** (1.0 / gamma))
+        return display
+
+    elif fit_type == "linear":
+        # Linear inverse: display_value = normalized * scale
+        scale = coeffs.get("scale", 50.0)
+        display = normalized_value * scale
+        return display
+
+    return None
+
+
 def _get_mixer_display_range(field: str):
     """Get display range (min, max) for a mixer field from Firestore mapping.
 
@@ -338,6 +437,17 @@ def _get_mixer_display_range(field: str):
         if not store.enabled:
             return (-50.0, 50.0) if field == "pan" else (0.0, 1.0)
 
+        # Try new consolidated structure first
+        # Determine entity type based on context (track is most common)
+        for entity_type in ["track", "return", "master"]:
+            pm = _get_mixer_param_meta(entity_type, field)
+            if pm:
+                dmin = pm.get("min_display")
+                dmax = pm.get("max_display")
+                if dmin is not None and dmax is not None:
+                    return (float(dmin), float(dmax))
+
+        # Fall back to old structure
         mapping = store.get_mixer_param_mapping(field)
         if not mapping:
             return (-50.0, 50.0) if field == "pan" else (0.0, 1.0)
@@ -365,6 +475,23 @@ def _resolve_mixer_display_value(field: str, display: str) -> Optional[float]:
         if not store.enabled:
             return None
 
+        # Try new consolidated structure first
+        # Check all entity types for param metadata
+        for entity_type in ["track", "return", "master"]:
+            pm = _get_mixer_param_meta(entity_type, field)
+            if pm:
+                # Try numeric parsing first (for display values like "-6", "25")
+                num = _parse_target_display(display)
+                if num is not None and pm.get("fit"):
+                    # Use fit formula to convert display → normalized
+                    result = _apply_mixer_fit_inverse(pm, num)
+                    if result is not None:
+                        return result
+
+                # Try preset lookup (for presets like "unity", "center")
+                # Note: Presets are no longer in consolidated structure - fallback to old only
+
+        # Fall back to old structure for presets
         mapping = store.get_mixer_param_mapping(field)
         if not mapping:
             return None
