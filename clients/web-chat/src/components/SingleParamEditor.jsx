@@ -77,11 +77,15 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
     const rangeLooksBool = Math.abs(vmin) <= 1e-6 && Math.abs(vmax - 1.0) <= 1e-6;
 
     const computedType = (() => {
-      if (ctIn === 'toggle' || ctIn === 'binary') return 'toggle';
-      if (isOnOffLabels) return 'toggle';
-      // Only treat as toggle by name pattern; 0..1 range alone is not sufficient
-      if (nameLc.endsWith(' on')) return 'toggle';
-      if (ctIn === 'quantized' || hasLabels || hasLabelMap) return 'quantized';
+      // Prefer explicit mapping from Firestore params_meta
+      if (ctIn) {
+        if (ctIn === 'toggle' || ctIn === 'binary') return 'toggle';
+        if (ctIn === 'quantized') return 'quantized';
+        return 'continuous';
+      }
+      // Minimal fallback only when control_type is missing
+      if (nameLc.endsWith(' on') || isOnOffLabels) return 'toggle';
+      if (hasLabels || hasLabelMap) return 'quantized';
       return 'continuous';
     })();
 
