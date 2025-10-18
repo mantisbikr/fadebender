@@ -195,11 +195,10 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
                 elif isinstance(label_map, dict) and label_map:
                     control_type = "quantized"
                 else:
-                    # Toggle if endswith ' On' or 0..1
+                    # Conservative: treat as toggle only if name explicitly ends with ' On'
                     nlc = str(pname or "").lower()
                     try:
-                        vmin = float(lp.get("min", 0.0)); vmax = float(lp.get("max", 1.0))
-                        if (abs(vmin) <= 1e-6 and abs(vmax - 1.0) <= 1e-6) or nlc.endswith(" on"):
+                        if nlc.endswith(" on"):
                             control_type = "toggle"
                         else:
                             control_type = "continuous"

@@ -84,7 +84,7 @@ export default function ParamEditor({ capabilities, compact = false }) {
 
   const renderControl = (p) => {
     const cur = values[p.name] || {};
-    if (p.control_type === 'toggle') {
+    if (p.control_type === 'toggle' || p.control_type === 'binary') {
       const vmax = (p.max != null) ? Number(p.max) : 1.0;
       const on = approxEqual(cur.value, vmax) || String(cur.display_value || '').toLowerCase().includes('on');
       return (
@@ -141,4 +141,3 @@ export default function ParamEditor({ capabilities, compact = false }) {
     </Box>
   );
 }
-

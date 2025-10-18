@@ -79,7 +79,8 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
     const computedType = (() => {
       if (ctIn === 'toggle' || ctIn === 'binary') return 'toggle';
       if (isOnOffLabels) return 'toggle';
-      if (nameLc.endsWith(' on') || rangeLooksBool) return 'toggle';
+      // Only treat as toggle by name pattern; 0..1 range alone is not sufficient
+      if (nameLc.endsWith(' on')) return 'toggle';
       if (ctIn === 'quantized' || hasLabels || hasLabelMap) return 'quantized';
       return 'continuous';
     })();
