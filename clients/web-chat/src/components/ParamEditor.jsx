@@ -83,8 +83,10 @@ export default function ParamEditor({ capabilities, compact = false }) {
   };
 
   const renderControl = (p) => {
+    const ct = String(p.control_type || '').toLowerCase();
+    if (!ct) return null; // No UI when type is missing
     const cur = values[p.name] || {};
-    if (p.control_type === 'toggle' || p.control_type === 'binary') {
+    if (ct === 'toggle' || ct === 'binary') {
       const vmax = (p.max != null) ? Number(p.max) : 1.0;
       const on = approxEqual(cur.value, vmax) || String(cur.display_value || '').toLowerCase().includes('on');
       return (
@@ -94,7 +96,7 @@ export default function ParamEditor({ capabilities, compact = false }) {
         />
       );
     }
-    if (p.control_type === 'quantized' && (p.labels && p.labels.length)) {
+    if (ct === 'quantized' && (p.labels && p.labels.length)) {
       const current = currentLabelFor(p) || '';
       return (
         <Box sx={{ minWidth: 200 }}>
@@ -107,6 +109,7 @@ export default function ParamEditor({ capabilities, compact = false }) {
         </Box>
       );
     }
+    if (ct !== 'continuous') return null; // Only render continuous slider when explicitly marked
     // Continuous
     const minD = Number(p.min_display ?? p.min ?? 0);
     const maxD = Number(p.max_display ?? p.max ?? 1);
@@ -133,9 +136,11 @@ export default function ParamEditor({ capabilities, compact = false }) {
     <Box sx={{ mt: 2 }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Edit Parameters</Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {allParams.map((p) => (
-          <Box key={`${p.index}-${p.name}`}>{renderControl(p)}</Box>
-        ))}
+        {allParams.map((p) => {
+          const ui = renderControl(p);
+          if (!ui) return null;
+          return (<Box key={`${p.index}-${p.name}`}>{ui}</Box>);
+        })}
       </Box>
       {!compact && <Divider sx={{ my: 2 }} />}
     </Box>

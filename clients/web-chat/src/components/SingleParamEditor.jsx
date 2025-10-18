@@ -65,29 +65,13 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
   };
 
   const renderControl = () => {
-    // Robust control type detection
+    // Only render when Firestore provided a control_type
     const ctIn = (param.control_type || '').toLowerCase();
+    if (!ctIn) return null;
     const hasLabels = Array.isArray(param.labels) && param.labels.length > 0;
     const hasLabelMap = param.label_map && typeof param.label_map === 'object' && Object.keys(param.label_map).length > 0;
-    const labelsLower = hasLabels ? param.labels.map((l) => String(l).toLowerCase()) : [];
-    const isOnOffLabels = labelsLower.includes('on') || labelsLower.includes('off');
-    const nameLc = String(param.name || '').toLowerCase();
-    const vmin = Number.isFinite(param.min) ? Number(param.min) : 0;
-    const vmax = Number.isFinite(param.max) ? Number(param.max) : 1;
-    const rangeLooksBool = Math.abs(vmin) <= 1e-6 && Math.abs(vmax - 1.0) <= 1e-6;
-
-    const computedType = (() => {
-      // Prefer explicit mapping from Firestore params_meta
-      if (ctIn) {
-        if (ctIn === 'toggle' || ctIn === 'binary') return 'toggle';
-        if (ctIn === 'quantized') return 'quantized';
-        return 'continuous';
-      }
-      // Minimal fallback only when control_type is missing
-      if (nameLc.endsWith(' on') || isOnOffLabels) return 'toggle';
-      if (hasLabels || hasLabelMap) return 'quantized';
-      return 'continuous';
-    })();
+    const computedType = (ctIn === 'toggle' || ctIn === 'binary') ? 'toggle'
+                        : (ctIn === 'quantized' ? 'quantized' : 'continuous');
 
     if (computedType === 'toggle') {
       return (

@@ -187,23 +187,8 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
             idx = int(mp.get("index", 0))
             lp = live_by_index.get(idx, {})
             label_map = mp.get("label_map") or {}
-            # Infer control_type if missing
+            # Do not infer control_type for devices; require Firestore to provide it
             control_type = mp.get("control_type")
-            if not control_type:
-                if isinstance(mp.get("quantized"), bool) and mp.get("quantized"):
-                    control_type = "quantized"
-                elif isinstance(label_map, dict) and label_map:
-                    control_type = "quantized"
-                else:
-                    # Conservative: treat as toggle only if name explicitly ends with ' On'
-                    nlc = str(pname or "").lower()
-                    try:
-                        if nlc.endswith(" on"):
-                            control_type = "toggle"
-                        else:
-                            control_type = "continuous"
-                    except Exception:
-                        control_type = "continuous"
             # dependency (master) info
             master_name = None
             try:
