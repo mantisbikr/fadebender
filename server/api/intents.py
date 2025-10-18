@@ -943,6 +943,13 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                         if str(k).strip().lower() == lnorm:
                             x = float(v)
                             break
+            # Handle common on/off without label_map present
+            elif ty is None:
+                lnorm = str(target_display).strip().lower()
+                if lnorm in {"on", "enable", "enabled", "true", "1", "yes"}:
+                    x = vmax
+                elif lnorm in {"off", "disable", "disabled", "false", "0", "no"}:
+                    x = vmin
             # Numeric display
             elif ty is not None:
                 if pm and isinstance(pm.get("fit"), dict):
@@ -1413,6 +1420,17 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             min_display = pm.get("min_display")
             max_display = pm.get("max_display")
 
+        # Determine toggle hints for UI
+        try:
+            name_lc = str(sel.get("name", "")).strip().lower()
+            vmin = float(sel.get("min", 0.0)); vmax = float(sel.get("max", 1.0)); curv = float(sel.get("value", 0.0))
+            is_toggle = name_lc.endswith(" on") or (abs(vmin) <= 1e-6 and abs(vmax - 1.0) <= 1e-6)
+            is_on = None
+            if is_toggle:
+                is_on = bool(curv >= (vmin + 0.5 * (vmax - vmin)))
+        except Exception:
+            is_toggle = False; is_on = None
+
         dev_out = {
             "ok": True,
             "unit": (pm.get("unit") if isinstance(pm, dict) else None),
@@ -1427,6 +1445,8 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             "label_map": label_map,
             "min_display": min_display,
             "max_display": max_display,
+            "is_toggle": is_toggle,
+            "is_on": is_on,
         }
         if not display_only_io:
             dev_out["normalized_value"] = sel.get("value")
@@ -1441,6 +1461,17 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             raise HTTPException(404, "params_not_found")
         pref = _alias_param_name_if_needed(intent.param_ref)
         sel = _resolve_param(params, intent.param_index, pref)
+        # Determine toggle hints for UI (track device)
+        try:
+            name_lc = str(sel.get("name", "")).strip().lower()
+            vmin = float(sel.get("min", 0.0)); vmax = float(sel.get("max", 1.0)); curv = float(sel.get("value", 0.0))
+            is_toggle = name_lc.endswith(" on") or (abs(vmin) <= 1e-6 and abs(vmax - 1.0) <= 1e-6)
+            is_on = None
+            if is_toggle:
+                is_on = bool(curv >= (vmin + 0.5 * (vmax - vmin)))
+        except Exception:
+            is_toggle = False; is_on = None
+
         dev_out = {
             "ok": True,
             "unit": None,
@@ -1451,6 +1482,8 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             "has_label_map": False,
             "param_name": sel.get("name"),
             "param_index": sel.get("index"),
+            "is_toggle": is_toggle,
+            "is_on": is_on,
         }
         if not display_only_io:
             dev_out["normalized_value"] = sel.get("value")

@@ -348,6 +348,35 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
     except Exception:
         pass
 
+    # Generic return device parameter with unit: set return A reverb <param> to <val> [unit]
+    try:
+        import re
+        m = re.search(r"\bset\s+return\s+([a-d])\s+(?:reverb\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°))?\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            pname = m.group(2).strip()
+            value = float(m.group(3))
+            unit_raw = m.group(4)
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms','millisecond','milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            # Use device_index=0 and plugin hint 'reverb' to help mapping, but execution will use param_ref
+            return {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': 'reverb', 'parameter': pname }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+    except Exception:
+        pass
+
     # Questions about problems (treat as help-style queries)
     if any(phrase in q for phrase in [
         "too soft", "too quiet", "can't hear", "how to", "what does",

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider, Chip } from '@mui/material';
 import { apiService } from '../services/api.js';
 
@@ -20,8 +20,25 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
 
   // Auto-enable master toggle (default on if dependency exists)
   const [autoEnable, setAutoEnable] = useState(param.has_master ? true : false);
+  // Derive initial toggle state from current value/display and keep it in sync
+  const initialToggleOn = useMemo(() => {
+    const dv = String(current?.display_value || '');
+    if (/^on$/i.test(dv)) return true;
+    if (/^off$/i.test(dv)) return false;
+    if (typeof current?.is_on === 'boolean') return current.is_on;
+    const num = Number(current?.value);
+    if (Number.isFinite(num)) return num >= 0.99;
+    const m = dv.match(/-?\d+(?:\.\d+)?/);
+    if (m) return Number(m[0]) >= 0.99;
+    return false;
+  }, [current]);
+  const [toggleOn, setToggleOn] = useState(initialToggleOn);
+  useEffect(() => {
+    setToggleOn(initialToggleOn);
+  }, [initialToggleOn]);
 
   const handleToggle = async (on) => {
+    setToggleOn(on);
     await exec({ domain: 'device', action: 'set', return_index, device_index, param_ref: param.name, display: on ? 'On' : 'Off', auto_enable_master: autoEnable });
   };
 
@@ -48,19 +65,37 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
   };
 
   const renderControl = () => {
-    const ct = param.control_type || 'continuous';
-    if (ct === 'toggle') {
-      const isOn = /on/i.test(String(current?.display_value || '')) || (Number(current?.value) >= 0.99);
+    // Robust control type detection
+    const ctIn = (param.control_type || '').toLowerCase();
+    const hasLabels = Array.isArray(param.labels) && param.labels.length > 0;
+    const hasLabelMap = param.label_map && typeof param.label_map === 'object' && Object.keys(param.label_map).length > 0;
+    const labelsLower = hasLabels ? param.labels.map((l) => String(l).toLowerCase()) : [];
+    const isOnOffLabels = labelsLower.includes('on') || labelsLower.includes('off');
+    const nameLc = String(param.name || '').toLowerCase();
+    const vmin = Number.isFinite(param.min) ? Number(param.min) : 0;
+    const vmax = Number.isFinite(param.max) ? Number(param.max) : 1;
+    const rangeLooksBool = Math.abs(vmin) <= 1e-6 && Math.abs(vmax - 1.0) <= 1e-6;
+
+    const computedType = (() => {
+      if (ctIn === 'toggle' || ctIn === 'binary') return 'toggle';
+      if (isOnOffLabels) return 'toggle';
+      if (nameLc.endsWith(' on') || rangeLooksBool) return 'toggle';
+      if (ctIn === 'quantized' || hasLabels || hasLabelMap) return 'quantized';
+      return 'continuous';
+    })();
+
+    if (computedType === 'toggle') {
       return (
         <>
-          <FormControlLabel control={<Switch checked={isOn} onChange={(e) => handleToggle(e.target.checked)} disabled={busy} />} label={param.name} />
+          <FormControlLabel control={<Switch checked={toggleOn} onChange={(e) => handleToggle(e.target.checked)} disabled={busy} />} label={param.name} />
           {param.has_master && (
             <FormControlLabel sx={{ ml: 2 }} control={<Switch checked={autoEnable} onChange={(e) => setAutoEnable(e.target.checked)} />} label="Auto‑enable master" />
           )}
         </>
       );
     }
-    if (ct === 'quantized' && (param.labels && param.labels.length)) {
+
+    if (computedType === 'quantized' && hasLabels) {
       const currentLabel = useMemo(() => {
         const lm = param.label_map || {};
         if (!lm || !current) return '';
@@ -80,8 +115,22 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
         </Box>
       );
     }
+
     const minD = Number(param.min_display ?? param.min ?? 0);
     const maxD = Number(param.max_display ?? param.max ?? 1);
+    // Build evenly spaced marks across range
+    const marks = (() => {
+      if (!isFinite(minD) || !isFinite(maxD) || maxD <= minD) return [];
+      const ticks = 5; // 6 marks
+      const step = (maxD - minD) / ticks;
+      const arr = [];
+      for (let i = 0; i <= ticks; i++) {
+        const v = minD + i * step;
+        arr.push({ value: v, label: `${formatNum(v)}${param.unit ? ' ' + param.unit : ''}` });
+      }
+      return arr;
+    })();
+
     return (
       <Box>
         <Typography variant="body2" sx={{ mb: 0.5 }}>{param.name} {param.unit ? `(${param.unit})` : ''}</Typography>
@@ -96,7 +145,7 @@ export default function SingleParamEditor({ editor, onSuggestedIntent }) {
           disabled={busy}
           valueLabelDisplay="auto"
           valueLabelFormat={(x) => `${formatNum(x)}${param.unit ? ' ' + param.unit : ''}`}
-          marks={[{ value: isFinite(minD) ? minD : 0, label: `${formatNum(isFinite(minD) ? minD : 0)}${param.unit ? ' ' + param.unit : ''}` }, { value: isFinite(maxD) ? maxD : 1, label: `${formatNum(isFinite(maxD) ? maxD : 1)}${param.unit ? ' ' + param.unit : ''}` }]}
+          marks={marks}
         />
         <Typography variant="caption" color="text.secondary">{formatNum(isFinite(minD) ? minD : 0)} — {formatNum(isFinite(maxD) ? maxD : 1)} {param.unit || ''}</Typography>
         {param.has_master && (
