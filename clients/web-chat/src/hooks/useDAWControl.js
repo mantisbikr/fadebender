@@ -203,7 +203,8 @@ export function useDAWControl() {
           // Read current via /intent/read for consistent formatting
           let readBody = { domain: entity };
           if (entity === 'track') {
-            readBody.track_index = Number(ref);
+            // Caps carry 0-based index; intents read expects 1-based
+            readBody.track_index = Number(ref) + 1;
           } else if (entity === 'return') {
             readBody.return_ref = String(ref);
           }

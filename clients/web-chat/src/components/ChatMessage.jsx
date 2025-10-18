@@ -349,7 +349,9 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
         p: 2,
         mb: 2,
         borderRadius: 2,
-        ...messageProps
+        ...messageProps,
+        width: '100%',
+        maxWidth: 'none'
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
