@@ -191,6 +191,67 @@ export function useDAWControl() {
         }
         return;
       }
+      // Fast path: open mixer param editor
+      if (rawInput && rawInput.startsWith('__OPEN_MIXER_PARAM__|')) {
+        setIsProcessing(true);
+        try {
+          const parts = rawInput.split('|');
+          const entity = parts[1]; // 'track' | 'return' | 'master'
+          const ref = parts[2];    // track index (string) or return letter (A/B/..) or '' for master
+          const paramName = parts[3];
+
+          // Read current via /intent/read for consistent formatting
+          let readBody = { domain: entity };
+          if (entity === 'track') {
+            readBody.track_index = Number(ref);
+          } else if (entity === 'return') {
+            readBody.return_ref = String(ref);
+          }
+          readBody.field = paramName;
+          const result = await apiService.readIntent(readBody);
+
+          // Pull mixer capabilities for param meta
+          let caps = null;
+          if (entity === 'track') {
+            caps = await apiService.getTrackMixerCapabilities(Number(ref));
+          } else if (entity === 'return') {
+            const ri = ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+            caps = await apiService.getReturnMixerCapabilities(ri);
+          } else if (entity === 'master') {
+            caps = await apiService.getMasterMixerCapabilities();
+          }
+          const capData = caps?.data || {};
+          const params = [];
+          (capData.groups || []).forEach(g => (g.params || []).forEach(p => params.push(p)));
+          (capData.ungrouped || []).forEach(p => params.push(p));
+          const pmeta = params.find(p => String(p.name).toLowerCase() === String(paramName).toLowerCase()) || { name: paramName };
+
+          const editor = {
+            entity_type: entity,
+            index_ref: ref,
+            title: `${paramName} • ${entity === 'track' ? `Track ${Number(ref) + 1}` : entity === 'return' ? `Return ${ref}` : 'Master'}`,
+            param: {
+              name: pmeta.name,
+              control_type: pmeta.control_type,
+              unit: pmeta.unit,
+              labels: pmeta.labels,
+              label_map: pmeta.label_map,
+              min_display: pmeta.min_display,
+              max_display: pmeta.max_display,
+              min: pmeta.min,
+              max: pmeta.max,
+              current_value: result?.normalized_value,
+              current_display: result?.display_value,
+            },
+          };
+          addMessage({ type: 'info', content: `Edit ${paramName}`, data: { mixer_param_editor: editor } });
+        } catch (e) {
+          addMessage({ type: 'error', content: `Open mixer editor error: ${e.message}` });
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
 
       // Step 1: Process and validate input
       const processed = textProcessor.processInput(rawInput);
@@ -253,7 +314,8 @@ export function useDAWControl() {
       });
 
       let result;
-      let deviceCapabilities = null; // Store capabilities to include in success message
+      let deviceCapabilities = null; // Store device capabilities to include in success message
+      let mixerCapabilities = null;  // Store mixer capabilities to include in success message
       if (featureFlags.use_intents_for_chat && (parsed && parsed.ok) && parsed.intent) {
         // Execute canonical intent directly; on error surface message and stop
         try {
@@ -283,6 +345,20 @@ export function useDAWControl() {
                 }
               } catch {}
             }
+            // If it's a mixer op, fetch mixer capabilities for the relevant entity
+            try {
+              if (ci.domain === 'track' && typeof ci.track_index === 'number' && ci.field) {
+                const caps = await apiService.getTrackMixerCapabilities(Number(ci.track_index));
+                if (caps && caps.ok) mixerCapabilities = caps.data;
+              } else if (ci.domain === 'return' && (typeof ci.return_index === 'number' || typeof ci.return_ref === 'string') && ci.field) {
+                const ri = typeof ci.return_index === 'number' ? Number(ci.return_index) : (ci.return_ref ? (ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)) : 0);
+                const caps = await apiService.getReturnMixerCapabilities(ri);
+                if (caps && caps.ok) mixerCapabilities = caps.data;
+              } else if (ci.domain === 'master' && ci.field) {
+                const caps = await apiService.getMasterMixerCapabilities();
+                if (caps && caps.ok) mixerCapabilities = caps.data;
+              }
+            } catch {}
           } catch {}
         } catch (e) {
           addMessage({ type: 'error', content: `Intent error: ${e.message}` });
@@ -320,6 +396,9 @@ export function useDAWControl() {
       }
       if (deviceCapabilities) {
         successData.capabilities = deviceCapabilities;
+      }
+      if (mixerCapabilities) {
+        successData.capabilities = mixerCapabilities;
       }
 
       addMessage({

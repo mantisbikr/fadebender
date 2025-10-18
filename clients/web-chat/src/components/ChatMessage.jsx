@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import ClickAwayAccordion from './ClickAwayAccordion.jsx';
 import ParamAccordion from './ParamAccordion.jsx';
+import SingleMixerParamEditor from './SingleMixerParamEditor.jsx';
 import SingleParamEditor from './SingleParamEditor.jsx';
 
 export default function ChatMessage({ message, onSuggestedIntent }) {
@@ -194,12 +195,23 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
             <ParamAccordion
               capabilities={message.data.capabilities}
               onParamClick={(p) => {
-                // Bubble up a suggestion to read current value and propose change
                 const caps = message.data.capabilities;
-                const letter = (typeof caps.return_index === 'number') ? String.fromCharCode('A'.charCodeAt(0) + caps.return_index) : 'A';
-                const deviceName = caps.device_name || '';
-                const payload = `__READ_PARAM__|${letter}|${caps.device_index}|${p.name}|${deviceName}`;
-                onSuggestedIntent?.(payload);
+                // Device capabilities path
+                if (typeof caps.device_index === 'number') {
+                  const letter = (typeof caps.return_index === 'number') ? String.fromCharCode('A'.charCodeAt(0) + caps.return_index) : 'A';
+                  const deviceName = caps.device_name || '';
+                  const payload = `__READ_PARAM__|${letter}|${caps.device_index}|${p.name}|${deviceName}`;
+                  onSuggestedIntent?.(payload);
+                  return;
+                }
+                // Mixer capabilities path: open mixer param editor
+                if (caps.entity_type) {
+                  let ref = '';
+                  if (caps.entity_type === 'track' && typeof caps.track_index === 'number') ref = String(caps.track_index);
+                  if (caps.entity_type === 'return' && typeof caps.return_index === 'number') ref = String.fromCharCode('A'.charCodeAt(0) + caps.return_index);
+                  const payload = `__OPEN_MIXER_PARAM__|${caps.entity_type}|${ref}|${p.name}`;
+                  onSuggestedIntent?.(payload);
+                }
               }}
             />
           )}
@@ -281,10 +293,15 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
             </Alert>
           )}
 
-          {/* Omit JSON details to keep chat compact; render editor if provided */}
+          {/* Omit JSON details to keep chat compact; render editors if provided */}
           {message.data.param_editor && (
             <Box sx={{ mt: 2 }}>
               <SingleParamEditor editor={message.data.param_editor} onSuggestedIntent={onSuggestedIntent} />
+            </Box>
+          )}
+          {message.data.mixer_param_editor && (
+            <Box sx={{ mt: 2 }}>
+              <SingleMixerParamEditor editor={message.data.mixer_param_editor} />
             </Box>
           )}
         </Box>

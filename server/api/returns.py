@@ -11,6 +11,7 @@ from server.services.ableton_client import request_op, data_or_raw
 from server.core.deps import get_store
 from server.services.mapping_utils import make_device_signature
 import re as _re
+from server.core.deps import get_store
 
 
 router = APIRouter()
@@ -84,6 +85,97 @@ def get_return_devices(index: int) -> Dict[str, Any]:
     if not resp:
         return {"ok": False, "error": "no response"}
     return {"ok": True, "data": data_or_raw(resp)}
+
+
+@router.get("/return/mixer/capabilities")
+def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
+    ri = int(index)
+    rs = request_op("get_return_tracks", timeout=1.0)
+    if not rs:
+        return {"ok": False, "error": "no response"}
+    data = data_or_raw(rs) or {}
+    rets = data.get("returns") or []
+    ret = next((r for r in rets if int(r.get("index", -1)) == ri), None)
+    mixer = (ret or {}).get("mixer") or {}
+
+    store = get_store()
+    mapping = store.get_mixer_channel_mapping("return") if store.enabled else None
+    if not mapping:
+        return {"ok": False, "error": "no_mixer_mapping"}
+
+    params_meta = mapping.get("params_meta") or []
+    sections = mapping.get("sections") or {}
+
+    section_params = {name: (sec.get("parameters") or []) for name, sec in sections.items()}
+    param_to_section = {}
+    for sname, plist in section_params.items():
+        for pname in plist:
+            param_to_section[pname] = sname
+
+    groups = []
+    by_group = {}
+    values = {}
+
+    def _display_for(name: str, raw):
+        try:
+            if name == "volume":
+                from server.volume_utils import live_float_to_db
+                return float(f"{live_float_to_db(float(raw)):.2f}")
+            if name == "pan":
+                return float(f"{(float(raw) * 50.0):.2f}")
+            if name in ("mute",):
+                return "On" if bool(raw) else "Off"
+            return raw
+        except Exception:
+            return raw
+
+    raw_map = {
+        "volume": mixer.get("volume"),
+        "pan": mixer.get("pan"),
+        "mute": mixer.get("mute"),
+    }
+
+    for mp in params_meta:
+        pname = mp.get("name")
+        item = {
+            "index": int(mp.get("index", 0)),
+            "name": pname,
+            "unit": mp.get("unit"),
+            "labels": mp.get("labels"),
+            "label_map": mp.get("label_map"),
+            "min_display": mp.get("min_display"),
+            "max_display": mp.get("max_display"),
+            "min": mp.get("min"),
+            "max": mp.get("max"),
+            "control_type": mp.get("control_type"),
+            "role": mp.get("role"),
+            "tooltip": (mp.get("audio_knowledge") or {}).get("audio_function"),
+        }
+        gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
+        if gname:
+            by_group.setdefault(gname, []).append(item)
+        else:
+            by_group.setdefault("Other", []).append(item)
+        rv = raw_map.get(pname)
+        values[pname] = {"value": rv, "display_value": _display_for(pname, rv)}
+
+    for gname, plist in by_group.items():
+        sec_meta = sections.get(gname, {})
+        groups.append({
+            "name": gname,
+            "params": plist,
+            "description": sec_meta.get("description"),
+            "sonic_focus": sec_meta.get("sonic_focus"),
+        })
+
+    return {"ok": True, "data": {
+        "entity_type": "return",
+        "return_index": ri,
+        "device_name": f"Return {chr(ord('A')+ri)} Mixer",
+        "groups": groups,
+        "ungrouped": [],
+        "values": values,
+    }}
 
 
 @router.get("/return/device/params")

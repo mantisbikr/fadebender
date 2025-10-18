@@ -310,6 +310,21 @@ class ApiService {
     if (!response.ok) throw new Error(`Return device capabilities failed: ${response.statusText}`);
     return response.json();
   }
+  async getTrackMixerCapabilities(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/mixer/capabilities?index=${index}`);
+    if (!response.ok) throw new Error(`Track mixer capabilities failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getReturnMixerCapabilities(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/mixer/capabilities?index=${index}`);
+    if (!response.ok) throw new Error(`Return mixer capabilities failed: ${response.statusText}`);
+    return response.json();
+  }
+  async getMasterMixerCapabilities() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/master/mixer/capabilities`);
+    if (!response.ok) throw new Error(`Master mixer capabilities failed: ${response.statusText}`);
+    return response.json();
+  }
   async getReturnDeviceMap(index, device) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/map?index=${index}&device=${device}`);
     if (!response.ok) throw new Error(`Return device map failed: ${response.statusText}`);

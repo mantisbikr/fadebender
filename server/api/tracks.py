@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from server.core.events import broker
 from server.services.ableton_client import request_op, data_or_raw
+from server.core.deps import get_store
 import re as _re
 
 
@@ -85,6 +86,108 @@ def get_track_device_params(index: int, device: int) -> Dict[str, Any]:
     if not resp:
         return {"ok": False, "error": "no response"}
     return {"ok": True, "data": data_or_raw(resp)}
+
+
+@router.get("/track/mixer/capabilities")
+def get_track_mixer_capabilities(index: int) -> Dict[str, Any]:
+    ti = int(index)
+    # Current status for values
+    st = request_op("get_track_status", timeout=1.0, track_index=ti)
+    if not st:
+        return {"ok": False, "error": "no response"}
+    sdata = data_or_raw(st) or {}
+    mixer = sdata.get("mixer") or {}
+
+    store = get_store()
+    mapping = store.get_mixer_channel_mapping("track") if store.enabled else None
+    if not mapping:
+        return {"ok": False, "error": "no_mixer_mapping"}
+
+    params_meta = mapping.get("params_meta") or []
+    sections = mapping.get("sections") or {}
+
+    # Build section name -> param names
+    section_params = {name: (sec.get("parameters") or []) for name, sec in sections.items()}
+    # Reverse lookup param -> section
+    param_to_section = {}
+    for sname, plist in section_params.items():
+        for pname in plist:
+            param_to_section[pname] = sname
+
+    # Build groups and values
+    groups = []
+    by_group = {}
+    values = {}
+
+    def _display_for(name: str, raw):
+        try:
+            if name == "volume":
+                from server.volume_utils import live_float_to_db
+                return float(f"{live_float_to_db(float(raw)):.2f}")
+            if name == "cue":
+                from server.volume_utils import live_float_to_db
+                return float(f"{live_float_to_db(float(raw)):.2f}")
+            if name == "pan":
+                # [-1,1] -> [-50,50]
+                return float(f"{(float(raw) * 50.0):.2f}")
+            if name in ("mute", "solo"):
+                return "On" if bool(raw) else "Off"
+            return raw
+        except Exception:
+            return raw
+
+    # Current values map (normalized raw comes from status)
+    raw_map = {
+        "volume": mixer.get("volume"),
+        "pan": mixer.get("pan"),
+        "mute": mixer.get("mute"),
+        "solo": mixer.get("solo"),
+    }
+
+    for mp in params_meta:
+        pname = mp.get("name")
+        item = {
+            "index": int(mp.get("index", 0)),
+            "name": pname,
+            "unit": mp.get("unit"),
+            "labels": mp.get("labels"),
+            "label_map": mp.get("label_map"),
+            "min_display": mp.get("min_display"),
+            "max_display": mp.get("max_display"),
+            "min": mp.get("min"),
+            "max": mp.get("max"),
+            "control_type": mp.get("control_type"),
+            "role": mp.get("role"),
+            "tooltip": (mp.get("audio_knowledge") or {}).get("audio_function"),
+        }
+        gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
+        if gname:
+            by_group.setdefault(gname, []).append(item)
+        else:
+            by_group.setdefault("Other", []).append(item)
+
+        # Attach current value + display
+        rv = raw_map.get(pname)
+        values[pname] = {"value": rv, "display_value": _display_for(pname, rv)}
+
+    # Build groups list with descriptions
+    for gname, plist in by_group.items():
+        sec_meta = sections.get(gname, {})
+        groups.append({
+            "name": gname,
+            "params": plist,
+            "description": sec_meta.get("description"),
+            "sonic_focus": sec_meta.get("sonic_focus"),
+        })
+
+    return {"ok": True, "data": {
+        "entity_type": "track",
+        "track_index": ti,
+        "device_name": f"Track {ti+1} Mixer",
+        "groups": groups,
+        "ungrouped": [],
+        "values": values,
+    }}
 
 
 def _parse_num(s: str) -> float | None:

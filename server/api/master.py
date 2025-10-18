@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from server.core.events import broker
 from server.services.ableton_client import request_op, data_or_raw
+from server.core.deps import get_store
 
 
 router = APIRouter()
@@ -80,6 +81,91 @@ def get_master_device_params_endpoint(device: int) -> Dict[str, Any]:
     return {"ok": True, "data": data_or_raw(resp)}
 
 
+@router.get("/master/mixer/capabilities")
+def get_master_mixer_capabilities() -> Dict[str, Any]:
+    ms = request_op("get_master_status", timeout=1.0)
+    if not ms:
+        return {"ok": False, "error": "no response"}
+    data = data_or_raw(ms) or {}
+    mixer = data.get("mixer") or {}
+
+    store = get_store()
+    mapping = store.get_mixer_channel_mapping("master") if store.enabled else None
+    if not mapping:
+        return {"ok": False, "error": "no_mixer_mapping"}
+
+    params_meta = mapping.get("params_meta") or []
+    sections = mapping.get("sections") or {}
+
+    section_params = {name: (sec.get("parameters") or []) for name, sec in sections.items()}
+    param_to_section = {}
+    for sname, plist in section_params.items():
+        for pname in plist:
+            param_to_section[pname] = sname
+
+    groups = []
+    by_group = {}
+    values: Dict[str, Any] = {}
+
+    def _display_for(name: str, raw):
+        try:
+            if name in ("volume", "cue"):
+                from server.volume_utils import live_float_to_db
+                return float(f"{live_float_to_db(float(raw)):.2f}")
+            if name == "pan":
+                return float(f"{(float(raw) * 50.0):.2f}")
+            return raw
+        except Exception:
+            return raw
+
+    raw_map = {
+        "volume": mixer.get("volume"),
+        "pan": mixer.get("pan"),
+        "cue": mixer.get("cue"),
+    }
+
+    for mp in params_meta:
+        pname = mp.get("name")
+        item = {
+            "index": int(mp.get("index", 0)),
+            "name": pname,
+            "unit": mp.get("unit"),
+            "labels": mp.get("labels"),
+            "label_map": mp.get("label_map"),
+            "min_display": mp.get("min_display"),
+            "max_display": mp.get("max_display"),
+            "min": mp.get("min"),
+            "max": mp.get("max"),
+            "control_type": mp.get("control_type"),
+            "role": mp.get("role"),
+            "tooltip": (mp.get("audio_knowledge") or {}).get("audio_function"),
+        }
+        gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
+        if gname:
+            by_group.setdefault(gname, []).append(item)
+        else:
+            by_group.setdefault("Other", []).append(item)
+        rv = raw_map.get(pname)
+        values[pname] = {"value": rv, "display_value": _display_for(pname, rv)}
+
+    for gname, plist in by_group.items():
+        sec_meta = sections.get(gname, {})
+        groups.append({
+            "name": gname,
+            "params": plist,
+            "description": sec_meta.get("description"),
+            "sonic_focus": sec_meta.get("sonic_focus"),
+        })
+
+    return {"ok": True, "data": {
+        "entity_type": "master",
+        "device_name": "Master Mixer",
+        "groups": groups,
+        "ungrouped": [],
+        "values": values,
+    }}
+
+
 class MasterDeviceParamBody(BaseModel):
     device_index: int
     param_index: int
@@ -107,4 +193,3 @@ def set_master_device_param(body: MasterDeviceParamBody) -> Dict[str, Any]:
     except Exception:
         pass
     return resp if isinstance(resp, dict) else {"ok": True}
-
