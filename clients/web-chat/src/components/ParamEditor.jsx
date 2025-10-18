@@ -6,6 +6,13 @@ function approxEqual(a, b, eps = 1e-3) {
   try { return Math.abs(Number(a) - Number(b)) <= eps; } catch { return false; }
 }
 
+function formatNum(n) {
+  const x = Number(n);
+  if (!isFinite(x)) return String(n);
+  const r = Math.round(x * 100) / 100;
+  return (r % 1 === 0) ? String(r) : String(r).replace(/\.?0+$/, '');
+}
+
 export default function ParamEditor({ capabilities, compact = false }) {
   if (!capabilities) return null;
   const values = capabilities.values || {};
@@ -126,8 +133,10 @@ export default function ParamEditor({ capabilities, compact = false }) {
           step={(maxD - minD) / 100}
           onChangeCommitted={(_, v) => handleSlider(p, v)}
           disabled={busy}
+          valueLabelDisplay="auto"
+          valueLabelFormat={(x) => `${formatNum(x)}${p.unit ? ' ' + p.unit : ''}`}
         />
-        <Typography variant="caption" color="text.secondary">{isFinite(minD) ? minD : 0} — {isFinite(maxD) ? maxD : 1} {p.unit || ''}</Typography>
+        <Typography variant="caption" color="text.secondary">{formatNum(isFinite(minD) ? minD : 0)} — {formatNum(isFinite(maxD) ? maxD : 1)} {p.unit || ''}</Typography>
       </Box>
     );
   };
