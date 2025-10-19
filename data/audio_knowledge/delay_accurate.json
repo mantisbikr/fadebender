@@ -1,0 +1,504 @@
+{
+  "device_name": "Delay",
+  "device_signature": "9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1",
+  "source": "Researched from Ableton Live 12 Manual (Section 26.11), delay DSP principles, and practical usage patterns",
+  "last_updated": "2025-10-18",
+  "parameters": {
+    "Device On": {
+      "audio_function": "Master bypass switch for entire delay device",
+      "sonic_effect": {
+        "increasing": "Enables delay processing; adds echo, space, and rhythm to signal",
+        "decreasing": "Bypasses all delay processing; passes dry signal through unchanged"
+      },
+      "use_cases": [
+        "Quick A/B comparison of dry vs delayed signal",
+        "Automation for rhythmic delay drops",
+        "CPU conservation when delay not needed"
+      ],
+      "typical_values": {
+        "off": "Bypass - no delay processing",
+        "on": "Active - full delay processing"
+      }
+    },
+    "Delay Mode": {
+      "audio_function": "Transition mode when changing delay time while processing audio",
+      "sonic_effect": {
+        "repitch": "Pitch variation when changing time, like tape delay; smooth analog character",
+        "fade": "Crossfade between old and new times; time-stretch-like quality; safe for performance",
+        "jump": "Immediate jump to new time; audible click if delays are sounding; useful for glitch effects"
+      },
+      "technical_detail": "Determines how delay buffer responds to time changes. Repitch emulates tape mechanics with doppler shift, Fade uses crossfading to avoid artifacts, Jump is instant but can click.",
+      "use_cases": [
+        "Repitch: Tape-style analog delay emulation, creative pitch effects",
+        "Fade: Performance-safe time changes, smooth transitions",
+        "Jump: Glitch effects, rhythmic stutters, aggressive sound design"
+      ],
+      "typical_values": {
+        "repitch": "Default - tape-like pitch shifts (most musical)",
+        "fade": "Smooth - no artifacts (best for automation)",
+        "jump": "Instant - clicks present (special effects)"
+      },
+      "relationships": [
+        "Interact with Time modulation - different modes respond differently to Dly < Mod",
+        "Repitch mode creates pitch effects when Time is modulated"
+      ]
+    },
+    "Link": {
+      "audio_function": "Stereo link - applies left channel's Sync and Time settings to right channel",
+      "sonic_effect": {
+        "increasing": "Locks both channels to same timing; mono-like delay behavior; centered image",
+        "decreasing": "Independent L/R timing; wide stereo image; complex rhythmic patterns"
+      },
+      "use_cases": [
+        "Simplify control when identical L/R delays desired",
+        "Create centered, mono-style delay effects",
+        "Quick rhythmic delay setup with single time control"
+      ],
+      "typical_values": {
+        "off": "Independent L/R - stereo width",
+        "on": "Linked - centered mono delay"
+      },
+      "relationships": [
+        "When engaged, changing L Sync/Time automatically updates R Sync/Time",
+        "Overrides R Time and R Sync settings"
+      ]
+    },
+    "Ping Pong": {
+      "audio_function": "Alternates delayed signal between left and right outputs",
+      "sonic_effect": {
+        "increasing": "Signal bounces L→R→L; wide stereo field; rhythmic spatial movement",
+        "decreasing": "Normal stereo delay; static positioning; L and R independent"
+      },
+      "technical_detail": "Internally cross-feeds delay lines - left output feeds right delay input and vice versa, creating bouncing effect.",
+      "use_cases": [
+        "Wide stereo delay effects",
+        "Dub-style spatial movement",
+        "Rhythmic call-and-response patterns",
+        "Maximize stereo width with medium-high feedback"
+      ],
+      "typical_values": {
+        "off": "Standard stereo delay",
+        "on": "Bouncing stereo (use with tempo sync for rhythmic bounce)"
+      },
+      "relationships": [
+        "Most effective with different L/R delay times",
+        "Interacts with Feedback - higher feedback = more bounces"
+      ]
+    },
+    "L Sync": {
+      "audio_function": "Toggles left channel between tempo-synced beat divisions and free milliseconds",
+      "sonic_effect": {
+        "increasing": "Beat-synced delay (16th note divisions); locked to tempo; rhythmic precision",
+        "decreasing": "Free time in milliseconds; independent of tempo; smooth time sweeps"
+      },
+      "use_cases": [
+        "On: Rhythmic delays locked to song tempo",
+        "Off: Slapback, doubling, creative time-based effects",
+        "Off: Smooth delay time automation without rhythmic jumps"
+      ],
+      "typical_values": {
+        "off": "Free time (1-5000ms) - use L Time knob",
+        "on": "Tempo sync - use L 16th divisions"
+      },
+      "relationships": [
+        "When On, enables L 16th parameter",
+        "When Off, enables L Time parameter"
+      ]
+    },
+    "R Sync": {
+      "audio_function": "Toggles right channel between tempo-synced beat divisions and free milliseconds",
+      "sonic_effect": {
+        "increasing": "Beat-synced delay (16th note divisions); locked to tempo; rhythmic precision",
+        "decreasing": "Free time in milliseconds; independent of tempo; smooth time sweeps"
+      },
+      "use_cases": [
+        "On: Rhythmic delays locked to song tempo",
+        "Off: Slapback, doubling, creative time-based effects",
+        "Mix: L synced + R free for complex polyrhythmic patterns"
+      ],
+      "typical_values": {
+        "off": "Free time (1-5000ms) - use R Time knob",
+        "on": "Tempo sync - use R 16th divisions"
+      },
+      "relationships": [
+        "When On, enables R 16th parameter",
+        "When Off, enables R Time parameter",
+        "Disabled when Link is active (follows L Sync)"
+      ]
+    },
+    "L Time": {
+      "audio_function": "Left channel delay time in milliseconds when Sync is off",
+      "sonic_effect": {
+        "increasing": "Longer delays; increased space; more separation from source; rhythmic slowing",
+        "decreasing": "Shorter delays; tight to source; slapback to doubling character; faster rhythm"
+      },
+      "technical_detail": "Exponential range 1-5000ms. Short times (1-50ms) create doubling/chorus, medium (50-500ms) slapback/echo, long (500-5000ms) rhythmic delays.",
+      "use_cases": [
+        "1-15ms: Doubling, thickening, subtle width",
+        "20-80ms: Slapback echo (classic vocal effect)",
+        "100-300ms: Quarter note-ish delays at various tempos",
+        "500-5000ms: Long atmospheric delays, special effects"
+      ],
+      "typical_values": {
+        "doubling": "5-15ms",
+        "slapback": "50-120ms",
+        "short_echo": "150-300ms",
+        "long_delay": "400-2000ms",
+        "special_fx": "2000-5000ms"
+      },
+      "relationships": [
+        "Affected by Delay Mode - Repitch creates pitch shifts when changed",
+        "Can be modulated by Dly < Mod for chorus-like effects",
+        "Only active when L Sync is Off"
+      ]
+    },
+    "R Time": {
+      "audio_function": "Right channel delay time in milliseconds when Sync is off",
+      "sonic_effect": {
+        "increasing": "Longer delays; increased space; more separation from source; rhythmic slowing",
+        "decreasing": "Shorter delays; tight to source; slapback to doubling character; faster rhythm"
+      },
+      "technical_detail": "Exponential range 1-5000ms. Different L/R times create stereo width and polyrhythmic patterns.",
+      "use_cases": [
+        "Match L Time for centered mono delay",
+        "Offset from L Time for wide stereo field",
+        "Create polyrhythmic patterns with different L/R times",
+        "Subtle offset (10-30ms) for stereo width without obvious delay"
+      ],
+      "typical_values": {
+        "mono_match": "Same as L Time",
+        "stereo_width": "L Time ± 10-50ms",
+        "polyrhythm": "Different rhythmic values from L"
+      },
+      "relationships": [
+        "Works with L Time to create stereo field",
+        "Disabled when Link is active (follows L Time)",
+        "Only active when R Sync is Off"
+      ]
+    },
+    "L 16th": {
+      "audio_function": "Left channel tempo-synced delay time in 16th note divisions when Sync is on",
+      "sonic_effect": {
+        "increasing": "Longer beat divisions; slower rhythm; more space between repeats",
+        "decreasing": "Shorter divisions; faster rhythm; tighter rhythmic patterns"
+      },
+      "technical_detail": "Values 1, 2, 3, 4, 5, 6, 8, 16 represent multiples of 16th notes. 4 = quarter note, 8 = half note, 16 = whole note.",
+      "use_cases": [
+        "1-2: Very fast rhythmic delays (16th-8th notes)",
+        "3-4: Standard rhythmic delays (dotted 8th, quarter)",
+        "5-8: Slower delays (dotted quarter to half note)",
+        "16: Whole note delays, long atmospheric"
+      ],
+      "typical_values": {
+        "fast": "1-2 (16th-8th note)",
+        "groove": "3-4 (dotted 8th-quarter)",
+        "slow": "6-8 (half note range)",
+        "long": "16 (whole note)"
+      },
+      "relationships": [
+        "Only active when L Sync is On",
+        "Automatically scales with project tempo",
+        "Common combinations: L=4, R=3 for dotted rhythm"
+      ]
+    },
+    "R 16th": {
+      "audio_function": "Right channel tempo-synced delay time in 16th note divisions when Sync is on",
+      "sonic_effect": {
+        "increasing": "Longer beat divisions; slower rhythm; more space between repeats",
+        "decreasing": "Shorter divisions; faster rhythm; tighter rhythmic patterns"
+      },
+      "technical_detail": "Values 1, 2, 3, 4, 5, 6, 8, 16 represent multiples of 16th notes. Different L/R divisions create polyrhythmic patterns.",
+      "use_cases": [
+        "Match L 16th for centered mono delay",
+        "Offset for polyrhythmic patterns (e.g., L=4, R=3)",
+        "Create complex rhythmic textures with Ping Pong",
+        "Dub-style delays with different L/R divisions"
+      ],
+      "typical_values": {
+        "mono_match": "Same as L 16th",
+        "dotted_rhythm": "L=4, R=3 (quarter + dotted 8th)",
+        "polyrhythm": "Different divisions for complexity"
+      },
+      "relationships": [
+        "Only active when R Sync is On",
+        "Disabled when Link is active (follows L 16th)",
+        "Works with Ping Pong for bouncing rhythmic patterns"
+      ]
+    },
+    "L Offset": {
+      "audio_function": "Fine-tune left delay time offset as percentage when in Sync mode",
+      "sonic_effect": {
+        "increasing": "Delays timing later (positive offset); pushes beat slightly behind; laid-back groove",
+        "decreasing": "Advances timing earlier (negative offset); pulls beat forward; rushed feel"
+      },
+      "technical_detail": "±33% offset of selected beat division. At L 16th = 4 (quarter note), ±33% = ±33% of quarter note duration.",
+      "use_cases": [
+        "Create swing or shuffle feels in synced delays",
+        "Offset delays slightly behind beat for laid-back feel",
+        "Slight advancement for pushing energy",
+        "Humanize mechanical synced delays"
+      ],
+      "typical_values": {
+        "centered": "0% - on the beat",
+        "swing": "+10 to +20% - behind beat groove",
+        "push": "-5 to -10% - ahead of beat energy",
+        "extreme": "±25 to ±33% - strong swing/rush"
+      },
+      "relationships": [
+        "Only active when L Sync is On",
+        "Percentage relative to L 16th division",
+        "Combines with R Offset for stereo timing variations"
+      ]
+    },
+    "R Offset": {
+      "audio_function": "Fine-tune right delay time offset as percentage when in Sync mode",
+      "sonic_effect": {
+        "increasing": "Delays timing later (positive offset); pushes beat slightly behind; laid-back groove",
+        "decreasing": "Advances timing earlier (negative offset); pulls beat forward; rushed feel"
+      },
+      "technical_detail": "±33% offset of selected beat division. Different L/R offsets create stereo timing variation and width.",
+      "use_cases": [
+        "Match L Offset for centered timing adjustment",
+        "Offset differently from L for wide stereo field",
+        "Create subtle stereo movement with small L/R differences",
+        "Polyrhythmic patterns with different L/R offsets"
+      ],
+      "typical_values": {
+        "match_L": "Same as L Offset for mono",
+        "stereo_subtle": "L Offset ± 5-10%",
+        "stereo_wide": "Opposite sign from L Offset"
+      },
+      "relationships": [
+        "Only active when R Sync is On",
+        "Disabled when Link is active (follows L Offset)",
+        "Percentage relative to R 16th division"
+      ]
+    },
+    "Feedback": {
+      "audio_function": "Amount of delay output fed back into input for repeating echoes",
+      "sonic_effect": {
+        "increasing": "More repeats; longer decay; builds density; approaches infinite at high values; can self-oscillate",
+        "decreasing": "Fewer repeats; quick decay; cleaner; single echo at 0%"
+      },
+      "technical_detail": "Internal feedback loop - each repeat is Feedback% of previous. At 0% = single delay, ~70-80% = noticeable decay, 95% = very long sustain approaching infinite.",
+      "use_cases": [
+        "0-30%: Single slapback or doubling",
+        "40-60%: Multiple distinct echoes",
+        "70-85%: Dense, reverb-like delay cloud",
+        "90-95%: Infinite-style delays, dub effects, watch levels!"
+      ],
+      "typical_values": {
+        "single_echo": "0-20%",
+        "short_tail": "30-50%",
+        "reverb_like": "60-75%",
+        "dub_delay": "75-90%",
+        "infinite": "90-95% (watch for buildup!)"
+      },
+      "relationships": [
+        "Interacts with Filter - high feedback needs filter to control frequency buildup",
+        "Works with Ping Pong for bouncing repeats",
+        "High feedback + modulation can create chorus/flanger effects"
+      ]
+    },
+    "Freeze": {
+      "audio_function": "Captures and endlessly cycles current delay buffer, ignoring new input",
+      "sonic_effect": {
+        "increasing": "Freezes delay content; infinite sustain; no new input processed; creates pad-like textures",
+        "decreasing": "Normal delay operation; new input processed; natural decay according to Feedback"
+      },
+      "technical_detail": "Disables input and sets internal feedback to 100%, creating infinite loop. Current buffer content sustains unchanged until Freeze disabled.",
+      "use_cases": [
+        "Create ambient pads from delay tails",
+        "Freeze rhythmic patterns for layering",
+        "Build tension by sustaining delay content",
+        "Sound design - isolate and sustain delay artifacts"
+      ],
+      "typical_values": {
+        "off": "Normal delay operation",
+        "on": "Frozen buffer - use for pads/textures"
+      },
+      "relationships": [
+        "When On, disables Filter and Modulation sections",
+        "Combines with high Feedback for immediate infinite sustain",
+        "Audio in buffer when activated determines frozen sound"
+      ]
+    },
+    "Filter On": {
+      "audio_function": "Enables band-pass filter in feedback loop to shape repeating echoes",
+      "sonic_effect": {
+        "increasing": "Activates filter; shapes frequency content of repeats; prevents buildup; adds character",
+        "decreasing": "Bypasses filter; full-range repeats; natural decay; more hi-fi"
+      },
+      "technical_detail": "Band-pass filter in feedback path - each repeat passes through filter, progressively shaping tone. Essential for controlling frequency buildup at high feedback.",
+      "use_cases": [
+        "Prevent muddy low-end buildup with high feedback",
+        "Create telephone/radio-style filtered delays",
+        "Dub-style frequency sweeps (automate Filter Freq)",
+        "Isolate specific frequency ranges in repeats"
+      ],
+      "typical_values": {
+        "off": "Clean, full-range delays",
+        "on": "Use Filter Freq/Width to shape tone"
+      },
+      "relationships": [
+        "Enables Filter Freq and Filter Width parameters",
+        "Disabled when Freeze is On",
+        "Critical for high-feedback delays to control buildup"
+      ]
+    },
+    "Filter Freq": {
+      "audio_function": "Center frequency of band-pass filter shaping delay repeats",
+      "sonic_effect": {
+        "increasing": "Higher center frequency; brighter, thinner repeats; less bass; telephone-like at extremes",
+        "decreasing": "Lower center frequency; darker, warmer repeats; more bass; can muddy at extremes"
+      },
+      "technical_detail": "Exponential 50-18000Hz range. Sets center of bandpass - frequencies outside band are attenuated in feedback loop.",
+      "use_cases": [
+        "50-200Hz: Extreme lo-fi, bass-only delays",
+        "300-800Hz: Telephone/radio character, vocal focus",
+        "1000-3000Hz: Presence boost, cut lows and highs",
+        "5000-12000Hz: Bright, airy delays, cut body",
+        "Automate for dub-style filter sweeps"
+      ],
+      "typical_values": {
+        "bass": "100-300Hz",
+        "telephone": "500-1000Hz",
+        "presence": "1500-3000Hz",
+        "bright": "5000-10000Hz"
+      },
+      "relationships": [
+        "Only active when Filter On is enabled and Freeze is Off",
+        "Works with Filter Width to define bandpass shape",
+        "Can be modulated by Filter < Mod for sweeping effects"
+      ]
+    },
+    "Filter Width": {
+      "audio_function": "Bandwidth of band-pass filter - controls how much frequency range passes through",
+      "sonic_effect": {
+        "increasing": "Wider bandwidth; more frequencies pass; fuller sound; less filtering effect",
+        "decreasing": "Narrower bandwidth; fewer frequencies pass; thinner, more focused; stronger filtering"
+      },
+      "technical_detail": "Range 0.5-9.0 (unitless Q factor). Low values = narrow, resonant filter. High values = gentle, broad filter.",
+      "use_cases": [
+        "0.5-2.0: Narrow, resonant filtering - isolate specific range",
+        "2.5-5.0: Moderate filtering - shape without thinning too much",
+        "6.0-9.0: Gentle filtering - subtle tone shaping"
+      ],
+      "typical_values": {
+        "narrow": "0.5-2.0 (strong character)",
+        "moderate": "3.0-5.0 (balanced)",
+        "wide": "6.0-9.0 (subtle shaping)"
+      },
+      "relationships": [
+        "Only active when Filter On is enabled and Freeze is Off",
+        "Works with Filter Freq - narrow width emphasizes Freq selection",
+        "Lower width can create resonant peaks for special effects"
+      ]
+    },
+    "Mod Freq": {
+      "audio_function": "LFO rate in Hertz modulating delay time and/or filter frequency",
+      "sonic_effect": {
+        "increasing": "Faster modulation; quicker wobble; chorus to vibrato; can sound unstable at extremes",
+        "decreasing": "Slower modulation; gentle drift; subtle movement; more natural"
+      },
+      "technical_detail": "Exponential 0.01-40Hz LFO. Low rates (0.01-0.5Hz) create slow drift, mid rates (0.5-5Hz) chorus-like, high rates (5-40Hz) vibrato to ring modulation effects.",
+      "use_cases": [
+        "0.01-0.3Hz: Slow tape-like drift, subtle movement",
+        "0.5-3Hz: Chorus-like modulation, analog warmth",
+        "3-8Hz: Vibrato effects, obvious modulation",
+        "10-40Hz: Extreme vibrato, ring mod-like artifacts"
+      ],
+      "typical_values": {
+        "subtle": "0.05-0.2Hz",
+        "chorus": "0.5-2Hz",
+        "vibrato": "4-8Hz",
+        "extreme": "10-40Hz"
+      },
+      "relationships": [
+        "Disabled when Freeze is On",
+        "Rate controls speed for both Dly < Mod and Filter < Mod",
+        "Interacts with Delay Mode - Repitch mode creates pitch effects"
+      ]
+    },
+    "Dly < Mod": {
+      "audio_function": "Amount of LFO modulation applied to delay time",
+      "sonic_effect": {
+        "increasing": "More delay time variation; stronger chorus/vibrato; pitch warble; can be disorienting at extremes",
+        "decreasing": "Less variation; stable delay time; cleaner; subtle movement"
+      },
+      "technical_detail": "0-100% modulation depth. With Repitch mode, creates pitch shifting like tape wow/flutter. With Fade mode, creates time-stretch-like effects without pitch change.",
+      "use_cases": [
+        "0-10%: Subtle analog warmth, tape-like drift",
+        "10-30%: Light chorus effect, movement",
+        "30-60%: Obvious chorus, BBD-style analog delay",
+        "60-100%: Extreme pitch modulation, special effects",
+        "Combine with slow Mod Freq for tape wow/flutter emulation"
+      ],
+      "typical_values": {
+        "subtle": "5-15% (analog warmth)",
+        "chorus": "20-40% (chorus-like)",
+        "vibrato": "50-80% (obvious pitch)",
+        "extreme": "80-100% (special effects)"
+      },
+      "relationships": [
+        "Disabled when Freeze is On",
+        "Depth set by this param, rate set by Mod Freq",
+        "Delay Mode determines character: Repitch = pitch shift, Fade = time stretch",
+        "Creates chorus-like effects even with single delay"
+      ]
+    },
+    "Filter < Mod": {
+      "audio_function": "Amount of LFO modulation applied to filter frequency",
+      "sonic_effect": {
+        "increasing": "More frequency sweeping; wah-like movement; dynamic filtering; can overwhelm at extremes",
+        "decreasing": "Less sweeping; static filter; cleaner; subtle movement"
+      },
+      "technical_detail": "0-100% modulation depth applied to Filter Freq. Creates auto-wah or phaser-like sweeping of filter center frequency.",
+      "use_cases": [
+        "0-15%: Subtle filter animation, analog-style drift",
+        "20-40%: Noticeable auto-wah character",
+        "50-75%: Strong sweeping, phaser-like effects",
+        "80-100%: Extreme frequency sweeps, special effects",
+        "Combine with narrow Filter Width for resonant sweeps"
+      ],
+      "typical_values": {
+        "subtle": "5-15% (gentle sweep)",
+        "auto_wah": "25-50% (obvious movement)",
+        "strong": "60-85% (dramatic sweeps)",
+        "extreme": "90-100% (full range sweeps)"
+      },
+      "relationships": [
+        "Disabled when Freeze is On",
+        "Requires Filter On to be enabled",
+        "Depth set by this param, rate set by Mod Freq",
+        "Narrow Filter Width enhances resonant sweep effect"
+      ]
+    },
+    "Dry/Wet": {
+      "audio_function": "Mix balance between unprocessed (dry) signal and delayed (wet) signal",
+      "sonic_effect": {
+        "increasing": "More delay in mix; more echo; can overwhelm dry signal; use 100% on return tracks",
+        "decreasing": "Less delay in mix; more dry signal; clearer; no delay at 0%"
+      },
+      "technical_detail": "0-100% wet mix. Insert use typically 10-40% wet. Return track use always 100% wet (dry signal already in mix). Equal-loudness toggle maintains perceived volume at 50/50.",
+      "use_cases": [
+        "0-20%: Subtle thickening, doubling effects",
+        "20-40%: Clear delay presence, still dry-forward",
+        "40-60%: Balanced wet/dry, obvious delay",
+        "60-80%: Delay-forward, ambient",
+        "100%: Return track use, parallel processing"
+      ],
+      "typical_values": {
+        "subtle_insert": "10-25%",
+        "balanced_insert": "30-50%",
+        "return_track": "100% (always)",
+        "ambient": "60-80%"
+      },
+      "relationships": [
+        "Set to 100% when used on return/send track",
+        "Lower values needed with high Feedback to avoid buildup",
+        "Equal-loudness option compensates for perceived volume changes"
+      ]
+    }
+  }
+}

@@ -183,6 +183,69 @@ def _auto_enable_master_if_needed(params: list[dict], target_param_name: str) ->
     return None
 
 
+def _check_requires_for_effect(mapping: dict | None, params: list[dict], target_param_name: str) -> list[dict]:
+    """Check requires_for_effect conditions and return prerequisite parameter changes.
+
+    Returns a list of dicts with {param_dict, target_value} for parameters that need to be changed
+    to satisfy the requirements. Empty list if no requirements or all satisfied.
+    """
+    if not mapping:
+        return []
+    try:
+        grp = mapping.get("grouping") or {}
+        requires = grp.get("requires_for_effect") or {}
+
+        # Find requirement for target param (case-insensitive)
+        target_lc = str(target_param_name or "").strip().lower()
+        req_entry = None
+        for k, v in requires.items():
+            if str(k).strip().lower() == target_lc:
+                req_entry = v
+                break
+
+        if not req_entry:
+            return []
+
+        # Check all_of conditions
+        all_of = req_entry.get("all_of") or []
+        if not isinstance(all_of, list):
+            return []
+
+        # Collect unsatisfied conditions
+        prereqs = []
+        for cond in all_of:
+            if not isinstance(cond, dict):
+                continue
+            req_param_name = str(cond.get("param", "")).strip().lower()
+            req_value = cond.get("value")
+
+            # Find the parameter in params list
+            param_dict = None
+            for p in params:
+                if str(p.get("name", "")).strip().lower() == req_param_name:
+                    param_dict = p
+                    break
+
+            if param_dict is None:
+                continue
+
+            # Check if current value satisfies requirement
+            current_val = float(param_dict.get("value", 0.0))
+            req_val = float(req_value)
+
+            # If not satisfied, add to prereqs
+            if abs(current_val - req_val) > 1e-6:
+                prereqs.append({
+                    "param_dict": param_dict,
+                    "target_value": req_val,
+                    "note": f"requires_for_effect:{target_param_name}"
+                })
+
+        return prereqs
+    except Exception:
+        return []
+
+
 def _master_from_mapping(mapping: dict | None, params: list[dict], target_param_name: str) -> Optional[dict]:
     """Resolve a master toggle strictly via Firestore mapping.grouping.
 
@@ -1070,21 +1133,30 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         if target_display is not None:
             used_display = True
             ty = _parse_target_display(target_display)
-            # Label resolution (non-numeric)
-            if pm and isinstance(pm.get("label_map"), dict) and ty is None:
+            # Label resolution - check label_map FIRST for quantized params (even if numeric)
+            if pm and isinstance(pm.get("label_map"), dict):
                 lm = pm.get("label_map") or {}
                 lnorm = target_display.strip().lower()
-                if lnorm in {"on", "enable", "enabled", "true", "1", "yes"}:
-                    x = vmax
-                elif lnorm in {"off", "disable", "disabled", "false", "0", "no"}:
-                    x = vmin
-                else:
-                    for k, v in lm.items():
-                        if str(k).strip().lower() == lnorm:
-                            x = float(v)
-                            break
+                # Try exact match in label_map first
+                matched = False
+                for k, v in lm.items():
+                    if str(k).strip().lower() == lnorm:
+                        x = float(v)
+                        matched = True
+                        break
+                # If not matched, check for on/off synonyms
+                if not matched:
+                    if lnorm in {"on", "enable", "enabled", "true", "1", "yes"}:
+                        x = vmax
+                        matched = True
+                    elif lnorm in {"off", "disable", "disabled", "false", "0", "no"}:
+                        x = vmin
+                        matched = True
+                # Skip numeric processing if we matched a label
+                if matched:
+                    ty = None  # Prevent falling through to numeric handler
             # Handle common on/off without label_map present
-            elif ty is None:
+            if ty is None and not pm.get("label_map"):
                 lnorm = str(target_display).strip().lower()
                 if lnorm in {"on", "enable", "enabled", "true", "1", "yes"}:
                     x = vmax
@@ -1166,23 +1238,50 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             elif unit_lc in ("percent", "%"):
                 x = vmin + (vmax - vmin) * _clamp(x, 0.0, 100.0) / 100.0
         # Optional dependency enable (mapping only)
+        # First check requires_for_effect (complex multi-condition dependencies)
+        prereq_changes = []
+        if intent.auto_enable_master is None or intent.auto_enable_master:
+            prereq_changes = _check_requires_for_effect(mapping, params, str(sel.get("name", "")))
+
+        # Then check simple master toggle dependency
         master_toggle = _master_from_mapping(mapping, params, str(sel.get("name", "")))
-        preview: Dict[str, Any] = {"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(_clamp(x, vmin, vmax) if intent.clamp else x)}
         if master_toggle is not None and (intent.auto_enable_master is None or intent.auto_enable_master):
-            preview["pre"] = {
-                "op": "set_return_device_param",
-                "return_index": ri,
-                "device_index": di,
-                "param_index": int(master_toggle.get("index", 0)),
-                "value": float(master_toggle.get("max", 1.0)),
-                "note": "auto_enable_master"
-            }
+            # Check if already in prereq_changes to avoid duplicates
+            master_idx = int(master_toggle.get("index", 0))
+            if not any(int(pc["param_dict"].get("index", -1)) == master_idx for pc in prereq_changes):
+                prereq_changes.append({
+                    "param_dict": master_toggle,
+                    "target_value": float(master_toggle.get("max", 1.0)),
+                    "note": "auto_enable_master"
+                })
+
+        preview: Dict[str, Any] = {"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(_clamp(x, vmin, vmax) if intent.clamp else x)}
+
+        # Add prereqs to preview
+        if prereq_changes:
+            preview["prereqs"] = [
+                {
+                    "op": "set_return_device_param",
+                    "return_index": ri,
+                    "device_index": di,
+                    "param_index": int(pc["param_dict"].get("index", 0)),
+                    "param_name": pc["param_dict"].get("name"),
+                    "value": float(pc["target_value"]),
+                    "note": pc["note"]
+                }
+                for pc in prereq_changes
+            ]
+
         if intent.dry_run:
             return {"ok": True, "preview": preview}
-        # Apply pre toggle if any
-        if preview.get("pre"):
-            pre = preview["pre"]
-            request_op("set_return_device_param", timeout=1.0, **{k: pre[k] for k in ("return_index","device_index","param_index","value")})
+
+        # Apply all prereq changes in order
+        for prereq in prereq_changes:
+            pd = prereq["param_dict"]
+            request_op("set_return_device_param", timeout=1.0,
+                      return_index=ri, device_index=di,
+                      param_index=int(pd.get("index", 0)),
+                      value=float(prereq["target_value"]))
 
         # Capture old value before change
         old_val = float(sel.get("value", 0.0))
