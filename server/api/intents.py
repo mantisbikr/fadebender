@@ -1866,6 +1866,31 @@ _COMMON_PARAM_ALIASES = {
     "loshelf": "low shelf",
     "hi shelf": "hi shelf",
     "hishelf": "hi shelf",
+    # Filter types and common abbreviations
+    "low pass": "low cut",
+    "low-pass": "low cut",
+    "lpf": "low cut",
+    "lp": "low cut",
+    "high pass": "high cut",
+    "high-pass": "high cut",
+    "hpf": "high cut",
+    "hp": "high cut",
+    # Q / Bandwidth / Resonance family
+    "bandwidth": "q",
+    "bw": "q",
+    "q factor": "q",
+    "q-factor": "q",
+    "res": "q",
+    "resonance": "q",
+    # Rate / Speed / Tempo-ish controls
+    "speed": "rate",
+    # Depth / Amount / Intensity family
+    "intensity": "depth",
+    "amt": "amount",
+    # Feedback abbreviations
+    "fbk": "feedback",
+    "feed back": "feedback",
+    "feedback amount": "feedback",
     "width": "stereo image",
     "stereo width": "stereo image",
     "image": "stereo image",
