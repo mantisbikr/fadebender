@@ -425,7 +425,7 @@ export function useDAWControl() {
                 if (hasPlugin) {
                   return {
                     label: `${d.name || plugin} (${ord})`,
-                    value: `${base} ${plugin} ${ord} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
+                    value: `${base} ${d.name} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
                   };
                 }
                 return {
@@ -452,7 +452,7 @@ export function useDAWControl() {
                         const ord2 = 1; // default to first match for suggestion
                         extras.push({
                           label: `Return ${letter2}: ${matches[0].name || plugin} (${ord2})`,
-                          value: `set Return ${letter2} ${plugin} ${ord2} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
+                          value: `set Return ${letter2} ${matches[0].name} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
                         });
                       }
                     } catch {}

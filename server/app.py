@@ -39,7 +39,7 @@ from server.config.param_registry import (
     reload_param_registry,
 )
 from server.services.mapping_store import MappingStore
-from server.core.deps import set_store_instance
+from server.core.deps import set_store_instance, get_live_index
 from server.core.events import broker, emit_event, schedule_emit
 from server.api.events import router as events_router
 from server.api.health import router as health_router
@@ -4036,3 +4036,11 @@ def start_ableton_event_listener() -> None:
 @app.on_event("startup")
 async def _ableton_startup_listener() -> None:
     start_ableton_event_listener()
+    # Start LiveIndex background refresher
+    try:
+        import asyncio as _asyncio
+        li = get_live_index()
+        _asyncio.create_task(li.refresh_all())
+        _asyncio.create_task(li.loop(interval_sec=60.0))
+    except Exception:
+        pass

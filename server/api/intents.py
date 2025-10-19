@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from server.services.ableton_client import request_op
-from server.core.deps import get_store
+from server.core.deps import get_store, get_device_resolver
 from server.services.mapping_utils import make_device_signature
 import math
 import re as _re
@@ -1121,9 +1121,18 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                         if 1 <= ord_hint <= len(matches):
                             di = matches[ord_hint - 1]
                         else:
-                            # Ordinal out of range — return choices
-                            choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
-                            raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
+                            # If an exact name match exists, prefer it and ignore the ordinal
+                            try:
+                                hint_raw = str(intent.device_name_hint or "").strip().lower()
+                                exact = next((int(d.get('index', 0)) for d in devs if str(d.get('name','')).strip().lower() == hint_raw), None)
+                            except Exception:
+                                exact = None
+                            if exact is not None:
+                                di = exact
+                            else:
+                                # Ordinal out of range — return choices
+                                choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                                raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
                     else:
                         di = matches[0]
                 else:
@@ -1143,6 +1152,18 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 raise HTTPException(404, f"device_out_of_range:{di}; devices=[{names}] on Return {chr(ord('A')+ri)}")
         except HTTPException:
             raise
+        except Exception:
+            pass
+        # Resolve device index using LiveIndex/Resolver when hints are provided
+        try:
+            if intent.device_name_hint or intent.device_ordinal_hint:
+                resolver = get_device_resolver()
+                di_res, _dname, _notes = resolver.resolve_return(
+                    return_index=ri,
+                    device_name_hint=intent.device_name_hint,
+                    device_ordinal_hint=intent.device_ordinal_hint,
+                )
+                di = int(di_res)
         except Exception:
             pass
         # Read params to get min/max, resolve selection
@@ -1437,8 +1458,17 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                         if 1 <= ord_hint <= len(matches):
                             di = matches[ord_hint - 1]
                         else:
-                            choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
-                            raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
+                            # Prefer exact name match if available, ignore invalid ordinal
+                            try:
+                                hint_raw = str(intent.device_name_hint or "").strip().lower()
+                                exact = next((int(d.get('index', 0)) for d in devs if str(d.get('name','')).strip().lower() == hint_raw), None)
+                            except Exception:
+                                exact = None
+                            if exact is not None:
+                                di = exact
+                            else:
+                                choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                                raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
                     else:
                         di = matches[0]
                 else:
@@ -1448,6 +1478,18 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 raise
             except Exception:
                 pass
+        # Resolve device index using resolver when hints are present
+        try:
+            if intent.device_name_hint or intent.device_ordinal_hint:
+                resolver = get_device_resolver()
+                di_res, _dname, _notes = resolver.resolve_track(
+                    track_index=ti,
+                    device_name_hint=intent.device_name_hint,
+                    device_ordinal_hint=intent.device_ordinal_hint,
+                )
+                di = int(di_res)
+        except Exception:
+            pass
         pr = request_op("get_track_device_params", timeout=1.2, track_index=ti, device_index=di)
         params = ((pr or {}).get("data") or {}).get("params") or []
         if not params:
