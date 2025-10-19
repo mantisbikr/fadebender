@@ -1,0 +1,243 @@
+{
+  "device_name": "Align Delay",
+  "device_signature": "82da8ccee34e85facb2a264e3110618dc199938e",
+  "source": "Researched from Ableton Forums, professional PA alignment documentation, and audio engineering resources",
+  "last_updated": "2025-10-18",
+  "description": "Utility delay device for micro-timing alignment and phase correction. Max for Live device with three operational modes for different alignment scenarios.",
+  "parameters": {
+    "Device On": {
+      "audio_function": "Master bypass control for the entire alignment delay effect",
+      "sonic_effect": {
+        "increasing": "Activates the delay alignment, applying configured timing offset to signals",
+        "decreasing": "Bypasses all delay processing, passing audio through unaffected"
+      },
+      "use_cases": [
+        "Enable when active timing correction is needed",
+        "Disable for A/B comparison of aligned vs unaligned signals"
+      ]
+    },
+    "Mode": {
+      "audio_function": "Selects delay measurement mode: Time (milliseconds), Samples (sample count), or Distance (physical distance with temperature compensation)",
+      "sonic_effect": {
+        "Time": "Delays measured in milliseconds, ideal for AV synchronization and general timing offsets",
+        "Samples": "Delays measured in discrete samples, ideal for sample-accurate latency compensation",
+        "Distance": "Delays calculated from physical distance and ambient temperature, ideal for PA speaker alignment"
+      },
+      "technical_detail": "Distance mode uses speed of sound calculations adjusted for temperature: ~343 m/s at 20°C (68°F). Temperature compensation accounts for sound traveling faster in warmer air and slower in colder air.",
+      "use_cases": [
+        "Time mode: Video sync, subtle stereo widening, general timing adjustments",
+        "Samples mode: Compensating for plugin latency, precise digital alignment",
+        "Distance mode: Live PA system alignment, monitor-to-main speaker delay, multi-mic phase alignment"
+      ],
+      "typical_values": {
+        "Time": "Most common for studio work and AV sync",
+        "Samples": "Preferred for latency compensation (0-200 samples typical)",
+        "Distance": "Essential for live sound reinforcement and PA alignment"
+      }
+    },
+    "Left ms": {
+      "audio_function": "Left channel delay in milliseconds when Mode=Time",
+      "sonic_effect": {
+        "increasing": "Delays left channel progressively, creating wider stereo image or correcting phase issues. At extreme values (50-100ms), creates obvious echo/slap-back effect",
+        "decreasing": "Reduces left channel delay, tightening stereo image or bringing left signal closer to right timing"
+      },
+      "technical_detail": "Range 0-100ms. Values under 30ms perceived as phase/timing shifts. Values over 30ms perceived as discrete echoes (Haas effect threshold).",
+      "use_cases": [
+        "Phase alignment for multi-mic recordings (typically 1-10ms adjustments)",
+        "Subtle stereo widening effects (5-20ms)",
+        "AV sync correction for video production",
+        "Correcting L/R timing mismatches from analog gear"
+      ],
+      "typical_values": {
+        "0-5ms": "Fine phase alignment for multi-mic setups (drum overheads, stereo piano)",
+        "5-20ms": "Stereo widening, creates spaciousness without obvious delay",
+        "20-40ms": "Haas effect for stereo enhancement, borderline perceptible as delay",
+        "40-100ms": "Obvious delay/echo effect, slap-back, AV sync correction"
+      }
+    },
+    "Right ms": {
+      "audio_function": "Right channel delay in milliseconds when Mode=Time",
+      "sonic_effect": {
+        "increasing": "Delays right channel progressively, creating wider stereo image or correcting phase issues",
+        "decreasing": "Reduces right channel delay, tightening stereo image"
+      },
+      "technical_detail": "Identical behavior to Left ms but affects right channel. Can be used independently or linked via Link L/R.",
+      "use_cases": [
+        "Same as Left ms, but for right channel",
+        "Combined with Left ms for asymmetric stereo effects"
+      ],
+      "typical_values": {
+        "Same ranges as Left ms": "Typical applications mirror left channel usage"
+      }
+    },
+    "Delay L Smp": {
+      "audio_function": "Left channel delay in discrete samples when Mode=Samples",
+      "sonic_effect": {
+        "increasing": "Delays left channel by exact sample count, useful for sample-accurate latency compensation",
+        "decreasing": "Reduces sample delay, bringing signals into tighter alignment"
+      },
+      "technical_detail": "Range 0-200 samples. At 44.1kHz: 1 sample = 0.023ms, 200 samples = 4.5ms. At 48kHz: 1 sample = 0.021ms, 200 samples = 4.2ms. Sample-accurate for digital latency compensation.",
+      "use_cases": [
+        "Compensating for plugin latency reported in samples",
+        "Precise alignment of parallel processing chains",
+        "Correcting fixed hardware delays (AD/DA converters, digital processors)",
+        "Sample-accurate phase alignment for drum sample replacement"
+      ],
+      "typical_values": {
+        "0-10 samples": "Fine tuning, minimal latency correction",
+        "10-50 samples": "Typical plugin latency compensation (0.2-1ms at 48kHz)",
+        "50-200 samples": "Larger hardware delays, lookahead compression compensation"
+      }
+    },
+    "Delay R smp": {
+      "audio_function": "Right channel delay in discrete samples when Mode=Samples",
+      "sonic_effect": {
+        "increasing": "Delays right channel by exact sample count",
+        "decreasing": "Reduces sample delay on right channel"
+      },
+      "technical_detail": "Identical to Delay L Smp but for right channel. Sample-accurate control.",
+      "use_cases": [
+        "Same as Delay L Smp but for right channel",
+        "Independent R channel latency compensation"
+      ]
+    },
+    "Left meter": {
+      "audio_function": "Left channel delay based on physical distance in meters when Mode=Distance",
+      "sonic_effect": {
+        "increasing": "Delays left channel based on distance sound travels in air, compensated for ambient temperature",
+        "decreasing": "Reduces distance-based delay"
+      },
+      "technical_detail": "Range 0-100 meters. Delay calculated using speed of sound at specified temperature (~343 m/s at 20°C). 10m ≈ 29ms delay. Used for physical PA speaker alignment.",
+      "use_cases": [
+        "Aligning delayed PA speakers to main PA (measure physical distance)",
+        "Delay fill speakers to match mains in large venues",
+        "Front-of-house to monitor alignment",
+        "Balcony fill speaker delay calculation"
+      ],
+      "typical_values": {
+        "0-10m": "Small room, stage monitor alignment (~0-29ms)",
+        "10-30m": "Medium venue, front fill or side fill speakers (~29-87ms)",
+        "30-100m": "Large venue, delay towers, outdoor systems (~87-290ms)"
+      }
+    },
+    "Right meter": {
+      "audio_function": "Right channel delay based on physical distance in meters when Mode=Distance",
+      "sonic_effect": {
+        "increasing": "Delays right channel based on distance calculation",
+        "decreasing": "Reduces distance-based delay"
+      },
+      "technical_detail": "Same as Left meter for right channel. Temperature compensation applied.",
+      "use_cases": [
+        "Same as Left meter for right channel",
+        "Asymmetric PA configurations with different L/R distances"
+      ]
+    },
+    "Left Feet": {
+      "audio_function": "Left channel delay based on physical distance in feet when Mode=Distance and DistUnit=Feet",
+      "sonic_effect": {
+        "increasing": "Delays based on feet measurement, useful for imperial system users",
+        "decreasing": "Reduces distance delay in feet"
+      },
+      "technical_detail": "Range 0-328 feet (equivalent to 0-100 meters). Speed of sound ~1125 ft/s at room temperature. 100ft ≈ 89ms delay.",
+      "use_cases": [
+        "Same applications as Left meter but for users working in imperial units",
+        "Common in US live sound industry"
+      ],
+      "typical_values": {
+        "0-30ft": "Close range, stage monitoring (~0-27ms)",
+        "30-100ft": "Medium range PA alignment (~27-89ms)",
+        "100-328ft": "Long range delays, outdoor venues (~89-290ms)"
+      }
+    },
+    "Right Feet": {
+      "audio_function": "Right channel delay based on physical distance in feet",
+      "sonic_effect": {
+        "increasing": "Delays right channel by distance in feet",
+        "decreasing": "Reduces distance delay"
+      },
+      "technical_detail": "Same as Left Feet for right channel.",
+      "use_cases": [
+        "Same as Left Feet for right channel"
+      ]
+    },
+    "Celsius": {
+      "audio_function": "Ambient temperature in Celsius for speed of sound compensation in Distance mode",
+      "sonic_effect": {
+        "increasing": "Assumes warmer air temperature; sound travels faster, reduces calculated delay for given distance",
+        "decreasing": "Assumes colder air temperature; sound travels slower, increases calculated delay"
+      },
+      "technical_detail": "Range -20°C to 60°C. Speed of sound increases ~0.6 m/s per °C. At 0°C: 331.3 m/s, at 20°C: 343 m/s, at 60°C: 366 m/s. Accurate temperature setting critical for precise PA alignment.",
+      "use_cases": [
+        "Set to actual ambient temperature for accurate PA delay calculations",
+        "Indoor venues: typically 18-24°C (64-75°F)",
+        "Outdoor summer shows: 25-35°C (77-95°F)",
+        "Outdoor winter shows: 0-15°C (32-59°F)"
+      ],
+      "typical_values": {
+        "20°C (68°F)": "Standard room temperature, 343 m/s",
+        "25°C (77°F)": "Warm room/outdoor summer, 346 m/s",
+        "15°C (59°F)": "Cool room/outdoor spring, 340 m/s"
+      }
+    },
+    "Fahrenheit": {
+      "audio_function": "Ambient temperature in Fahrenheit for speed of sound compensation (alternative to Celsius)",
+      "sonic_effect": {
+        "increasing": "Assumes warmer air, sound travels faster",
+        "decreasing": "Assumes colder air, sound travels slower"
+      },
+      "technical_detail": "Range -4°F to 140°F (equivalent to -20°C to 60°C). Same physical effect as Celsius, just different unit display.",
+      "use_cases": [
+        "Same as Celsius but for users preferring Fahrenheit",
+        "Common in US live sound applications"
+      ],
+      "typical_values": {
+        "68°F (20°C)": "Standard room temperature",
+        "77°F (25°C)": "Warm conditions",
+        "59°F (15°C)": "Cool conditions"
+      }
+    },
+    "Link L/R": {
+      "audio_function": "Synchronizes left and right delay values when enabled",
+      "sonic_effect": {
+        "increasing": "Locks L and R delays together; changing one automatically changes the other to match",
+        "decreasing": "Allows independent L and R delay values for asymmetric timing corrections"
+      },
+      "technical_detail": "When linked, adjusting either L or R parameter updates both to the same value. Useful for mono delay offset without stereo image shift.",
+      "use_cases": [
+        "General mono delay offset (AV sync, latency compensation) without stereo shift",
+        "Consistent L/R delay when no stereo width adjustment needed",
+        "Disable link for stereo widening effects or asymmetric phase correction"
+      ],
+      "typical_values": {
+        "On (linked)": "Mono delay offset, maintain stereo image",
+        "Off (unlinked)": "Stereo effects, asymmetric correction, independent L/R delays"
+      }
+    },
+    "DistUnit": {
+      "audio_function": "Toggles distance measurement between Meters and Feet in Distance mode",
+      "sonic_effect": {
+        "Meters": "Displays and accepts distance values in metric units",
+        "Feet": "Displays and accepts distance values in imperial units"
+      },
+      "technical_detail": "1 meter = 3.28084 feet. Purely a display/input unit preference; underlying delay calculation remains the same.",
+      "use_cases": [
+        "Select based on regional preference or measurement tools available",
+        "Metric (meters) common in Europe, Asia, Australia",
+        "Imperial (feet) common in United States"
+      ]
+    },
+    "TempUnit": {
+      "audio_function": "Toggles temperature measurement between Celsius and Fahrenheit in Distance mode",
+      "sonic_effect": {
+        "Celsius": "Displays and accepts temperature in metric units",
+        "Fahrenheit": "Displays and accepts temperature in imperial units"
+      },
+      "technical_detail": "°F = (°C × 9/5) + 32. Display preference only; speed of sound calculation uses absolute temperature internally.",
+      "use_cases": [
+        "Select based on regional preference or available thermometer",
+        "Celsius common worldwide (except US)",
+        "Fahrenheit common in United States"
+      ]
+    }
+  }
+}
