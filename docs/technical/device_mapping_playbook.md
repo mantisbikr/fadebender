@@ -18,6 +18,38 @@ This enables NLP commands like "set reverb decay to 5 seconds" to work accuratel
 
 ---
 
+## Database Strategy
+
+**IMPORTANT**: Always use `dev-display-value` database for development and testing.
+
+### Development vs Production Databases
+
+- **`dev-display-value`** (Development/Testing)
+  - Set in `.env`: `FIRESTORE_DATABASE_ID=dev-display-value`
+  - Use for all mapping work, testing, and experimentation
+  - Safe sandbox - mistakes don't affect production
+  - Can be reset/modified freely during development
+
+- **`(default)` database** (Production)
+  - Code defaults to this when env vars not set
+  - Copy all tested mappings here when ready for production
+  - One final migration after all devices are complete
+  - Standard practice: production is default, dev/test are explicitly configured
+
+### Why This Matters
+
+**Problems when using wrong database:**
+- Accidentally pollute production with incomplete/untested data
+- Lose work when env vars aren't set (defaults to wrong database)
+- Confusion about which data is authoritative
+
+**Solution:**
+1. **Always set** `FIRESTORE_PROJECT_ID` and `FIRESTORE_DATABASE_ID` in `.env`
+2. **Verify** on server startup: check log for "Connected to Firestore: fadebender/dev-display-value"
+3. **Migration plan**: Complete all devices in `dev-display-value`, then one final copy to `(default)`
+
+---
+
 ## Phase 0: Knowledge Base Reconciliation (15 min) - CRITICAL
 
 ### 0.1 Obtain Ableton Manual Section
@@ -816,6 +848,233 @@ Create docs entry if device has:
 
 ---
 
+## Phase 9: Comprehensive Device Testing (1-2 hours)
+
+**NEW**: Create comprehensive test plan and systematically verify all functionality.
+
+### 9.1 Create Test Plan Document
+
+Create `docs/testing/<device>_device_test_plan.md` with structured test cases:
+
+**Test Plan Structure** (based on Delay device testing):
+
+```markdown
+# <Device Name> Device Test Plan
+
+## Part 1: Binary Parameters (X tests)
+Test all on/off toggles work correctly
+
+## Part 2: Quantized Parameters (X tests)
+Test all labeled/discrete parameters, especially label_map accuracy
+
+## Part 3: Continuous Parameters (X tests)
+Test accuracy at min/mid/max, verify fit quality
+
+## Part 4: Auto-Enable Masters (X tests)
+Test master/dependent relationships, requires_for_effect dependencies
+
+## Part 5: Special Dependencies (X tests)
+Test parameters that block other parameters' effects
+
+## Part 6: Read Operations (X tests)
+Test reading raw values, display values, all parameters
+
+## Part 7: Preset Loading (X tests)
+Test all presets load correctly
+
+## Part 8: Edge Cases (X tests)
+Test clamping, out-of-range values, boundary conditions
+```
+
+### 9.2 Execute Test Plan Systematically
+
+**Binary Parameter Tests:**
+```bash
+# Test each binary parameter
+curl -X POST http://127.0.0.1:8722/op/return/param_by_name \
+  -d '{"return_ref": "0", "device_ref": "DEVICE", "param_ref": "filter on", "target_display": "on"}'
+# Verify: value = 1.0
+
+curl -X POST http://127.0.0.1:8722/op/return/param_by_name \
+  -d '{"return_ref": "0", "device_ref": "DEVICE", "param_ref": "filter on", "target_display": "off"}'
+# Verify: value = 0.0
+```
+
+**Quantized Parameter Tests:**
+```bash
+# Test EVERY label in label_map, especially numeric labels
+# Example: "4" should map to 3.0 if zero-indexed
+curl -X POST http://127.0.0.1:8722/op/return/param_by_name \
+  -d '{"return_ref": "0", "device_ref": "DEVICE", "param_ref": "L 16th", "target_display": "4"}'
+# Verify: value matches label_map["4"] exactly (e.g., 3.0 not 4.0)
+```
+
+**Continuous Parameter Tests:**
+```bash
+# Test at multiple points, not just min/max
+# Test at: min, 25%, 50%, 75%, max
+curl -X POST http://127.0.0.1:8722/op/return/param_by_name \
+  -d '{"return_ref": "0", "device_ref": "DEVICE", "param_ref": "L Time", "target_display": "500"}'
+# Verify: readback within 3% of target (500ms ± 15ms)
+```
+
+**requires_for_effect Tests:**
+```bash
+# Test complex multi-condition dependencies
+# Example: Filter Freq requires Filter On=1 AND Freeze=0
+
+# Set blocking condition (Freeze=On)
+curl -X POST http://127.0.0.1:8722/op/return/param_by_name \
+  -d '{"return_ref": "0", "device_ref": "DEVICE", "param_ref": "Freeze", "target_display": "on"}'
+
+# Try to set dependent parameter - should auto-disable Freeze
+curl -X POST http://127.0.0.1:8722/op/return/param_by_name \
+  -d '{"return_ref": "0", "device_ref": "DEVICE", "param_ref": "Filter Freq", "target_display": "1000"}'
+
+# Verify: Freeze is now off (auto-disabled)
+```
+
+### 9.3 Track Test Results
+
+Document all test results in the test plan:
+```markdown
+### Part 3, Test 1: L Time min boundary
+- **Expected**: 1ms
+- **Actual**: 1.0ms
+- **Status**: ✅ PASS
+
+### Part 3, Test 5: L Time accuracy at 500ms
+- **Expected**: 500ms ± 3%
+- **Actual**: 500ms (0% error)
+- **Status**: ✅ PASS
+```
+
+### 9.4 Fix Issues Discovered During Testing
+
+**Common issues found during Delay testing:**
+
+1. **Label map not used for numeric labels**
+   - Symptom: display "4" sets value to 4.0 instead of using label_map
+   - Fix: Check label_map BEFORE numeric parsing in `intents.py`
+
+2. **Accuracy errors in continuous params**
+   - Symptom: L Time 2000ms reads back as 2780ms (39% error)
+   - Fix: Replace exponential fit with spline interpolation using manual calibration
+
+3. **requires_for_effect not implemented**
+   - Symptom: Can set Filter Freq while Freeze blocks its effect
+   - Fix: Implement `_check_requires_for_effect()` in `intents.py`
+
+### 9.5 Document Fixes and Calibration Data
+
+If manual calibration is needed:
+
+**Create calibration record:**
+```json
+{
+  "parameter": "L Time",
+  "issue": "Exponential fit had 39% error at 2000ms",
+  "solution": "Spline interpolation with 6 manual calibration points",
+  "calibration_points": [
+    {"display": 1, "normalized": 0.000},
+    {"display": 10.5, "normalized": 0.286},
+    {"display": 104, "normalized": 0.460},
+    {"display": 517, "normalized": 0.635},
+    {"display": 1038, "normalized": 0.730},
+    {"display": 5000, "normalized": 1.000}
+  ],
+  "final_accuracy": "< 3% error across full range"
+}
+```
+
+### 9.6 Verify 100% Test Pass Rate
+
+**Success criteria:**
+- All binary parameters: 100% pass
+- All quantized parameters: 100% pass (exact label_map matches)
+- All continuous parameters: 100% pass (within 3% accuracy)
+- All auto-enable dependencies: 100% pass
+- All requires_for_effect dependencies: 100% pass
+- All preset loads: 100% pass
+- All edge cases: 100% pass
+
+**If not 100%, iterate:**
+1. Document failing test
+2. Identify root cause
+3. Fix in code or Firestore
+4. Re-run test
+5. Update test plan with result
+
+---
+
+## Phase 10: Preset Details Enhancement (30-45 min)
+
+**NEW**: Add descriptive details to all presets after device mapping is complete.
+
+### 10.1 Load All Presets and Document
+
+For each factory preset:
+```bash
+# Load preset
+curl -X POST http://127.0.0.1:8722/op/return/device/preset \
+  -d '{"return_index": 0, "device_index": 0, "preset_index": 0}'
+
+# Document:
+# - Preset name
+# - Key parameter values
+# - Sonic character
+# - Use cases
+```
+
+### 10.2 Add Preset Metadata to Firestore
+
+Structure for preset details:
+```json
+{
+  "preset_name": "Analog Echo",
+  "preset_index": 5,
+  "description": "Warm tape-style delay with subtle modulation",
+  "key_parameters": {
+    "L Time": "375ms",
+    "Feedback": "40%",
+    "Mod Amount": "15%",
+    "Filter Type": "Low-pass"
+  },
+  "sonic_character": "Warm, vintage, slightly wobbly echoes with rolled-off highs",
+  "use_cases": [
+    "Vocals - adds warmth and depth",
+    "Guitars - vintage rock/indie tone",
+    "Percussion - subtle rhythmic enhancement"
+  ],
+  "tags": ["vintage", "warm", "tape", "analog", "subtle"]
+}
+```
+
+### 10.3 Create Preset Collection in Firestore
+
+```bash
+# For each preset, create document in:
+# device_mappings/<device_sig>/presets/<preset_index>
+
+python3 scripts/add_preset_details.py \
+  --signature <device_signature> \
+  --preset-index 5 \
+  --name "Analog Echo" \
+  --description "Warm tape-style delay..." \
+  --key-params '{"L Time": "375ms", "Feedback": "40%"}' \
+  --sonic-character "Warm, vintage..." \
+  --use-cases "Vocals, Guitars, Percussion" \
+  --tags "vintage,warm,tape"
+```
+
+### 10.4 Verify Preset Details in WebUI
+
+- Check preset browser shows descriptions
+- Verify preset search works with tags
+- Test preset recommendations based on use cases
+
+---
+
 ## Common Pitfalls & Solutions
 
 ### Pitfall 0: Using Manual Parameter Names Without Reconciliation (CRITICAL)
@@ -875,9 +1134,84 @@ for param in params_meta:
 doc_ref.update({"params_meta": params_meta})
 ```
 
+### Pitfall 6: Label Map Priority for Numeric Labels (from Delay testing)
+**Result:** Quantized params with numeric labels (e.g., "4") set wrong value (4.0 instead of 3.0)
+
+**What happened with Delay:**
+- L 16th/R 16th have zero-indexed labels: {"4": 3.0, "8": 7.0, etc.}
+- Code checked `if ty is None` (numeric type) BEFORE checking label_map
+- Display "4" parsed as number, set to 4.0, should use label_map → 3.0
+
+**Solution:** Check label_map FIRST before numeric parsing in `intents.py`:
+```python
+# OLD (wrong order):
+if pm and label_map and ty is None:  # ty already set, skips label_map
+    # check labels
+
+# NEW (correct order):
+if pm and label_map:  # Check label_map first
+    # Try exact match in label_map
+    if matched:
+        ty = None  # Prevent numeric handler
+```
+
+### Pitfall 7: Missing requires_for_effect Dependencies (from Delay testing)
+**Result:** Can set parameters that have no effect due to blocking conditions
+
+**What happened with Delay:**
+- Filter Freq/Width require BOTH Filter On=1 AND Freeze=0
+- Simple master/dependent only handles Filter On
+- Freeze blocks filter effect but doesn't disable Filter Freq when you set it
+- User sets Filter Freq, hears nothing because Freeze is on
+
+**Solution:** Implement `_check_requires_for_effect()` in `intents.py`:
+```python
+def _check_requires_for_effect(mapping, params, target_param_name):
+    """Check multi-condition dependencies from grouping.requires_for_effect"""
+    # Check all_of conditions
+    # Return list of parameters that need to be changed
+    # Example: Filter Freq requires [Filter On=1, Freeze=0]
+    # If Freeze=1, return [{param: Freeze, value: 0}] to auto-disable
+```
+
+### Pitfall 8: Wrong Database Without Realizing (from Delay testing)
+**Result:** Hours of work in wrong database, or production pollution
+
+**What happened with Delay:**
+- Forgot to set `FIRESTORE_DATABASE_ID`, code used default database
+- Made changes thinking we were in `dev-display-value`
+- Only realized when querying returned no data
+
+**Solution:**
+1. Always set BOTH env vars in `.env`:
+   ```bash
+   FIRESTORE_PROJECT_ID=fadebender
+   FIRESTORE_DATABASE_ID=dev-display-value
+   ```
+2. Verify on server startup log: "Connected to Firestore: fadebender/dev-display-value"
+3. Code should fail loudly if wrong database, not silently use default
+
+### Pitfall 9: Exponential Fit for Non-Exponential Data (from Delay testing)
+**Result:** Accuracy errors up to 39% in mid-range values
+
+**What happened with Delay:**
+- L Time/R Time initially fit with exponential (common for time params)
+- Boundary points matched perfectly (1ms, 5000ms)
+- Mid-range had huge errors: 2000ms → 2780ms (39% off)
+- Actual curve was non-monotonic with inflection points
+
+**Solution:**
+1. Test accuracy at 5-10 points across range, not just boundaries
+2. If mid-range errors > 5%, use spline interpolation:
+   ```python
+   # Manual calibration at 6 points
+   # Spline fit: R² = 1.0, < 3% error everywhere
+   ```
+3. Spline is always accurate but slower than parametric fits
+
 ---
 
-## Time Budget (5-6 hours total)
+## Time Budget (8-10 hours total)
 
 0. **Knowledge Base Reconciliation** (15 min) - IF manual documentation available
    - Get actual param names from Live
@@ -891,7 +1225,7 @@ doc_ref.update({"params_meta": params_meta})
    - Gather device documentation
    - Verify we have good sample coverage
 
-2. **Initialize Device Structure** (30-45 min) - **NEW**
+2. **Initialize Device Structure** (30-45 min)
    - Run initialization script with device docs
    - Review proposed sections, grouping, params_meta
    - Confirm or correct structure (units, grouping, labels)
@@ -919,7 +1253,7 @@ doc_ref.update({"params_meta": params_meta})
    - Verify all params work correctly
    - Fix any edge cases
 
-7. **Audio Knowledge Curation** (30-60 min) - **NEW**
+7. **Audio Knowledge Curation** (30-60 min)
    - Research all parameters from authoritative sources
    - Create audio_knowledge JSON
    - Apply to Firestore
@@ -931,9 +1265,25 @@ doc_ref.update({"params_meta": params_meta})
    - Commit audio knowledge
    - Document special cases
 
-**Total: 5.5-6.5 hours**  (includes new structure initialization + audio knowledge phases)
+9. **Comprehensive Device Testing** (1-2 hours) - **NEW**
+   - Create comprehensive test plan (66+ tests for Delay)
+   - Execute all test categories systematically
+   - Fix issues discovered (label_map, accuracy, dependencies)
+   - Document calibration data if needed
+   - Verify 100% test pass rate
 
-**Note**: Phase 0 saves 2-4 hours of debugging time later. Phases 2 and 7 are new but streamline the overall process.
+10. **Preset Details Enhancement** (30-45 min) - **NEW**
+    - Load and analyze all factory presets
+    - Document sonic character and use cases
+    - Add preset metadata to Firestore
+    - Verify preset browser functionality
+
+**Total: 8-10 hours**  (includes comprehensive testing + preset enhancement)
+
+**Note**:
+- Phase 0 saves 2-4 hours of debugging time later
+- Phase 9 catches issues early, prevents user-facing bugs
+- Phase 10 enhances user experience with preset discovery
 
 ---
 
@@ -980,26 +1330,44 @@ GET  /return/device/params                 # Get all params from Live
 
 A device mapping is complete when:
 
+✅ **Database Configuration**:
+  - Working in `dev-display-value` database (verified on server startup)
+  - `FIRESTORE_PROJECT_ID` and `FIRESTORE_DATABASE_ID` set in `.env`
+  - Migration to `(default)` database planned after all devices complete
+
 ✅ **Structure** - Complete Reverb-style format:
   - `sections` with descriptions, sonic_focus, technical_notes
-  - `grouping` with masters, dependents, dependent_master_values, apply_order
+  - `grouping` with masters, dependents, dependent_master_values, apply_order, requires_for_effect
   - `params_meta` array in main document (not subcollection)
 
-✅ **Parameters** - All params in params_meta (33 for Reverb):
+✅ **Parameters** - All params in params_meta:
   - All binary params have labels
-  - All quantized params have label_map
+  - All quantized params have label_map (verify numeric labels are zero-indexed)
   - All continuous params have fit, confidence, min_display, max_display
   - All units confirmed and correct
 
 ✅ **Fitting** - All continuous params:
-  - fit (type, coeffs/points, r2)
-  - confidence > 0.999
+  - fit (type: exp/linear/spline, coeffs/points, r2)
+  - confidence > 0.999 (or 1.0 for spline)
   - min_display and max_display
+  - Accuracy < 3% across full range
 
-✅ **Testing** - All parameters tested:
-  - All parameters tested at min/mid/max values
-  - All test results within 1% of target
-  - No missing or incorrectly classified params
+✅ **Dependencies** - All relationships working:
+  - Auto-enable masters (simple dependencies)
+  - requires_for_effect (multi-condition dependencies)
+  - Master parameters correctly identified
+  - Blocking parameters auto-disabled when needed
+
+✅ **Comprehensive Testing** - 100% test pass rate:
+  - Test plan created (docs/testing/<device>_device_test_plan.md)
+  - All binary parameters: 100% pass
+  - All quantized parameters: 100% pass (exact label_map matches)
+  - All continuous parameters: 100% pass (within 3% accuracy)
+  - All auto-enable dependencies: 100% pass
+  - All requires_for_effect dependencies: 100% pass
+  - All preset loads: 100% pass
+  - All edge cases: 100% pass
+  - Calibration data documented if manual calibration used
 
 ✅ **Audio Knowledge** - All params have accurate knowledge:
   - audio_function (technical description)
@@ -1007,10 +1375,19 @@ A device mapping is complete when:
   - technical_detail, use_cases, typical_values (when applicable)
   - Researched from authoritative sources
 
+✅ **Preset Details** - All factory presets enhanced:
+  - Preset metadata created for all presets
+  - Sonic character described
+  - Use cases documented
+  - Key parameters identified
+  - Tags added for searchability
+
 ✅ **Documentation** - Complete backup and commits:
   - Mapping backed up to git
   - Device mapping committed
   - Audio knowledge JSON committed
+  - Test plan committed
+  - Calibration data committed (if applicable)
   - Special cases documented
 
 ---
@@ -1058,7 +1435,25 @@ git add backups/ && git commit -m "feat(devices): complete <Device> mapping"
 ## Next Steps
 
 After completing a device:
+
 1. Update device count in project docs
 2. Share learnings about unusual parameter types
 3. Improve auto-fitting scripts based on issues encountered
 4. Consider automating more of the classification step
+5. Add device to list for final migration to `(default)` database
+
+After completing ALL devices:
+
+1. **Final Database Migration**: Copy all device mappings from `dev-display-value` → `(default)`
+
+   ```bash
+   python3 scripts/migrate_database.py \
+     --source dev-display-value \
+     --target "(default)" \
+     --collection device_mappings
+   ```
+
+2. Update production `.env` to use `(default)` (or remove `FIRESTORE_DATABASE_ID` entirely)
+3. Verify all devices work in production
+4. Keep `dev-display-value` for future experimentation
+5. Document migration date and devices included
