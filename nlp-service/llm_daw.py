@@ -14,14 +14,40 @@ from config.llm_config import get_llm_project_id, get_llm_api_key, get_default_m
 
 
 def _build_daw_prompt(query: str) -> str:
+    # Inject lightweight HINTS to help the LLM include device ordinals and track scope
+    def _hints_text(q: str) -> str:
+        try:
+            hints = _extract_llm_hints(q)
+        except Exception:
+            hints = {}
+        if not hints:
+            return ""
+        try:
+            hjson = json.dumps(hints, ensure_ascii=False)
+        except Exception:
+            hjson = "{}"
+        # Nudge model to honor hints explicitly
+        return (
+            "HINTS (use to disambiguate — include in output if consistent):\n"
+            + hjson + "\n"
+            + "- If device_ordinal_hint is present, set targets[0].device_ordinal to that number.\n"
+            + "- If track_hint is present, align targets[0].track with it.\n\n"
+        )
+
     return (
+        f"{_hints_text(query)}"
         "You are an expert DAW (Digital Audio Workstation) command interpreter for Ableton Live. "
         "Parse natural language commands into structured JSON for controlling tracks, returns, master, devices, and effects.\n\n"
-        "Return strictly valid JSON with this structure:\n"
+        "Return strictly valid JSON with this structure (fields are required unless marked optional):\n"
         "{\n"
         "  \"intent\": \"set_parameter\" | \"relative_change\" | \"question_response\" | \"clarification_needed\",\n"
-        "  \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"volume\"}],\n"
-        "  \"operation\": {\"type\": \"absolute|relative\", \"value\": 2, \"unit\": \"dB\"},\n"
+        "  \"targets\": [{\n"
+        "      \"track\": \"Track 1|Return A|Master\",\n"
+        "      \"plugin\": \"reverb|compressor|delay|eq|align delay\" | null,\n"
+        "      \"parameter\": \"decay|predelay|volume|pan|send A|mode|quality|...\",\n"
+        "      \"device_ordinal\": 2  /* optional: when user says 'reverb 2' or 'device 2' */\n"
+        "  }],\n"
+        "  \"operation\": {\"type\": \"absolute|relative\", \"value\": 2, \"unit\": \"dB|ms|s|Hz|kHz|%|display|null\"},\n"
         "  \"meta\": {\"utterance\": \"original command\", \"confidence\": 0.95}\n"
         "}\n\n"
         "For questions/help, use:\n"
@@ -55,10 +81,16 @@ def _build_daw_prompt(query: str) -> str:
         "- Volume: \"set master volume to -3 dB\", \"increase master volume by 1 dB\"\n"
         "- Pan: \"pan master 10% right\"\n\n"
         "## Device Parameters (plugin is device name, parameter is knob/control):\n"
+        "- Always set \"plugin\" to device name (e.g., reverb, delay, eq, compressor, align delay).\n"
+        "- If user says an ordinal (e.g., 'reverb 2' or 'device 2'), include \"device_ordinal\" with that 1-based number.\n"
+        "- For label selections (e.g., Mode 'Distance', Quality 'High', On/Off), set operation.value to that string and unit='display'.\n"
         "- \"set return A reverb decay to 2 seconds\" → {\"track\": \"Return A\", \"plugin\": \"reverb\", \"parameter\": \"decay\"}\n"
         "- \"set track 1 compressor threshold to -12 dB\" → {\"track\": \"Track 1\", \"plugin\": \"compressor\", \"parameter\": \"threshold\"}\n"
         "- \"increase return B delay time by 50 ms\" → relative change for delay device\n"
-        "- \"set return A reverb predelay to 20 ms\", \"set track 2 eq gain to 3 dB\"\n\n"
+        "- \"set return A reverb predelay to 20 ms\", \"set track 2 eq gain to 3 dB\"\n"
+        "- \"set Return B reverb 2 decay to 2 s\" → include \"device_ordinal\": 2 in the target.\n"
+        "- \"set Return B device 2 decay to 2 s\" → include \"device_ordinal\": 2 (plugin may be omitted).\n"
+        "- \"set Return B Align Delay Mode to Distance\" → operation.value=\"Distance\", unit=\"display\".\n\n"
         "## Help/Questions:\n"
         "- \"how do I control sends?\" → question_response with explanation and examples\n"
         "- \"what does reverb decay do?\" → question_response explaining the parameter\n"
@@ -70,14 +102,17 @@ def _build_daw_prompt(query: str) -> str:
         "4. For device parameters, set \"plugin\" to the device name (reverb, compressor, eq, delay, etc.)\n"
         "5. Solo/mute/unmute/unsolo are set_parameter commands with value 1 (on) or 0 (off)\n"
         "6. Pan values: -50 to +50 (negative = left, positive = right, 0 = center)\n"
-        "7. For question_response, ALWAYS include 2-4 specific suggested_intents\n"
-        "8. Only use clarification_needed when the command is truly ambiguous (e.g., \"boost vocals\" without specifying track)\n\n"
+        "7. For device label selections (on/off, Mode/Type/Quality), use unit=\"display\".\n"
+        "8. For question_response, ALWAYS include 2-4 specific suggested_intents\n"
+        "9. Only use clarification_needed when the command is truly ambiguous (e.g., \"boost vocals\" without specifying track)\n\n"
         "EXAMPLES:\n"
         "- \"solo track 1\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"solo\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
         "- \"mute track 2\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 2\", \"plugin\": null, \"parameter\": \"mute\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
         "- \"set return A volume to -3 dB\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return A\", \"plugin\": null, \"parameter\": \"volume\"}], \"operation\": {\"type\": \"absolute\", \"value\": -3, \"unit\": \"dB\"}}\n"
         "- \"set track 1 send A to -12 dB\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"send A\"}], \"operation\": {\"type\": \"absolute\", \"value\": -12, \"unit\": \"dB\"}}\n"
         "- \"set return A reverb decay to 2 seconds\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return A\", \"plugin\": \"reverb\", \"parameter\": \"decay\"}], \"operation\": {\"type\": \"absolute\", \"value\": 2, \"unit\": \"seconds\"}}\n"
+        "- \"set return B reverb 2 decay to 2 s\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return B\", \"plugin\": \"reverb\", \"parameter\": \"decay\", \"device_ordinal\": 2}], \"operation\": {\"type\": \"absolute\", \"value\": 2, \"unit\": \"s\"}}\n"
+        "- \"set return B align delay mode to distance\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return B\", \"plugin\": \"align delay\", \"parameter\": \"mode\"}], \"operation\": {\"type\": \"absolute\", \"value\": \"distance\", \"unit\": \"display\"}}\n"
         "- \"how do I control sends?\" → {\"intent\": \"question_response\", \"answer\": \"You can control sends by specifying the track and send letter...\", \"suggested_intents\": [\"set track 1 send A to -12 dB\", \"increase track 2 send B by 3 dB\"]}\n"
         "- \"boost vocals\" → {\"intent\": \"clarification_needed\", \"question\": \"Which track contains the vocals?\", \"context\": {\"action\": \"increase\", \"parameter\": \"volume\"}}\n\n"
         f"Command: {query}\n"
@@ -143,6 +178,13 @@ def interpret_daw_command(query: str, model_preference: str | None = None, stric
 def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any]:
     """Simple rule-based fallback parser for basic DAW commands."""
     q = query.lower().strip()
+    # Ordinal word mapping for device selection (first..tenth)
+    ordinal_words = {
+        'first': '1', 'second': '2', 'third': '3', 'fourth': '4', 'fifth': '5',
+        'sixth': '6', 'seventh': '7', 'eighth': '8', 'ninth': '9', 'tenth': '10'
+    }
+    for w, d in ordinal_words.items():
+        q = __import__('re').sub(rf"\b{w}\b", d, q)
     # Light typo corrections to improve robustness when LLM is unavailable
     typo_map = {
         'retrun': 'return', 'retun': 'return',
@@ -178,6 +220,52 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
                 "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
             }
+    except Exception:
+        pass
+
+    # Track device parameter with unit, allowing device capture and optional ordinal
+    try:
+        import re
+        dev_pat = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
+        if m:
+            track_num = int(m.group(1))
+            device_raw = m.group(2) or ''
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            value = float(m.group(5))
+            unit_raw = m.group(6)
+            dev_norm = None
+            if device_raw:
+                dr = device_raw.lower().strip()
+                if dr in ("eq", "equalizer"): dev_norm = "eq"
+                elif dr == "compressor": dev_norm = "compressor"
+                elif dr == "delay": dev_norm = "delay"
+                elif dr.replace(" ", "") == "aligndelay": dev_norm = "align delay"
+                else: dev_norm = dr
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms','millisecond','milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Track {track_num}', 'plugin': (dev_norm or 'reverb'), 'parameter': pname }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
     except Exception:
         pass
 
@@ -220,29 +308,38 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
     except Exception:
         pass
 
-    # Return device parameter by name (common ones): e.g., "set return A reverb stereo image to 50 [degrees|%]"
+    # Return device parameter: capture device name and optional ordinal (reverb 2|align delay 2|...)
     try:
         import re
-        m = re.search(r"\bset\s+return\s+([a-d])\b.*?(stereo\s+image|decay|predelay|dry\s*/\s*wet|dry\s*wet|dry|wet)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°))?\b", q)
+        dev_pat = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
         if m:
             return_ref = m.group(1).upper()
-            pname = m.group(2)
-            value = float(m.group(3))
-            unit_raw = m.group(4)
-            # Normalize param name
+            device_raw = m.group(2) or ''
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            value = float(m.group(5))
+            unit_raw = m.group(6)
+            dev_norm = None
+            if device_raw:
+                dr = device_raw.lower().strip()
+                if dr in ("eq", "equalizer"): dev_norm = "eq"
+                elif dr == "compressor": dev_norm = "compressor"
+                elif dr == "delay": dev_norm = "delay"
+                elif dr.replace(" ", "") == "aligndelay": dev_norm = "align delay"
+                else: dev_norm = dr
+            # Normalize some common param names
             pname_norm_map = {
                 'stereo image': 'Stereo Image',
                 'decay': 'Decay',
                 'predelay': 'Predelay',
                 'dry / wet': 'Dry/Wet',
                 'dry wet': 'Dry/Wet',
-                'dry': 'Dry/Wet',
-                'wet': 'Dry/Wet',
             }
             pn = ' '.join(pname.split()).lower()
             pn = pn.replace('dry / wet', 'dry / wet').replace('dry wet', 'dry / wet')
-            param_ref = pname_norm_map.get(pn, pname.title())
-            # Normalize unit
+            param_ref = pname_norm_map.get(pn, pname)
             unit_out = None
             if unit_raw:
                 u = unit_raw.lower()
@@ -253,12 +350,18 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 elif u in ('hz',): unit_out = 'hz'
                 elif u in ('khz',): unit_out = 'khz'
                 elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
-            return {
+            out = {
                 'intent': 'set_parameter',
-                'targets': [{ 'track': f'Return {return_ref}', 'plugin': 'reverb', 'parameter': param_ref }],
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': (dev_norm or 'reverb'), 'parameter': param_ref }],
                 'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
                 'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
             }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
     except Exception:
         pass
 
@@ -300,6 +403,141 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
                 "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
             }
+    except Exception:
+        pass
+
+    # Return device param: label selection (e.g., Mode to Distance)
+    try:
+        import re
+        dev_pat = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
+        # Capture a word/label value (no number required)
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            device_raw = m.group(2) or ''
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            label = m.group(5).strip()
+            dr = device_raw.lower().strip() if device_raw else ''
+            if dr in ("eq", "equalizer"): plugin = "eq"
+            elif dr == "compressor": plugin = "compressor"
+            elif dr == "delay": plugin = "delay"
+            elif dr.replace(" ", "") == "aligndelay": plugin = "align delay"
+            else: plugin = (dr or 'reverb')
+            # Normalize common param names
+            pname_map = { 'mode': 'Mode', 'algorithm': 'Algorithm', 'alg': 'Algorithm', 'type': 'Type', 'quality': 'Quality', 'distunit': 'DistUnit', 'units': 'Units' }
+            param_ref = pname_map.get(pname.lower(), pname.title())
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': plugin, 'parameter': param_ref }],
+                'operation': { 'type': 'absolute', 'value': label, 'unit': 'display' },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
+    except Exception:
+        pass
+
+    # Track device param: label selection (e.g., Mode to Distance)
+    try:
+        import re
+        dev_pat = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        if m:
+            track_num = int(m.group(1))
+            device_raw = m.group(2) or ''
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            label = m.group(5).strip()
+            dr = device_raw.lower().strip() if device_raw else ''
+            if dr in ("eq", "equalizer"): plugin = "eq"
+            elif dr == "compressor": plugin = "compressor"
+            elif dr == "delay": plugin = "delay"
+            elif dr.replace(" ", "") == "aligndelay": plugin = "align delay"
+            else: plugin = (dr or 'reverb')
+            pname_map = { 'mode': 'Mode', 'algorithm': 'Algorithm', 'alg': 'Algorithm', 'type': 'Type', 'quality': 'Quality', 'distunit': 'DistUnit', 'units': 'Units' }
+            param_ref = pname_map.get(pname.lower(), pname.title())
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Track {track_num}', 'plugin': plugin, 'parameter': param_ref }],
+                'operation': { 'type': 'absolute', 'value': label, 'unit': 'display' },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
+
+    except Exception:
+        pass
+
+    # Return generic ordinal device without name: "set return A device 2 <param> to <val> [unit]"
+    try:
+        import re
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+device\s+(\d+)\s+(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            device_ord = m.group(2)
+            pname = m.group(3).strip()
+            value = float(m.group(4))
+            unit_raw = m.group(5)
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms','millisecond','milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord) }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+            return out
+    except Exception:
+        pass
+
+    # Track generic ordinal device without name: "set track N device 2 <param> to <val> [unit]"
+    try:
+        import re
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+device\s+(\d+)\s+(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
+        if m:
+            track_num = int(m.group(1))
+            device_ord = m.group(2)
+            pname = m.group(3).strip()
+            value = float(m.group(4))
+            unit_raw = m.group(5)
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms','millisecond','milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Track {track_num}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord) }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+            return out
+    except Exception:
+        pass
     except Exception:
         pass
 
@@ -348,15 +586,27 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
     except Exception:
         pass
 
-    # Generic return device parameter with unit: set return A reverb <param> to <val> [unit]
+    # Generic return device parameter with unit, allowing device capture and optional ordinal
     try:
         import re
-        m = re.search(r"\bset\s+return\s+([a-d])\s+(?:reverb\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°))?\b", q)
+        dev_pat = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
         if m:
             return_ref = m.group(1).upper()
-            pname = m.group(2).strip()
-            value = float(m.group(3))
-            unit_raw = m.group(4)
+            device_raw = m.group(2) or ''
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            value = float(m.group(5))
+            unit_raw = m.group(6)
+            dev_norm = None
+            if device_raw:
+                dr = device_raw.lower().strip()
+                if dr in ("eq", "equalizer"): dev_norm = "eq"
+                elif dr == "compressor": dev_norm = "compressor"
+                elif dr == "delay": dev_norm = "delay"
+                elif dr.replace(" ", "") == "aligndelay": dev_norm = "align delay"
+                else: dev_norm = dr
             unit_out = None
             if unit_raw:
                 u = unit_raw.lower()
@@ -367,13 +617,18 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 elif u in ('hz',): unit_out = 'hz'
                 elif u in ('khz',): unit_out = 'khz'
                 elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
-            # Use device_index=0 and plugin hint 'reverb' to help mapping, but execution will use param_ref
-            return {
+            out = {
                 'intent': 'set_parameter',
-                'targets': [{ 'track': f'Return {return_ref}', 'plugin': 'reverb', 'parameter': pname }],
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': (dev_norm or 'reverb'), 'parameter': pname }],
                 'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
                 'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
             }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
     except Exception:
         pass
 

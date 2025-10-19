@@ -383,7 +383,95 @@ export function useDAWControl() {
             } catch {}
           } catch {}
         } catch (e) {
-          addMessage({ type: 'error', content: `Intent error: ${e.message}` });
+          const msg = String(e && e.message || 'Intent execute failed');
+          // Friendly clarification for device selection errors
+          const devNotFound = msg.startsWith('device_not_found_for_hint:') && msg.includes('devices=[');
+          const ordOutOfRange = msg.startsWith('device_ordinal_out_of_range:') && msg.includes('devices=[');
+          if (devNotFound || ordOutOfRange) {
+            try {
+              // Extract device list from message: devices=[0:Name, 1:Other, ...]
+              const m = msg.match(/devices=\[(.*)\]$/);
+              const listPart = m ? m[1] : '';
+              const pairs = listPart.split(',').map(s => s.trim()).filter(Boolean);
+              const devices = pairs.map(p => {
+                const sp = p.split(':');
+                const idx = Number(sp[0]);
+                const name = sp.slice(1).join(':').trim();
+                return { index: isNaN(idx) ? null : idx, name };
+              }).filter(d => d.index !== null);
+              // Build suggested intents using current canonical or raw context
+              const ci = parsed?.intent || {};
+              // Determine location (Return letter preferred)
+              let retRef = null;
+              if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
+              if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
+              // Parameter and value from intent
+              const param = ci.param_ref || ci.field || 'decay';
+              const val = (ci.display ? ci.display : (typeof ci.value !== 'undefined' ? String(ci.value) : ''));
+              const unit = (ci.unit && ci.unit !== 'display') ? ` ${ci.unit}` : '';
+              const base = retRef ? `set Return ${retRef}` : (typeof ci.track_index === 'number' ? `set track ${ci.track_index}` : `set Return A`);
+              // Prefer plugin hint if present
+              const plugin = (ci.device_name_hint || '').toLowerCase();
+              const hasPlugin = plugin && !['device','fx','effect','plugin'].includes(plugin);
+              const labelPart = val ? `${val}${unit}` : '';
+              let suggestions = devices.slice(0, 6).map(d => {
+                const ord = (d.index + 1); // show 1-based ordinal
+                if (hasPlugin) {
+                  return {
+                    label: `${d.name || plugin} (${ord})`,
+                    value: `${base} ${plugin} ${ord} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
+                  };
+                }
+                return {
+                  label: `${d.name || 'Device'} (${ord})`,
+                  value: `${base} device ${ord} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
+                };
+              });
+              // Also suggest other returns where the plugin exists (if name given)
+              if (hasPlugin) {
+                try {
+                  const returnsResp = await apiService.getReturnTracks();
+                  const rets = (returnsResp && returnsResp.data && returnsResp.data.returns) || [];
+                  const extras = [];
+                  for (const r of rets) {
+                    const ri2 = Number(r.index);
+                    const letter2 = String.fromCharCode('A'.charCodeAt(0) + ri2);
+                    // Skip current return if known
+                    if (retRef && letter2.toUpperCase() === String(retRef).toUpperCase()) continue;
+                    try {
+                      const devsResp = await apiService.getReturnDevices(ri2);
+                      const list = (devsResp && devsResp.data && devsResp.data.devices) || [];
+                      const matches = list.filter(dv => String(dv.name || '').toLowerCase().replace(/\s+/g,' ') .includes(String(plugin).toLowerCase()));
+                      if (matches.length > 0) {
+                        const ord2 = 1; // default to first match for suggestion
+                        extras.push({
+                          label: `Return ${letter2}: ${matches[0].name || plugin} (${ord2})`,
+                          value: `set Return ${letter2} ${plugin} ${ord2} ${param} ${labelPart ? 'to ' + labelPart : ''}`.trim()
+                        });
+                      }
+                    } catch {}
+                    if (extras.length >= 3) break; // limit extra suggestions
+                  }
+                  suggestions = suggestions.concat(extras);
+                } catch {}
+              }
+              addMessage({
+                type: 'question',
+                content: devNotFound
+                  ? (retRef
+                      ? `I couldn't find “${plugin}” on Return ${retRef}. Here’s what’s on Return ${retRef}:`
+                      : `I couldn't find that device there. Here are the available devices:`)
+                  : (retRef
+                      ? `That ${plugin || 'device'} number isn’t available on Return ${retRef}. Here’s what’s on Return ${retRef}:`
+                      : `That device number isn’t available there. Here are the available devices:`),
+                data: { suggested_intents: suggestions }
+              });
+              return;
+            } catch (_) {
+              // Fall through to error
+            }
+          }
+          addMessage({ type: 'error', content: `Intent error: ${msg}` });
           return;
         }
       } else {

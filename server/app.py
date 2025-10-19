@@ -3410,6 +3410,111 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             LAST_SENT[k] = msg["value"]
         return {"ok": bool(resp and resp.get("ok", True)), "preview": msg, "resp": resp, "intent": intent, "summary": summary}
 
+    # Device parameter control (returns only for now)
+    if intent.get("intent") == "set_parameter":
+        targets = intent.get("targets") or []
+        if targets:
+            target = targets[0]
+
+            # LLM generates "track": "Return A" not "return": "A"
+            # Handle both formats
+            track_ref = target.get("track") or target.get("return")
+            device_ref = target.get("plugin") or target.get("device")
+            param_name = target.get("parameter")
+
+            # Check if this is a return track (starts with "Return")
+            is_return = isinstance(track_ref, str) and track_ref.strip().upper().startswith("RETURN")
+
+            if is_return:
+                # Extract return device parameter intent
+                op = intent.get("operation") or {}
+                value = op.get("value")
+                unit = op.get("unit")
+
+                # Parse return index from "Return A" or "A"
+                return_index = None
+                if isinstance(track_ref, str):
+                    letter = track_ref.strip().upper().replace("RETURN", "").strip()
+                    if len(letter) == 1 and 'A' <= letter <= 'Z':
+                        return_index = ord(letter) - ord('A')
+
+                if return_index is None or param_name is None:
+                    # Can't auto-execute without return and param
+                    return {
+                        "ok": False,
+                        "reason": "incomplete_device_intent",
+                        "intent": intent,
+                        "summary": "I need a return track letter and parameter name to proceed."
+                    }
+
+                # Get devices to find device_index
+                try:
+                    from server.api.intents import execute_intent as exec_canonical
+                    from server.api.intents import CanonicalIntent
+
+                    # Build canonical intent for device parameter
+                    canonical = CanonicalIntent(
+                        domain="device",
+                        return_index=return_index,
+                        device_index=0,  # Default to first device, will improve with device matching
+                        param_ref=param_name,
+                        display=str(value) if value is not None else None,
+                        unit=unit,
+                        dry_run=not body.confirm
+                    )
+
+                    # Execute the intent
+                    result = exec_canonical(canonical)
+
+                    if not result.get("ok"):
+                        return {
+                            "ok": False,
+                            "reason": "execution_failed",
+                            "intent": intent,
+                            "summary": result.get("summary") or "Failed to set parameter",
+                            "error": result.get("error")
+                        }
+
+                    summary = result.get("summary") or f"Set {param_name}"
+
+                    # If confirmed (not dry_run), fetch capabilities for UI
+                    capabilities = None
+                    if body.confirm:
+                        try:
+                            from server.api.returns import get_return_device_capabilities
+                            caps_result = get_return_device_capabilities(index=return_index, device=0)
+                            if caps_result.get("ok"):
+                                capabilities = caps_result.get("data")
+                        except Exception as e:
+                            print(f"[CHAT] Warning: Failed to fetch capabilities: {e}")
+
+                    return {
+                        "ok": True,
+                        "summary": summary,
+                        "intent": intent,
+                        "data": {"capabilities": capabilities} if capabilities else {}
+                    }
+
+                except HTTPException as he:
+                    return {
+                        "ok": False,
+                        "reason": "http_error",
+                        "intent": intent,
+                        "summary": f"Error: {he.detail}",
+                        "error": str(he.detail)
+                    }
+                except Exception as e:
+                    print(f"[CHAT] Device parameter execution error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return {
+                        "ok": False,
+                        "reason": "execution_error",
+                        "intent": intent,
+                        "summary": f"Error executing command: {str(e)}",
+                        "error": str(e)
+                    }
+
     # Fallback: return intent for UI to decide
     return {
         "ok": False,

@@ -94,6 +94,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     parameter = (target.get("parameter") or "").lower()
     parameter = _normalize_mixer_param(parameter)
     plugin = target.get("plugin")
+    device_ordinal = target.get("device_ordinal")
     op_type = (op.get("type") or "").lower()
     value = op.get("value")
     unit = op.get("unit")
@@ -103,14 +104,19 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         errors.append(f"unsupported_op_type:{op_type}")
         return None, errors
 
-    try:
-        amount = float(value)
-    except Exception:
-        errors.append("invalid_value_amount")
-        return None, errors
+    # For mixer/sends we require numeric; for device we allow display strings
+    def _to_float(v: Any) -> Optional[float]:
+        try:
+            return float(v)
+        except Exception:
+            return None
 
     # Mixer controls: volume, pan, mute, solo
     if parameter in ("volume", "pan", "mute", "solo"):
+        amount = _to_float(value)
+        if amount is None:
+            errors.append("invalid_value_amount")
+            return None, errors
         intent = {
             "domain": domain,
             "action": "set",
@@ -123,6 +129,10 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
 
     # Send controls: "send A", "send B", etc.
     if parameter.startswith("send ") or parameter in ("send", "sends"):
+        amount = _to_float(value)
+        if amount is None:
+            errors.append("invalid_value_amount")
+            return None, errors
         if not parameter.startswith("send "):
             # Try to extract trailing letter from raw text if provided, else require client to add send_ref downstream
             pass
@@ -140,14 +150,41 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
 
     # Device parameters: if plugin is specified
     if plugin:
-        intent = {
+        # Device params support numeric and display label values
+        intent: Dict[str, Any] = {
             "domain": "device",
             "action": "set",
             "param_ref": parameter,
-            "value": amount,
-            "unit": unit,
             **target_fields
         }
+        # Pass through device name as a hint unless it's a generic placeholder
+        try:
+            pl = str(plugin).strip().lower()
+            if pl not in ("device", "fx", "effect", "plugin") and pl:
+                intent["device_name_hint"] = str(plugin)
+        except Exception:
+            pass
+        try:
+            if device_ordinal is not None:
+                intent["device_ordinal_hint"] = int(device_ordinal)
+        except Exception:
+            pass
+        amount = _to_float(value)
+        unit_l = (unit or "").strip().lower()
+        if amount is not None:
+            intent["value"] = amount
+            if unit is not None:
+                intent["unit"] = unit
+        else:
+            # Treat as display string selection (e.g., Mode → Distance)
+            if isinstance(value, str):
+                intent["display"] = value
+                # Keep unit if explicitly marked as 'display', else omit
+                if unit_l == "display":
+                    intent["unit"] = unit
+            else:
+                errors.append("invalid_value_amount")
+                return None, errors
         # Need device_index - for now use 0 (first device on track/return)
         intent["device_index"] = 0
         return intent, []

@@ -29,6 +29,8 @@ class CanonicalIntent(BaseModel):
     return_index: Optional[int] = None      # numeric index (0-based) OR
     return_ref: Optional[str] = None        # letter reference: "A", "B", "C" (preferred for user-facing API)
     device_index: Optional[int] = None      # device on track or return (depending on which index is present)
+    device_name_hint: Optional[str] = None  # optional hint to resolve device_index by name
+    device_ordinal_hint: Optional[int] = None  # 1-based ordinal among matches (or among all if no name)
 
     # Field/parameter selection
     field: Optional[str] = None             # mixer field: volume|pan|mute|solo|cue|tempo|send
@@ -594,7 +596,8 @@ def _generate_device_param_summary(
     new_display: str,
     device_name: str,
     return_ref: Optional[str] = None,
-    track_index: Optional[int] = None
+    track_index: Optional[int] = None,
+    old_display: Optional[str] = None,
 ) -> str:
     """Generate a rich summary for a device parameter change.
 
@@ -619,8 +622,15 @@ def _generate_device_param_summary(
     else:
         location = device_name
 
-    # Direction of change
+    # Direction of change: prefer display-based comparison (e.g., ms, dB) when available
     increased = new_value > old_value
+    try:
+        od = _parse_target_display(str(old_display)) if old_display is not None else None
+        nd = _parse_target_display(str(new_display)) if new_display is not None else None
+        if od is not None and nd is not None:
+            increased = float(nd) > float(od)
+    except Exception:
+        pass
     direction_word = "increased" if increased else ("decreased" if new_value < old_value else "set")
 
     # Format numeric portion of display to max 2 decimals
@@ -1065,6 +1075,43 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
         ri = _resolve_return_index(intent)
         di = int(intent.device_index)
+        # If hints provided, try to resolve index by name and/or ordinal
+        if intent.device_name_hint or intent.device_ordinal_hint:
+            try:
+                devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
+                devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+                matches = []
+                # Build matches by name when hint provided; else all devices
+                if intent.device_name_hint:
+                    hint = str(intent.device_name_hint).strip().lower()
+                    hint_nos = hint.replace(" ", "")
+                    for d in devs:
+                        nm = str(d.get("name", ""))
+                        nml = nm.strip().lower()
+                        if nml == hint or nml.replace(" ", "") == hint_nos or (hint in nml) or (hint_nos in nml.replace(" ", "")):
+                            matches.append(int(d.get("index", 0)))
+                else:
+                    matches = [int(d.get("index", 0)) for d in devs]
+                matches = sorted(set(matches))
+                ord_hint = int(intent.device_ordinal_hint) if intent.device_ordinal_hint else None
+                if matches:
+                    if ord_hint:
+                        if 1 <= ord_hint <= len(matches):
+                            di = matches[ord_hint - 1]
+                        else:
+                            # Ordinal out of range — return choices
+                            choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                            raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
+                    else:
+                        di = matches[0]
+                else:
+                    # No matches for name hint — return device list to help user
+                    choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                    raise HTTPException(404, f"device_not_found_for_hint:{intent.device_name_hint}; devices=[{choices}]")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         # Validate device exists and capture friendly names
         try:
             devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
@@ -1313,7 +1360,8 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                     new_value=new_val,
                     new_display=new_display,
                     device_name=dname,
-                    return_ref=return_letter
+                    return_ref=return_letter,
+                    old_display=str(sel.get("display_value")) if sel.get("display_value") is not None else None
                 )
 
                 # Add summary to response
@@ -1325,12 +1373,58 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             # If summary generation fails, fall back to basic response
             pass
 
+        # Attach return device capabilities so UI can render grouped cards
+        if not intent.dry_run:
+            try:
+                from server.api.returns import get_return_device_capabilities
+                caps = get_return_device_capabilities(index=ri, device=di)
+                if isinstance(caps, dict) and caps.get("ok"):
+                    if isinstance(resp, dict):
+                        resp.setdefault("data", {})
+                        resp["data"]["capabilities"] = caps.get("data")
+            except Exception:
+                pass
+
         return resp
 
     # Device parameter (track device)
     if d == "device" and intent.track_index is not None and intent.device_index is not None:
         ti = int(intent.track_index)
         di = int(intent.device_index)
+        # If hints provided, try to resolve index by name and/or ordinal for track devices
+        if intent.device_name_hint or intent.device_ordinal_hint:
+            try:
+                devs_list = request_op("get_track_devices", timeout=1.0, track_index=ti) or {}
+                devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+                matches = []
+                if intent.device_name_hint:
+                    hint = str(intent.device_name_hint).strip().lower()
+                    hint_nos = hint.replace(" ", "")
+                    for d in devs:
+                        nm = str(d.get("name", ""))
+                        nml = nm.strip().lower()
+                        if nml == hint or nml.replace(" ", "") == hint_nos or (hint in nml) or (hint_nos in nml.replace(" ", "")):
+                            matches.append(int(d.get("index", 0)))
+                else:
+                    matches = [int(d.get("index", 0)) for d in devs]
+                matches = sorted(set(matches))
+                ord_hint = int(intent.device_ordinal_hint) if intent.device_ordinal_hint else None
+                if matches:
+                    if ord_hint:
+                        if 1 <= ord_hint <= len(matches):
+                            di = matches[ord_hint - 1]
+                        else:
+                            choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                            raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
+                    else:
+                        di = matches[0]
+                else:
+                    choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                    raise HTTPException(404, f"device_not_found_for_hint:{intent.device_name_hint}; devices=[{choices}]")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         pr = request_op("get_track_device_params", timeout=1.2, track_index=ti, device_index=di)
         params = ((pr or {}).get("data") or {}).get("params") or []
         if not params:

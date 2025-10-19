@@ -43,11 +43,14 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
               Try these commands:
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {suggestedIntents.map((intent, index) => (
+              {suggestedIntents.map((item, index) => {
+                const label = typeof item === 'string' ? item : (item.label || item.value || 'Option');
+                const value = typeof item === 'string' ? item : (item.value || item.label || '');
+                return (
                 <Chip
                   key={index}
-                  label={intent}
-                  onClick={() => onSuggestedIntent?.(intent)}
+                  label={label}
+                  onClick={() => value && onSuggestedIntent?.(value)}
                   color="primary"
                   variant="outlined"
                   size="small"
@@ -59,7 +62,7 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
                     }
                   }}
                 />
-              ))}
+              );})}
             </Box>
           </Box>
         )}
@@ -232,9 +235,33 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
           <Typography variant="body2" sx={{ mb: 2 }}>
             {message.content}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Please respond with your clarification to continue...
-          </Typography>
+          {Array.isArray(message.data?.suggested_intents) && message.data.suggested_intents.length > 0 ? (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Quick options:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {message.data.suggested_intents.map((item, index) => {
+                  const label = typeof item === 'string' ? item : (item.label || item.value || 'Option');
+                  const value = typeof item === 'string' ? item : (item.value || item.label || '');
+                  return (
+                    <Chip
+                      key={index}
+                      label={label}
+                      onClick={() => value && onSuggestedIntent?.(value)}
+                      color="primary"
+                      variant="outlined"
+                      size="small"
+                    />
+                  );
+                })}
+              </Box>
+            </Box>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              Please respond with your clarification to continue...
+            </Typography>
+          )}
         </Box>
       );
     }
