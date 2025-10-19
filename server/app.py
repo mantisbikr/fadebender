@@ -53,6 +53,7 @@ from server.api.device_mapping import router as device_mapping_router
 from server.api.presets import router as presets_router
 from server.api.intents import router as intents_router
 from server.api.overview import router as overview_router
+from server.api.snapshot import router as snapshot_router
 from server.cloud.enrich_queue import enqueue_preset_enrich
 import hashlib
 import math
@@ -501,6 +502,7 @@ app.include_router(presets_router)
 app.include_router(ops_router)
 app.include_router(intents_router)
 app.include_router(overview_router)
+app.include_router(snapshot_router)
 
 
 app.include_router(health_router)

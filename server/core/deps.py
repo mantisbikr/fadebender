@@ -5,11 +5,13 @@ from typing import Optional
 from server.services.mapping_store import MappingStore
 from server.services.live_index import LiveIndex
 from server.services.device_resolver import DeviceResolver
+from server.services.value_registry import ValueRegistry
 
 
 _STORE: Optional[MappingStore] = None
 _INDEX: Optional[LiveIndex] = None
 _RESOLVER: Optional[DeviceResolver] = None
+_REGISTRY: Optional[ValueRegistry] = None
 
 
 def set_store_instance(store: MappingStore) -> None:
@@ -36,3 +38,10 @@ def get_device_resolver() -> DeviceResolver:
     if _RESOLVER is None:
         _RESOLVER = DeviceResolver(get_live_index())
     return _RESOLVER
+
+
+def get_value_registry() -> ValueRegistry:
+    global _REGISTRY
+    if _REGISTRY is None:
+        _REGISTRY = ValueRegistry()
+    return _REGISTRY

@@ -1018,6 +1018,11 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_return_mixer", timeout=1.0, return_index=return_idx, field=str(field), value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
+        try:
+            reg = get_value_registry()
+            reg.update_mixer("return", return_idx, field, float(v), None, None, source="op")
+        except Exception:
+            pass
         return resp
 
     # Return sends
@@ -1049,6 +1054,11 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_return_send", timeout=1.0, return_index=return_idx, send_index=send_idx, value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
+        try:
+            reg = get_value_registry()
+            reg.update_mixer("return", return_idx, f"send_{send_idx}", float(v), None, None, source="op")
+        except Exception:
+            pass
         return resp
 
     # Master mixer (subset)
@@ -1091,6 +1101,18 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_master_mixer", timeout=1.0, field=str(field), value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
+        try:
+            reg = get_value_registry()
+            disp = None; unit = None
+            if field == "volume":
+                from server.volume_utils import live_float_to_db
+                try:
+                    disp = f"{live_float_to_db(float(v)):.1f} dB"; unit = "db"
+                except Exception:
+                    pass
+            reg.update_mixer("master", 0, field, float(v), disp, unit, source="op")
+        except Exception:
+            pass
         return resp
 
     # Device parameter (return device)
