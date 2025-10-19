@@ -776,6 +776,8 @@ def _detect_device_type(params: list[dict], device_name: str | None = None) -> s
             return "autofilter"
         if "saturator" in name_lc:
             return "saturator"
+        if "amp" in name_lc:
+            return "amp"
 
     param_set = set(p.get("name", "") for p in params)
 
@@ -802,6 +804,10 @@ def _detect_device_type(params: list[dict], device_name: str | None = None) -> s
     # Ableton Saturator
     if {"Drive", "Dry/Wet", "Color", "Type"}.issubset(param_set):
         return "saturator"
+
+    # Ableton Amp
+    if {"Amp Type", "Bass", "Middle", "Treble", "Gain"}.issubset(param_set):
+        return "amp"
 
     # Fallback: infer from common parameter name hints
     if {"Time", "Feedback"}.intersection(param_set) and any("Time" in n for n in param_set):
@@ -2876,10 +2882,11 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     handled_label = False
     if label and pm_entry:
         lm = pm_entry.get("label_map") or {}
+        # label_map format: {"0": "Clean", "1": "Boost", ...} (number → label)
         for k, v in lm.items():
             try:
-                if str(k).strip().lower() == label.lower():
-                    x = max(vmin, min(vmax, float(v)))
+                if str(v).strip().lower() == label.lower():
+                    x = max(vmin, min(vmax, float(k)))
                     handled_label = True
                     break
             except Exception:

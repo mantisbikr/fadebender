@@ -536,9 +536,10 @@ def sanity_probe(body: Dict[str, Any]) -> Dict[str, Any]:
         )
         if pm and isinstance(pm.get("label_map"), dict):
             lm = pm.get("label_map") or {}
+            # label_map format: {"0": "Clean", "1": "Boost", ...} (number → label)
             for k, v in lm.items():
-                if str(k).strip().lower() == target_display.strip().lower():
-                    x = max(vmin, min(vmax, float(v)))
+                if str(v).strip().lower() == target_display.strip().lower():
+                    x = max(vmin, min(vmax, float(k)))
                     request_op(
                         "set_return_device_param",
                         timeout=1.0,

@@ -361,9 +361,10 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
         ty = _parse_target_display(target_display)
         if pm and isinstance(pm.get("label_map"), dict) and ty is None:
             lm = pm.get("label_map") or {}
+            # label_map format: {"0": "Clean", "1": "Boost", ...} (number → label)
             for k, v in lm.items():
-                if str(k).strip().lower() == target_display.strip().lower():
-                    x = max(vmin, min(vmax, float(v)))
+                if str(v).strip().lower() == target_display.strip().lower():
+                    x = max(vmin, min(vmax, float(k)))
                     request_op("set_return_device_param", timeout=1.0, return_index=ri, device_index=di, param_index=pi, value=float(x))
                     break
         else:

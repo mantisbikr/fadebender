@@ -1185,10 +1185,11 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 lm = pm.get("label_map") or {}
                 lnorm = target_display.strip().lower()
                 # Try exact match in label_map first
+                # label_map format: {"0": "Clean", "1": "Boost", ...} (number → label)
                 matched = False
                 for k, v in lm.items():
-                    if str(k).strip().lower() == lnorm:
-                        x = float(v)
+                    if str(v).strip().lower() == lnorm:
+                        x = float(k)
                         matched = True
                         break
                 # If not matched, check for on/off synonyms

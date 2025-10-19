@@ -1,0 +1,170 @@
+{
+  "device_name": "Amp",
+  "device_signature": "d554752f4be9eee62197c37b45b1c22237842c37",
+  "source": "Ableton Live 12 Manual Section 26.1, Fadebender KB knowledge/ableton-live/audio-effects/amp.md",
+  "description": "Guitar and bass amplifier emulation developed with Softube using physical modeling technology. Provides seven classic amp models with unified tone controls.",
+  "parameters": {
+    "Device On": {
+      "audio_function": "Enables/disables the Amp effect",
+      "sonic_effect": {
+        "On": "Effect is active and processing audio",
+        "Off": "Effect is bypassed, audio passes through unprocessed"
+      }
+    },
+    "Amp Type": {
+      "audio_function": "Selects between seven classic guitar/bass amplifier models, each with distinct tonal characteristics",
+      "sonic_effect": {
+        "Clean": "Based on the 'Brilliant' channel of a classic 1960s amp. Widely used by British Invasion guitarists. Clean, bright tone.",
+        "Boost": "Based on the 'Tremolo' channel of the same 1960s amp. Great for edgy rock riffs with more drive than Clean.",
+        "Blues": "Based on a 1970s-era guitar amp with bright character. Popular with country, rock, and blues guitarists.",
+        "Rock": "Modeled after a classic 45-watt 1960s amp. Perhaps the best-known rock amp of all time. Classic rock distortion.",
+        "Lead": "Based on the 'Modern' channel of a high-gain amp. Popular with metal guitarists. High gain and sustain.",
+        "Heavy": "Based on the 'Vintage' channel of the same high-gain amp. Ideal for metal and grunge sounds.",
+        "Bass": "Modeled after a rare 1970s PA that became popular with bass players. Strong low end with 'fuzz' at high volumes."
+      },
+      "technical_detail": "Physical modeling technology emulates the electrical characteristics of each amplifier's preamp and power amp stages, including non-linear interactions between circuits.",
+      "use_cases": [
+        "Clean/Boost: Vintage rock, indie, surf, rockabilly",
+        "Blues: Blues, country, classic rock rhythm tones",
+        "Rock: Classic rock, hard rock, punk",
+        "Lead/Heavy: Metal, hard rock solos, high-gain rhythm",
+        "Bass: Bass guitar, sub-bass enhancement, bass distortion"
+      ]
+    },
+    "Bass": {
+      "audio_function": "Low-frequency EQ control in the preamp stage",
+      "sonic_effect": "Adjusts the level of bass frequencies. Higher values increase low-end warmth and weight. Can add 'boom' or 'thickness' to the sound.",
+      "technical_detail": "Interacts non-linearly with other EQ controls and gain settings. High Bass settings can reduce available 'electrical energy' for mid/treble frequencies in the amp model, mimicking real analog behavior. Can also increase distortion amount.",
+      "use_cases": [
+        "Add weight to thin guitar tones",
+        "Enhance bass guitar low end",
+        "Reduce at high gain to prevent muddiness",
+        "Boost for rhythm guitar thickness"
+      ],
+      "typical_values": {
+        "Clean guitar": "3-6",
+        "Rhythm guitar": "5-7",
+        "Lead guitar": "2-5 (reduce to cut through mix)",
+        "Bass guitar": "6-9"
+      }
+    },
+    "Middle": {
+      "audio_function": "Mid-frequency EQ control in the preamp stage",
+      "sonic_effect": "Adjusts midrange frequencies. Higher values add body and presence. Lower values create scooped, hollow sounds.",
+      "technical_detail": "Most critical EQ for guitar tone. Interacts with Bass and Treble in non-linear ways. Midrange frequencies are where guitars sit in a mix. Can significantly affect distortion character.",
+      "use_cases": [
+        "Boost for cutting through dense mixes",
+        "Scoop (reduce) for metal/modern rock tones",
+        "Moderate settings for vintage rock",
+        "High settings for blues/classic rock"
+      ],
+      "typical_values": {
+        "Scooped metal": "2-4",
+        "Modern rock": "4-6",
+        "Classic rock": "6-8",
+        "Blues/jazz": "5-7"
+      }
+    },
+    "Treble": {
+      "audio_function": "High-frequency EQ control in the preamp stage",
+      "sonic_effect": "Adjusts high-frequency content. Higher values add brightness, sparkle, and cut. Lower values create darker, warmer tones.",
+      "technical_detail": "Affects the high-frequency response before distortion. Interacts with Presence (which affects highs in the power amp stage). High Treble can reduce bass/mid energy in the amp model. Can add harshness if overused.",
+      "use_cases": [
+        "Add sparkle to clean tones",
+        "Brighten dark-sounding guitars or pickups",
+        "Reduce for warm jazz tones",
+        "Moderate for balanced rock tones"
+      ],
+      "typical_values": {
+        "Warm jazz": "2-4",
+        "Balanced rock": "5-7",
+        "Bright clean": "7-9",
+        "Metal": "6-8"
+      }
+    },
+    "Presence": {
+      "audio_function": "Additional mid/high-frequency tone control in the power amp stage",
+      "sonic_effect": "Affects upper-midrange and high frequencies after the preamp. Adds or subtracts 'edge', 'crispness', or 'air'. Effect varies considerably by amp model.",
+      "technical_detail": "Models the presence control found in guitar amp power sections. Applied after preamp EQ and distortion. Affects the 'feel' and 'attack' of the sound. Different amp models respond differently to Presence adjustments.",
+      "use_cases": [
+        "Add cutting power to lead tones",
+        "Enhance pick attack and definition",
+        "Reduce for smoother, less aggressive tone",
+        "Experiment per amp model for different colors"
+      ],
+      "typical_values": {
+        "Smooth rhythm": "3-5",
+        "Balanced tone": "5-7",
+        "Aggressive lead": "7-10"
+      }
+    },
+    "Gain": {
+      "audio_function": "Input level to the preamplifier, primary distortion control",
+      "sonic_effect": "Higher settings increase saturation and distortion. Low settings produce clean tones. Works with Volume to determine overall output level, but Gain is the primary distortion amount control.",
+      "technical_detail": "Models the preamp gain stage. High gain drives the virtual tubes/transistors harder, creating harmonic distortion and compression. Interacts with EQ settings - boosting EQ can increase gain/distortion.",
+      "use_cases": [
+        "Low (0-3): Clean tones, jazz, country",
+        "Medium (4-6): Blues, classic rock, crunch",
+        "High (7-9): Hard rock, heavy distortion",
+        "Maximum (10): Metal, extreme saturation"
+      ],
+      "typical_values": {
+        "Clean": "0-3",
+        "Crunch": "4-6",
+        "Distortion": "7-8",
+        "High gain": "9-10"
+      }
+    },
+    "Volume": {
+      "audio_function": "Output level of the power amplifier stage",
+      "sonic_effect": "Controls the output level. With Blues, Heavy, and Bass amp models, high Volume levels can add significant additional power amp distortion and 'sag'.",
+      "technical_detail": "Models the power amp output stage. In real amps, cranking the volume drives the power tubes into distortion. This is modeled particularly for Blues, Heavy, and Bass models where high Volume adds compression and warmth.",
+      "use_cases": [
+        "Balance overall output level",
+        "Add power amp distortion (Blues/Heavy/Bass models)",
+        "Compensate for gain changes",
+        "Drive for additional saturation with specific models"
+      ],
+      "typical_values": {
+        "Typical output": "6-8",
+        "With high gain": "5-7 (prevent clipping)",
+        "Power amp distortion": "8-10 (Blues/Heavy/Bass)"
+      }
+    },
+    "Dual Mono": {
+      "audio_function": "Toggles between mono and stereo (dual) processing modes",
+      "sonic_effect": {
+        "Mono": "Single amp model, identical processing on left and right channels. Lower CPU usage.",
+        "Dual": "Two independent amp instances, creating stereo width and slight variations. Higher CPU usage (2x)."
+      },
+      "technical_detail": "Dual mode runs two independent amp simulations with subtle variations, creating a wider, more 'recorded' sound similar to double-tracking. Uses twice the CPU.",
+      "use_cases": [
+        "Mono: Single guitar tracks, bass, CPU efficiency",
+        "Dual: Wide stereo guitar tones, doubling effect, fuller sound"
+      ]
+    },
+    "Dry/Wet": {
+      "audio_function": "Blends unprocessed (dry) and processed (wet) signals",
+      "sonic_effect": "100% wet is fully processed amp sound. Lower values blend in clean signal for parallel processing, tonal coloration, or subtle saturation.",
+      "technical_detail": "Allows parallel processing - blend clean signal with distorted amp for articulation while maintaining harmonic richness. Useful for non-guitar sources or subtle coloration.",
+      "use_cases": [
+        "100%: Traditional guitar amp use",
+        "50-80%: Subtle coloration, preserve clarity",
+        "30-60%: Parallel distortion on bass",
+        "Low values: Gentle saturation on drums/synths"
+      ],
+      "typical_values": {
+        "Full amp tone": "100%",
+        "Subtle color": "30-60%",
+        "Parallel bass": "40-70%"
+      }
+    }
+  },
+  "usage_notes": [
+    "Designed to be used with Cabinet effect for authentic guitar/bass tones. Place Cabinet after Amp in device chain.",
+    "EQ controls interact non-linearly with each other and with gain - turning up one parameter may reduce others due to modeled 'electrical energy' limits.",
+    "Can produce excellent results on non-guitar sources: drums, synths, vocals. Experiment with low Dry/Wet for coloration.",
+    "Blues, Heavy, and Bass models add extra distortion at high Volume settings, modeling power amp saturation.",
+    "Dual Mono mode doubles CPU usage but creates wider, more spacious tones."
+  ]
+}

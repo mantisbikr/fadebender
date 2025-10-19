@@ -19,6 +19,8 @@ def detect_device_type(params: List[Dict[str, Any]], device_name: Optional[str] 
             return "autofilter"
         if "saturator" in name_lc:
             return "saturator"
+        if "amp" in name_lc:
+            return "amp"
 
     param_set = set(str(p.get("name", "")) for p in params)
 
@@ -34,6 +36,8 @@ def detect_device_type(params: List[Dict[str, Any]], device_name: Optional[str] 
         return "autofilter"
     if {"Drive", "Dry/Wet", "Color", "Type"}.issubset(param_set):
         return "saturator"
+    if {"Amp Type", "Bass", "Middle", "Treble", "Gain"}.issubset(param_set):
+        return "amp"
 
     if {"Time", "Feedback"}.intersection(param_set) and any("Time" in n for n in param_set):
         return "delay"
