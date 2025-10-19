@@ -129,15 +129,37 @@ def _resolve_param(params: list[dict], param_index: Optional[int], param_ref: Op
                 return p
         raise HTTPException(404, "param_not_found")
     if param_ref:
-        pref = param_ref.strip().lower()
+        import re as _re2
+        def _norm_key(s: str) -> str:
+            s0 = (s or "").lower()
+            # unify common short forms: lo->low, hi->high where standalone
+            s0 = _re2.sub(r"\blo\b", "low", s0)
+            s0 = _re2.sub(r"\bhi\b", "high", s0)
+            # remove separators
+            s0 = _re2.sub(r"[^a-z0-9]", "", s0)
+            # normalize known pairs
+            s0 = s0.replace("locut", "lowcut").replace("hicut", "highcut")
+            s0 = s0.replace("lowpass", "lowcut").replace("highpass", "highcut")
+            s0 = s0.replace("drywet", "drywet")
+            return s0
+
+        pref_raw = str(param_ref or "").strip()
+        pref = pref_raw.lower()
+        pref_norm = _norm_key(pref_raw)
         names = [str(p.get("name", "")) for p in params]
         cand = [p for p in params if pref in str(p.get("name", "")).lower()]
+        if len(cand) == 0 and pref_norm:
+            pairs = [(p, _norm_key(str(p.get("name", "")))) for p in params]
+            exact = [p for (p, nk) in pairs if nk == pref_norm]
+            if exact:
+                cand = exact
+            else:
+                cand = [p for (p, nk) in pairs if pref_norm in nk]
         if len(cand) == 1:
             return cand[0]
         if len(cand) == 0:
-            # Fuzzy suggestions (contains and startswith)
-            starts = [n for n in names if n.lower().startswith(pref)]
-            contains = [n for n in names if pref in n.lower()]
+            starts = [n for n in names if n.lower().startswith(pref) or _norm_key(n).startswith(pref_norm)]
+            contains = [n for n in names if (pref in n.lower()) or (pref_norm and pref_norm in _norm_key(n))]
             sugg = starts or contains or names[:8]
             raise HTTPException(404, f"param_not_found:{param_ref}; candidates={sugg}")
         raise HTTPException(409, f"param_ambiguous:{param_ref}; candidates={[p.get('name') for p in cand]}")
@@ -1833,6 +1855,17 @@ _COMMON_PARAM_ALIASES = {
     "dry": "dry/wet",
     "dry wet": "dry/wet",
     "dry / wet": "dry/wet",
+    # Cut filters and shelves
+    "lo cut": "low cut",
+    "locut": "low cut",
+    "lowcut": "low cut",
+    "hi cut": "high cut",
+    "hicut": "high cut",
+    "highcut": "high cut",
+    "lo shelf": "low shelf",
+    "loshelf": "low shelf",
+    "hi shelf": "hi shelf",
+    "hishelf": "hi shelf",
     "width": "stereo image",
     "stereo width": "stereo image",
     "image": "stereo image",

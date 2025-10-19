@@ -255,7 +255,25 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
                     />
                   );
                 })}
+            </Box>
+            {message.data && message.data.capabilities && (
+              <Box sx={{ mt: 2 }}>
+                <ParamAccordion
+                  capabilities={message.data.capabilities}
+                  onParamClick={(p) => {
+                    const caps = message.data.capabilities;
+                    // Device capabilities path
+                    if (typeof caps.device_index === 'number') {
+                      const letter = (typeof caps.return_index === 'number') ? String.fromCharCode('A'.charCodeAt(0) + caps.return_index) : 'A';
+                      const deviceName = caps.device_name || '';
+                      const payload = `__READ_PARAM__|${letter}|${caps.device_index}|${p.name}|${deviceName}`;
+                      onSuggestedIntent?.(payload);
+                      return;
+                    }
+                  }}
+                />
               </Box>
+            )}
             </Box>
           ) : (
             <Typography variant="caption" color="text.secondary">

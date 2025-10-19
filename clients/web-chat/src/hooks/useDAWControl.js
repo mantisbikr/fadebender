@@ -341,6 +341,12 @@ export function useDAWControl() {
         // Execute canonical intent directly; on error surface message and stop
         try {
           result = await apiService.executeCanonicalIntent(parsed.intent);
+          // If server attached capabilities, use them when client-side fetch hasn't populated yet
+          try {
+            if (!deviceCapabilities && result && result.data && result.data.capabilities) {
+              deviceCapabilities = result.data.capabilities;
+            }
+          } catch {}
           // Update conversational focus for follow-ups (e.g., device questions)
           try {
             const ci = parsed.intent;
@@ -470,6 +476,80 @@ export function useDAWControl() {
             } catch (_) {
               // Fall through to error
             }
+          }
+          // Friendly handling for parameter name issues
+          const paramNotFound = msg.startsWith('param_not_found:');
+          const paramAmbiguous = msg.startsWith('param_ambiguous:');
+          if (paramNotFound || paramAmbiguous) {
+            try {
+              // Build candidates from error message if present
+              let candidates = [];
+              const m = msg.match(/candidates=\[?([^\]]+)\]?$/);
+              if (m && m[1]) {
+                candidates = m[1].split(',').map(s => s.replace(/^\s*['\"]?|['\"]?\s*$/g,'').trim()).filter(Boolean);
+              }
+              const ci = parsed?.intent || {};
+              // Determine Return letter
+              let retRef = null;
+              if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
+              if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
+              // Guess device index: prefer ci.device_index; else attempt name match
+              let deviceIdx = (typeof ci.device_index === 'number') ? Number(ci.device_index) : 0;
+              const plugin = (ci.device_name_hint || '').toLowerCase();
+              if ((deviceIdx === 0 || isNaN(deviceIdx)) && retRef) {
+                try {
+                  const ri = retRef.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+                  const devsResp = await apiService.getReturnDevices(ri);
+                  const list = (devsResp && devsResp.data && devsResp.data.devices) || [];
+                  if (plugin) {
+                    const match = list.find(d => String(d.name || '').toLowerCase().replace(/\s+/g,' ') .includes(plugin));
+                    if (match) deviceIdx = Number(match.index);
+                  }
+                } catch {}
+              }
+              // Fetch capabilities so user can click params directly
+              let capabilities = null;
+              try {
+                if (retRef && deviceIdx >= 0) {
+                  const ri = retRef.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+                  const caps = await apiService.getReturnDeviceCapabilities(ri, deviceIdx);
+                  if (caps && caps.ok) capabilities = caps.data;
+                }
+              } catch {}
+              // Build suggested intents using candidates or the first few params
+              const base = retRef ? `set Return ${retRef}` : 'set Return A';
+              const labelPart = ci.display ? String(ci.display) : (typeof ci.value !== 'undefined' ? String(ci.value) : '');
+              const unit = (ci.unit && ci.unit !== 'display' && labelPart) ? ` ${ci.unit}` : '';
+              const aFewParams = () => {
+                try {
+                  if (capabilities && Array.isArray(capabilities.groups)) {
+                    const params = [];
+                    capabilities.groups.forEach(g => (g.params || []).forEach(p => params.push(p.name)));
+                    if (Array.isArray(capabilities.ungrouped)) capabilities.ungrouped.forEach(p => params.push(p.name));
+                    return params.slice(0, 6);
+                  }
+                } catch {}
+                return [];
+              };
+              const paramsList = candidates.length ? candidates.slice(0, 6) : aFewParams();
+              const ord = (typeof ci.device_ordinal_hint === 'number') ? Number(ci.device_ordinal_hint) : 1;
+              const hasPlugin = plugin && !['device','fx','effect','plugin'].includes(plugin);
+              const suggestions = paramsList.map(pn => ({
+                label: pn,
+                value: hasPlugin
+                  ? `${base} ${plugin} ${ord} ${pn} ${labelPart ? 'to ' + labelPart + unit : ''}`.trim()
+                  : `${base} device ${ord} ${pn} ${labelPart ? 'to ' + labelPart + unit : ''}`.trim()
+              }));
+
+              addMessage({
+                type: 'question',
+                content: paramNotFound
+                  ? `I couldn’t find that parameter${retRef ? ` on Return ${retRef}` : ''}. Try one of these or pick from the list:`
+                  : `That parameter name is ambiguous. Pick one below or choose from the list:`,
+                data: { suggested_intents: suggestions, capabilities }
+              });
+              return;
+            } catch (_) {}
           }
           addMessage({ type: 'error', content: `Intent error: ${msg}` });
           return;
