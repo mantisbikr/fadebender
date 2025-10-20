@@ -475,6 +475,42 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
     except Exception:
         pass
 
+    # Sends control (track) variants: allow missing 'to' or 'on' phrasing
+    try:
+        import re
+        # Variant without 'to'
+        m = re.search(r"\bset\s+track\s+(\d+)\s+(?:send\s+)?([a-d])\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+        if not m:
+            # Variant: set send A on track 1 to -12 dB
+            m = re.search(r"\bset\s+send\s+([a-d])\s+on\s+track\s+(\d+)\s*(?:to|at)?\s*(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+            if m:
+                # Rearrange capture groups to unify handling
+                track_num = int(m.group(2))
+                send_ref = m.group(1).upper()
+                value = float(m.group(3))
+                unit = m.group(4)
+            else:
+                track_num = None
+        if m and track_num is None:
+            track_num = int(m.group(1))
+            send_ref = m.group(2).upper()
+            value = float(m.group(3))
+            unit = m.group(4)
+        if m:
+            unit_out = None
+            if unit:
+                unit_l = unit.lower()
+                if unit_l in ("db",): unit_out = "dB"
+                elif unit_l in ("%", "percent"): unit_out = "%"
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": f"send {send_ref}"}],
+                "operation": {"type": "absolute", "value": value, "unit": unit_out},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
     # Return device param: label selection (e.g., Mode to Distance)
     try:
         import re
@@ -639,6 +675,41 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
             send_ref = m.group(2).upper()
             value = float(m.group(3))
             unit = m.group(4)
+            unit_out = None
+            if unit:
+                unit_l = unit.lower()
+                if unit_l in ("db",): unit_out = "dB"
+                elif unit_l in ("%", "percent"): unit_out = "%"
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": f"send {send_ref}"}],
+                "operation": {"type": "absolute", "value": value, "unit": unit_out},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+
+    # Sends control (return) variants: allow missing 'to' or 'on' phrasing
+    try:
+        import re
+        # Variant without 'to'
+        m = re.search(r"\bset\s+return\s+([a-d])\s+(?:send\s+)?([a-d])\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+        if not m:
+            # Variant: set send B on return A to -10 dB
+            m = re.search(r"\bset\s+send\s+([a-d])\s+on\s+return\s+([a-d])\s*(?:to|at)?\s*(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent))?\b", q)
+            if m:
+                return_ref = m.group(2).upper()
+                send_ref = m.group(1).upper()
+                value = float(m.group(3))
+                unit = m.group(4)
+            else:
+                return_ref = None
+        if m and return_ref is None:
+            return_ref = m.group(1).upper()
+            send_ref = m.group(2).upper()
+            value = float(m.group(3))
+            unit = m.group(4)
+        if m:
             unit_out = None
             if unit:
                 unit_l = unit.lower()

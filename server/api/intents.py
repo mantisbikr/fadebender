@@ -6,11 +6,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from server.services.ableton_client import request_op
-from server.core.deps import get_store, get_device_resolver
+from server.core.deps import get_store, get_device_resolver, get_value_registry
 from server.services.mapping_utils import make_device_signature
 import math
 import re as _re
-from server.volume_utils import db_to_live_float, db_to_live_float_send
+from server.volume_utils import db_to_live_float, db_to_live_float_send, live_float_to_db
 from server.config.app_config import get_app_config, get_feature_flags
 
 
@@ -937,6 +937,30 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_mixer", timeout=1.0, track_index=track_idx, field=str(field), value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
+        # Write-through to ValueRegistry
+        try:
+            reg = get_value_registry()
+            # Calculate display value for snapshot
+            disp = None
+            unit = None
+            if field == "volume":
+                try:
+                    disp = f"{live_float_to_db(float(v)):.2f}"
+                    unit = "dB"
+                except Exception:
+                    pass
+            elif field == "pan":
+                # Pan display: -50 to 50 (50L to 50R, 0=center), no unit
+                try:
+                    display_min, display_max = _get_mixer_display_range("pan")
+                    display_scale = max(abs(display_min), abs(display_max))
+                    disp = f"{float(v) * display_scale:.2f}"
+                    unit = None  # Pan has no unit
+                except Exception:
+                    pass
+            reg.update_mixer("track", track_idx, field, float(v), disp, unit, source="op")
+        except Exception:
+            pass
         return resp
 
     # Track sends
@@ -964,6 +988,20 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_send", timeout=1.0, track_index=track_idx, send_index=send_idx, value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
+        # Write-through to ValueRegistry
+        try:
+            reg = get_value_registry()
+            # Calculate display value for snapshot
+            disp = None
+            unit = None
+            try:
+                disp = f"{live_float_to_db(float(v)):.2f}"
+                unit = "dB"
+            except Exception:
+                pass
+            reg.update_mixer("track", track_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
+        except Exception:
+            pass
         return resp
 
     # Return mixer

@@ -91,8 +91,8 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         errors.append("missing_or_invalid_track")
         return None, errors
 
-    parameter = (target.get("parameter") or "").lower()
-    parameter = _normalize_mixer_param(parameter)
+    param_raw = (target.get("parameter") or "")
+    parameter = _normalize_mixer_param(str(param_raw).lower())
     plugin = target.get("plugin")
     device_ordinal = target.get("device_ordinal")
     op_type = (op.get("type") or "").lower()
@@ -111,6 +111,22 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         except Exception:
             return None
 
+    # Helper: detect send letter even when spacing/case is odd (e.g., "sendB", "Send   A")
+    def _extract_send_letter(p: str) -> Optional[str]:
+        try:
+            import re as _re
+            s = str(p or "").lower()
+            m = _re.search(r"\bsend\s*([a-d])\b", s)
+            if m:
+                return m.group(1).upper()
+            # Very conservative fallback: exact single letter A-D only, and only if plugin is empty/generic
+            s_clean = s.strip()
+            if s_clean in ("a","b","c","d"):
+                return s_clean.upper()
+        except Exception:
+            pass
+        return None
+
     # Mixer controls: volume, pan, mute, solo
     if parameter in ("volume", "pan", "mute", "solo"):
         amount = _to_float(value)
@@ -127,16 +143,24 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         }
         return intent, []
 
-    # Send controls: "send A", "send B", etc.
-    if parameter.startswith("send ") or parameter in ("send", "sends"):
+    # Send controls: "send A", "send B", etc. (prefer this mapping even if a plugin is present)
+    send_letter = None
+    if parameter.startswith("send "):
+        try:
+            send_letter = parameter.split()[-1].upper()
+        except Exception:
+            send_letter = None
+    if send_letter is None:
+        send_letter = _extract_send_letter(param_raw)
+    if (parameter in ("send", "sends")) and send_letter is None:
+        # No letter specified; treat as error for now
+        errors.append("send_letter_missing")
+        return None, errors
+    if send_letter is not None:
         amount = _to_float(value)
         if amount is None:
             errors.append("invalid_value_amount")
             return None, errors
-        if not parameter.startswith("send "):
-            # Try to extract trailing letter from raw text if provided, else require client to add send_ref downstream
-            pass
-        send_letter = parameter.split()[-1].upper()  # Extract "A", "B", etc.
         intent = {
             "domain": domain,
             "action": "set",
