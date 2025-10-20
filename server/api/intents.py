@@ -10,7 +10,7 @@ from server.core.deps import get_store, get_device_resolver, get_value_registry
 from server.services.mapping_utils import make_device_signature
 import math
 import re as _re
-from server.volume_utils import db_to_live_float, db_to_live_float_send, live_float_to_db
+from server.volume_utils import db_to_live_float, db_to_live_float_send, live_float_to_db, live_float_to_db_send
 from server.config.app_config import get_app_config, get_feature_flags
 
 
@@ -901,22 +901,31 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         v = float(intent.value if intent.value is not None else 0.0)
 
         # Check for display value (string presets like "center", "25L", "unity")
+        resolved_from_display = False
         if intent.display and field in ("pan", "volume"):
+            print(f"[DEBUG] Resolving display: field={field}, display={intent.display}")
             resolved = _resolve_mixer_display_value(field, intent.display)
+            print(f"[DEBUG] Resolved to: {resolved}")
             if resolved is not None:
                 v = resolved
+                resolved_from_display = True
+                print(f"[DEBUG] Set v to resolved value: {v} (already normalized, skip unit conversion)")
             # If display resolves to None, fall through to normal value handling
 
-        if field == "volume":
+        if field == "volume" and not resolved_from_display:
             # Disallow normalized input when display_only_io is enabled
             if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
                 raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
+            print(f"[DEBUG] Volume conversion: v before={v}, unit={intent.unit}")
             if (intent.unit or "").lower() in ("db", "dB".lower()):
+                print(f"[DEBUG] Converting from dB: {v}")
                 v = db_to_live_float(v)
+                print(f"[DEBUG] After db_to_live_float: {v}")
             elif (intent.unit or "").lower() in ("percent", "%"):
                 v = v / 100.0
             v = _clamp(v, 0.0, 1.0) if intent.clamp else v
-        elif field == "pan":
+            print(f"[DEBUG] Volume after all conversions: {v}")
+        elif field == "pan" and not resolved_from_display:
             # Pan: If value is outside [-1, 1], treat as display value and convert
             # Get display range from Firestore mapping (e.g., -50 to 50)
             if display_only_io and (intent.display is None) and -1.0 <= v <= 1.0 and not intent.unit:
@@ -934,21 +943,30 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             v = 1.0 if v >= 0.5 else 0.0
         if intent.dry_run:
             return {"ok": True, "preview": {"op": "set_mixer", "track_index": track_idx, "field": field, "value": v}}
+        print(f"[DEBUG] Sending to Live: track={track_idx}, field={field}, v={v}")
         resp = request_op("set_mixer", timeout=1.0, track_index=track_idx, field=str(field), value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
+        print(f"[DEBUG] Live response: {resp}")
         # Write-through to ValueRegistry
         try:
             reg = get_value_registry()
             # Calculate display value for snapshot
             disp = None
             unit = None
-            if field == "volume":
+
+            # Prefer original display value from intent to avoid round-trip conversion errors
+            if intent.display and field in ("volume", "pan"):
+                disp = intent.display
+                unit = intent.unit if field == "volume" else None
+            elif field == "volume":
                 try:
                     disp = f"{live_float_to_db(float(v)):.2f}"
                     unit = "dB"
-                except Exception:
-                    pass
+                except Exception as e:
+                    import traceback
+                    print(f"[DEBUG] live_float_to_db failed for v={v}: {e}")
+                    traceback.print_exc()
             elif field == "pan":
                 # Pan display: -50 to 50 (50L to 50R, 0=center), no unit
                 try:
@@ -958,9 +976,13 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                     unit = None  # Pan has no unit
                 except Exception:
                     pass
+            print(f"[DEBUG] About to write to registry - v is now: {v}")
+            print(f"[DEBUG] Writing to registry: track={track_idx}, field={field}, v={v}, disp={disp}, unit={unit}")
             reg.update_mixer("track", track_idx, field, float(v), disp, unit, source="op")
-        except Exception:
-            pass
+        except Exception as e:
+            import traceback
+            print(f"[DEBUG] Registry write failed: {e}")
+            traceback.print_exc()
         return resp
 
     # Track sends
@@ -994,14 +1016,25 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             # Calculate display value for snapshot
             disp = None
             unit = None
-            try:
-                disp = f"{live_float_to_db(float(v)):.2f}"
-                unit = "dB"
-            except Exception:
-                pass
+
+            # Prefer original display value from intent to avoid round-trip conversion errors
+            if intent.display:
+                disp = intent.display
+                unit = intent.unit
+            else:
+                try:
+                    disp = f"{live_float_to_db_send(float(v)):.2f}"
+                    unit = "dB"
+                except Exception as e:
+                    import traceback
+                    print(f"[DEBUG] Send: live_float_to_db_send failed for v={v}: {e}")
+                    traceback.print_exc()
+            print(f"[DEBUG] Writing to registry: track={track_idx}, send_{send_idx}, v={v}, disp={disp}, unit={unit}")
             reg.update_mixer("track", track_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
-        except Exception:
-            pass
+        except Exception as e:
+            import traceback
+            print(f"[DEBUG] Send registry write failed: {e}")
+            traceback.print_exc()
         return resp
 
     # Return mixer
@@ -1022,12 +1055,14 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         v = float(intent.value if intent.value is not None else 0.0)
 
         # Check for display value (string presets like "center", "25L", "unity")
+        resolved_from_display = False
         if intent.display and field in ("pan", "volume"):
             resolved = _resolve_mixer_display_value(field, intent.display)
             if resolved is not None:
                 v = resolved
+                resolved_from_display = True
 
-        if field == "volume":
+        if field == "volume" and not resolved_from_display:
             if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
                 raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
             # Add dB support for return volume (range: -60dB to +6dB)
@@ -1036,7 +1071,7 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             elif (intent.unit or "").lower() in ("percent", "%"):
                 v = v / 100.0
             v = _clamp(v, 0.0, 1.0) if intent.clamp else v
-        elif field == "pan":
+        elif field == "pan" and not resolved_from_display:
             if display_only_io and (intent.display is None) and -1.0 <= v <= 1.0 and not intent.unit:
                 raise HTTPException(400, "normalized_not_allowed_for_pan: provide display like '30L'/'30R'")
             # Pan: If value is outside [-1, 1], treat as display value and convert
@@ -1058,9 +1093,35 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             raise HTTPException(504, "no_reply")
         try:
             reg = get_value_registry()
-            reg.update_mixer("return", return_idx, field, float(v), None, None, source="op")
-        except Exception:
-            pass
+            disp = None
+            unit = None
+
+            # Prefer original display value from intent to avoid round-trip conversion errors
+            if intent.display and field in ("volume", "pan"):
+                disp = intent.display
+                unit = intent.unit if field == "volume" else None
+            elif field == "volume":
+                try:
+                    disp = f"{live_float_to_db(float(v)):.2f}"
+                    unit = "dB"
+                except Exception as e:
+                    import traceback
+                    print(f"[DEBUG] Return: live_float_to_db failed for v={v}: {e}")
+                    traceback.print_exc()
+            elif field == "pan":
+                try:
+                    display_min, display_max = _get_mixer_display_range("pan")
+                    display_scale = max(abs(display_min), abs(display_max))
+                    disp = f"{float(v) * display_scale:.2f}"
+                    unit = None  # Pan has no unit
+                except Exception:
+                    pass
+            print(f"[DEBUG] Writing to registry: return={return_idx}, field={field}, v={v}, disp={disp}, unit={unit}")
+            reg.update_mixer("return", return_idx, field, float(v), disp, unit, source="op")
+        except Exception as e:
+            import traceback
+            print(f"[DEBUG] Return registry write failed: {e}")
+            traceback.print_exc()
         return resp
 
     # Return sends
@@ -1094,7 +1155,14 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             raise HTTPException(504, "no_reply")
         try:
             reg = get_value_registry()
-            reg.update_mixer("return", return_idx, f"send_{send_idx}", float(v), None, None, source="op")
+            disp = None
+            unit = None
+            try:
+                disp = f"{live_float_to_db_send(float(v)):.2f}"
+                unit = "dB"
+            except Exception:
+                pass
+            reg.update_mixer("return", return_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
         except Exception:
             pass
         return resp
@@ -1104,18 +1172,20 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         v = float(intent.value if intent.value is not None else 0.0)
 
         # Check for display value (string presets like "center", "25L", "unity")
+        resolved_from_display = False
         if intent.display and field in ("pan", "volume", "cue"):
             resolved = _resolve_mixer_display_value(field, intent.display)
             if resolved is not None:
                 v = resolved
+                resolved_from_display = True
 
-        if field == "volume":
+        if field == "volume" and not resolved_from_display:
             if (intent.unit or "").lower() in ("db", "dB".lower()):
                 v = db_to_live_float(v)
             elif (intent.unit or "").lower() in ("percent", "%"):
                 v = v / 100.0
             v = _clamp(v, 0.0, 1.0) if intent.clamp else v
-        elif field == "cue":
+        elif field == "cue" and not resolved_from_display:
             # Cue volume: only supports dB (no percent)
             if (intent.unit or "").lower() in ("db", "dB".lower()):
                 v = db_to_live_float(v)
@@ -1142,8 +1212,12 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         try:
             reg = get_value_registry()
             disp = None; unit = None
-            if field == "volume":
-                from server.volume_utils import live_float_to_db
+
+            # Prefer original display value from intent to avoid round-trip conversion errors
+            if intent.display and field in ("volume", "pan", "cue"):
+                disp = intent.display
+                unit = intent.unit if field in ("volume", "cue") else None
+            elif field == "volume":
                 try:
                     disp = f"{live_float_to_db(float(v)):.1f} dB"; unit = "db"
                 except Exception:
@@ -1674,7 +1748,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         raw = mix.get(field)
         # Volume display in dB
         if field == "volume":
-            from server.volume_utils import live_float_to_db
             disp = None
             if raw is not None:
                 try:
@@ -1729,7 +1802,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         disp = (send or {}).get("display_value")
         if disp is None and raw is not None:
             try:
-                from server.volume_utils import live_float_to_db_send
                 disp = f"{live_float_to_db_send(float(raw)):.1f} dB"
             except Exception:
                 disp = None
@@ -1749,7 +1821,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         raw = mix.get(field)
         # Volume dB formatting
         if field == "volume":
-            from server.volume_utils import live_float_to_db
             disp = None
             if raw is not None:
                 try:
@@ -1807,7 +1878,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         disp = (send or {}).get("display_value")
         if disp is None and raw is not None:
             try:
-                from server.volume_utils import live_float_to_db_send
                 disp = f"{live_float_to_db_send(float(raw)):.1f} dB"
             except Exception:
                 disp = None
@@ -1823,7 +1893,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         field = str(intent.field)
         raw = mix.get(field)
         if field == "volume":
-            from server.volume_utils import live_float_to_db
             disp = None
             if raw is not None:
                 try:

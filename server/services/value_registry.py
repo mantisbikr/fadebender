@@ -24,11 +24,13 @@ class ValueRegistry:
         idx = int(index)
         ent = self._mixer.setdefault(entity, {})
         row = ent.setdefault(idx, {})
+        ts = time.time()
         row[str(field)] = {
             "normalized": normalized_value,
             "display": display_value,
             "unit": unit,
-            "ts": time.time(),
+            "ts": ts,
+            "timestamp": ts,
             "source": source,
         }
 
@@ -42,11 +44,13 @@ class ValueRegistry:
         dom = self._device.setdefault(d, {})
         ent = dom.setdefault(idx, {})
         dev = ent.setdefault(di, {})
+        ts = time.time()
         dev[str(param_name)] = {
             "normalized": normalized_value,
             "display": display_value,
             "unit": unit,
-            "ts": time.time(),
+            "ts": ts,
+            "timestamp": ts,
             "source": source,
         }
 
@@ -56,4 +60,3 @@ class ValueRegistry:
 
     def get_devices(self) -> Dict[str, Any]:
         return self._device
-

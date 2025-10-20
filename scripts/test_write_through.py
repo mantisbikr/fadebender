@@ -7,6 +7,48 @@ import time
 
 BASE_URL = "http://127.0.0.1:8722"
 
+
+# ---------- Helpers for new /snapshot shape ----------
+def _fields_from_mixer_array(mixer: dict, kind: str, index: int) -> dict:
+    try:
+        arr = (mixer or {}).get(kind) or []
+        if isinstance(arr, list):
+            for row in arr:
+                try:
+                    if int(row.get("index", -1)) == int(index):
+                        return row.get("fields") or {}
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return {}
+
+
+def _get_track_fields(snapshot: dict, track_index: int) -> dict:
+    data = (snapshot or {}).get("data", {})
+    mixer = data.get("mixer", {})
+    # Prefer array-of-objects
+    fields = _fields_from_mixer_array(mixer, "track", track_index)
+    if fields:
+        return fields
+    # Fallback to back-compat map
+    mm = (data.get("mixer_map") or {}).get("track", {})
+    if isinstance(mm, dict):
+        return mm.get(str(track_index), {})
+    return {}
+
+
+def _get_return_fields(snapshot: dict, return_index: int) -> dict:
+    data = (snapshot or {}).get("data", {})
+    mixer = data.get("mixer", {})
+    fields = _fields_from_mixer_array(mixer, "return", return_index)
+    if fields:
+        return fields
+    mm = (data.get("mixer_map") or {}).get("return", {})
+    if isinstance(mm, dict):
+        return mm.get(str(return_index), {})
+    return {}
+
 def get_snapshot():
     """Fetch current snapshot."""
     resp = requests.get(f"{BASE_URL}/snapshot", timeout=5)
@@ -62,21 +104,11 @@ def test_track_volume_write_through():
         print("2. Checking snapshot for track volume...")
         snapshot = get_snapshot()
 
-        # ValueRegistry stores mixer data as: data.mixer.track[track_index]
-        mixer = snapshot.get("data", {}).get("mixer", {})
-        mixer_track = mixer.get("track", {})
-
-        if not mixer_track:
-            print(f"   ✗ No track mixer data in snapshot")
-            print(f"   Snapshot structure: {json.dumps(snapshot, indent=2)[:500]}")
-            return False
-
-        # Get Track 1 data (track_index=1)
-        track_data = mixer_track.get(1, {})
+        # Get Track 1 data (supports array or map format)
+        track_data = _get_track_fields(snapshot, 1)
 
         if not track_data:
             print(f"   ✗ No data for track 1 in mixer")
-            print(f"   Available tracks: {list(mixer_track.keys())}")
             return False
 
         volume = track_data.get("volume", {})
@@ -137,21 +169,11 @@ def test_return_volume_write_through():
         print("2. Checking snapshot for return volume...")
         snapshot = get_snapshot()
 
-        # ValueRegistry stores mixer data as: data.mixer.return[return_index]
-        mixer = snapshot.get("data", {}).get("mixer", {})
-        mixer_return = mixer.get("return", {})
-
-        if not mixer_return:
-            print(f"   ✗ No return mixer data in snapshot")
-            print(f"   Snapshot structure: {json.dumps(snapshot, indent=2)[:500]}")
-            return False
-
-        # Get Return A data (return_index=0)
-        return_data = mixer_return.get(0, {})
+        # Get Return A data (supports array or map format)
+        return_data = _get_return_fields(snapshot, 0)
 
         if not return_data:
             print(f"   ✗ No data for Return A in mixer")
-            print(f"   Available returns: {list(mixer_return.keys())}")
             return False
 
         volume = return_data.get("volume", {})
@@ -212,16 +234,8 @@ def test_track_pan_write_through():
         print("2. Checking snapshot for track pan...")
         snapshot = get_snapshot()
 
-        # ValueRegistry stores mixer data as: data.mixer.track[track_index]
-        mixer = snapshot.get("data", {}).get("mixer", {})
-        mixer_track = mixer.get("track", {})
-
-        if not mixer_track:
-            print(f"   ✗ No track mixer data in snapshot")
-            return False
-
-        # Get Track 1 data (track_index=1)
-        track_data = mixer_track.get(1, {})
+        # Get Track 1 data (supports array or map format)
+        track_data = _get_track_fields(snapshot, 1)
 
         if not track_data:
             print(f"   ✗ No data for track 1 in mixer")
@@ -283,16 +297,8 @@ def test_send_write_through():
         print("2. Checking snapshot for send level...")
         snapshot = get_snapshot()
 
-        # ValueRegistry stores sends as: data.mixer.track[track_index]["send_0"]
-        mixer = snapshot.get("data", {}).get("mixer", {})
-        mixer_track = mixer.get("track", {})
-
-        if not mixer_track:
-            print(f"   ✗ No track mixer data in snapshot")
-            return False
-
-        # Get Track 1 data (track_index=1)
-        track_data = mixer_track.get(1, {})
+        # Get Track 1 data (supports array or map format)
+        track_data = _get_track_fields(snapshot, 1)
 
         if not track_data:
             print(f"   ✗ No data for track 1 in mixer")
