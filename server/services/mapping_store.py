@@ -142,6 +142,108 @@ class MappingStore:
                 traceback.print_exc()
             return None
 
+    def get_device_type_by_name(self, device_name: str) -> Optional[str]:
+        """Query Firestore for device_type by device_name.
+
+        Checks presets collection first (for preset instances like "4th Bandpass"),
+        then falls back to device_mappings (for generic device classes like "Delay").
+
+        Args:
+            device_name: Name of the device (e.g., "Reverb", "4th Bandpass")
+
+        Returns:
+            device_type string or None if not found
+        """
+        if not self._enabled or not self._client:
+            return None
+        try:
+            # First try presets collection (preset instances use "category" field)
+            query = self._client.collection("presets").where("device_name", "==", device_name).limit(1)
+            results = list(query.stream())
+
+            if results:
+                data = results[0].to_dict()
+                # Presets use "category" for device_type
+                category = data.get("category")
+                if category:
+                    return category
+
+            # Fallback to device_mappings collection (generic device classes)
+            query = self._client.collection("device_mappings").where("device_name", "==", device_name).limit(1)
+            results = list(query.stream())
+
+            if results:
+                data = results[0].to_dict()
+                return data.get("device_type")
+
+            return None
+        except Exception as e:
+            print(f"[MAPPING-STORE] Error querying device_type by name '{device_name}': {e}")
+            return None
+
+    def get_device_param_names(self, device_signature: Optional[str] = None, device_name: Optional[str] = None) -> Optional[List[str]]:
+        """Get list of parameter names for a device.
+
+        Queries Firestore for device parameter names by signature or device name.
+        Used for parameter validation and normalization.
+
+        Args:
+            device_signature: Structure signature hash (preferred for accuracy)
+            device_name: Device name (fallback if signature not available)
+
+        Returns:
+            List of canonical parameter names or None if not found
+        """
+        if not self._enabled or not self._client:
+            return None
+
+        try:
+            # Try signature first (most accurate)
+            if device_signature:
+                doc = self._client.collection("device_mappings").document(device_signature).get()
+                if doc.exists:
+                    data = doc.to_dict()
+                    param_names = data.get("param_names")
+                    if param_names and isinstance(param_names, list):
+                        return param_names
+
+            # Fallback: query by device_name in presets or device_mappings
+            if device_name:
+                # Try presets first
+                query = self._client.collection("presets").where("device_name", "==", device_name).limit(1)
+                results = list(query.stream())
+                if results:
+                    data = results[0].to_dict()
+
+                    # Extract param names from parameter_values or parameter_display_values
+                    param_values = data.get("parameter_values", {})
+                    param_display_values = data.get("parameter_display_values", {})
+
+                    # Keys are identical in both, use whichever exists
+                    param_dict = param_values if param_values else param_display_values
+
+                    if param_dict and isinstance(param_dict, dict):
+                        param_names = list(param_dict.keys())
+                        return param_names
+
+                    # Fallback to recursive approach if no param dicts found
+                    sig = data.get("structure_signature")
+                    if sig:
+                        return self.get_device_param_names(device_signature=sig)
+
+                # Try device_mappings
+                query = self._client.collection("device_mappings").where("device_name", "==", device_name).limit(1)
+                results = list(query.stream())
+                if results:
+                    data = results[0].to_dict()
+                    param_names = data.get("param_names")
+                    if param_names and isinstance(param_names, list):
+                        return param_names
+
+            return None
+        except Exception:
+            return None
+
     # ---------- Prompt templates ----------
     def get_prompt_template(self, device_type: str) -> Optional[str]:
         """Fetch per-device-type prompt template from Firestore if enabled.
@@ -626,6 +728,27 @@ class MappingStore:
             return False
 
     # ---------- Mixer Parameter Mappings ----------
+
+    def get_mixer_param_names(self) -> Optional[List[str]]:
+        """Get list of all mixer parameter names from Firestore.
+
+        Queries mixer_mappings collection and returns all document IDs
+        (which are the parameter names: "volume", "pan", "mute", etc.)
+
+        Returns:
+            List of mixer parameter names or None if not available
+        """
+        if not self._enabled or not self._client:
+            return None
+
+        try:
+            # List all documents in mixer_mappings collection
+            docs = self._client.collection("mixer_mappings").stream()
+            param_names = [doc.id for doc in docs]
+            return param_names if param_names else None
+
+        except Exception:
+            return None
 
     def get_mixer_param_mapping(self, param_name: str) -> Optional[Dict[str, Any]]:
         """Get mixer parameter mapping (e.g., pan, volume) from Firestore.

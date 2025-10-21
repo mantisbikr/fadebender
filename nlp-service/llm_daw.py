@@ -99,6 +99,7 @@ def _build_daw_prompt(query: str) -> str:
         return (
             "HINTS (use to disambiguate — include in output if consistent):\n"
             + hjson + "\n"
+            + "- If device_name_hint is present, use it as the plugin name EXACTLY as provided (e.g., '4th bandpass' is a device name, not an ordinal).\n"
             + "- If device_ordinal_hint is present, set targets[0].device_ordinal to that number.\n"
             + "- If track_hint is present, align targets[0].track with it.\n\n"
         )
@@ -173,7 +174,8 @@ def _build_daw_prompt(query: str) -> str:
         "6. Pan values: -50 to +50 (negative = left, positive = right, 0 = center)\n"
         "7. For device label selections (on/off, Mode/Type/Quality), use unit=\"display\".\n"
         "8. For question_response, ALWAYS include 2-4 specific suggested_intents\n"
-        "9. Only use clarification_needed when the command is truly ambiguous (e.g., \"boost vocals\" without specifying track)\n\n"
+        "9. Only use clarification_needed when the command is truly ambiguous (e.g., \"boost vocals\" without specifying track)\n"
+        "10. Device names before parameter keywords are literal names (e.g., '4th bandpass mode' → plugin='4th bandpass', NOT ordinal=4). Only set device_ordinal when ordinal appears AFTER device name (e.g., 'reverb 2').\n\n"
         "EXAMPLES:\n"
         "- \"solo track 1\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"solo\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
         "- \"mute track 2\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 2\", \"plugin\": null, \"parameter\": \"mute\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
@@ -182,6 +184,7 @@ def _build_daw_prompt(query: str) -> str:
         "- \"set return A reverb decay to 2 seconds\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return A\", \"plugin\": \"reverb\", \"parameter\": \"decay\"}], \"operation\": {\"type\": \"absolute\", \"value\": 2, \"unit\": \"seconds\"}}\n"
         "- \"set return B reverb 2 decay to 2 s\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return B\", \"plugin\": \"reverb\", \"parameter\": \"decay\", \"device_ordinal\": 2}], \"operation\": {\"type\": \"absolute\", \"value\": 2, \"unit\": \"s\"}}\n"
         "- \"set return B align delay mode to distance\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return B\", \"plugin\": \"align delay\", \"parameter\": \"mode\"}], \"operation\": {\"type\": \"absolute\", \"value\": \"distance\", \"unit\": \"display\"}}\n"
+        "- \"set return A 4th bandpass mode to fade\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Return A\", \"plugin\": \"4th bandpass\", \"parameter\": \"mode\"}], \"operation\": {\"type\": \"absolute\", \"value\": \"fade\", \"unit\": \"display\"}}\n"
         "- \"how do I control sends?\" → {\"intent\": \"question_response\", \"answer\": \"You can control sends by specifying the track and send letter...\", \"suggested_intents\": [\"set track 1 send A to -12 dB\", \"increase track 2 send B by 3 dB\"]}\n"
         "- \"boost vocals\" → {\"intent\": \"clarification_needed\", \"question\": \"Which track contains the vocals?\", \"context\": {\"action\": \"increase\", \"parameter\": \"volume\"}}\n\n"
         f"Command: {query}\n"

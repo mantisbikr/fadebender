@@ -123,6 +123,98 @@ def _resolve_send_index(intent: CanonicalIntent) -> int:
     raise HTTPException(400, "send_index_or_send_ref_required")
 
 
+def _normalize_mixer_param(param_ref: Optional[str]) -> Optional[str]:
+    """
+    Normalize mixer parameter name using Firestore mixer_mappings + fuzzy matching.
+
+    Handles typos in mixer params like: "volme" → "volume", "paning" → "pan"
+
+    Args:
+        param_ref: User's parameter reference (may have typos)
+
+    Returns:
+        Normalized parameter name or original if normalization fails/not available
+    """
+    if not param_ref:
+        return param_ref
+
+    try:
+        from server.core.deps import get_store
+        from server.services.param_normalizer import normalize_parameter
+
+        store = get_store()
+        if not store or not store.enabled:
+            return param_ref
+
+        # Fetch all mixer parameter names from Firestore
+        canonical_params = store.get_mixer_param_names()
+
+        if not canonical_params:
+            return param_ref
+
+        # Use fuzzy matching to find best match
+        normalized, confidence = normalize_parameter(param_ref, canonical_params, max_distance=2)
+
+        if normalized and confidence > 0.6:  # Only use if reasonably confident
+            return normalized
+
+        return param_ref
+
+    except Exception:
+        return param_ref
+
+
+def _normalize_param_with_firestore(
+    param_ref: Optional[str],
+    device_name: Optional[str] = None,
+    device_signature: Optional[str] = None
+) -> Optional[str]:
+    """
+    Normalize parameter name using Firestore canonical parameter names + fuzzy matching.
+
+    This provides intelligent parameter aliasing and typo correction by querying
+    the actual device structure from Firestore.
+
+    Args:
+        param_ref: User's parameter reference (may have typos, aliases)
+        device_name: Device name for Firestore lookup
+        device_signature: Device signature for Firestore lookup (preferred)
+
+    Returns:
+        Normalized parameter name or original if normalization fails/not available
+    """
+    if not param_ref or (not device_name and not device_signature):
+        return param_ref
+
+    try:
+        from server.core.deps import get_store
+        from server.services.param_normalizer import normalize_parameter
+
+        store = get_store()
+        if not store or not store.enabled:
+            return param_ref
+
+        # Fetch canonical parameter names from Firestore
+        canonical_params = store.get_device_param_names(
+            device_signature=device_signature,
+            device_name=device_name
+        )
+
+        if not canonical_params:
+            return param_ref
+
+        # Use fuzzy matching to find best match
+        normalized, confidence = normalize_parameter(param_ref, canonical_params, max_distance=2)
+
+        if normalized and confidence > 0.6:  # Only use if reasonably confident
+            return normalized
+
+        return param_ref
+
+    except Exception:
+        return param_ref
+
+
 def _resolve_param(params: list[dict], param_index: Optional[int], param_ref: Optional[str]) -> dict:
     if isinstance(param_index, int):
         for p in params:
@@ -812,59 +904,85 @@ def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Opt
         return None
     type_hint, qualifier_hint = _extract_type_and_qualifier(plugin)
     plugin_txt = _norm_txt(str(plugin or ""))
+
+    print(f"[DEVICE-RESOLVE] plugin={plugin}, type_hint={type_hint}, qualifier_hint={qualifier_hint}, ordinal={ordinal_hint}")
+
     literal_matches: list[int] = []
     for d in devs:
         nm = str(d.get("name", ""))
         if plugin_txt and plugin_txt in _norm_txt(nm):
             literal_matches.append(int(d.get("index", 0)))
     if len(literal_matches) == 1:
+        print(f"[DEVICE-RESOLVE] Literal match found: device={literal_matches[0]}")
         return literal_matches[0]
-    # Build candidates with mapping + param presence
-    cands: list[tuple[int, str, bool]] = []
-    type_filtered: list[tuple[int, str, bool]] = []
-    pref = _alias_param_name_if_needed(param_ref)
+
+    # Load device_type from Firestore by querying device_name (fast!)
+    from server.core.deps import get_store
+    store = get_store()
+    device_types: Dict[int, Optional[str]] = {}
+
+    print(f"[DEVICE-RESOLVE] Store enabled: {store.enabled if store else 'N/A'}")
+
+    if store and store.enabled:
+        for d in devs:
+            idx = int(d.get("index", 0))
+            nm = str(d.get("name", ""))
+
+            try:
+                # Query Firestore directly by device name
+                dtype = store.get_device_type_by_name(nm)
+                print(f"[DEVICE-RESOLVE] Device {idx} '{nm}': Firestore device_type={dtype}")
+                device_types[idx] = dtype
+            except Exception as e:
+                print(f"[DEVICE-RESOLVE] ✗ Error querying device_type for '{nm}': {e}")
+                device_types[idx] = None
+
+    # Build candidates using Firestore device_type when available, fall back to name-based
+    cands: list[tuple[int, str, Optional[str], bool]] = []  # (index, name, inferred_type, qualifier_ok)
     for d in devs:
         di = int(d.get("index", 0))
         nm = str(d.get("name", ""))
-        pr = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=di)
-        params = ((pr or {}).get("data") or {}).get("params") or []
-        sig = make_device_signature(nm, params)
-        try:
-            store = get_store()
-            mapping = store.get_device_map(sig) if store.enabled else None
-        except Exception:
-            mapping = None
-        dtype = _device_type_from_mapping_or_name(mapping, nm)
-        # qualifier match
+        # Use Firestore device_type if available, otherwise infer from name
+        dtype = device_types.get(di) or _device_type_from_mapping_or_name(None, nm)
         ok_qual = _matches_qualifier(nm, dtype, qualifier_hint)
-        # param presence
-        has_param = False
-        if pref:
-            try:
-                names = [str(p.get("name", "")) for p in params]
-                if any(_norm_txt(pref) in _norm_txt(n) for n in names):
-                    has_param = True
-            except Exception:
-                has_param = False
-        item = (di, nm, bool(has_param and ok_qual))
-        if not type_hint or (dtype == type_hint):
-            type_filtered.append(item)
-        cands.append(item)
-    pool = type_filtered if type_hint else cands
-    pool_with_param = [x for x in pool if x[2]]
-    target_pool = pool_with_param or pool
-    if len(target_pool) == 1:
-        return target_pool[0][0]
-    if isinstance(ordinal_hint, int) and ordinal_hint >= 1 and ordinal_hint <= len(target_pool):
-        target_pool_sorted = sorted(target_pool, key=lambda x: x[0])
-        return target_pool_sorted[ordinal_hint - 1][0]
+        cands.append((di, nm, dtype, ok_qual))
+        print(f"[DEVICE-RESOLVE] Device {di} '{nm}': type={dtype}, qualifier_ok={ok_qual}, from_firestore={di in device_types and device_types[di] is not None}")
+
+    # Filter by type hint if present
+    pool = [x for x in cands if (not type_hint or (x[2] == type_hint)) and x[3]]
+    if not pool:
+        pool = [x for x in cands if (not type_hint or (x[2] == type_hint))]
+
+    print(f"[DEVICE-RESOLVE] Candidates after filtering: {len(pool)} matches")
+    for c in pool:
+        print(f"[DEVICE-RESOLVE]   - Device {c[0]} '{c[1]}' (type={c[2]})")
+
+    # Single match → select
+    if len(pool) == 1:
+        print(f"[DEVICE-RESOLVE] Single match: device={pool[0][0]}")
+        return pool[0][0]
+    # Ordinal among filtered set (stable by device index)
+    if isinstance(ordinal_hint, int) and ordinal_hint >= 1 and ordinal_hint <= len(pool):
+        pool_sorted = sorted(pool, key=lambda x: x[0])
+        selected = pool_sorted[ordinal_hint - 1][0]
+        print(f"[DEVICE-RESOLVE] Ordinal match: device={selected} (ordinal {ordinal_hint} of {len(pool)})")
+        return selected
+
+    print(f"[DEVICE-RESOLVE] No match found (ambiguous: {len(pool)} candidates)")
     return None
 
 
 @router.post("/intent/execute")
-def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
+def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, Any]:
     d = intent.domain
     field = intent.field or ""
+
+    # Apply fuzzy normalization for mixer parameters (track/return/master)
+    if d in ("track", "return", "master") and field:
+        normalized_field = _normalize_mixer_param(field)
+        if normalized_field != field:
+            field = normalized_field
+
     features = get_feature_flags()
     display_only_io = bool((features or {}).get("display_only_io", False))
     # Track routing execute
@@ -1419,12 +1537,21 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 v = v / 100.0
             v = _clamp(v, 0.0, 1.0) if intent.clamp else v
         elif field == "cue" and not resolved_from_display:
-            # Cue volume: only supports dB (no percent)
-            if (intent.unit or "").lower() in ("db", "dB".lower()):
+            # Firestore-driven cue handling: use explicit unit, else fit inversion if available
+            unit_norm = _normalize_unit(intent.unit)
+            if unit_norm in ("db",):
                 v = db_to_live_float(v)
-            # No else - if no unit specified, treat as error (user must specify dB)
-            elif not intent.display:
-                raise HTTPException(400, "cue_requires_db_unit_or_display_value")
+            elif unit_norm in ("percent", "%"):
+                v = v / 100.0
+            else:
+                pm = _get_mixer_param_meta("master", "cue")
+                if pm and isinstance(pm.get("fit"), dict):
+                    inv = _apply_mixer_fit_inverse(pm, float(v))
+                    if inv is None:
+                        raise HTTPException(400, "cue_requires_unit_or_mapping_fit_for_master")
+                    v = float(inv)
+                else:
+                    raise HTTPException(400, "cue_requires_unit_or_mapping_fit_for_master")
             v = _clamp(v, 0.0, 1.0) if intent.clamp else v
         elif field == "pan":
             # Pan: If value is outside [-1, 1], treat as display value and convert
@@ -1630,6 +1757,7 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
         ri = _resolve_return_index(intent)
         di = int(intent.device_index)
+        _selection_method: str | None = None
         # Use simplified resolver when enabled to pick device_index more robustly by name/type/qualifier/param
         try:
             features = get_feature_flags()
@@ -1642,6 +1770,7 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                 )
                 if isinstance(di_s, int):
                     di = di_s
+                    _selection_method = "simple_resolver"
                 else:
                     # Ambiguous: list devices for clarification
                     try:
@@ -1657,8 +1786,8 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             raise
         except Exception:
             pass
-        # If hints provided, try to resolve index by name and/or ordinal
-        if intent.device_name_hint or intent.device_ordinal_hint:
+        # If hints provided, try to resolve index by name and/or ordinal (skip if simple_resolver succeeded)
+        if (intent.device_name_hint or intent.device_ordinal_hint) and _selection_method != "simple_resolver":
             try:
                 devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
                 devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
@@ -1724,6 +1853,8 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                     device_ordinal_hint=intent.device_ordinal_hint,
                 )
                 di = int(di_res)
+                if _selection_method is None:
+                    _selection_method = "resolver_hints"
         except Exception:
             pass
         # Read params to get min/max, resolve selection
@@ -1733,6 +1864,26 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             raise HTTPException(404, "params_not_found")
         # Apply alias resolution for param_ref before selection
         pref = _alias_param_name_if_needed(intent.param_ref)
+
+        # Apply Firestore-based normalization with fuzzy matching
+        try:
+            # Get device name from device list for Firestore lookup
+            device_name = None
+            try:
+                devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
+                devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+                for d in devs:
+                    if int(d.get("index", -1)) == di:
+                        device_name = str(d.get("name", ""))
+                        break
+            except Exception:
+                pass
+
+            if device_name:
+                pref = _normalize_param_with_firestore(pref, device_name=device_name)
+        except Exception:
+            pass
+
         try:
             sel = _resolve_param(params, intent.param_index, pref)
         except HTTPException as he:
@@ -1973,7 +2124,17 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_return_device_param", timeout=1.0, return_index=ri, device_index=di, param_index=int(sel.get("index", 0)), value=float(preview["value"]))
         if not resp:
             raise HTTPException(504, "no_reply")
-
+        if debug and isinstance(resp, dict):
+            dbg = {
+                "selection_method": _selection_method or "default",
+                "return_index": ri,
+                "device_index": di,
+                "device_name": dname,
+                "param_name": sel.get("name"),
+                "param_index": sel.get("index"),
+            }
+            resp.setdefault("debug", {}).update(dbg)
+        
         # Read back new display value and generate rich summary
         try:
             readback = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=di)
