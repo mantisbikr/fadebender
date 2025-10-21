@@ -82,7 +82,7 @@ def _extract_llm_hints(query: str) -> Dict[str, Any]:
     return h
 
 
-def _build_daw_prompt(query: str) -> str:
+def _build_daw_prompt(query: str, mixer_params: List[str] | None = None) -> str:
     # Inject lightweight HINTS to help the LLM include device ordinals and track scope
     def _hints_text(q: str) -> str:
         try:
@@ -104,8 +104,19 @@ def _build_daw_prompt(query: str) -> str:
             + "- If track_hint is present, align targets[0].track with it.\n\n"
         )
 
+    # Build mixer params context if available
+    mixer_context = ""
+    if mixer_params:
+        mixer_context = (
+            "KNOWN MIXER PARAMETERS (from DAW):\n"
+            f"{', '.join(mixer_params)}\n\n"
+            "**CRITICAL RULE**: If the user mentions a parameter from this list AND does NOT mention a device/plugin name, "
+            "it is a MIXER operation (set plugin=null). Device operations ALWAYS have an explicit device name.\n\n"
+        )
+
     return (
         f"{_hints_text(query)}"
+        f"{mixer_context}"
         "You are an expert DAW (Digital Audio Workstation) command interpreter for Ableton Live. "
         "Parse natural language commands into structured JSON for controlling tracks, returns, master, devices, and effects.\n\n"
         "Return strictly valid JSON with this structure (fields are required unless marked optional):\n"
@@ -194,6 +205,19 @@ def _build_daw_prompt(query: str) -> str:
 
 def interpret_daw_command(query: str, model_preference: str | None = None, strict: bool | None = None) -> Dict[str, Any]:
     """Interpret user query into DAW commands using Vertex AI if available."""
+    # Fetch mixer params from Firestore for context
+    mixer_params = None
+    try:
+        # Import here to avoid circular dependency
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
+        from services.mapping_store import MappingStore
+        store = MappingStore()
+        mixer_params = store.get_mixer_param_names()
+    except Exception:
+        # Fallback to hardcoded list if Firestore unavailable
+        mixer_params = ["volume", "pan", "mute", "solo", "send"]
+
     # Try Vertex AI SDK path first
     try:
         import vertexai  # type: ignore
@@ -207,7 +231,7 @@ def interpret_daw_command(query: str, model_preference: str | None = None, stric
         # Initialize Vertex AI (uses service account if GOOGLE_APPLICATION_CREDENTIALS is set)
         vertexai.init(project=project, location=location)
 
-        prompt = _build_daw_prompt(query)
+        prompt = _build_daw_prompt(query, mixer_params)
         response_text = None
 
         if model_name.startswith("gemini"):

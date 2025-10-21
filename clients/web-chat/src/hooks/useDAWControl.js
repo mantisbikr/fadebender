@@ -374,7 +374,7 @@ export function useDAWControl() {
                 const ri = typeof ctx.return_index === 'number' ? ctx.return_index : (typeof ctx.return_ref === 'string' ? (ctx.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)) : 0);
                 const caps = await apiService.getReturnDeviceCapabilities(ri, ctx.device_index);
                 if (caps && caps.ok) {
-                  deviceCapabilities = caps.data; // Store for later
+                  deviceCapabilities = deviceCapabilities || caps.data; // Only use if not already set by backend
                 }
               } catch {}
             }
@@ -383,14 +383,14 @@ export function useDAWControl() {
               if (ci.domain === 'track' && typeof ci.track_index === 'number' && ci.field) {
                 // Canonical track_index is 1-based; capabilities expect 0-based
                 const caps = await apiService.getTrackMixerCapabilities(Number(ci.track_index) - 1);
-                if (caps && caps.ok) mixerCapabilities = caps.data;
+                if (caps && caps.ok) mixerCapabilities = mixerCapabilities || caps.data;
               } else if (ci.domain === 'return' && (typeof ci.return_index === 'number' || typeof ci.return_ref === 'string') && ci.field) {
                 const ri = typeof ci.return_index === 'number' ? Number(ci.return_index) : (ci.return_ref ? (ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)) : 0);
                 const caps = await apiService.getReturnMixerCapabilities(ri);
-                if (caps && caps.ok) mixerCapabilities = caps.data;
+                if (caps && caps.ok) mixerCapabilities = mixerCapabilities || caps.data;
               } else if (ci.domain === 'master' && ci.field) {
                 const caps = await apiService.getMasterMixerCapabilities();
-                if (caps && caps.ok) mixerCapabilities = caps.data;
+                if (caps && caps.ok) mixerCapabilities = mixerCapabilities || caps.data;
               }
             } catch {}
           } catch {}
@@ -483,6 +483,74 @@ export function useDAWControl() {
               // Fall through to error
             }
           }
+          // Friendly handling for device_ambiguous (no clear device match)
+          const devAmbiguous = msg.startsWith('device_ambiguous') && msg.includes('devices=[');
+          if (devAmbiguous) {
+            try {
+              // Extract device list from message: devices=[0:Name, 1:Other, ...]
+              const m = msg.match(/devices=\[(.*)\]$/);
+              const listPart = m ? m[1] : '';
+              const pairs = listPart.split(',').map(s => s.trim()).filter(Boolean);
+              const devices = pairs.map(p => {
+                const sp = p.split(':');
+                const idx = Number(sp[0]);
+                const name = sp.slice(1).join(':').trim();
+                return { index: isNaN(idx) ? null : idx, name };
+              }).filter(d => d.index !== null);
+
+              const ci = parsed?.intent || {};
+              const plugin = (ci.device_name_hint || '').toLowerCase();
+              let retRef = null;
+              if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
+              if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
+
+              const param = ci.param_ref || ci.field || 'decay';
+              const val = (ci.display ? ci.display : (typeof ci.value !== 'undefined' ? String(ci.value) : ''));
+              const unit = (ci.unit && ci.unit !== 'display') ? ` ${ci.unit}` : '';
+              const base = retRef ? `set Return ${retRef}` : 'set Return A';
+
+              // Build suggestions for devices on current return
+              let suggestions = devices.slice(0, 4).map(d => ({
+                label: `${d.name} on Return ${retRef || 'A'}`,
+                value: `${base} ${d.name} ${param} ${val ? 'to ' + val + unit : ''}`.trim()
+              }));
+
+              // Check if plugin exists on other returns
+              if (plugin) {
+                try {
+                  const returnsResp = await apiService.getReturnTracks();
+                  const rets = (returnsResp && returnsResp.data && returnsResp.data.returns) || [];
+                  for (const r of rets) {
+                    const ri2 = Number(r.index);
+                    const letter2 = String.fromCharCode('A'.charCodeAt(0) + ri2);
+                    if (retRef && letter2.toUpperCase() === String(retRef).toUpperCase()) continue;
+                    try {
+                      const devsResp = await apiService.getReturnDevices(ri2);
+                      const list = (devsResp && devsResp.data && devsResp.data.devices) || [];
+                      const matches = list.filter(dv => String(dv.name || '').toLowerCase().includes(plugin));
+                      if (matches.length > 0) {
+                        suggestions.push({
+                          label: `${matches[0].name} on Return ${letter2}`,
+                          value: `set Return ${letter2} ${matches[0].name} ${param} ${val ? 'to ' + val + unit : ''}`.trim()
+                        });
+                        if (suggestions.length >= 6) break;
+                      }
+                    } catch {}
+                  }
+                } catch {}
+              }
+
+              addMessage({
+                type: 'question',
+                content: plugin && suggestions.length > devices.length
+                  ? `I couldn't find "${plugin}" on Return ${retRef || 'A'}, but I found it on other returns. Which one did you mean?`
+                  : `I couldn't find "${plugin}" on Return ${retRef || 'A'}. Here's what's available:`,
+                data: { suggested_intents: suggestions }
+              });
+              return;
+            } catch (_) {}
+          }
+
           // Friendly handling for parameter name issues
           const paramNotFound = msg.startsWith('param_not_found:');
           const paramAmbiguous = msg.startsWith('param_ambiguous:');
@@ -495,37 +563,85 @@ export function useDAWControl() {
                 candidates = m[1].split(',').map(s => s.replace(/^\s*['\"]?|['\"]?\s*$/g,'').trim()).filter(Boolean);
               }
               const ci = parsed?.intent || {};
-              // Determine Return letter
-              let retRef = null;
-              if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
-              if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
-              // Guess device index: prefer ci.device_index; else attempt name match
-              let deviceIdx = (typeof ci.device_index === 'number') ? Number(ci.device_index) : 0;
-              const plugin = (ci.device_name_hint || '').toLowerCase();
-              if ((deviceIdx === 0 || isNaN(deviceIdx)) && retRef) {
+
+              // Check if this is a mixer operation (track/return/master without device context)
+              // Mixer operations have 'field' (volume, pan, mute, solo, send)
+              // Device operations have 'param_ref' (decay, feedback, etc.) and domain='device'
+              const hasTrackContext = typeof ci.track_index === 'number';
+              const hasReturnContext = (typeof ci.return_index === 'number' || typeof ci.return_ref === 'string');
+              const hasMasterContext = ci.domain === 'master';
+              const hasDeviceContext = (typeof ci.device_index === 'number'
+                                        || ci.device_name_hint
+                                        || ci.device_ordinal_hint);
+
+              const isMixerOp = ((hasTrackContext || hasReturnContext || hasMasterContext)
+                                && !hasDeviceContext
+                                && ci.domain !== 'device')
+                                || (ci.field && !ci.param_ref); // Has 'field' but no 'param_ref' indicates mixer
+
+              let capabilities = null;
+              let base = '';
+
+              if (isMixerOp) {
+                // Fetch MIXER capabilities for track/return/master
                 try {
-                  const ri = retRef.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
-                  const devsResp = await apiService.getReturnDevices(ri);
-                  const list = (devsResp && devsResp.data && devsResp.data.devices) || [];
-                  if (plugin) {
-                    const match = list.find(d => String(d.name || '').toLowerCase().replace(/\s+/g,' ') .includes(plugin));
-                    if (match) deviceIdx = Number(match.index);
+                  if (ci.domain === 'track' && typeof ci.track_index === 'number') {
+                    const caps = await apiService.getTrackMixerCapabilities(Number(ci.track_index) - 1);
+                    if (caps && caps.ok) capabilities = caps.data;
+                    base = `set track ${ci.track_index}`;
+                  } else if (ci.domain === 'return') {
+                    let retRef = null;
+                    if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
+                    if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
+                    if (retRef) {
+                      const ri = retRef.charCodeAt(0) - 'A'.charCodeAt(0);
+                      const caps = await apiService.getReturnMixerCapabilities(ri);
+                      if (caps && caps.ok) capabilities = caps.data;
+                      base = `set Return ${retRef}`;
+                    }
+                  } else if (ci.domain === 'master') {
+                    const caps = await apiService.getMasterMixerCapabilities();
+                    if (caps && caps.ok) capabilities = caps.data;
+                    base = 'set master';
                   }
                 } catch {}
-              }
-              // Fetch capabilities so user can click params directly
-              let capabilities = null;
-              try {
-                if (retRef && deviceIdx >= 0) {
-                  const ri = retRef.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
-                  const caps = await apiService.getReturnDeviceCapabilities(ri, deviceIdx);
-                  if (caps && caps.ok) capabilities = caps.data;
+              } else {
+                // Fetch DEVICE capabilities
+                let retRef = null;
+                if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
+                if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
+
+                let deviceIdx = (typeof ci.device_index === 'number') ? Number(ci.device_index) : 0;
+                const plugin = (ci.device_name_hint || '').toLowerCase();
+                if ((deviceIdx === 0 || isNaN(deviceIdx)) && retRef) {
+                  try {
+                    const ri = retRef.charCodeAt(0) - 'A'.charCodeAt(0);
+                    const devsResp = await apiService.getReturnDevices(ri);
+                    const list = (devsResp && devsResp.data && devsResp.data.devices) || [];
+                    if (plugin) {
+                      const match = list.find(d => String(d.name || '').toLowerCase().includes(plugin));
+                      if (match) deviceIdx = Number(match.index);
+                    }
+                  } catch {}
                 }
-              } catch {}
+
+                try {
+                  if (retRef && deviceIdx >= 0) {
+                    const ri = retRef.charCodeAt(0) - 'A'.charCodeAt(0);
+                    const caps = await apiService.getReturnDeviceCapabilities(ri, deviceIdx);
+                    if (caps && caps.ok) capabilities = caps.data;
+                  }
+                } catch {}
+
+                const hasPlugin = plugin && !['device','fx','effect','plugin'].includes(plugin);
+                const ord = (typeof ci.device_ordinal_hint === 'number') ? Number(ci.device_ordinal_hint) : 1;
+                base = retRef ? (hasPlugin ? `set Return ${retRef} ${plugin} ${ord}` : `set Return ${retRef} device ${ord}`) : 'set Return A device 1';
+              }
+
               // Build suggested intents using candidates or the first few params
-              const base = retRef ? `set Return ${retRef}` : 'set Return A';
               const labelPart = ci.display ? String(ci.display) : (typeof ci.value !== 'undefined' ? String(ci.value) : '');
               const unit = (ci.unit && ci.unit !== 'display' && labelPart) ? ` ${ci.unit}` : '';
+
               const aFewParams = () => {
                 try {
                   if (capabilities && Array.isArray(capabilities.groups)) {
@@ -537,20 +653,17 @@ export function useDAWControl() {
                 } catch {}
                 return [];
               };
+
               const paramsList = candidates.length ? candidates.slice(0, 6) : aFewParams();
-              const ord = (typeof ci.device_ordinal_hint === 'number') ? Number(ci.device_ordinal_hint) : 1;
-              const hasPlugin = plugin && !['device','fx','effect','plugin'].includes(plugin);
               const suggestions = paramsList.map(pn => ({
                 label: pn,
-                value: hasPlugin
-                  ? `${base} ${plugin} ${ord} ${pn} ${labelPart ? 'to ' + labelPart + unit : ''}`.trim()
-                  : `${base} device ${ord} ${pn} ${labelPart ? 'to ' + labelPart + unit : ''}`.trim()
+                value: `${base} ${pn} ${labelPart ? 'to ' + labelPart + unit : ''}`.trim()
               }));
 
               addMessage({
                 type: 'question',
                 content: paramNotFound
-                  ? `I couldn’t find that parameter${retRef ? ` on Return ${retRef}` : ''}. Try one of these or pick from the list:`
+                  ? `I couldn't find that parameter. Try one of these or pick from the list:`
                   : `That parameter name is ambiguous. Pick one below or choose from the list:`,
                 data: { suggested_intents: suggestions, capabilities }
               });

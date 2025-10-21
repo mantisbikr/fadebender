@@ -3509,14 +3509,7 @@ def chat(body: ChatBody) -> Dict[str, Any]:
                             capabilities = ((result.get("data") or {}) or {}).get("capabilities")
                     except Exception:
                         capabilities = None
-                    if body.confirm and not capabilities:
-                        try:
-                            from server.api.returns import get_return_device_capabilities
-                            caps_result = get_return_device_capabilities(index=return_index, device=0)
-                            if caps_result.get("ok"):
-                                capabilities = caps_result.get("data")
-                        except Exception as e:
-                            print(f"[CHAT] Warning: Failed to fetch capabilities: {e}")
+                    # Do not fetch fallback capabilities with device=0; rely on execute response
 
                     return {
                         "ok": True,

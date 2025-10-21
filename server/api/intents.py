@@ -1843,9 +1843,9 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             raise
         except Exception:
             pass
-        # Resolve device index using LiveIndex/Resolver when hints are provided
+        # Resolve device index using LiveIndex/Resolver when hints are provided (skip if simple_resolver succeeded)
         try:
-            if intent.device_name_hint or intent.device_ordinal_hint:
+            if (intent.device_name_hint or intent.device_ordinal_hint) and _selection_method != "simple_resolver":
                 resolver = get_device_resolver()
                 di_res, _dname, _notes = resolver.resolve_return(
                     return_index=ri,
@@ -2186,9 +2186,12 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         # Ensure return device capabilities so UI can render grouped cards
         if not intent.dry_run:
             try:
+                print(f"[CAPABILITIES] Calling ensure_capabilities with return_index={ri}, device_index={di}")
                 from server.api.cap_utils import ensure_capabilities  # type: ignore
                 resp = ensure_capabilities(resp, domain="return_device", return_index=ri, device_index=di)
-            except Exception:
+                print(f"[CAPABILITIES] Capabilities attached")
+            except Exception as e:
+                print(f"[CAPABILITIES] Error: {e}")
                 pass
 
         return resp
