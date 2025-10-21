@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
+from server.config.app_config import get_mixer_param_aliases
 
-_MIXER_PARAM_ALIASES = {
-    # mixer field aliases → canonical
-    "vol": "volume",
-    "level": "volume",
-    "gain": "volume",
-    "loudness": "volume",
-    "pan": "pan",
-    "balance": "pan",
-    "mute": "mute",
-    "unmute": "mute",
-    "solo": "solo",
-    "unsolo": "solo",
-}
+# Mixer field aliases (config-driven)
+_MIXER_PARAM_ALIASES: Dict[str, str] = {}
+try:
+    _MIXER_PARAM_ALIASES = get_mixer_param_aliases() or {}
+except Exception:
+    _MIXER_PARAM_ALIASES = {}
 
 def _normalize_mixer_param(name: str) -> str:
     n = (name or "").strip().lower()

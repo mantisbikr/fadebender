@@ -3461,14 +3461,30 @@ def chat(body: ChatBody) -> Dict[str, Any]:
                     from server.api.intents import execute_intent as exec_canonical
                     from server.api.intents import CanonicalIntent
 
-                    # Build canonical intent for device parameter
+                    # Build canonical intent for device parameter, carry device hints if available
+                    device_name_hint = None
+                    device_ordinal_hint = None
+                    try:
+                        if device_ref:
+                            dev_l = str(device_ref).strip().lower()
+                            if dev_l not in ("device", "fx", "effect", "plugin"):
+                                device_name_hint = str(device_ref)
+                        ord_val = target.get("device_ordinal")
+                        if ord_val is not None:
+                            device_ordinal_hint = int(ord_val)
+                    except Exception:
+                        pass
+
                     canonical = CanonicalIntent(
                         domain="device",
                         return_index=return_index,
-                        device_index=0,  # Default to first device, will improve with device matching
+                        device_index=0,  # default; execute_intent will resolve using hints when present
                         param_ref=param_name,
-                        display=str(value) if value is not None else None,
+                        display=str(value) if value is not None and isinstance(value, str) else None,
+                        value=(None if isinstance(value, str) else value),
                         unit=unit,
+                        device_name_hint=device_name_hint,
+                        device_ordinal_hint=device_ordinal_hint,
                         dry_run=not body.confirm
                     )
 
@@ -3486,9 +3502,14 @@ def chat(body: ChatBody) -> Dict[str, Any]:
 
                     summary = result.get("summary") or f"Set {param_name}"
 
-                    # If confirmed (not dry_run), fetch capabilities for UI
+                    # Prefer capabilities attached by exec_canonical; fetch only if missing
                     capabilities = None
-                    if body.confirm:
+                    try:
+                        if isinstance(result, dict):
+                            capabilities = ((result.get("data") or {}) or {}).get("capabilities")
+                    except Exception:
+                        capabilities = None
+                    if body.confirm and not capabilities:
                         try:
                             from server.api.returns import get_return_device_capabilities
                             caps_result = get_return_device_capabilities(index=return_index, device=0)
@@ -3523,6 +3544,189 @@ def chat(body: ChatBody) -> Dict[str, Any]:
                         "summary": f"Error executing command: {str(e)}",
                         "error": str(e)
                     }
+
+    # Auto-execute Return mixer (volume/pan/mute/solo) and sends using CanonicalIntent
+    try:
+        if intent.get("intent") == "set_parameter":
+            targets = intent.get("targets") or []
+            if targets:
+                target = targets[0] or {}
+                track_ref = target.get("track") or target.get("return")
+                plugin = target.get("plugin")
+                param_name = (target.get("parameter") or "").strip().lower()
+                if isinstance(track_ref, str) and track_ref.strip().lower().startswith("return ") and not plugin:
+                    from server.api.intents import execute_intent as exec_canonical
+                    from server.api.intents import CanonicalIntent
+                    letter = track_ref.strip().split()[-1].upper()
+                    op = intent.get("operation") or {}
+                    # Send detection
+                    import re as _re
+                    m = _re.search(r"\bsend\s*([a-d])\b", param_name)
+                    if m:
+                        send_ref = m.group(1).upper()
+                        canonical = CanonicalIntent(
+                            domain="return",
+                            return_ref=letter,
+                            field="send",
+                            send_ref=send_ref,
+                            value=op.get("value"),
+                            unit=op.get("unit"),
+                            dry_run=not body.confirm,
+                        )
+                    else:
+                        canonical = CanonicalIntent(
+                            domain="return",
+                            return_ref=letter,
+                            field=param_name,
+                            value=op.get("value"),
+                            unit=op.get("unit"),
+                            display=str(op.get("value")) if str(op.get("unit") or "").lower() == "display" else None,
+                            dry_run=not body.confirm,
+                        )
+                    result = exec_canonical(canonical)
+                    ok = bool(result and result.get("ok", True))
+                    summary = result.get("summary") or (f"Set Return {letter} send {send_ref}" if m else f"Set Return {letter} {param_name}")
+                    data = result.get("data") if isinstance(result, dict) else {}
+                    # Ensure capabilities are present for UI cards
+                    try:
+                        caps = ((data or {}).get("capabilities") if isinstance(data, dict) else None)
+                        if not caps:
+                            from server.api.returns import get_return_mixer_capabilities
+                            ri = ord(letter) - ord('A')
+                            caps_res = get_return_mixer_capabilities(index=ri)
+                            if isinstance(caps_res, dict) and caps_res.get("ok"):
+                                if isinstance(data, dict):
+                                    data.setdefault("capabilities", caps_res.get("data"))
+                                else:
+                                    data = {"capabilities": caps_res.get("data")}
+                    except Exception:
+                        pass
+                    return {"ok": ok, "intent": intent, "summary": summary, "data": data or {}}
+    except Exception:
+        pass
+
+    # Auto-execute Track mixer (volume/pan/mute/solo) and sends using CanonicalIntent (ensures UI cards)
+    try:
+        if intent.get("intent") == "set_parameter":
+            targets = intent.get("targets") or []
+            if targets:
+                target = targets[0] or {}
+                track_ref = target.get("track")
+                plugin = target.get("plugin")
+                param_name = (target.get("parameter") or "").strip().lower()
+                if isinstance(track_ref, str) and track_ref.strip().lower().startswith("track ") and not plugin:
+                    from server.api.intents import execute_intent as exec_canonical
+                    from server.api.intents import CanonicalIntent
+                    # Extract track index from "Track N"
+                    try:
+                        track_idx = int(track_ref.strip().split()[-1])
+                    except Exception:
+                        track_idx = None
+                    if track_idx:
+                        import re as _re
+                        m = _re.search(r"\bsend\s*([a-d])\b", param_name)
+                        if m:
+                            send_ref = m.group(1).upper()
+                            op = intent.get("operation") or {}
+                            canonical = CanonicalIntent(
+                                domain="track",
+                                track_index=int(track_idx),
+                                field="send",
+                                send_ref=send_ref,
+                                value=op.get("value"),
+                                unit=op.get("unit"),
+                                dry_run=not body.confirm,
+                            )
+                            result = exec_canonical(canonical)
+                            ok = bool(result and result.get("ok", True))
+                            summary = result.get("summary") or f"Set Track {track_idx} send {send_ref}"
+                            data = result.get("data") if isinstance(result, dict) else {}
+                            # Ensure track capabilities for UI cards
+                            try:
+                                caps = ((data or {}).get("capabilities") if isinstance(data, dict) else None)
+                                if not caps:
+                                    from server.api.tracks import get_track_mixer_capabilities
+                                    caps_res = get_track_mixer_capabilities(index=max(0, int(track_idx) - 1))
+                                    if isinstance(caps_res, dict) and caps_res.get("ok"):
+                                        if isinstance(data, dict):
+                                            data.setdefault("capabilities", caps_res.get("data"))
+                                        else:
+                                            data = {"capabilities": caps_res.get("data")}
+                            except Exception:
+                                pass
+                            return {"ok": ok, "intent": intent, "summary": summary, "data": data or {}}
+                        elif param_name in ("volume", "pan", "mute", "solo"):
+                            op = intent.get("operation") or {}
+                            canonical = CanonicalIntent(
+                                domain="track",
+                                track_index=int(track_idx),
+                                field=param_name,
+                                value=op.get("value"),
+                                unit=op.get("unit"),
+                                display=str(op.get("value")) if str(op.get("unit") or "").lower() == "display" else None,
+                                dry_run=not body.confirm,
+                            )
+                            result = exec_canonical(canonical)
+                            ok = bool(result and result.get("ok", True))
+                            summary = result.get("summary") or f"Set Track {track_idx} {param_name}"
+                            data = result.get("data") if isinstance(result, dict) else {}
+                            try:
+                                caps = ((data or {}).get("capabilities") if isinstance(data, dict) else None)
+                                if not caps:
+                                    from server.api.tracks import get_track_mixer_capabilities
+                                    caps_res = get_track_mixer_capabilities(index=max(0, int(track_idx) - 1))
+                                    if isinstance(caps_res, dict) and caps_res.get("ok"):
+                                        if isinstance(data, dict):
+                                            data.setdefault("capabilities", caps_res.get("data"))
+                                        else:
+                                            data = {"capabilities": caps_res.get("data")}
+                            except Exception:
+                                pass
+                            return {"ok": ok, "intent": intent, "summary": summary, "data": data or {}}
+    except Exception:
+        pass
+
+    # Auto-execute Master mixer using CanonicalIntent
+    try:
+        if intent.get("intent") == "set_parameter":
+            targets = intent.get("targets") or []
+            if targets:
+                target = targets[0] or {}
+                track_ref = target.get("track")
+                plugin = target.get("plugin")
+                param_name = (target.get("parameter") or "").strip().lower()
+                if isinstance(track_ref, str) and track_ref.strip().lower() == "master" and not plugin:
+                    from server.api.intents import execute_intent as exec_canonical
+                    from server.api.intents import CanonicalIntent
+                    op = intent.get("operation") or {}
+                    canonical = CanonicalIntent(
+                        domain="master",
+                        field=param_name,
+                        value=op.get("value"),
+                        unit=op.get("unit"),
+                        display=str(op.get("value")) if str(op.get("unit") or "").lower() == "display" else None,
+                        dry_run=not body.confirm,
+                    )
+                    result = exec_canonical(canonical)
+                    ok = bool(result and result.get("ok", True))
+                    summary = result.get("summary") or f"Set Master {param_name}"
+                    data = result.get("data") if isinstance(result, dict) else {}
+                    # Ensure master capabilities for UI cards
+                    try:
+                        caps = ((data or {}).get("capabilities") if isinstance(data, dict) else None)
+                        if not caps:
+                            from server.api.master import get_master_mixer_capabilities
+                            caps_res = get_master_mixer_capabilities()
+                            if isinstance(caps_res, dict) and caps_res.get("ok"):
+                                if isinstance(data, dict):
+                                    data.setdefault("capabilities", caps_res.get("data"))
+                                else:
+                                    data = {"capabilities": caps_res.get("data")}
+                    except Exception:
+                        pass
+                    return {"ok": ok, "intent": intent, "summary": summary, "data": data or {}}
+    except Exception:
+        pass
 
     # Fallback: return intent for UI to decide
     return {

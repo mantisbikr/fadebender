@@ -41,6 +41,96 @@ def _load() -> Dict[str, Any]:
                 "room": 0,
                 "delay": 1,
                 "echo": 1,
+            },
+            # Canonical device types -> list of name keywords/synonyms to match in resolver
+            "device_type_aliases": {
+                "reverb": ["reverb", "hall", "room", "plate", "space", "ambience", "ambient"],
+                "delay": ["delay", "echo", "slapback", "pingpong", "ping-pong"],
+                "compressor": ["compress", "compressor"],
+                "eq": ["eq", "equalizer"],
+                "amp": ["amp", "screamer", "overdrive", "distortion", "fuzz", "saturator"],
+                "chorus": ["chorus"],
+                "flanger": ["flanger"],
+                "phaser": ["phaser"],
+            },
+            # Aliases for parameter names (mixer and device)
+            "param_aliases": {
+                # Mixer parameter aliases map to canonical names
+                "mixer": {
+                    "vol": "volume",
+                    "level": "volume",
+                    "gain": "volume",
+                    "loudness": "volume",
+                    "pan": "pan",
+                    "balance": "pan",
+                    "mute": "mute",
+                    "unmute": "mute",
+                    "solo": "solo",
+                    "unsolo": "solo",
+                },
+                # Device parameter aliases map to canonical param labels
+                "device": {
+                    "mix": "dry/wet",
+                    "wet": "dry/wet",
+                    "dry": "dry/wet",
+                    "dry wet": "dry/wet",
+                    "dry / wet": "dry/wet",
+                    "lo cut": "low cut",
+                    "locut": "low cut",
+                    "lowcut": "low cut",
+                    "hi cut": "high cut",
+                    "hicut": "high cut",
+                    "highcut": "high cut",
+                    "lo shelf": "low shelf",
+                    "loshelf": "low shelf",
+                    "hi shelf": "hi shelf",
+                    "hishelf": "hi shelf",
+                    "low pass": "low cut",
+                    "low-pass": "low cut",
+                    "lpf": "low cut",
+                    "lp": "low cut",
+                    "high pass": "high cut",
+                    "high-pass": "high cut",
+                    "hpf": "high cut",
+                    "hp": "high cut",
+                    "bandwidth": "q",
+                    "bw": "q",
+                    "q factor": "q",
+                    "q-factor": "q",
+                    "res": "q",
+                    "resonance": "q",
+                    "speed": "rate",
+                    "intensity": "depth",
+                    "amt": "amount",
+                    "fbk": "feedback",
+                    "feed back": "feedback",
+                    "feedback amount": "feedback",
+                    "width": "stereo image",
+                    "stereo width": "stereo image",
+                    "image": "stereo image",
+                    "decay time": "decay",
+                    "pre delay": "predelay",
+                    "pre-delay": "predelay",
+                }
+            },
+        },
+        "nlp": {
+            # Configurable typo corrections for fallback parser
+            "typo_corrections": {
+                "retrun": "return",
+                "retun": "return",
+                "revreb": "reverb",
+                "reverbb": "reverb",
+                "revebr": "reverb",
+                "reverv": "reverb",
+                "strereo": "stereo",
+                "streo": "stereo",
+                "stere": "stereo",
+                "tack": "track",
+                "trck": "track",
+                "trac": "track",
+                "sennd": "send",
+                "snd": "send",
             }
         },
         "debug": {
@@ -72,6 +162,26 @@ def get_app_config() -> Dict[str, Any]:
 def get_send_aliases() -> Dict[str, int]:
     cfg = _load()
     return dict(cfg.get("server", {}).get("send_aliases", {}))
+
+
+def get_device_type_aliases() -> Dict[str, Any]:
+    cfg = _load()
+    return dict(cfg.get("server", {}).get("device_type_aliases", {}))
+
+
+def get_mixer_param_aliases() -> Dict[str, str]:
+    cfg = _load()
+    return dict(cfg.get("server", {}).get("param_aliases", {}).get("mixer", {}))
+
+
+def get_device_param_aliases() -> Dict[str, str]:
+    cfg = _load()
+    return dict(cfg.get("server", {}).get("param_aliases", {}).get("device", {}))
+
+
+def get_typo_corrections() -> Dict[str, str]:
+    cfg = _load()
+    return dict(cfg.get("nlp", {}).get("typo_corrections", {}))
 
 
 def get_ui_settings() -> Dict[str, Any]:

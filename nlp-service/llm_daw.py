@@ -255,11 +255,18 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
     for w, d in ordinal_words.items():
         q = __import__('re').sub(rf"\b{w}\b", d, q)
     # Light typo corrections to improve robustness when LLM is unavailable
-    typo_map = {
-        'retrun': 'return', 'retun': 'return',
-        'revreb': 'reverb', 'reverbb': 'reverb', 'revebr': 'reverb', 'reverv': 'reverb',
-        'strereo': 'stereo', 'streo': 'stereo', 'stere': 'stereo',
-    }
+    # Config-driven typo corrections (falls back to defaults if config unavailable)
+    try:
+        from server.config.app_config import get_typo_corrections  # type: ignore
+        typo_map = get_typo_corrections() or {}
+    except Exception:
+        typo_map = {
+            'retrun': 'return', 'retun': 'return',
+            'revreb': 'reverb', 'reverbb': 'reverb', 'revebr': 'reverb', 'reverv': 'reverb',
+            'strereo': 'stereo', 'streo': 'stereo', 'stere': 'stereo',
+            'tack': 'track', 'trck': 'track', 'trac': 'track',
+            'sennd': 'send', 'snd': 'send',
+        }
     for k, v in typo_map.items():
         q = __import__('re').sub(rf"\b{k}\b", v, q)
 
@@ -562,6 +569,66 @@ def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None
                 'intent': 'set_parameter',
                 'targets': [{ 'track': f'Return {return_ref}', 'plugin': device_name, 'parameter': param_ref }],
                 'operation': { 'type': 'absolute', 'value': label, 'unit': 'display' },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+    except Exception:
+        pass
+
+    # Return device param: numeric with arbitrary device name (e.g., "set Return A 4th bandpass feedback to 20 %")
+    try:
+        import re
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:the\s+)?(.+?)\s+(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
+        if m:
+            return_ref = m.group(1).upper()
+            device_name = m.group(2).strip()
+            pname = m.group(3).strip()
+            value = float(m.group(4))
+            unit_raw = m.group(5)
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms','millisecond','milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            return {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Return {return_ref}', 'plugin': device_name, 'parameter': pname }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
+                'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
+            }
+    except Exception:
+        pass
+
+    # Track device param: numeric with arbitrary device name (e.g., "set track 2 4th bandpass feedback to 20 %")
+    try:
+        import re
+        units_pat = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:the\s+)?(.+?)\s+(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({units_pat}))?\b", q)
+        if m:
+            track_num = int(m.group(1))
+            device_name = m.group(2).strip()
+            pname = m.group(3).strip()
+            value = float(m.group(4))
+            unit_raw = m.group(5)
+            unit_out = None
+            if unit_raw:
+                u = unit_raw.lower()
+                if u in ('db',): unit_out = 'dB'
+                elif u in ('%','percent'): unit_out = '%'
+                elif u in ('ms','millisecond','milliseconds'): unit_out = 'ms'
+                elif u in ('s','sec','second','seconds'): unit_out = 's'
+                elif u in ('hz',): unit_out = 'hz'
+                elif u in ('khz',): unit_out = 'khz'
+                elif u in ('degree','degrees','deg','°'): unit_out = 'degrees'
+            return {
+                'intent': 'set_parameter',
+                'targets': [{ 'track': f'Track {track_num}', 'plugin': device_name, 'parameter': pname }],
+                'operation': { 'type': 'absolute', 'value': value, 'unit': unit_out },
                 'meta': { 'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference) }
             }
     except Exception:

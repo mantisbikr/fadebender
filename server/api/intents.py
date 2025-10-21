@@ -375,6 +375,8 @@ def _normalize_unit(u: Optional[str]) -> Optional[str]:
     if not u:
         return None
     s = str(u).strip().lower()
+    if s in ("n/a", "na", "none", "unitless", "no unit", "-", ""):  # treat as no unit
+        return None
     if s in ("sec", "second", "seconds"):
         return "s"
     if s in ("millisecond", "milliseconds"):
@@ -434,6 +436,32 @@ def _get_mixer_param_meta(entity_type: str, param_name: str) -> Optional[Dict[st
         return next((p for p in params_meta if p.get("name") == param_name), None)
     except Exception:
         return None
+
+
+def _default_unit_for_send(entity_type: str) -> Optional[str]:
+    """Infer default unit for sends from Firestore mapping if available.
+
+    Returns lowercased unit string (e.g., 'db', '%') or None if unknown.
+    """
+    # Try consolidated channel mapping first
+    pm = _get_mixer_param_meta(entity_type, "send")
+    try:
+        if pm and isinstance(pm.get("unit"), str):
+            u = str(pm.get("unit")).strip().lower()
+            return _normalize_unit(u)
+    except Exception:
+        pass
+    # Fall back to legacy mixer_mappings/send
+    try:
+        store = get_store()
+        if store.enabled:
+            mapping = store.get_mixer_param_mapping("send")
+            if mapping and isinstance(mapping.get("unit"), str):
+                return _normalize_unit(mapping.get("unit"))
+    except Exception:
+        pass
+    # No fallback: require Firestore to define units
+    return None
 
 
 def _apply_mixer_fit_inverse(param_meta: Dict[str, Any], display_value: float) -> Optional[float]:
@@ -983,6 +1011,18 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             import traceback
             print(f"[DEBUG] Registry write failed: {e}")
             traceback.print_exc()
+        # Ensure mixer capabilities (track)
+        try:
+            from server.api.cap_utils import ensure_capabilities  # type: ignore
+            resp = ensure_capabilities(resp, domain="track", track_index=track_idx)
+        except Exception:
+            pass
+        # Ensure return mixer capabilities after send set
+        try:
+            from server.api.cap_utils import ensure_capabilities  # type: ignore
+            resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
+        except Exception:
+            pass
         return resp
 
     # Track sends
@@ -997,13 +1037,27 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         if track_idx < 1:
             raise HTTPException(400, "track_index_must_be_at_least_1")
         v = float(intent.value if intent.value is not None else 0.0)
-        if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
-            raise HTTPException(400, "normalized_not_allowed_for_send: provide dB (unit='db') or percent")
-        # Add dB support for sends (range: -60dB to 0dB)
-        if (intent.unit or "").lower() in ("db", "dB".lower()):
+        # Determine target unit from intent -> channel mapping
+        unit_norm = _normalize_unit(intent.unit)
+        if unit_norm in ("db",):
             v = db_to_live_float_send(v)
-        elif (intent.unit or "").lower() in ("percent", "%"):
+        elif unit_norm in ("percent", "%"):
             v = v / 100.0
+        else:
+            # No explicit unit; try Firestore params_meta for 'send'
+            pm = _get_mixer_param_meta("track", "send")
+            pm_unit = _normalize_unit((pm or {}).get("unit")) if pm else None
+            if pm_unit in ("db",):
+                v = db_to_live_float_send(v)
+            elif pm_unit in ("percent", "%"):
+                v = v / 100.0
+            else:
+                # Unitless: attempt fit-based inverse mapping if provided
+                if pm and isinstance(pm.get("fit"), dict):
+                    inv = _apply_mixer_fit_inverse(pm, float(v))
+                    v = float(inv) if inv is not None else v
+                else:
+                    raise HTTPException(400, "send_requires_unit_or_mapping_fit_for_track")
         v = _clamp(v, 0.0, 1.0) if intent.clamp else v
         if intent.dry_run:
             return {"ok": True, "preview": {"op": "set_send", "track_index": track_idx, "send_index": send_idx, "value": v}}
@@ -1035,6 +1089,12 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             import traceback
             print(f"[DEBUG] Send registry write failed: {e}")
             traceback.print_exc()
+        # Ensure track mixer capabilities for UI cards
+        try:
+            from server.api.cap_utils import ensure_capabilities  # type: ignore
+            resp = ensure_capabilities(resp, domain="track", track_index=track_idx)
+        except Exception:
+            pass
         return resp
 
     # Return mixer
@@ -1122,6 +1182,37 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             import traceback
             print(f"[DEBUG] Return registry write failed: {e}")
             traceback.print_exc()
+        # Add a concise summary for chat/UI
+        try:
+            letter = chr(ord('A') + int(return_idx))
+            disp_txt = None
+            if field == "volume":
+                try:
+                    disp_txt = f"{live_float_to_db(float(v)):.1f} dB"
+                except Exception:
+                    pass
+            elif field == "pan":
+                try:
+                    display_min, display_max = _get_mixer_display_range("pan")
+                    display_scale = max(abs(display_min), abs(display_max))
+                    disp_txt = f"{float(v) * display_scale:.0f}{'R' if float(v) > 0 else ('L' if float(v) < 0 else 'C')}"
+                except Exception:
+                    pass
+            elif field in ("mute", "solo"):
+                disp_txt = "On" if float(v) >= 0.5 else "Off"
+            if isinstance(resp, dict):
+                if disp_txt:
+                    resp["summary"] = f"Set Return {letter} {field} to {disp_txt}"
+                else:
+                    resp["summary"] = f"Set Return {letter} {field}"
+        except Exception:
+            pass
+        # Ensure return mixer capabilities
+        try:
+            from server.api.cap_utils import ensure_capabilities  # type: ignore
+            resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
+        except Exception:
+            pass
         return resp
 
     # Return sends
@@ -1140,13 +1231,24 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             pass
         send_idx = _resolve_send_index(intent)
         v = float(intent.value if intent.value is not None else 0.0)
-        if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
-            raise HTTPException(400, "normalized_not_allowed_for_send: provide dB (unit='db') or percent")
-        # Add dB support for return sends (range: -60dB to 0dB)
-        if (intent.unit or "").lower() in ("db", "dB".lower()):
+        unit_norm = _normalize_unit(intent.unit)
+        if unit_norm in ("db",):
             v = db_to_live_float_send(v)
-        elif (intent.unit or "").lower() in ("percent", "%"):
+        elif unit_norm in ("percent", "%"):
             v = v / 100.0
+        else:
+            pm = _get_mixer_param_meta("return", "send")
+            pm_unit = _normalize_unit((pm or {}).get("unit")) if pm else None
+            if pm_unit in ("db",):
+                v = db_to_live_float_send(v)
+            elif pm_unit in ("percent", "%"):
+                v = v / 100.0
+            else:
+                if pm and isinstance(pm.get("fit"), dict):
+                    inv = _apply_mixer_fit_inverse(pm, float(v))
+                    v = float(inv) if inv is not None else v
+                else:
+                    raise HTTPException(400, "send_requires_unit_or_mapping_fit_for_return")
         v = _clamp(v, 0.0, 1.0) if intent.clamp else v
         if intent.dry_run:
             return {"ok": True, "preview": {"op": "set_return_send", "return_index": return_idx, "send_index": send_idx, "value": v}}
@@ -1163,6 +1265,27 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             except Exception:
                 pass
             reg.update_mixer("return", return_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
+        except Exception:
+            pass
+        # Add a concise summary for chat/UI
+        try:
+            letter = chr(ord('A') + int(return_idx))
+            disp_txt = None
+            try:
+                disp_txt = f"{live_float_to_db_send(float(v)):.1f} dB"
+            except Exception:
+                pass
+            if isinstance(resp, dict):
+                if disp_txt:
+                    resp["summary"] = f"Set Return {letter} send {chr(ord('A') + int(send_idx))} to {disp_txt}"
+                else:
+                    resp["summary"] = f"Set Return {letter} send {chr(ord('A') + int(send_idx))}"
+        except Exception:
+            pass
+        # Ensure return mixer capabilities for UI cards
+        try:
+            from server.api.cap_utils import ensure_capabilities  # type: ignore
+            resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
         except Exception:
             pass
         return resp
@@ -1225,7 +1348,173 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             reg.update_mixer("master", 0, field, float(v), disp, unit, source="op")
         except Exception:
             pass
+        # Ensure master capabilities
+        try:
+            from server.api.cap_utils import ensure_capabilities  # type: ignore
+            resp = ensure_capabilities(resp, domain="master")
+        except Exception:
+            pass
         return resp
+
+    # Guard: Sometimes LLM misclassifies mixer fields (volume/pan/mute/solo/send) as device params.
+    # If so, reroute to the appropriate mixer path before handling device params.
+    if d == "device" and (intent.param_ref or "").strip().lower() in ("volume", "pan", "mute", "solo"):
+        pname = str(intent.param_ref or "").strip().lower()
+        # Return-scoped reroute
+        if (intent.return_index is not None) or (intent.return_ref is not None):
+            return_idx = _resolve_return_index(intent)
+            v = float(intent.value if intent.value is not None else 0.0)
+            resolved_from_display = False
+            if intent.display and pname in ("pan", "volume"):
+                resolved = _resolve_mixer_display_value(pname, intent.display)
+                if resolved is not None:
+                    v = resolved
+                    resolved_from_display = True
+            if pname == "volume" and not resolved_from_display:
+                if (intent.unit or "").lower() in ("db", "dB".lower()):
+                    v = db_to_live_float(v)
+                elif (intent.unit or "").lower() in ("percent", "%"):
+                    v = v / 100.0
+                v = _clamp(v, 0.0, 1.0) if intent.clamp else v
+            elif pname == "pan" and not resolved_from_display:
+                if abs(v) > 1.0:
+                    display_min, display_max = _get_mixer_display_range("pan")
+                    display_scale = max(abs(display_min), abs(display_max))
+                    v = _clamp(v, display_min, display_max) / display_scale
+                else:
+                    v = _clamp(v, -1.0, 1.0) if intent.clamp else v
+            elif pname in ("mute", "solo"):
+                v = 1.0 if v >= 0.5 else 0.0
+            resp = request_op("set_return_mixer", timeout=1.0, return_index=return_idx, field=str(pname), value=float(v))
+            if not resp:
+                raise HTTPException(504, "no_reply")
+            # Attach return capabilities so UI can render cards immediately
+            try:
+                from server.api.returns import get_return_mixer_capabilities  # type: ignore
+                caps = get_return_mixer_capabilities(index=return_idx)
+                if isinstance(caps, dict) and caps.get("ok"):
+                    if isinstance(resp, dict):
+                        resp.setdefault("data", {})
+                        resp["data"]["capabilities"] = caps.get("data")
+            except Exception:
+                pass
+            return resp
+        # Track-scoped reroute
+        if intent.track_index is not None:
+            track_idx = int(intent.track_index)
+            v = float(intent.value if intent.value is not None else 0.0)
+            resolved_from_display = False
+            if intent.display and pname in ("pan", "volume"):
+                resolved = _resolve_mixer_display_value(pname, intent.display)
+                if resolved is not None:
+                    v = resolved
+                    resolved_from_display = True
+            if pname == "volume" and not resolved_from_display:
+                if (intent.unit or "").lower() in ("db", "dB".lower()):
+                    v = db_to_live_float(v)
+                elif (intent.unit or "").lower() in ("percent", "%"):
+                    v = v / 100.0
+                v = _clamp(v, 0.0, 1.0) if intent.clamp else v
+            elif pname == "pan" and not resolved_from_display:
+                if abs(v) > 1.0:
+                    display_min, display_max = _get_mixer_display_range("pan")
+                    display_scale = max(abs(display_min), abs(display_max))
+                    v = _clamp(v, display_min, display_max) / display_scale
+                else:
+                    v = _clamp(v, -1.0, 1.0) if intent.clamp else v
+            elif pname in ("mute", "solo"):
+                v = 1.0 if v >= 0.5 else 0.0
+            resp = request_op("set_mixer", timeout=1.0, track_index=track_idx, field=str(pname), value=float(v))
+            if not resp:
+                raise HTTPException(504, "no_reply")
+            # Attach track capabilities
+            try:
+                from server.api.tracks import get_track_mixer_capabilities  # type: ignore
+                caps = get_track_mixer_capabilities(index=max(0, track_idx - 1))
+                if isinstance(caps, dict) and caps.get("ok"):
+                    if isinstance(resp, dict):
+                        resp.setdefault("data", {})
+                        resp["data"]["capabilities"] = caps.get("data")
+            except Exception:
+                pass
+            return resp
+
+    # Additional guard: if misclassified as device but param looks like a send ("send A/B/C…"), reroute
+    if d == "device" and (intent.param_ref or "").strip():
+        pref = str(intent.param_ref or "").strip().lower()
+        try:
+            m = _re.search(r"\bsend\s*([a-z])\b", pref)
+        except Exception:
+            m = None
+        if m:
+            letter = m.group(1).upper()
+            amount = float(intent.value if intent.value is not None else 0.0)
+            # Return-scoped reroute
+            if (intent.return_index is not None) or (intent.return_ref is not None):
+                return_idx = _resolve_return_index(intent)
+                # Resolve unit from Firestore when not provided
+                unit_norm = _normalize_unit(intent.unit)
+                if unit_norm in ("db",):
+                    amount = db_to_live_float_send(amount)
+                elif unit_norm in ("percent", "%"):
+                    amount = amount / 100.0
+                else:
+                    pm = _get_mixer_param_meta("return", "send")
+                    pm_unit = _normalize_unit((pm or {}).get("unit")) if pm else None
+                    if pm_unit in ("db",):
+                        amount = db_to_live_float_send(amount)
+                    elif pm_unit in ("percent", "%"):
+                        amount = amount / 100.0
+                    else:
+                        if pm and isinstance(pm.get("fit"), dict):
+                            inv = _apply_mixer_fit_inverse(pm, float(amount))
+                            amount = float(inv) if inv is not None else amount
+                        else:
+                            raise HTTPException(400, "send_requires_unit_or_mapping_fit_for_return")
+                amount = _clamp(amount, 0.0, 1.0) if intent.clamp else amount
+                resp = request_op("set_return_send", timeout=1.0, return_index=return_idx, send_index=_letter_to_index(letter), value=float(amount))
+                if not resp:
+                    raise HTTPException(504, "no_reply")
+                # Ensure capabilities for UI
+                try:
+                    from server.api.cap_utils import ensure_capabilities  # type: ignore
+                    resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
+                except Exception:
+                    pass
+                return resp
+            # Track-scoped reroute
+            if intent.track_index is not None:
+                track_idx = int(intent.track_index)
+                if track_idx < 1:
+                    raise HTTPException(400, "track_index_must_be_at_least_1")
+                unit_norm = _normalize_unit(intent.unit)
+                if unit_norm in ("db",):
+                    amount = db_to_live_float_send(amount)
+                elif unit_norm in ("percent", "%"):
+                    amount = amount / 100.0
+                else:
+                    pm = _get_mixer_param_meta("track", "send")
+                    pm_unit = _normalize_unit((pm or {}).get("unit")) if pm else None
+                    if pm_unit in ("db",):
+                        amount = db_to_live_float_send(amount)
+                    elif pm_unit in ("percent", "%"):
+                        amount = amount / 100.0
+                    else:
+                        if pm and isinstance(pm.get("fit"), dict):
+                            inv = _apply_mixer_fit_inverse(pm, float(amount))
+                            amount = float(inv) if inv is not None else amount
+                        else:
+                            raise HTTPException(400, "send_requires_unit_or_mapping_fit_for_track")
+                amount = _clamp(amount, 0.0, 1.0) if intent.clamp else amount
+                resp = request_op("set_send", timeout=1.0, track_index=track_idx, send_index=_letter_to_index(letter), value=float(amount))
+                if not resp:
+                    raise HTTPException(504, "no_reply")
+                try:
+                    from server.api.cap_utils import ensure_capabilities  # type: ignore
+                    resp = ensure_capabilities(resp, domain="track", track_index=track_idx)
+                except Exception:
+                    pass
+                return resp
 
     # Device parameter (return device)
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
@@ -1307,7 +1596,40 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
             raise HTTPException(404, "params_not_found")
         # Apply alias resolution for param_ref before selection
         pref = _alias_param_name_if_needed(intent.param_ref)
-        sel = _resolve_param(params, intent.param_index, pref)
+        try:
+            sel = _resolve_param(params, intent.param_index, pref)
+        except HTTPException as he:
+            msg = str(he.detail) if hasattr(he, "detail") else str(he)
+            # Fallback: if param not found on the chosen device, search other devices on this return
+            if isinstance(he.status_code, int) and he.status_code in (404, 409) and ("param_not_found" in msg):
+                try:
+                    devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
+                    devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+                    matches = []
+                    for d in devs:
+                        dj = int(d.get("index", 0))
+                        prj = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=dj)
+                        pjs = ((prj or {}).get("data") or {}).get("params") or []
+                        try:
+                            sj = _resolve_param(pjs, intent.param_index, pref)
+                            matches.append((dj, pjs, sj, str(d.get("name", f"Device {dj}"))))
+                        except HTTPException:
+                            continue
+                    # If exactly one device contains the param, switch to it
+                    if len(matches) == 1:
+                        di, params, sel, _nm = matches[0]
+                    elif len(matches) > 1:
+                        names = ", ".join([f"{m[0]}:{m[3]}" for m in matches])
+                        raise HTTPException(409, f"param_ambiguous_across_devices:{pref}; devices=[{names}]")
+                    else:
+                        raise he
+                except HTTPException:
+                    raise
+                except Exception:
+                    # If search fails for any reason, re-raise original
+                    raise he
+            else:
+                raise
         vmin = float(sel.get("min", 0.0)); vmax = float(sel.get("max", 1.0))
         x = float(intent.value if intent.value is not None else vmin)
         # If display provided, try mapping via params_meta fit/labels; fallback to refine if not dry_run
@@ -1547,19 +1869,27 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
                     resp["summary"] = summary
                 else:
                     resp = {"ok": True, "summary": summary}
+                # Write-through to ValueRegistry (return device)
+                try:
+                    reg = get_value_registry()
+                    unit_out = None
+                    try:
+                        if pm and isinstance(pm.get("unit"), str):
+                            unit_out = str(pm.get("unit")).lower()
+                    except Exception:
+                        pass
+                    reg.update_device_param("return", ri, di, str(sel.get("name", "")), new_val, new_display, unit_out, source="op")
+                except Exception:
+                    pass
         except Exception:
             # If summary generation fails, fall back to basic response
             pass
 
-        # Attach return device capabilities so UI can render grouped cards
+        # Ensure return device capabilities so UI can render grouped cards
         if not intent.dry_run:
             try:
-                from server.api.returns import get_return_device_capabilities
-                caps = get_return_device_capabilities(index=ri, device=di)
-                if isinstance(caps, dict) and caps.get("ok"):
-                    if isinstance(resp, dict):
-                        resp.setdefault("data", {})
-                        resp["data"]["capabilities"] = caps.get("data")
+                from server.api.cap_utils import ensure_capabilities  # type: ignore
+                resp = ensure_capabilities(resp, domain="return_device", return_index=ri, device_index=di)
             except Exception:
                 pass
 
@@ -1629,7 +1959,37 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         if not params:
             raise HTTPException(404, "params_not_found")
         pref = _alias_param_name_if_needed(intent.param_ref)
-        sel = _resolve_param(params, intent.param_index, pref)
+        try:
+            sel = _resolve_param(params, intent.param_index, pref)
+        except HTTPException as he:
+            msg = str(he.detail) if hasattr(he, "detail") else str(he)
+            if isinstance(he.status_code, int) and he.status_code in (404, 409) and ("param_not_found" in msg):
+                try:
+                    devs_list = request_op("get_track_devices", timeout=1.0, track_index=ti) or {}
+                    devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+                    matches = []
+                    for d in devs:
+                        dj = int(d.get("index", 0))
+                        prj = request_op("get_track_device_params", timeout=1.0, track_index=ti, device_index=dj)
+                        pjs = ((prj or {}).get("data") or {}).get("params") or []
+                        try:
+                            sj = _resolve_param(pjs, intent.param_index, pref)
+                            matches.append((dj, pjs, sj, str(d.get("name", f"Device {dj}"))))
+                        except HTTPException:
+                            continue
+                    if len(matches) == 1:
+                        di, params, sel, _nm = matches[0]
+                    elif len(matches) > 1:
+                        names = ", ".join([f"{m[0]}:{m[3]}" for m in matches])
+                        raise HTTPException(409, f"param_ambiguous_across_devices:{pref}; devices=[{names}]")
+                    else:
+                        raise he
+                except HTTPException:
+                    raise
+                except Exception:
+                    raise he
+            else:
+                raise
         vmin = float(sel.get("min", 0.0)); vmax = float(sel.get("max", 1.0))
         x = float(intent.value if intent.value is not None else vmin)
         used_display = False
@@ -1698,6 +2058,21 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
         resp = request_op("set_device_param", timeout=1.0, track_index=ti, device_index=di, param_index=int(sel.get("index", 0)), value=float(preview["value"]))
         if not resp:
             raise HTTPException(504, "no_reply")
+        # Readback and write-through for track device
+        try:
+            rb = request_op("get_track_device_params", timeout=1.0, track_index=ti, device_index=di)
+            params_rb = ((rb or {}).get("data") or {}).get("params") or []
+            up = next((p for p in params_rb if int(p.get("index", -1)) == int(sel.get("index", 0))), None)
+            if up:
+                new_display = up.get("display_value") or str(preview["value"])  # fallback
+                new_val = float(up.get("value", preview["value"]))
+                try:
+                    reg = get_value_registry()
+                    reg.update_device_param("track", ti, di, str(sel.get("name", "")), new_val, new_display, None, source="op")
+                except Exception:
+                    pass
+        except Exception:
+            pass
         return resp
 
     raise HTTPException(400, "unsupported_intent")
@@ -1785,7 +2160,29 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
     # Track send
     if d == "track" and intent.track_index is not None and intent.field == "send":
         ti = int(intent.track_index)
-        # Support send_ref (A/B/C...) or send_index; fallback to param_index for compatibility
+        rs = request_op("get_track_sends", timeout=1.0, track_index=ti)
+        data = (rs or {}).get("data") or rs or {}
+        sends = data.get("sends") or []
+        # If no specific send requested, return a list so UI can render chips
+        if intent.send_ref is None and intent.send_index is None and intent.param_index is None:
+            out_items = []
+            for s in sends:
+                idx = int(s.get("index", -1))
+                raw = s.get("value")
+                disp = s.get("display_value")
+                if disp is None and raw is not None:
+                    try:
+                        disp = f"{live_float_to_db_send(float(raw)):.1f} dB"
+                    except Exception:
+                        disp = None
+                out_items.append({
+                    "index": idx,
+                    "letter": chr(ord('A') + idx) if 0 <= idx < 26 else None,
+                    "display_value": disp,
+                    "normalized_value": None if display_only_io else raw,
+                })
+            return {"ok": True, "data": {"sends": out_items}}
+        # Otherwise, resolve a specific send
         if intent.send_ref is not None:
             si = _letter_to_index(str(intent.send_ref))
         elif intent.send_index is not None:
@@ -1794,9 +2191,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             si = int(intent.param_index)
         else:
             raise HTTPException(400, "send_index_or_send_ref_required")
-        rs = request_op("get_track_sends", timeout=1.0, track_index=ti)
-        data = (rs or {}).get("data") or rs or {}
-        sends = data.get("sends") or []
         send = next((s for s in sends if int(s.get("index", -1)) == si), None)
         raw = (send or {}).get("value")
         disp = (send or {}).get("display_value")
@@ -1862,6 +2256,28 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
     # Return send
     if d == "return" and (intent.return_index is not None or intent.return_ref is not None) and intent.field == "send":
         ri = _letter_to_index(intent.return_ref) if intent.return_ref is not None else int(intent.return_index)
+        rs = request_op("get_return_sends", timeout=1.0, return_index=ri)
+        data = (rs or {}).get("data") or rs or {}
+        sends = data.get("sends") or []
+        # If no specific send requested, return list for UI chips
+        if intent.send_ref is None and intent.send_index is None and intent.param_index is None:
+            out_items = []
+            for s in sends:
+                idx = int(s.get("index", -1))
+                raw = s.get("value")
+                disp = s.get("display_value")
+                if disp is None and raw is not None:
+                    try:
+                        disp = f"{live_float_to_db_send(float(raw)):.1f} dB"
+                    except Exception:
+                        disp = None
+                out_items.append({
+                    "index": idx,
+                    "letter": chr(ord('A') + idx) if 0 <= idx < 26 else None,
+                    "display_value": disp,
+                    "normalized_value": None if display_only_io else raw,
+                })
+            return {"ok": True, "data": {"sends": out_items}}
         if intent.send_ref is not None:
             si = _letter_to_index(str(intent.send_ref))
         elif intent.send_index is not None:
@@ -1870,9 +2286,6 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             si = int(intent.param_index)
         else:
             raise HTTPException(400, "send_index_or_send_ref_required")
-        rs = request_op("get_return_sends", timeout=1.0, return_index=ri)
-        data = (rs or {}).get("data") or rs or {}
-        sends = data.get("sends") or []
         send = next((s for s in sends if int(s.get("index", -1)) == si), None)
         raw = (send or {}).get("value")
         disp = (send or {}).get("display_value")
@@ -1886,7 +2299,7 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             out["normalized_value"] = raw
         return out
     # Master mixer
-    if d == "master" and intent.field in ("volume", "pan"):
+    if d == "master" and intent.field in ("volume", "pan", "cue"):
         ms = request_op("get_master_status", timeout=1.0)
         data = (ms or {}).get("data") or ms or {}
         mix = data.get("mixer") or {}
@@ -1914,6 +2327,15 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
                     amt = int(round(abs(pan_raw) * 50))
                     disp = f"{amt}{'R' if pan_raw > 0 else 'L'}"
             return {"ok": True, "field": field, "normalized_value": norm, "display_value": disp}
+        if field == "cue":
+            disp = None
+            if raw is not None:
+                try:
+                    dbv = live_float_to_db(float(raw))
+                    disp = f"{dbv:.1f} dB"
+                except Exception:
+                    pass
+            return {"ok": True, "field": field, "normalized_value": raw, "display_value": disp}
         return {"ok": True, "field": field, "normalized_value": raw, "display_value": None}
     # Device parameter (return device)
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
@@ -2019,14 +2441,15 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
             dev_out["normalized_value"] = sel.get("value")
         return dev_out
     raise HTTPException(400, "unsupported_read")
-_COMMON_PARAM_ALIASES = {
-    # Generic device param aliases (lowercased)
+from server.config.app_config import get_device_param_aliases  # config-driven aliases
+
+_DEFAULT_DEVICE_PARAM_ALIASES = {
+    # Kept as a safety baseline; config overrides/extends
     "mix": "dry/wet",
     "wet": "dry/wet",
     "dry": "dry/wet",
     "dry wet": "dry/wet",
     "dry / wet": "dry/wet",
-    # Cut filters and shelves
     "lo cut": "low cut",
     "locut": "low cut",
     "lowcut": "low cut",
@@ -2037,7 +2460,6 @@ _COMMON_PARAM_ALIASES = {
     "loshelf": "low shelf",
     "hi shelf": "hi shelf",
     "hishelf": "hi shelf",
-    # Filter types and common abbreviations
     "low pass": "low cut",
     "low-pass": "low cut",
     "lpf": "low cut",
@@ -2046,19 +2468,15 @@ _COMMON_PARAM_ALIASES = {
     "high-pass": "high cut",
     "hpf": "high cut",
     "hp": "high cut",
-    # Q / Bandwidth / Resonance family
     "bandwidth": "q",
     "bw": "q",
     "q factor": "q",
     "q-factor": "q",
     "res": "q",
     "resonance": "q",
-    # Rate / Speed / Tempo-ish controls
     "speed": "rate",
-    # Depth / Amount / Intensity family
     "intensity": "depth",
     "amt": "amount",
-    # Feedback abbreviations
     "fbk": "feedback",
     "feed back": "feedback",
     "feedback amount": "feedback",
@@ -2074,4 +2492,9 @@ def _alias_param_name_if_needed(name: Optional[str]) -> Optional[str]:
     if not name:
         return name
     n = str(name).strip().lower()
-    return _COMMON_PARAM_ALIASES.get(n, name)
+    try:
+        cfg = get_device_param_aliases() or {}
+    except Exception:
+        cfg = {}
+    # config has priority; fallback to default map
+    return (cfg.get(n) or _DEFAULT_DEVICE_PARAM_ALIASES.get(n) or name)

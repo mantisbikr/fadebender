@@ -343,8 +343,14 @@ export function useDAWControl() {
           result = await apiService.executeCanonicalIntent(parsed.intent);
           // If server attached capabilities, use them when client-side fetch hasn't populated yet
           try {
-            if (!deviceCapabilities && result && result.data && result.data.capabilities) {
-              deviceCapabilities = result.data.capabilities;
+            const caps = result && result.data && result.data.capabilities;
+            if (caps) {
+              // Heuristic: device caps include device_index; mixer caps include entity_type
+              if (typeof caps.device_index === 'number') {
+                deviceCapabilities = deviceCapabilities || caps;
+              } else {
+                mixerCapabilities = mixerCapabilities || caps;
+              }
             }
           } catch {}
           // Update conversational focus for follow-ups (e.g., device questions)
@@ -561,6 +567,48 @@ export function useDAWControl() {
 
       // Prefer a clean, chat-like summary; only include details when there is an error
       if (!result.ok) {
+        // Friendly handling for common mapping errors without throwing exceptions
+        const summary = String(result.summary || '');
+        const isParamIssue = summary.startsWith('param_not_found:') || summary.startsWith('param_ambiguous:');
+        const isDevIssue = summary.startsWith('device_not_found_for_hint:') || summary.startsWith('device_ordinal_out_of_range:');
+        if (isParamIssue || isDevIssue) {
+          try {
+            // Build suggestions similar to exception path
+            const ci = parsed?.intent || {};
+            let retRef = null;
+            if (typeof ci.return_ref === 'string') retRef = ci.return_ref.toUpperCase();
+            if (!retRef && typeof ci.return_index === 'number') retRef = String.fromCharCode('A'.charCodeAt(0) + Number(ci.return_index));
+            const param = ci.param_ref || ci.field || 'decay';
+            const val = (ci.display ? ci.display : (typeof ci.value !== 'undefined' ? String(ci.value) : ''));
+            const unit = (ci.unit && ci.unit !== 'display') ? ` ${ci.unit}` : '';
+            const base = retRef ? `set Return ${retRef}` : (typeof ci.track_index === 'number' ? `set track ${ci.track_index}` : `set Return A`);
+            const plugin = (ci.device_name_hint || '').toLowerCase();
+            const hasPlugin = plugin && !['device','fx','effect','plugin'].includes(plugin);
+            let capabilities = null;
+            // Try to fetch device capabilities for param issues to show a full card
+            if (retRef && typeof ci.device_index === 'number') {
+              try {
+                const ri = retRef.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+                const caps = await apiService.getReturnDeviceCapabilities(ri, ci.device_index);
+                if (caps && caps.ok) capabilities = caps.data;
+              } catch {}
+            }
+            const suggestions = [];
+            if (capabilities && Array.isArray(capabilities.groups)) {
+              const params = [];
+              capabilities.groups.forEach(g => (g.params || []).forEach(p => params.push(p.name)));
+              (capabilities.ungrouped || []).forEach(p => params.push(p.name));
+              params.slice(0, 6).forEach(pn => suggestions.push({
+                label: pn,
+                value: hasPlugin ? `${base} ${plugin} ${ci.device_ordinal_hint || 1} ${pn} ${val ? 'to ' + val + unit : ''}`.trim()
+                                  : `${base} device ${ci.device_ordinal_hint || 1} ${pn} ${val ? 'to ' + val + unit : ''}`.trim()
+              }));
+            }
+            addMessage({ type: 'question', content: summary, data: { suggested_intents: suggestions, capabilities } });
+            return;
+          } catch {}
+        }
+        // Default info path
         addMessage({
           type: 'info',
           content: result.summary || result.reason || 'Preview only',

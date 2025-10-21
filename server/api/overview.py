@@ -84,6 +84,8 @@ def snapshot() -> Dict[str, Any]:
                 "tracks": li._tracks,
                 "returns": li._returns,
             },
+            # Last-known device parameter values written via ValueRegistry (optional)
+            "device_values": reg.get_devices(),
             "mixer": mixer_arr,
             "mixer_map": mixer_map,  # for backward-compat tests that use string keys
         },
