@@ -32,6 +32,7 @@ def _load() -> Dict[str, Any]:
         },
         "features": {
             "use_intents_for_chat": True,  # Use /intent/execute for chat commands (default enabled)
+            "simple_device_resolver": True,  # Simplified device resolver for device intents (name/type/qualifier)
         },
         "server": {
             "send_aliases": {
@@ -52,6 +53,33 @@ def _load() -> Dict[str, Any]:
                 "chorus": ["chorus"],
                 "flanger": ["flanger"],
                 "phaser": ["phaser"],
+            },
+            "device_qualifier_aliases": {
+                "reverb": {
+                    "ambience": ["ambience", "ambient"],
+                    "hall": ["hall"],
+                    "room": ["room"],
+                    "plate": ["plate"],
+                    "spring": ["spring"],
+                    "chamber": ["chamber"],
+                    "cathedral": ["cathedral"],
+                    "big room": ["big room", "large room"],
+                    "small room": ["small room", "tiny room"],
+                },
+                "delay": {
+                    "ping pong": ["ping pong", "ping-pong"],
+                    "slapback": ["slapback"],
+                    "tape": ["tape"],
+                    "grain": ["grain", "granular"],
+                    "multi": ["multi", "multitap"],
+                },
+                "amp": {
+                    "screamer": ["screamer"],
+                    "clean": ["clean"],
+                    "crunch": ["crunch"],
+                    "lead": ["lead"],
+                    "bass": ["bass"],
+                }
             },
             # Aliases for parameter names (mixer and device)
             "param_aliases": {
@@ -167,6 +195,11 @@ def get_send_aliases() -> Dict[str, int]:
 def get_device_type_aliases() -> Dict[str, Any]:
     cfg = _load()
     return dict(cfg.get("server", {}).get("device_type_aliases", {}))
+
+
+def get_device_qualifier_aliases() -> Dict[str, Any]:
+    cfg = _load()
+    return dict(cfg.get("server", {}).get("device_qualifier_aliases", {}))
 
 
 def get_mixer_param_aliases() -> Dict[str, str]:

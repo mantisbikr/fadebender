@@ -12,6 +12,7 @@ import math
 import re as _re
 from server.volume_utils import db_to_live_float, db_to_live_float_send, live_float_to_db, live_float_to_db_send
 from server.config.app_config import get_app_config, get_feature_flags
+from server.config.app_config import get_device_type_aliases, get_device_qualifier_aliases
 
 
 router = APIRouter()
@@ -749,6 +750,115 @@ def _generate_device_param_summary(
         pass
 
     return summary
+
+# ---------- Simplified Device Resolver (Return) ----------
+def _norm_txt(s: str) -> str:
+    import re as _re2
+    s0 = (s or "").strip().lower()
+    s0 = _re2.sub(r"\s+", " ", s0)
+    return s0
+
+
+def _extract_type_and_qualifier(plugin: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    if not plugin:
+        return None, None
+    txt = _norm_txt(str(plugin))
+    type_aliases = get_device_type_aliases() or {}
+    for canon, toks in type_aliases.items():
+        for t in toks or []:
+            if f" {t.strip().lower()} " in f" {txt} ":
+                q = txt.replace(t, "").strip()
+                q = q if q else None
+                return canon.lower(), q
+    return None, None
+
+
+def _device_type_from_mapping_or_name(mapping: Optional[dict], name: str) -> Optional[str]:
+    try:
+        if mapping and isinstance(mapping.get("device_type"), str):
+            return str(mapping.get("device_type")).strip().lower()
+        if mapping and isinstance(mapping.get("category"), str):
+            return str(mapping.get("category")).strip().lower()
+    except Exception:
+        pass
+    n = _norm_txt(name)
+    aliases = get_device_type_aliases() or {}
+    for canon, toks in aliases.items():
+        for t in toks or []:
+            if t in n:
+                return canon.lower()
+    return None
+
+
+def _matches_qualifier(name: str, device_type: Optional[str], qualifier: Optional[str]) -> bool:
+    if not qualifier:
+        return True
+    q = _norm_txt(qualifier)
+    n = _norm_txt(name)
+    if q in n:
+        return True
+    qmap = (get_device_qualifier_aliases() or {}).get(str(device_type or ""), {})
+    for k, arr in (qmap or {}).items():
+        for t in arr or []:
+            if t in n and (q in t or t in q or q == k):
+                return True
+    return False
+
+
+def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Optional[str], ordinal_hint: Optional[int]) -> int | None:
+    devs_list = request_op("get_return_devices", timeout=1.0, return_index=int(ri)) or {}
+    devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+    if not devs:
+        return None
+    type_hint, qualifier_hint = _extract_type_and_qualifier(plugin)
+    plugin_txt = _norm_txt(str(plugin or ""))
+    literal_matches: list[int] = []
+    for d in devs:
+        nm = str(d.get("name", ""))
+        if plugin_txt and plugin_txt in _norm_txt(nm):
+            literal_matches.append(int(d.get("index", 0)))
+    if len(literal_matches) == 1:
+        return literal_matches[0]
+    # Build candidates with mapping + param presence
+    cands: list[tuple[int, str, bool]] = []
+    type_filtered: list[tuple[int, str, bool]] = []
+    pref = _alias_param_name_if_needed(param_ref)
+    for d in devs:
+        di = int(d.get("index", 0))
+        nm = str(d.get("name", ""))
+        pr = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=di)
+        params = ((pr or {}).get("data") or {}).get("params") or []
+        sig = make_device_signature(nm, params)
+        try:
+            store = get_store()
+            mapping = store.get_device_map(sig) if store.enabled else None
+        except Exception:
+            mapping = None
+        dtype = _device_type_from_mapping_or_name(mapping, nm)
+        # qualifier match
+        ok_qual = _matches_qualifier(nm, dtype, qualifier_hint)
+        # param presence
+        has_param = False
+        if pref:
+            try:
+                names = [str(p.get("name", "")) for p in params]
+                if any(_norm_txt(pref) in _norm_txt(n) for n in names):
+                    has_param = True
+            except Exception:
+                has_param = False
+        item = (di, nm, bool(has_param and ok_qual))
+        if not type_hint or (dtype == type_hint):
+            type_filtered.append(item)
+        cands.append(item)
+    pool = type_filtered if type_hint else cands
+    pool_with_param = [x for x in pool if x[2]]
+    target_pool = pool_with_param or pool
+    if len(target_pool) == 1:
+        return target_pool[0][0]
+    if isinstance(ordinal_hint, int) and ordinal_hint >= 1 and ordinal_hint <= len(target_pool):
+        target_pool_sorted = sorted(target_pool, key=lambda x: x[0])
+        return target_pool_sorted[ordinal_hint - 1][0]
+    return None
 
 
 @router.post("/intent/execute")
@@ -1520,6 +1630,33 @@ def execute_intent(intent: CanonicalIntent) -> Dict[str, Any]:
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
         ri = _resolve_return_index(intent)
         di = int(intent.device_index)
+        # Use simplified resolver when enabled to pick device_index more robustly by name/type/qualifier/param
+        try:
+            features = get_feature_flags()
+            if bool((features or {}).get("simple_device_resolver", False)):
+                di_s = _simple_resolve_return_device(
+                    ri,
+                    intent.device_name_hint or (intent.param_ref if (intent.param_ref or "").lower() not in ("volume","pan","mute","solo") else None),
+                    intent.param_ref,
+                    intent.device_ordinal_hint,
+                )
+                if isinstance(di_s, int):
+                    di = di_s
+                else:
+                    # Ambiguous: list devices for clarification
+                    try:
+                        devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
+                        devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
+                        names = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
+                        raise HTTPException(409, f"device_ambiguous; devices=[{names}]")
+                    except HTTPException:
+                        raise
+                    except Exception:
+                        raise HTTPException(409, "device_ambiguous")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         # If hints provided, try to resolve index by name and/or ordinal
         if intent.device_name_hint or intent.device_ordinal_hint:
             try:
