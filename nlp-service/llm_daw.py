@@ -133,14 +133,15 @@ def _build_daw_prompt(query: str, mixer_params: List[str] | None = None, known_d
         device_context = (
             "KNOWN DEVICES (from session presets):\n"
             + "\n".join(device_lines) + "\n\n"
-            + "**Use these device names** when matching user input with typos. "
-            + "For example: 'screamr' → 'Screamer' (amp), '4th bandpas' → '4th bandpass' (delay).\n\n"
+            + "**IMPORTANT**: These device names are ONLY for typo correction when the user EXPLICITLY mentions a device/plugin. "
+            + "DO NOT infer device operations from parameter names alone. "
+            + "For example: 'screamr gain' → 'Screamer' (user mentioned device), but 'set track 1 volume' → NO device (pure mixer op).\n\n"
         )
 
     return (
         f"{_hints_text(query)}"
-        f"{mixer_context}"
         f"{device_context}"
+        f"{mixer_context}"
         "You are an expert audio engineer and Ableton Live power user. Your job is to interpret natural language "
         "commands for controlling a DAW session - tracks, returns (send effects), master channel, and audio devices/plugins.\n\n"
         "**CONTEXT: You understand audio engineering terminology**\n"
@@ -235,6 +236,11 @@ def _build_daw_prompt(query: str, mixer_params: List[str] | None = None, known_d
         "12. For question_response, ALWAYS include 2-4 specific suggested_intents\n"
         "13. Only use clarification_needed when truly ambiguous (e.g., \"boost vocals\" without specifying track)\n"
         "14. Interpret typos intelligently - context matters more than exact spelling\n\n"
+        "**🚨 CRITICAL: NEVER use known devices for mixer parameters! 🚨**\n"
+        "If the command mentions ONLY track/return + parameter (volume/pan/mute/send), set plugin=null.\n"
+        "Device names from known devices list are ONLY for when user EXPLICITLY says the device name.\n"
+        "Examples of MIXER ops (plugin=null): 'set track 1 volume', 'pan return A', 'mute track 2'\n"
+        "Examples of DEVICE ops (plugin=name): 'set return A reverb decay', 'set track 2 compressor threshold'\n\n"
         "EXAMPLES (including typos/variations):\n\n"
         "**Mixer Operations (no device name):**\n"
         "- \"solo track 1\" → {\"intent\": \"set_parameter\", \"targets\": [{\"track\": \"Track 1\", \"plugin\": null, \"parameter\": \"solo\"}], \"operation\": {\"type\": \"absolute\", \"value\": 1, \"unit\": null}}\n"
@@ -257,30 +263,85 @@ def _build_daw_prompt(query: str, mixer_params: List[str] | None = None, known_d
     )
 
 
+def _fetch_session_devices() -> List[Dict[str, str]] | None:
+    """Fetch all devices from current Live session snapshot."""
+    try:
+        import requests
+        resp = requests.get("http://127.0.0.1:8722/snapshot", timeout=2.0)
+        if not resp.ok:
+            return None
+
+        snapshot = resp.json()
+        if not snapshot or not snapshot.get("ok"):
+            return None
+
+        devices = []
+        seen = set()
+
+        # Extract from data.devices structure (more detailed)
+        data = snapshot.get("data", {})
+        device_data = data.get("devices", {})
+
+        # Process track devices
+        for track_idx, track_info in device_data.get("tracks", {}).items():
+            for dev in track_info.get("devices", []):
+                name = dev.get("name", "").strip()
+                if name and name not in seen:
+                    devices.append({"name": name, "type": "unknown"})
+                    seen.add(name)
+
+        # Process return devices
+        for return_idx, return_info in device_data.get("returns", {}).items():
+            for dev in return_info.get("devices", []):
+                name = dev.get("name", "").strip()
+                if name and name not in seen:
+                    devices.append({"name": name, "type": "unknown"})
+                    seen.add(name)
+
+        return devices if devices else None
+    except Exception:
+        return None
+
+
 def interpret_daw_command(query: str, model_preference: str | None = None, strict: bool | None = None) -> Dict[str, Any]:
     """Interpret user query into DAW commands using Vertex AI if available."""
-    # Fetch mixer params and known devices from Firestore for context
     mixer_params = None
     known_devices = None
+
+    # PRIORITY 1: Fetch devices from current Live session (most accurate)
     try:
-        # Import here to avoid circular dependency
+        known_devices = _fetch_session_devices()
+    except Exception:
+        pass
+
+    # PRIORITY 2: Fall back to Firestore presets only if session fetch failed
+    if not known_devices:
+        try:
+            import sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
+            from services.mapping_store import MappingStore
+            store = MappingStore()
+
+            presets = store.list_presets()
+            if presets:
+                known_devices = []
+                seen = set()
+                for p in presets:
+                    name = p.get("device_name") or p.get("name")
+                    dtype = p.get("device_type") or "unknown"
+                    if name and name not in seen:
+                        known_devices.append({"name": name, "type": dtype})
+                        seen.add(name)
+        except Exception:
+            pass
+
+    # Fetch mixer params from Firestore
+    try:
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
         from services.mapping_store import MappingStore
         store = MappingStore()
         mixer_params = store.get_mixer_param_names()
-
-        # Fetch known device names from presets
-        presets = store.list_presets()
-        if presets:
-            known_devices = []
-            seen = set()
-            for p in presets:
-                name = p.get("device_name") or p.get("name")
-                dtype = p.get("device_type") or "unknown"
-                if name and name not in seen:
-                    known_devices.append({"name": name, "type": dtype})
-                    seen.add(name)
     except Exception:
         pass
 

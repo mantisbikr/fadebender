@@ -143,8 +143,10 @@ class MappingStore:
         if not self._enabled or not self._client:
             return None
         try:
+            from google.cloud.firestore_v1.base_query import FieldFilter  # type: ignore
+
             # First try presets collection (preset instances use "category" field)
-            query = self._client.collection("presets").where("device_name", "==", device_name).limit(1)
+            query = self._client.collection("presets").where(filter=FieldFilter("device_name", "==", device_name)).limit(1)
             results = list(query.stream())
 
             if results:
@@ -155,7 +157,7 @@ class MappingStore:
                     return category
 
             # Fallback to device_mappings collection (generic device classes)
-            query = self._client.collection("device_mappings").where("device_name", "==", device_name).limit(1)
+            query = self._client.collection("device_mappings").where(filter=FieldFilter("device_name", "==", device_name)).limit(1)
             results = list(query.stream())
 
             if results:
@@ -194,8 +196,10 @@ class MappingStore:
 
             # Fallback: query by device_name in presets or device_mappings
             if device_name:
+                from google.cloud.firestore_v1.base_query import FieldFilter  # type: ignore
+
                 # Try presets first
-                query = self._client.collection("presets").where("device_name", "==", device_name).limit(1)
+                query = self._client.collection("presets").where(filter=FieldFilter("device_name", "==", device_name)).limit(1)
                 results = list(query.stream())
                 if results:
                     data = results[0].to_dict()
@@ -217,7 +221,7 @@ class MappingStore:
                         return self.get_device_param_names(device_signature=sig)
 
                 # Try device_mappings
-                query = self._client.collection("device_mappings").where("device_name", "==", device_name).limit(1)
+                query = self._client.collection("device_mappings").where(filter=FieldFilter("device_name", "==", device_name)).limit(1)
                 results = list(query.stream())
                 if results:
                     data = results[0].to_dict()
