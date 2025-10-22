@@ -288,37 +288,36 @@ def interpret_daw_command(query: str, model_preference: str | None = None, stric
     if not mixer_params:
         mixer_params = ["volume", "pan", "mute", "solo", "send"]
 
-    # Try Vertex AI SDK path first
+    # Try Google Gen AI SDK (Vertex AI mode)
     try:
-        import vertexai  # type: ignore
-        from vertexai.generative_models import GenerativeModel  # type: ignore
-        from vertexai.language_models import TextGenerationModel  # type: ignore
+        from google import genai  # type: ignore
+        from google.genai import types  # type: ignore
 
         project = get_llm_project_id()
         location = os.getenv("GCP_REGION", "us-central1")
         model_name = get_default_model_name(model_preference)
 
-        # Initialize Vertex AI (uses service account if GOOGLE_APPLICATION_CREDENTIALS is set)
-        vertexai.init(project=project, location=location)
+        # Initialize client with Vertex AI mode (uses Application Default Credentials)
+        # Respects GOOGLE_APPLICATION_CREDENTIALS environment variable for service account auth
+        client = genai.Client(vertexai=True, project=project, location=location)
 
         prompt = _build_daw_prompt(query, mixer_params, known_devices)
-        response_text = None
 
-        if model_name.startswith("gemini"):
-            model = GenerativeModel(model_name)
-            resp = model.generate_content(prompt, generation_config={
-                "temperature": 0.1,
-                "max_output_tokens": 512,
-                "top_p": 0.8,
-                "top_k": 20,
-            })
-            response_text = getattr(resp, "text", None)
-        else:
-            # Use legacy TextGenerationModel for non-Gemini (e.g., Model Garden)
-            model = TextGenerationModel.from_pretrained(model_name)
-            resp = model.predict(prompt=prompt, temperature=0.1, max_output_tokens=512, top_p=0.8, top_k=20)
-            response_text = getattr(resp, "text", None)
+        # Generate content with configuration
+        config = types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=512,
+            top_p=0.8,
+            top_k=20,
+        )
 
+        resp = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=config
+        )
+
+        response_text = resp.text if hasattr(resp, 'text') else None
         if not response_text:
             raise RuntimeError("Empty LLM response")
 
