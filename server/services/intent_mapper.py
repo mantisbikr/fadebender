@@ -86,9 +86,11 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         return None, errors
 
     param_raw = (target.get("parameter") or "")
-    parameter = _normalize_mixer_param(str(param_raw).lower())
     plugin = target.get("plugin")
     device_ordinal = target.get("device_ordinal")
+
+    # Only normalize mixer params if there's NO plugin (device operations keep original parameter names)
+    parameter = str(param_raw).lower() if plugin else _normalize_mixer_param(str(param_raw).lower())
     op_type = (op.get("type") or "").lower()
     value = op.get("value")
     unit = op.get("unit")

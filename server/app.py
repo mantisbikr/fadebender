@@ -1339,16 +1339,13 @@ async def _ensure_device_mapping(
     try:
         # Skip if params list is empty or too small (device in transition)
         if not params or len(params) < 5:
-            print(f"[DEVICE-MAPPING] Skipping - insufficient params ({len(params or [])} params, need at least 5)")
             return
 
         # Check if device mapping already exists
         mapping = STORE.get_device_mapping(device_signature)
         if mapping:
-            print(f"[DEVICE-MAPPING] Device mapping already exists for {device_signature}")
             return
 
-        print(f"[DEVICE-MAPPING] Creating new device mapping for {device_signature}")
 
         # Build params_meta (consolidated structure with all parameter info)
         params_meta = []
@@ -1381,12 +1378,11 @@ async def _ensure_device_mapping(
         # Save to Firestore
         saved = STORE.save_device_mapping(device_signature, mapping_data)
         if saved:
-            print(f"[DEVICE-MAPPING] ✓ Created device mapping with {len(params_meta)} parameters")
+            pass  # Successfully saved device mapping
         else:
-            print(f"[DEVICE-MAPPING] ✗ Failed to create device mapping")
+            pass  # Failed to save device mapping
 
     except Exception as e:
-        print(f"[DEVICE-MAPPING] Error ensuring device mapping: {e}")
         import traceback
         traceback.print_exc()
 
@@ -1431,25 +1427,15 @@ async def _auto_capture_preset(
             try:
                 saved_remote = STORE.save_preset(preset_id, existing, local_only=False)
                 if saved_remote:
-                    print(f"[AUTO-CAPTURE] Ensured preset {preset_id} saved to Firestore")
+                    pass  # Successfully saved to Firestore
             except Exception:
                 pass
             # If values are sufficient, do not re-capture
             if isinstance(pv, dict) and len(pv) >= 5:
                 # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment
-                print(f"[AUTO-CAPTURE] Preset {preset_id} already exists, skipping")
                 return
             else:
-                print(f"[AUTO-CAPTURE] Preset {preset_id} exists but has {len(pv) if isinstance(pv, dict) else 0} values; refreshing")
-
-        print(f"[AUTO-CAPTURE] Capturing new preset: {preset_id}")
-
-        # DEBUG: Check what params structure we're receiving
-        if params and len(params) > 0:
-            sample_param = params[0]
-            print(f"[AUTO-CAPTURE] DEBUG - First param keys: {list(sample_param.keys())}")
-            print(f"[AUTO-CAPTURE] DEBUG - Has 'value'? {'value' in sample_param}")
-            print(f"[AUTO-CAPTURE] DEBUG - Sample param: {sample_param}")
+                pass  # Need to refresh preset values
 
         # Extract parameter values AND display values from provided params
         parameter_values = {}
@@ -1466,21 +1452,12 @@ async def _auto_capture_preset(
                 if param_display is not None:
                     parameter_display_values[param_name] = str(param_display)
 
-                # Debug: Show Sync/Time related params WITH display_value
-                if any(x in param_name for x in ['Sync', 'Time', '16th']):
-                    print(f"[AUTO-CAPTURE] DEBUG - {param_name}: value={param_value}, display_value='{param_display}'")
-
-        print(f"[AUTO-CAPTURE] Extracted {len(parameter_values)} parameter values")
-        print(f"[AUTO-CAPTURE] Extracted {len(parameter_display_values)} parameter display values")
-
         # Generate metadata (fast-path optional)
         metadata = {}
         fast_path = str(os.getenv("SKIP_LOCAL_METADATA_GENERATION", "")).lower() in ("1","true","yes","on")
         if fast_path:
-            print("[AUTO-CAPTURE] Fast-path: skipping local metadata; marking pending_enrichment")
             metadata = {"metadata_status": "pending_enrichment"}
         else:
-            print(f"[AUTO-CAPTURE] Generating metadata via LLM...")
             metadata = await _generate_preset_metadata_llm(
                 device_name=device_name,
                 device_type=device_type,
@@ -1514,7 +1491,6 @@ async def _auto_capture_preset(
         saved = STORE.save_preset(preset_id, preset_data, local_only=False)
 
         if saved:
-            print(f"[AUTO-CAPTURE] ✓ Saved preset {preset_id} to Firestore")
             try:
                 # Notify UI via SSE so it can refresh preset listings/state
                 await broker.publish({
@@ -1547,10 +1523,9 @@ async def _auto_capture_preset(
             except Exception:
                 pass
         else:
-            print(f"[AUTO-CAPTURE] ✗ Failed to save preset {preset_id}")
+            pass  # Fast-path: metadata skipped
 
     except Exception as e:
-        print(f"[AUTO-CAPTURE] Error capturing preset: {e}")
         import traceback
         traceback.print_exc()
 
@@ -3106,8 +3081,6 @@ def chat(body: ChatBody) -> Dict[str, Any]:
         float_value = volume_cmd["live_float"]
         warn = volume_cmd["warning"]
 
-        print(f"DEBUG: Parsed volume command - track={track_index}, target={target}, raw='{volume_cmd['raw_value']}'")
-        print(f"DEBUG: Converted {target} dB to Live float {float_value}")
 
         msg = {"op": "set_mixer", "track_index": track_index, "field": "volume", "value": float_value}
         if not body.confirm:
@@ -3118,10 +3091,20 @@ def chat(body: ChatBody) -> Dict[str, Any]:
             schedule_emit({"event": "mixer_changed", "track": track_index, "field": "volume"})
         except Exception:
             pass
+        # Add capabilities for mixer operations
+        try:
+            from server.api.cap_utils import ensure_capabilities
+            resp = ensure_capabilities(resp, domain="track", track_index=track_index)
+        except Exception:
+            pass
         summ = f"Set Track {track_index} volume to {target:g} dB"
         if warn:
             summ += " (warning: >0 dB may clip)"
-        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": summ}
+        # Extract capabilities to top level for consistency
+        result = {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": summ}
+        if isinstance(resp, dict) and "data" in resp and "capabilities" in resp.get("data", {}):
+            result["data"] = resp["data"]
+        return result
 
     # --- Send controls ---
     # Absolute: set track N send <idx|name> to X [dB|%]

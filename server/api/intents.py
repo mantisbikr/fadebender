@@ -254,7 +254,8 @@ def _resolve_param(params: list[dict], param_index: Optional[int], param_ref: Op
             starts = [n for n in names if n.lower().startswith(pref) or _norm_key(n).startswith(pref_norm)]
             contains = [n for n in names if (pref in n.lower()) or (pref_norm and pref_norm in _norm_key(n))]
             sugg = starts or contains or names[:8]
-            raise HTTPException(404, f"param_not_found:{param_ref}; candidates={sugg}")
+            sugg_text = ", ".join(sugg[:5])  # Limit to 5 suggestions for readability
+            raise HTTPException(404, f"Parameter '{param_ref}' not found. Did you mean: {sugg_text}?")
         raise HTTPException(409, f"param_ambiguous:{param_ref}; candidates={[p.get('name') for p in cand]}")
     raise HTTPException(400, "param_selector_required")
 
@@ -905,7 +906,6 @@ def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Opt
     type_hint, qualifier_hint = _extract_type_and_qualifier(plugin)
     plugin_txt = _norm_txt(str(plugin or ""))
 
-    print(f"[DEVICE-RESOLVE] plugin={plugin}, type_hint={type_hint}, qualifier_hint={qualifier_hint}, ordinal={ordinal_hint}")
 
     literal_matches: list[int] = []
     for d in devs:
@@ -913,7 +913,6 @@ def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Opt
         if plugin_txt and plugin_txt in _norm_txt(nm):
             literal_matches.append(int(d.get("index", 0)))
     if len(literal_matches) == 1:
-        print(f"[DEVICE-RESOLVE] Literal match found: device={literal_matches[0]}")
         return literal_matches[0]
 
     # Load device_type from Firestore by querying device_name (fast!)
@@ -921,7 +920,6 @@ def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Opt
     store = get_store()
     device_types: Dict[int, Optional[str]] = {}
 
-    print(f"[DEVICE-RESOLVE] Store enabled: {store.enabled if store else 'N/A'}")
 
     if store and store.enabled:
         for d in devs:
@@ -931,10 +929,8 @@ def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Opt
             try:
                 # Query Firestore directly by device name
                 dtype = store.get_device_type_by_name(nm)
-                print(f"[DEVICE-RESOLVE] Device {idx} '{nm}': Firestore device_type={dtype}")
                 device_types[idx] = dtype
             except Exception as e:
-                print(f"[DEVICE-RESOLVE] ✗ Error querying device_type for '{nm}': {e}")
                 device_types[idx] = None
 
     # Build candidates using Firestore device_type when available, fall back to name-based
@@ -946,29 +942,21 @@ def _simple_resolve_return_device(ri: int, plugin: Optional[str], param_ref: Opt
         dtype = device_types.get(di) or _device_type_from_mapping_or_name(None, nm)
         ok_qual = _matches_qualifier(nm, dtype, qualifier_hint)
         cands.append((di, nm, dtype, ok_qual))
-        print(f"[DEVICE-RESOLVE] Device {di} '{nm}': type={dtype}, qualifier_ok={ok_qual}, from_firestore={di in device_types and device_types[di] is not None}")
 
     # Filter by type hint if present
     pool = [x for x in cands if (not type_hint or (x[2] == type_hint)) and x[3]]
     if not pool:
         pool = [x for x in cands if (not type_hint or (x[2] == type_hint))]
 
-    print(f"[DEVICE-RESOLVE] Candidates after filtering: {len(pool)} matches")
-    for c in pool:
-        print(f"[DEVICE-RESOLVE]   - Device {c[0]} '{c[1]}' (type={c[2]})")
-
     # Single match → select
     if len(pool) == 1:
-        print(f"[DEVICE-RESOLVE] Single match: device={pool[0][0]}")
         return pool[0][0]
     # Ordinal among filtered set (stable by device index)
     if isinstance(ordinal_hint, int) and ordinal_hint >= 1 and ordinal_hint <= len(pool):
         pool_sorted = sorted(pool, key=lambda x: x[0])
         selected = pool_sorted[ordinal_hint - 1][0]
-        print(f"[DEVICE-RESOLVE] Ordinal match: device={selected} (ordinal {ordinal_hint} of {len(pool)})")
         return selected
 
-    print(f"[DEVICE-RESOLVE] No match found (ambiguous: {len(pool)} candidates)")
     return None
 
 
@@ -1159,28 +1147,21 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         # Check for display value (string presets like "center", "25L", "unity")
         resolved_from_display = False
         if intent.display and field in ("pan", "volume"):
-            print(f"[DEBUG] Resolving display: field={field}, display={intent.display}")
             resolved = _resolve_mixer_display_value(field, intent.display)
-            print(f"[DEBUG] Resolved to: {resolved}")
             if resolved is not None:
                 v = resolved
                 resolved_from_display = True
-                print(f"[DEBUG] Set v to resolved value: {v} (already normalized, skip unit conversion)")
             # If display resolves to None, fall through to normal value handling
 
         if field == "volume" and not resolved_from_display:
             # Disallow normalized input when display_only_io is enabled
             if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
                 raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
-            print(f"[DEBUG] Volume conversion: v before={v}, unit={intent.unit}")
             if (intent.unit or "").lower() in ("db", "dB".lower()):
-                print(f"[DEBUG] Converting from dB: {v}")
                 v = db_to_live_float(v)
-                print(f"[DEBUG] After db_to_live_float: {v}")
             elif (intent.unit or "").lower() in ("percent", "%"):
                 v = v / 100.0
             v = _clamp(v, 0.0, 1.0) if intent.clamp else v
-            print(f"[DEBUG] Volume after all conversions: {v}")
         elif field == "pan" and not resolved_from_display:
             # Pan: If value is outside [-1, 1], treat as display value and convert
             # Get display range from Firestore mapping (e.g., -50 to 50)
@@ -1199,11 +1180,9 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             v = 1.0 if v >= 0.5 else 0.0
         if intent.dry_run:
             return {"ok": True, "preview": {"op": "set_mixer", "track_index": track_idx, "field": field, "value": v}}
-        print(f"[DEBUG] Sending to Live: track={track_idx}, field={field}, v={v}")
         resp = request_op("set_mixer", timeout=1.0, track_index=track_idx, field=str(field), value=float(v))
         if not resp:
             raise HTTPException(504, "no_reply")
-        print(f"[DEBUG] Live response: {resp}")
         # Write-through to ValueRegistry
         try:
             reg = get_value_registry()
@@ -1221,7 +1200,6 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                     unit = "dB"
                 except Exception as e:
                     import traceback
-                    print(f"[DEBUG] live_float_to_db failed for v={v}: {e}")
                     traceback.print_exc()
             elif field == "pan":
                 # Pan display: -50 to 50 (50L to 50R, 0=center), no unit
@@ -1232,12 +1210,9 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                     unit = None  # Pan has no unit
                 except Exception:
                     pass
-            print(f"[DEBUG] About to write to registry - v is now: {v}")
-            print(f"[DEBUG] Writing to registry: track={track_idx}, field={field}, v={v}, disp={disp}, unit={unit}")
             reg.update_mixer("track", track_idx, field, float(v), disp, unit, source="op")
         except Exception as e:
             import traceback
-            print(f"[DEBUG] Registry write failed: {e}")
             traceback.print_exc()
         # Ensure mixer capabilities (track)
         try:
@@ -1309,13 +1284,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                     unit = "dB"
                 except Exception as e:
                     import traceback
-                    print(f"[DEBUG] Send: live_float_to_db_send failed for v={v}: {e}")
                     traceback.print_exc()
-            print(f"[DEBUG] Writing to registry: track={track_idx}, send_{send_idx}, v={v}, disp={disp}, unit={unit}")
             reg.update_mixer("track", track_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
         except Exception as e:
             import traceback
-            print(f"[DEBUG] Send registry write failed: {e}")
             traceback.print_exc()
         # Ensure track mixer capabilities for UI cards
         try:
@@ -1394,7 +1366,6 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                     unit = "dB"
                 except Exception as e:
                     import traceback
-                    print(f"[DEBUG] Return: live_float_to_db failed for v={v}: {e}")
                     traceback.print_exc()
             elif field == "pan":
                 try:
@@ -1404,11 +1375,9 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                     unit = None  # Pan has no unit
                 except Exception:
                     pass
-            print(f"[DEBUG] Writing to registry: return={return_idx}, field={field}, v={v}, disp={disp}, unit={unit}")
             reg.update_mixer("return", return_idx, field, float(v), disp, unit, source="op")
         except Exception as e:
             import traceback
-            print(f"[DEBUG] Return registry write failed: {e}")
             traceback.print_exc()
         # Add a concise summary for chat/UI
         try:
@@ -1776,12 +1745,15 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                     try:
                         devs_list = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
                         devs = ((devs_list.get("data") or devs_list) if isinstance(devs_list, dict) else devs_list).get("devices", [])
-                        names = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
-                        raise HTTPException(409, f"device_ambiguous; devices=[{names}]")
+                        if devs:
+                            device_names = " or ".join([f"{d.get('name','')} (device {int(d.get('index',0))})" for d in devs])
+                            raise HTTPException(409, f"Multiple devices found. Please specify which device: {device_names}")
+                        else:
+                            raise HTTPException(409, "Multiple devices found. Please specify which device you want to control.")
                     except HTTPException:
                         raise
                     except Exception:
-                        raise HTTPException(409, "device_ambiguous")
+                        raise HTTPException(409, "Multiple devices found. Please specify which device you want to control.")
         except HTTPException:
             raise
         except Exception:
@@ -2186,12 +2158,9 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         # Ensure return device capabilities so UI can render grouped cards
         if not intent.dry_run:
             try:
-                print(f"[CAPABILITIES] Calling ensure_capabilities with return_index={ri}, device_index={di}")
                 from server.api.cap_utils import ensure_capabilities  # type: ignore
                 resp = ensure_capabilities(resp, domain="return_device", return_index=ri, device_index=di)
-                print(f"[CAPABILITIES] Capabilities attached")
             except Exception as e:
-                print(f"[CAPABILITIES] Error: {e}")
                 pass
 
         return resp

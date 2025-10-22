@@ -16,25 +16,18 @@ class MappingStore:
             project_id = os.getenv("FIRESTORE_PROJECT_ID")
             database_id = os.getenv("FIRESTORE_DATABASE_ID", "(default)")
 
-            print(f"[MAPPING-STORE] DEBUG - Environment variables:")
-            print(f"  FIRESTORE_PROJECT_ID: {project_id}")
-            print(f"  FIRESTORE_DATABASE_ID: {database_id}")
 
             # Initialize client with database parameter
             if project_id and database_id and database_id != "(default)":
                 self._client = firestore.Client(project=project_id, database=database_id)
-                print(f"[MAPPING-STORE] Connected to Firestore: {project_id}/{database_id}")
             elif project_id:
                 self._client = firestore.Client(project=project_id)
-                print(f"[MAPPING-STORE] Connected to Firestore: {project_id}/(default)")
             else:
                 self._client = firestore.Client()
-                print(f"[MAPPING-STORE] Connected to Firestore: default project/database")
 
             self._enabled = True
             self._backend = "firestore"
         except Exception as e:
-            print(f"[MAPPING-STORE] Failed to initialize Firestore: {e}")
             import traceback
             traceback.print_exc()
             self._client = None
@@ -119,12 +112,8 @@ class MappingStore:
             dbg = bool(dbg_cfg or dbg_env)
             doc = self._client.collection("device_mappings").document(signature).get()
             if not doc.exists:
-                if dbg:
-                    print(f"[DEBUG] Firestore: Document {signature} does not exist")
                 return None
             data = doc.to_dict() or {}
-            if dbg:
-                print(f"[DEBUG] Firestore: Got doc data, fetching params subcollection...")
             # Pull params
             params_snap = self._client.collection("device_mappings").document(signature).collection("params").stream()
             params: List[Dict[str, Any]] = []
@@ -132,12 +121,9 @@ class MappingStore:
                 pdata = pdoc.to_dict() or {}
                 params.append(pdata)
             data["params"] = params
-            if dbg:
-                print(f"[DEBUG] Firestore: Loaded {len(params)} params")
             return data
         except Exception as e:
             if str(os.getenv("FB_DEBUG_FIRESTORE", "")).lower() in ("1","true","yes","on"):
-                print(f"[DEBUG] Firestore exception in get_device_map: {e}")
                 import traceback
                 traceback.print_exc()
             return None
@@ -178,7 +164,6 @@ class MappingStore:
 
             return None
         except Exception as e:
-            print(f"[MAPPING-STORE] Error querying device_type by name '{device_name}': {e}")
             return None
 
     def get_device_param_names(self, device_signature: Optional[str] = None, device_name: Optional[str] = None) -> Optional[List[str]]:
@@ -422,7 +407,6 @@ class MappingStore:
                 return None
             return doc.to_dict()
         except Exception as e:
-            print(f"[MAPPING-STORE] Error getting device mapping: {e}")
             return None
 
     def save_device_mapping(self, device_signature: str, mapping_data: Dict[str, Any]) -> bool:
@@ -436,16 +420,13 @@ class MappingStore:
             True if saved successfully
         """
         if not self._enabled or not self._client:
-            print("[MAPPING-STORE] Firestore not enabled, skipping device mapping save")
             return False
 
         try:
             doc = self._client.collection("device_mappings").document(device_signature)
             doc.set(mapping_data, merge=True)
-            print(f"[MAPPING-STORE] ✓ Saved device mapping {device_signature}")
             return True
         except Exception as e:
-            print(f"[MAPPING-STORE] ✗ Failed to save device mapping: {e}")
             return False
 
     # ---------- Preset Storage (Firestore + Local) ----------
@@ -478,29 +459,19 @@ class MappingStore:
         local_ok = True
         if is_user_preset:
             local_ok = self._save_preset_local(preset_id, preset_data)
-            if dbg:
-                print(f"[DEBUG] Firestore: Local save {'✓' if local_ok else '✗'} for user preset {preset_id}")
 
         if local_only:
-            if dbg:
-                print(f"[DEBUG] Firestore: Skipping Firestore save (local_only=True)")
             return local_ok
 
         if not self._enabled or not self._client:
-            if dbg:
-                print(f"[DEBUG] Firestore: Skipping save (enabled={self._enabled}, client={bool(self._client)})")
             return local_ok
 
         # Save to Firestore
         try:
             doc = self._client.collection("presets").document(preset_id)
             doc.set(preset_data, merge=True)
-            if dbg:
-                print(f"[DEBUG] Firestore: Saved preset {preset_id} (stock: Firestore only)")
             return True
         except Exception as e:
-            if dbg:
-                print(f"[DEBUG] Firestore: Failed to save preset {preset_id}: {e}")
             return local_ok  # At least local succeeded for user presets
 
     def get_preset(self, preset_id: str) -> Optional[Dict[str, Any]]:
@@ -768,7 +739,6 @@ class MappingStore:
                 return None
             return doc.to_dict()
         except Exception as e:
-            print(f"[MAPPING-STORE] Error getting mixer param mapping: {e}")
             return None
 
     def save_mixer_param_mapping(self, param_name: str, mapping_data: Dict[str, Any]) -> bool:
@@ -782,16 +752,13 @@ class MappingStore:
             True if saved successfully
         """
         if not self._enabled or not self._client:
-            print("[MAPPING-STORE] Firestore not enabled, skipping mixer param mapping save")
             return False
 
         try:
             doc = self._client.collection("mixer_mappings").document(param_name)
             doc.set(mapping_data, merge=True)
-            print(f"[MAPPING-STORE] ✓ Saved mixer param mapping for {param_name}")
             return True
         except Exception as e:
-            print(f"[MAPPING-STORE] ✗ Failed to save mixer param mapping: {e}")
             return False
 
     def get_mixer_channel_mapping(self, entity_type: str) -> Optional[Dict[str, Any]]:
@@ -814,5 +781,4 @@ class MappingStore:
                 return None
             return doc.to_dict()
         except Exception as e:
-            print(f"[MAPPING-STORE] Error getting mixer channel mapping: {e}")
             return None

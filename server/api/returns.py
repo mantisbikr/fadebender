@@ -207,7 +207,6 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
         raise HTTPException(504, "no response")
     pdata = data_or_raw(pr) or {}
     params = list((pdata.get("params") or []))
-    print(f"DEBUG capabilities: pr type={type(pr)}, pdata type={type(pdata)}, params count={len(params)}")
     # Resolve device name
     dv = request_op("get_return_devices", timeout=0.8, return_index=ri) or {}
     dlist = (data_or_raw(dv) or {}).get("devices") or []
@@ -216,10 +215,7 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
     sig = make_device_signature(dname, params)
     store = get_store()
     mapping = store.get_device_map(sig) if store.enabled else None
-    print(f"DEBUG: Device signature={sig}, store.enabled={store.enabled}, mapping exists={mapping is not None}")
-    if mapping:
-        print(f"DEBUG: Mapping keys: {list(mapping.keys())}")
-        print(f"DEBUG: Mapping content: {mapping}")
+
     # Assemble values map for convenience
     values = {}
     for p in params:
@@ -238,7 +234,6 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
         sections = mapping.get("sections") or {}
         grouping = (mapping.get("grouping") or {})
         dependents = (grouping.get("dependents") or {})
-        print(f"DEBUG: Using Firestore mapping, mapping has {len(mparams)} params_meta, {len(sections)} sections")
 
         # Build section->params mapping if sections exist
         section_params = {}
@@ -321,13 +316,10 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
                 "description": section_meta.get("description"),
                 "sonic_focus": section_meta.get("sonic_focus"),
             })
-        print(f"DEBUG: Firestore resulted in {len(groups)} groups, {len(ungrouped)} ungrouped")
     else:
         # Fallback: use live param list
-        print(f"DEBUG: No Firestore mapping, using fallback with {len(params)} params")
         for p in params:
             ungrouped.append({"index": int(p.get("index", 0)), "name": p.get("name")})
-        print(f"DEBUG: Fallback resulted in {len(ungrouped)} ungrouped params")
     return {"ok": True, "data": {
         "return_index": ri,
         "device_index": di,

@@ -11,10 +11,15 @@ PHASE 2: Integration Testing (Live execution)
 - Requires Live running
 - Tests /chat endpoint
 - Validates execution, capabilities sync, error handling
+
+Usage:
+    python3 test_nlp_comprehensive.py              # Run both phases
+    python3 test_nlp_comprehensive.py --phase1     # Run Phase 1 only
 """
 import requests
 import json
 import sys
+import argparse
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -43,14 +48,14 @@ def color_text(text: str, color: str) -> str:
 def print_header(text: str):
     print(f"\n{color_text('='*80, 'BLUE')}")
     print(color_text(f"  {text}", 'BLUE'))
-    print(color_text('='*80, 'BLUE')}\n")
+    print(color_text('='*80, 'BLUE') + "\n")
 
 
 def print_phase_header(phase: int, title: str, description: str):
     print(f"\n{color_text('█'*80, 'CYAN')}")
     print(color_text(f"  PHASE {phase}: {title}", 'CYAN'))
     print(color_text(f"  {description}", 'CYAN'))
-    print(color_text('█'*80, 'CYAN')}\n")
+    print(color_text('█'*80, 'CYAN') + "\n")
 
 
 def parse_intent(utterance: str) -> Dict[str, Any]:
@@ -58,7 +63,7 @@ def parse_intent(utterance: str) -> Dict[str, Any]:
     try:
         resp = requests.post(
             f"{BASE_URL}/intent/parse",
-            json={"utterance": utterance},
+            json={"text": utterance},
             timeout=10
         )
         resp.raise_for_status()
@@ -473,9 +478,30 @@ def phase2_error_handling() -> List[TestResult]:
 # =============================================================================
 
 def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description='FadeBender NLP Testing Suite',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 test_nlp_comprehensive.py              # Run both Phase 1 and Phase 2
+  python3 test_nlp_comprehensive.py --phase1     # Run Phase 1 only (no Live needed)
+        """
+    )
+    parser.add_argument(
+        '--phase1',
+        action='store_true',
+        help='Run Phase 1 only (NLP layer testing, no Live needed)'
+    )
+    args = parser.parse_args()
+
     print(color_text("\n🎛️  FadeBender Comprehensive NLP Testing Suite", 'BLUE'))
     print(color_text(f"    {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 'BLUE'))
-    print(color_text(f"    Target: {BASE_URL}\n", 'BLUE'))
+    print(color_text(f"    Target: {BASE_URL}", 'BLUE'))
+    if args.phase1:
+        print(color_text(f"    Mode: Phase 1 Only (NLP Layer)\n", 'YELLOW'))
+    else:
+        print(color_text(f"    Mode: Full Test Suite (Phase 1 + Phase 2)\n", 'BLUE'))
 
     # Check server health
     try:
@@ -505,6 +531,31 @@ def main():
     print(color_text(f"\n{'─'*80}", 'CYAN'))
     print(color_text(f"PHASE 1 SUMMARY: {phase1_passed}/{len(phase1_results)} passed", 'CYAN'))
     print(color_text(f"{'─'*80}\n", 'CYAN'))
+
+    # If --phase1 flag is set, stop here
+    if args.phase1:
+        print(color_text("✓ Phase 1 complete. Run without --phase1 flag to test Phase 2.\n", 'GREEN'))
+        passed = phase1_passed
+        failed = phase1_failed
+        total = len(phase1_results)
+        pass_rate = (passed / total * 100) if total > 0 else 0
+
+        print_header("PHASE 1 FINAL SUMMARY")
+        print(f"Total Tests: {total}")
+        print(f"{color_text(f'Passed: {passed}', 'GREEN')}")
+        print(f"{color_text(f'Failed: {failed}', 'RED')}")
+        print(f"Pass Rate: {pass_rate:.1f}%\n")
+
+        if failed > 0:
+            print(color_text("Failed Tests:", 'RED'))
+            for r in all_results:
+                if not r.passed:
+                    print(f"  ✗ {r.name}")
+                    print(f"    {r.message}")
+                    if r.details:
+                        print(f"    Details: {json.dumps(r.details, indent=6)}")
+
+        return 0 if failed == 0 else 1
 
     if phase1_failed > 0:
         print(color_text("⚠️  Phase 1 has failures. Fix NLP layer before proceeding to Phase 2.\n", 'YELLOW'))
