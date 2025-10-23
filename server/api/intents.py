@@ -932,6 +932,11 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
     if d == "return" and field == "routing" and intent.return_index is not None:
         from server.services.intents.routing_service import set_return_routing
         return set_return_routing(intent)
+    # Track mixer (delegated)
+    if d == "track" and field in ("volume", "pan", "mute", "solo"):
+        from server.services.intents.mixer_service import set_track_mixer
+        return set_track_mixer(intent)
+
     # Track mixer
     if d == "track" and field in ("volume", "pan", "mute", "solo"):
         if intent.track_index is None:
@@ -1106,6 +1111,11 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         except Exception:
             pass
         return resp
+
+    # Return mixer (delegated)
+    if d == "return" and field in ("volume", "pan", "mute", "solo"):
+        from server.services.intents.mixer_service import set_return_mixer
+        return set_return_mixer(intent)
 
     # Return mixer
     if d == "return" and field in ("volume", "pan", "mute", "solo"):
