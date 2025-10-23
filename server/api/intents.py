@@ -1997,6 +1997,14 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
 
         return resp
 
+    # Early delegation: device parameters
+    if d == "device" and intent.return_index is not None and intent.device_index is not None:
+        from server.services.intents.param_service import set_return_device_param
+        return set_return_device_param(intent, debug=debug)
+    if d == "device" and intent.track_index is not None and intent.device_index is not None:
+        from server.services.intents.param_service import set_track_device_param
+        return set_track_device_param(intent, debug=debug)
+
     # Device parameter (track device)
     if d == "device" and intent.track_index is not None and intent.device_index is not None:
         ti = int(intent.track_index)
