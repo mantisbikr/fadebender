@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from server.services.ableton_client import request_op, data_or_raw
 from server.core.deps import get_live_index, get_value_registry
@@ -247,3 +248,203 @@ def get_snapshot_devices(domain: str, index: int) -> Dict[str, Any]:
     else:
         devs = []
     return {"ok": True, "data": {"domain": domain, "index": int(index), "devices": devs}}
+
+
+# ============================================================================
+# PHASE 1: Snapshot Query Endpoint (Mixer + Transport only)
+# ============================================================================
+
+class QueryTarget(BaseModel):
+    """Single parameter to query."""
+    track: str | None = None  # "Track 1", "Return A", "Master", or None for transport
+    parameter: str  # Parameter name (e.g., "volume", "pan", "tempo")
+
+
+class SnapshotQueryRequest(BaseModel):
+    """Request to query multiple parameters."""
+    targets: List[QueryTarget]
+
+
+@router.post("/snapshot/query")
+def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
+    """Query parameter values from snapshot ValueRegistry (Phase 1: mixer + transport only).
+    
+    Returns conversational answer plus structured values.
+    Phase 1: Snapshot-only (returns 'not available' if not in snapshot)
+    Phase 2: Will add Live fallback
+    Phase 3: Will add device parameters + capabilities
+    """
+    reg = get_value_registry()
+    results = []
+
+    for target in request.targets:
+        track_name = target.track or ""
+        param_name = target.parameter
+
+        # Transport params (no track)
+        if not track_name and param_name in ("tempo", "metronome"):
+            transport = reg.get_transport()
+            param_data = transport.get(param_name)
+            if param_data:
+                results.append({
+                    "track": None,
+                    "parameter": param_name,
+                    "value": param_data.get("value"),
+                    "display_value": str(param_data.get("value")),
+                    "source": param_data.get("source"),
+                })
+            else:
+                results.append({
+                    "track": None,
+                    "parameter": param_name,
+                    "error": "not_available_in_snapshot",
+                })
+            continue
+
+        # Parse track/return/master
+        domain, index = _parse_track_name(track_name)
+        if not domain:
+            results.append({
+                "track": track_name,
+                "parameter": param_name,
+                "error": f"Could not parse track: {track_name}",
+            })
+            continue
+
+        # Query mixer parameter from snapshot
+        mixer_map = reg.get_mixer()
+        entity_data = mixer_map.get(domain, {})
+        
+        # Get track/return/master data
+        if domain == "master":
+            track_data = entity_data.get(0, {})
+        else:
+            track_data = entity_data.get(index, {})
+
+        param_data = track_data.get(param_name)
+
+        if param_data:
+            # Found in snapshot
+            display_val = param_data.get("display") or _format_mixer_display(param_name, param_data.get("normalized"))
+            results.append({
+                "track": track_name,
+                "parameter": param_name,
+                "value": param_data.get("normalized"),
+                "display_value": display_val,
+                "source": param_data.get("source"),
+            })
+        else:
+            # Not in snapshot
+            results.append({
+                "track": track_name,
+                "parameter": param_name,
+                "error": "not_available_in_snapshot",
+            })
+
+    # Format conversational answer
+    answer = _format_query_answer(results)
+
+    return {
+        "ok": True,
+        "answer": answer,
+        "values": results,
+    }
+
+
+def _parse_track_name(track_name: str) -> tuple[str | None, int | None]:
+    """Parse track name into domain and index.
+    
+    Examples:
+        "Master" → ("master", 0)
+        "Track 1" → ("track", 1)
+        "Return A" → ("return", 0)
+        "A-Reverb" → ("return", 0)
+    """
+    if not track_name:
+        return None, None
+
+    name_lower = track_name.lower().strip()
+
+    # Master
+    if name_lower == "master":
+        return "master", 0
+
+    # Return track patterns
+    if "return" in name_lower or name_lower[0] in "abc":
+        # Extract letter: "Return A" → A, "A-Reverb" → A
+        import re
+        match = re.search(r'\b([A-C])\b', track_name.upper())
+        if match:
+            letter = match.group(1)
+            return "return", ord(letter) - ord('A')
+
+    # Track pattern: "Track 1", "1-808 Core"
+    import re
+    match = re.search(r'(\d+)', track_name)
+    if match:
+        track_idx = int(match.group(1))
+        return "track", track_idx
+
+    return None, None
+
+
+def _format_mixer_display(param_name: str, normalized_value: float | None) -> str:
+    """Format normalized mixer value to display string."""
+    if normalized_value is None:
+        return "N/A"
+
+    # Volume/Cue/Sends: dB
+    if param_name in ("volume", "cue") or param_name.startswith("send"):
+        if normalized_value <= 0.0:
+            return "-inf dB"
+        try:
+            from server.volume_utils import live_float_to_db
+            db_val = live_float_to_db(normalized_value)
+            return f"{db_val:.1f} dB"
+        except Exception:
+            return f"{normalized_value:.2f}"
+
+    # Pan: -50 to +50
+    if param_name == "pan":
+        pan_val = normalized_value * 50.0
+        return f"{pan_val:+.1f}"
+
+    # Mute/Solo: On/Off
+    if param_name in ("mute", "solo"):
+        return "On" if normalized_value > 0.5 else "Off"
+
+    # Default
+    return f"{normalized_value:.2f}"
+
+
+def _format_query_answer(results: List[Dict[str, Any]]) -> str:
+    """Format query results into conversational answer."""
+    if not results:
+        return "No parameters queried."
+
+    # Filter out errors
+    valid_results = [r for r in results if "error" not in r]
+    
+    if not valid_results:
+        # All errors
+        if len(results) == 1:
+            return results[0].get("error", "Parameter not available")
+        return "Parameters not available in snapshot. Try adjusting them via the UI first."
+
+    # Single result
+    if len(valid_results) == 1:
+        r = valid_results[0]
+        track = r.get("track") or "Transport"
+        param = r.get("parameter", "")
+        display = r.get("display_value", "N/A")
+        return f"{track} {param} is {display}"
+
+    # Multiple results - group by track
+    track_name = valid_results[0].get("track", "")
+    parts = []
+    for r in valid_results:
+        param = r.get("parameter", "")
+        display = r.get("display_value", "N/A")
+        parts.append(f"{param}: {display}")
+
+    return f"{track_name} - " + ", ".join(parts)
