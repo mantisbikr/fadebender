@@ -251,7 +251,7 @@ def get_snapshot_devices(domain: str, index: int) -> Dict[str, Any]:
 
 
 # ============================================================================
-# PHASE 1: Snapshot Query Endpoint (Mixer + Transport only)
+# PHASE 2: Snapshot Query Endpoint with Live Fallback (Mixer + Transport)
 # ============================================================================
 
 class QueryTarget(BaseModel):
@@ -266,14 +266,15 @@ class SnapshotQueryRequest(BaseModel):
 
 
 @router.post("/snapshot/query")
-def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
-    """Query parameter values from snapshot ValueRegistry (Phase 1: mixer + transport only).
-    
+async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
+    """Query parameter values from snapshot with Live fallback (Phase 2: mixer + transport).
+
     Returns conversational answer plus structured values.
-    Phase 1: Snapshot-only (returns 'not available' if not in snapshot)
-    Phase 2: Will add Live fallback
+    Phase 2: Snapshot-first with Live fallback and snapshot update
     Phase 3: Will add device parameters + capabilities
     """
+    from server.services.ableton_client import get_transport as svc_get_transport
+
     reg = get_value_registry()
     results = []
 
@@ -294,11 +295,34 @@ def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
                     "source": param_data.get("source"),
                 })
             else:
-                results.append({
-                    "track": None,
-                    "parameter": param_name,
-                    "error": "not_available_in_snapshot",
-                })
+                # Fallback to Live
+                loop = asyncio.get_event_loop()
+                transport_live = await loop.run_in_executor(None, lambda: svc_get_transport(timeout=1.0))
+                if transport_live and transport_live.get("ok"):
+                    transport_data = transport_live.get("data") or {}
+                    value = transport_data.get(param_name)
+                    if value is not None:
+                        # Update snapshot
+                        reg.update_transport(param_name, value, source="live_fallback")
+                        results.append({
+                            "track": None,
+                            "parameter": param_name,
+                            "value": value,
+                            "display_value": str(value),
+                            "source": "live_fallback",
+                        })
+                    else:
+                        results.append({
+                            "track": None,
+                            "parameter": param_name,
+                            "error": "not_available",
+                        })
+                else:
+                    results.append({
+                        "track": None,
+                        "parameter": param_name,
+                        "error": "live_query_failed",
+                    })
             continue
 
         # Parse track/return/master
@@ -314,7 +338,7 @@ def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
         # Query mixer parameter from snapshot
         mixer_map = reg.get_mixer()
         entity_data = mixer_map.get(domain, {})
-        
+
         # Get track/return/master data
         if domain == "master":
             track_data = entity_data.get(0, {})
@@ -334,12 +358,9 @@ def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
                 "source": param_data.get("source"),
             })
         else:
-            # Not in snapshot
-            results.append({
-                "track": track_name,
-                "parameter": param_name,
-                "error": "not_available_in_snapshot",
-            })
+            # Fallback to Live
+            result = await _query_live_mixer_param(domain, index, param_name, track_name, reg)
+            results.append(result)
 
     # Format conversational answer
     answer = _format_query_answer(results)
@@ -448,3 +469,140 @@ def _format_query_answer(results: List[Dict[str, Any]]) -> str:
         parts.append(f"{param}: {display}")
 
     return f"{track_name} - " + ", ".join(parts)
+
+
+async def _query_live_mixer_param(domain: str, index: int, param_name: str, track_name: str, reg: Any) -> Dict[str, Any]:
+    """Query mixer parameter from Live and update snapshot."""
+    import re
+    loop = asyncio.get_event_loop()
+
+    try:
+        # Handle sends separately
+        if param_name.startswith("send"):
+            # Extract send index from "send A" → 0, "send B" → 1, etc.
+            match = re.search(r'send\s+([A-Z])', param_name, re.IGNORECASE)
+            if match and domain == "track":
+                send_letter = match.group(1).upper()
+                send_index = ord(send_letter) - ord('A')
+
+                resp = await loop.run_in_executor(
+                    None,
+                    lambda: request_op("get_track_sends", timeout=1.0, track_index=index)
+                )
+
+                if resp and resp.get("ok"):
+                    sends_data = data_or_raw(resp) or {}
+                    sends = sends_data.get("sends") or []
+                    send = next((s for s in sends if int(s.get("index", -1)) == send_index), None)
+                    if send:
+                        value = send.get("value")
+                        if value is not None:
+                            # Update snapshot
+                            reg.update_mixer(
+                                entity="track",
+                                index=index,
+                                field=param_name,
+                                normalized_value=value,
+                                display_value=None,
+                                unit=None,
+                                source="live_fallback"
+                            )
+                            display_val = _format_mixer_display(param_name, value)
+                            return {
+                                "track": track_name,
+                                "parameter": param_name,
+                                "value": value,
+                                "display_value": display_val,
+                                "source": "live_fallback",
+                            }
+
+            return {
+                "track": track_name,
+                "parameter": param_name,
+                "error": "send_not_found",
+            }
+
+        # Query based on domain
+        if domain == "track":
+            resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_track_status", timeout=1.0, track_index=index)
+            )
+        elif domain == "return":
+            resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_return_tracks", timeout=1.0)
+            )
+        elif domain == "master":
+            resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_master_status", timeout=1.0)
+            )
+        else:
+            return {
+                "track": track_name,
+                "parameter": param_name,
+                "error": f"unknown_domain:{domain}",
+            }
+
+        if not resp or not resp.get("ok"):
+            return {
+                "track": track_name,
+                "parameter": param_name,
+                "error": "live_query_failed",
+            }
+
+        resp_data = data_or_raw(resp) or {}
+
+        # Extract value based on domain
+        if domain == "return":
+            returns = resp_data.get("returns") or []
+            ret = next((r for r in returns if int(r.get("index", -1)) == index), None)
+            if not ret:
+                return {
+                    "track": track_name,
+                    "parameter": param_name,
+                    "error": "return_not_found",
+                }
+            resp_data = ret
+
+        # Get parameter value
+        if param_name in ("mute", "solo"):
+            value = resp_data.get(param_name)
+        else:
+            mixer = resp_data.get("mixer") or {}
+            value = mixer.get(param_name)
+
+        if value is None:
+            return {
+                "track": track_name,
+                "parameter": param_name,
+                "error": "parameter_not_available",
+            }
+
+        # Update snapshot
+        reg.update_mixer(
+            entity=domain,
+            index=index,
+            field=param_name,
+            normalized_value=value,
+            display_value=None,
+            unit=None,
+            source="live_fallback"
+        )
+
+        display_val = _format_mixer_display(param_name, value)
+        return {
+            "track": track_name,
+            "parameter": param_name,
+            "value": value,
+            "display_value": display_val,
+            "source": "live_fallback",
+        }
+
+    except Exception as e:
+        return {
+            "track": track_name,
+            "parameter": param_name,
+            "error": f"exception:{str(e)}",
+        }
