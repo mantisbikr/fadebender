@@ -11,6 +11,7 @@ from server.services.mapping_utils import make_device_signature
 import math
 import re as _re
 from server.volume_utils import db_to_live_float, db_to_live_float_send, live_float_to_db, live_float_to_db_send
+from server.services.intents.utils.refs import _letter_to_index
 from server.config.app_config import get_app_config, get_feature_flags
 from server.config.app_config import get_device_type_aliases, get_device_qualifier_aliases
 
@@ -89,20 +90,7 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-def _letter_to_index(letter: str) -> int:
-    """Convert letter reference to 0-based index.
-
-    Examples:
-        "A" or "a" → 0
-        "B" or "b" → 1
-        "C" or "c" → 2
-
-    Raises HTTPException if invalid.
-    """
-    letter = letter.strip().upper()
-    if len(letter) != 1 or not letter.isalpha():
-        raise HTTPException(400, f"invalid_letter_reference:{letter}")
-    return ord(letter) - ord('A')
+# _letter_to_index is now provided by server.services.intents.utils.refs
 
 
 def _resolve_return_index(intent: CanonicalIntent) -> int:
