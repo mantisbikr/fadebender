@@ -219,6 +219,7 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
             "device_values": reg.get_devices(),
             "mixer": mixer_arr,
             "mixer_map": mixer_map,  # for backward-compat tests that use string keys
+            "transport": reg.get_transport(),  # Last-known transport state (tempo, metronome)
         },
         "cache_info": {
             "device_cache_age_seconds": round(now - _device_cache_timestamp, 2),

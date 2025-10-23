@@ -15,6 +15,7 @@ class ValueRegistry:
     def __init__(self) -> None:
         self._mixer: Dict[str, Dict[int, Dict[str, Any]]] = {"track": {}, "return": {}, "master": {}}
         self._device: Dict[str, Dict[int, Dict[int, Dict[str, Dict[str, Any]]]]] = {"track": {}, "return": {}}
+        self._transport: Dict[str, Any] = {}  # Transport state (tempo, metronome, etc.)
 
     # ---------- Mixer ----------
     def update_mixer(self, entity: str, index: int, field: str, normalized_value: Optional[float], display_value: Optional[str], unit: Optional[str], source: str = "op") -> None:
@@ -54,9 +55,23 @@ class ValueRegistry:
             "source": source,
         }
 
+    # ---------- Transport ----------
+    def update_transport(self, field: str, value: Any, source: str = "op") -> None:
+        """Update transport state (tempo, metronome, etc.)."""
+        ts = time.time()
+        self._transport[str(field)] = {
+            "value": value,
+            "ts": ts,
+            "timestamp": ts,
+            "source": source,
+        }
+
     # ---------- Snapshots ----------
     def get_mixer(self) -> Dict[str, Any]:
         return self._mixer
 
     def get_devices(self) -> Dict[str, Any]:
         return self._device
+
+    def get_transport(self) -> Dict[str, Any]:
+        return self._transport
