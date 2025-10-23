@@ -251,13 +251,15 @@ def get_snapshot_devices(domain: str, index: int) -> Dict[str, Any]:
 
 
 # ============================================================================
-# PHASE 2: Snapshot Query Endpoint with Live Fallback (Mixer + Transport)
+# PHASE 3: Snapshot Query Endpoint with Device Parameters + Capabilities
 # ============================================================================
 
 class QueryTarget(BaseModel):
     """Single parameter to query."""
     track: str | None = None  # "Track 1", "Return A", "Master", or None for transport
-    parameter: str  # Parameter name (e.g., "volume", "pan", "tempo")
+    plugin: str | None = None  # Device name (e.g., "reverb", "compressor"), or None for mixer params
+    parameter: str  # Parameter name (e.g., "volume", "decay", "threshold"), or "*" for all device params
+    device_ordinal: int | None = None  # Optional device ordinal (e.g., "reverb 2" → ordinal=2)
 
 
 class SnapshotQueryRequest(BaseModel):
@@ -333,6 +335,12 @@ async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
                 "parameter": param_name,
                 "error": f"Could not parse track: {track_name}",
             })
+            continue
+
+        # Device parameters (if plugin specified)
+        if target.plugin:
+            result = await _query_device_param(domain, index, target.plugin, param_name, track_name, target.device_ordinal)
+            results.append(result)
             continue
 
         # Query mixer parameter from snapshot
@@ -603,6 +611,168 @@ async def _query_live_mixer_param(domain: str, index: int, param_name: str, trac
     except Exception as e:
         return {
             "track": track_name,
+            "parameter": param_name,
+            "error": f"exception:{str(e)}",
+        }
+
+
+async def _query_device_param(domain: str, index: int, plugin_name: str, param_name: str, track_name: str, device_ordinal: int | None) -> Dict[str, Any]:
+    """Query device parameter using existing endpoints and return value + capabilities."""
+    loop = asyncio.get_event_loop()
+
+    try:
+        # Step 1: Resolve plugin name to device_index
+        if domain == "track":
+            devs_resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_track_devices", timeout=1.0, track_index=index)
+            )
+        elif domain == "return":
+            devs_resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_return_devices", timeout=1.0, return_index=index)
+            )
+        elif domain == "master":
+            devs_resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_master_devices", timeout=1.0)
+            )
+        else:
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": f"unsupported_domain:{domain}",
+            }
+
+        if not devs_resp or not devs_resp.get("ok"):
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": "failed_to_get_devices",
+            }
+
+        devices_data = data_or_raw(devs_resp) or {}
+        devices = devices_data.get("devices") or []
+
+        # Find matching device(s) by name (fuzzy match)
+        matches = []
+        for dev in devices:
+            dev_name = str(dev.get("name", "")).lower()
+            plugin_lower = plugin_name.lower()
+            if plugin_lower in dev_name or dev_name in plugin_lower:
+                matches.append(int(dev.get("index", -1)))
+
+        if not matches:
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": "device_not_found",
+            }
+
+        # Use ordinal if specified (1-based), otherwise first match
+        if device_ordinal is not None and device_ordinal > 0 and device_ordinal <= len(matches):
+            device_index = matches[device_ordinal - 1]
+        else:
+            device_index = matches[0]
+
+        # Step 2: Query parameter value using param_lookup endpoint
+        if domain == "track":
+            param_resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_track_device_params", timeout=1.0, track_index=index, device_index=device_index)
+            )
+        elif domain == "return":
+            param_resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_return_device_params", timeout=1.0, return_index=index, device_index=device_index)
+            )
+        elif domain == "master":
+            param_resp = await loop.run_in_executor(
+                None,
+                lambda: request_op("get_master_device_params", timeout=1.0, device_index=device_index)
+            )
+        else:
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": "unsupported_domain_for_params",
+            }
+
+        if not param_resp or not param_resp.get("ok"):
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": "failed_to_get_params",
+            }
+
+        params_data = data_or_raw(param_resp) or {}
+        params = params_data.get("params") or []
+
+        # Find matching parameter (fuzzy match)
+        param_lower = param_name.lower()
+        param_matches = [p for p in params if param_lower in str(p.get("name", "")).lower()]
+
+        if not param_matches:
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": "parameter_not_found",
+            }
+
+        if len(param_matches) > 1:
+            return {
+                "track": track_name,
+                "plugin": plugin_name,
+                "parameter": param_name,
+                "error": "ambiguous_parameter",
+                "candidates": [p.get("name") for p in param_matches],
+            }
+
+        param = param_matches[0]
+        param_value = param.get("value")
+        param_display = param.get("display_value") or str(param_value)
+        param_index = param.get("index")
+        param_actual_name = param.get("name")
+
+        # Step 3: Get capabilities (optional, for UI rendering)
+        capabilities = None
+        try:
+            if domain == "return":
+                caps_resp = await loop.run_in_executor(
+                    None,
+                    lambda: request_op("get_return_device_capabilities", timeout=1.0, return_index=index, device_index=device_index)
+                )
+                if caps_resp and caps_resp.get("ok"):
+                    capabilities = data_or_raw(caps_resp)
+        except Exception:
+            pass  # Capabilities are optional
+
+        result = {
+            "track": track_name,
+            "plugin": plugin_name,
+            "parameter": param_actual_name,
+            "value": param_value,
+            "display_value": param_display,
+            "source": "live",
+            "device_index": device_index,
+            "param_index": param_index,
+        }
+
+        if capabilities:
+            result["capabilities"] = capabilities
+
+        return result
+
+    except Exception as e:
+        return {
+            "track": track_name,
+            "plugin": plugin_name,
             "parameter": param_name,
             "error": f"exception:{str(e)}",
         }
