@@ -987,6 +987,13 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
 
     features = get_feature_flags()
     display_only_io = bool((features or {}).get("display_only_io", False))
+
+    # Enrich unit from Firestore when display_only_io is enabled and unit is None
+    if display_only_io and intent.unit is None and d in ("track", "return", "master") and field in ("volume", "pan", "send"):
+        param_meta = _get_mixer_param_meta(d, field)
+        if param_meta and param_meta.get("unit"):
+            intent.unit = param_meta.get("unit")
+
     # Track routing execute
     if d == "track" and field == "routing" and intent.track_index is not None:
         ti = int(intent.track_index)
