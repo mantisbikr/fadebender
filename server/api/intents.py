@@ -1043,6 +1043,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             pass
         return resp
 
+    # Track sends (delegated)
+    if d == "track" and field == "send":
+        from server.services.intents.mixer_service import set_track_send
+        return set_track_send(intent)
     # Track sends
     if d == "track" and field == "send":
         if intent.track_index is None:
@@ -1232,6 +1236,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             pass
         return resp
 
+    # Return sends (delegated)
+    if d == "return" and field == "send":
+        from server.services.intents.mixer_service import set_return_send
+        return set_return_send(intent)
     # Return sends
     if d == "return" and field == "send":
         return_idx = _resolve_return_index(intent)
@@ -1307,6 +1315,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             pass
         return resp
 
+    # Master mixer (delegated)
+    if d == "master" and field in ("volume", "pan", "cue"):
+        from server.services.intents.mixer_service import set_master_mixer
+        return set_master_mixer(intent)
     # Master mixer (subset)
     if d == "master" and field in ("volume", "pan", "cue"):
         v = float(intent.value if intent.value is not None else 0.0)
