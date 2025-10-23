@@ -300,3 +300,12 @@ def save_config() -> bool:
         return True
     except Exception:
         return False
+
+
+def get_snapshot_config() -> Dict[str, Any]:
+    """Get snapshot refresh configuration with env var overrides."""
+    return {
+        "device_ttl_seconds": int(os.getenv("DEVICE_SNAPSHOT_TTL_SECONDS", "30")),
+        "device_chunk_size": int(os.getenv("DEVICE_REFRESH_CHUNK_SIZE", "3")),
+        "device_chunk_delay_ms": int(os.getenv("DEVICE_REFRESH_CHUNK_DELAY_MS", "40")),
+    }

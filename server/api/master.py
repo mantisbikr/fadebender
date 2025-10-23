@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from server.core.events import broker
 from server.services.ableton_client import request_op, data_or_raw
-from server.core.deps import get_store
+from server.core.deps import get_store, get_value_registry
 
 
 router = APIRouter()
@@ -54,6 +54,22 @@ def op_master_mixer(body: MasterMixerBody) -> Dict[str, Any]:
     )
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+
+    # Update ValueRegistry for snapshot
+    try:
+        reg = get_value_registry()
+        reg.update_mixer(
+            entity="master",
+            index=0,
+            field=body.field,
+            normalized_value=body.value,
+            display_value=resp.get("display_value"),
+            unit=resp.get("unit"),
+            source="web_ui"
+        )
+    except Exception:
+        pass
+
     try:
         asyncio.create_task(broker.publish({
             "event": "master_mixer_changed",
@@ -183,6 +199,26 @@ def set_master_device_param(body: MasterDeviceParamBody) -> Dict[str, Any]:
     )
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
+
+    # Update ValueRegistry for snapshot
+    try:
+        reg = get_value_registry()
+        reg.update_device_param(
+            domain="master",
+            index=0,
+            device_index=body.device_index,
+            param_name=resp.get("param_name", f"param_{body.param_index}"),
+            normalized_value=body.value,
+            display_value=resp.get("display_value"),
+            unit=resp.get("unit"),
+            source="web_ui"
+        )
+        # Reset device cache timestamp to mark as fresh
+        from server.api import overview
+        overview._device_cache_timestamp = __import__('time').time()
+    except Exception:
+        pass
+
     try:
         asyncio.create_task(broker.publish({
             "event": "master_device_param_changed",
