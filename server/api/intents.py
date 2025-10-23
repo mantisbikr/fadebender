@@ -71,6 +71,20 @@ class ReadIntent(BaseModel):
     send_ref: Optional[str] = None
 
 
+class QueryTarget(BaseModel):
+    """Target for get_parameter intent - matches overview.py QueryTarget"""
+    track: Optional[str] = None            # "Track 1", "Return A", "Master", or None for transport
+    plugin: Optional[str] = None           # Device name or None for mixer params
+    parameter: str                         # Parameter name
+    device_ordinal: Optional[int] = None   # Optional device ordinal
+
+
+class QueryIntent(BaseModel):
+    """Intent for get_parameter queries"""
+    intent: Literal["get_parameter"] = "get_parameter"
+    targets: list[QueryTarget]
+
+
 def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
@@ -2768,3 +2782,22 @@ def _alias_param_name_if_needed(name: Optional[str]) -> Optional[str]:
         cfg = {}
     # config has priority; fallback to default map
     return (cfg.get(n) or _DEFAULT_DEVICE_PARAM_ALIASES.get(n) or name)
+
+
+@router.post("/intent/query")
+async def query_intent(intent: QueryIntent) -> Dict[str, Any]:
+    """Handle get_parameter intent by calling /snapshot/query endpoint."""
+    import httpx
+
+    # Forward to snapshot/query endpoint
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                "http://localhost:8722/snapshot/query",
+                json={"targets": [t.dict() for t in intent.targets]},
+                timeout=5.0
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise HTTPException(500, f"Failed to query snapshot: {str(e)}")
