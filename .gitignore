@@ -54,3 +54,4 @@ credentials/
 
 # Database backups
 backups/database_backups/*.json
+server/.coverage
