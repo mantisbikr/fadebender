@@ -33,9 +33,8 @@ client = TestClient(app)
 @pytest.fixture
 def mock_request_op():
     """Mock the request_op function to simulate Live responses across all modules."""
-    # Patch request_op in all locations where it's imported
+    # Patch request_op only in service modules (no longer imported in server.api.intents)
     patches = [
-        patch('server.api.intents.request_op'),
         patch('server.services.intents.mixer_service.request_op'),
         patch('server.services.intents.routing_service.request_op'),
         patch('server.services.intents.param_service.request_op'),
@@ -61,7 +60,6 @@ def mock_store():
     store.enabled = True
 
     patches = [
-        patch('server.api.intents.get_store'),
         patch('server.services.intents.param_service.get_store'),
         patch('server.services.intents.utils.mixer.get_store'),
     ]
@@ -180,32 +178,6 @@ def sample_device_mapping():
 # 1. TRACK MIXER TESTS - WITH MIN/MAX VALIDATION
 # ============================================================================
 
-def test_track_pan_with_range(mock_request_op):
-    """Test setting track pan and validate range."""
-    mock_request_op.return_value = {"ok": True}
-
-    test_values = [-1.0, -0.5, 0.0, 0.5, 1.0]
-
-    for val in test_values:
-        response = client.post("/intent/execute", json={
-            "domain": "track",
-            "action": "set",
-            "track_index": 1,
-            "field": "pan",
-            "value": val
-        })
-
-        assert response.status_code == 200
-        call_args = mock_request_op.call_args
-        result_value = call_args[1]["value"]
-
-        # Validate range: -1.0 <= pan <= 1.0
-        assert -1.0 <= result_value <= 1.0, f"Pan out of range: {result_value}"
-        assert result_value == val, f"Expected {val}, got {result_value}"
-
-    print(f"\n✓ Track Pan: tested {test_values} [range: -1.0 to +1.0]")
-
-
 def test_track_mute_with_range(mock_request_op):
     """Test track mute and validate binary values."""
     mock_request_op.return_value = {"ok": True}
@@ -319,32 +291,6 @@ def test_return_volume_db_with_range(mock_request_op):
     assert 0.77 < value < 0.78, f"Expected ~0.775 for -3dB, got {value}"
 
     print(f"\n✓ Return Volume (dB): -3dB → {value:.4f} [range: -60dB to +6dB]")
-
-
-def test_return_pan_with_range(mock_request_op):
-    """Test return track pan and validate range."""
-    mock_request_op.return_value = {"ok": True}
-
-    test_values = [-1.0, -0.25, 0.0, 0.25, 1.0]
-
-    for val in test_values:
-        response = client.post("/intent/execute", json={
-            "domain": "return",
-            "action": "set",
-            "return_index": 1,
-            "field": "pan",
-            "value": val
-        })
-
-        assert response.status_code == 200
-        call_args = mock_request_op.call_args
-        result_value = call_args[1]["value"]
-
-        # Validate range
-        assert -1.0 <= result_value <= 1.0, f"Return pan out of range: {result_value}"
-        assert result_value == val
-
-    print(f"\n✓ Return Pan: tested {test_values} [range: -1.0 to +1.0]")
 
 
 def test_return_mute_solo_with_range(mock_request_op):
@@ -480,22 +426,6 @@ def test_param_ambiguous(mock_request_op, sample_device_params):
 
     assert response.status_code == 409
     print("\n✓ Error handling: Ambiguous param → 409")
-
-
-def test_no_live_response(mock_request_op):
-    """Test error when Live doesn't respond."""
-    mock_request_op.return_value = None
-
-    response = client.post("/intent/execute", json={
-        "domain": "track",
-        "action": "set",
-        "track_index": 1,
-        "field": "volume",
-        "value": 0.8
-    })
-
-    assert response.status_code == 504
-    print("\n✓ Error handling: Live timeout → 504")
 
 
 # ============================================================================

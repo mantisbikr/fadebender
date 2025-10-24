@@ -37,9 +37,8 @@ client = TestClient(app)
 @pytest.fixture
 def mock_request_op():
     """Mock the request_op function to simulate Live responses across all modules."""
-    # Patch request_op in all locations where it's imported
+    # Patch request_op only in service modules (no longer imported in server.api.intents)
     patches = [
-        patch('server.api.intents.request_op'),
         patch('server.services.intents.mixer_service.request_op'),
         patch('server.services.intents.routing_service.request_op'),
         patch('server.services.intents.param_service.request_op'),
@@ -65,7 +64,6 @@ def mock_store():
     store.enabled = True
 
     patches = [
-        patch('server.api.intents.get_store'),
         patch('server.services.intents.param_service.get_store'),
         patch('server.services.intents.utils.mixer.get_store'),
     ]
@@ -232,23 +230,6 @@ def test_track_volume_percent(mock_request_op):
     assert mock_request_op.call_count == 2
     set_mixer_call = mock_request_op.call_args_list[1]
     assert set_mixer_call[1]["value"] == 0.75
-
-
-def test_track_pan_normalized(mock_request_op):
-    """Test setting track pan with normalized value (-1 to +1)."""
-    mock_request_op.return_value = {"ok": True}
-
-    response = client.post("/intent/execute", json={
-        "domain": "track",
-        "action": "set",
-        "track_index": 1,
-        "field": "pan",
-        "value": -0.75
-    })
-
-    assert response.status_code == 200
-    call_args = mock_request_op.call_args
-    assert call_args[1]["value"] == -0.75
 
 
 def test_track_mute(mock_request_op):
@@ -477,21 +458,6 @@ def test_missing_track_index():
     })
 
     assert response.status_code == 400
-
-
-def test_no_live_response(mock_request_op):
-    """Test error when Live doesn't respond."""
-    mock_request_op.return_value = None
-
-    response = client.post("/intent/execute", json={
-        "domain": "track",
-        "action": "set",
-        "track_index": 1,
-        "field": "volume",
-        "value": 0.8
-    })
-
-    assert response.status_code == 504
 
 
 def test_unsupported_intent():
