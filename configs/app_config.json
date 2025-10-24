@@ -214,7 +214,7 @@
     "refresh_ms": 30000,
     "returns_refresh_ms": 3000,
     "sends_open_refresh_ms": 800,
-    "sidebar_width_px": 372,
+    "sidebar_width_px": 301,
     "sse_throttle_ms": 150,
     "track_refresh_ms": 3000
   }
