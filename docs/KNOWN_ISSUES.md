@@ -15,9 +15,8 @@ This document tracks known issues, incomplete features, and technical debt in th
 **Issue:**
 The `/intent/execute` and `/intent/read` endpoints include routing support for tracks and returns. Both the server API code and remote scripts are implemented, but the feature is not working correctly.
 
-**Implemented Code:**
-- `server/api/intents.py`: Lines 375-522 (track/return routing execute)
-- `server/api/intents.py`: Lines 923-934 (track/return routing read)
+**Implemented Code (current architecture):**
+- `server/services/intents/routing_service.py` – track/return routing execute/read
 
 **Remote Scripts (Implemented):**
 - `ableton_remote/Fadebender/lom_ops.py`:
@@ -57,9 +56,9 @@ The `/intent/execute` and `/intent/read` endpoints include routing support for t
 4. Consider if Live API limitations are causing issues
 
 **Related Code:**
-- Server: `server/api/intents.py` (routing intent handlers)
+- Server: `server/services/intents/routing_service.py` (routing intent handlers; API delegates here)
 - Remote: `ableton_remote/Fadebender/lom_ops.py` (routing operations)
-- Both exist, connection/logic issue needs investigation
+- Both exist; investigate connection/logic issues
 
 ---
 

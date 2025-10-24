@@ -77,7 +77,12 @@ pytest tests/test_intents.py -k "error" -v
 
 ### Run with coverage:
 ```bash
-pytest tests/test_intents.py --cov=server.api.intents --cov-report=html
+pytest tests/test_intents.py \
+  --cov=server.api.intents \
+  --cov=server.services.intents.mixer_service \
+  --cov=server.services.intents.param_service \
+  --cov=server.services.intents.routing_service \
+  --cov-report=html
 ```
 
 ### Run in verbose mode with output:

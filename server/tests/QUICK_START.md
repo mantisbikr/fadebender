@@ -90,12 +90,12 @@ pytest tests/test_intents.py -v -s
 POST /intent/execute
 {
   "domain": "track",
-  "track_index": 0,
+  "track_index": 1,
   "field": "volume",
   "value": -6.0,
   "unit": "dB"
 }
-# Expected: -6dB → 0.70 (normalized) ✅
+# Expected: -6dB converted per mixer mapping and applied via service ✅
 ```
 
 ### Device Parameter (by name)
@@ -176,10 +176,35 @@ httpx  # For FastAPI TestClient
 Add to `.github/workflows/test.yml`:
 
 ```yaml
-- name: Run Intent API Tests
-  run: |
-    cd server
-    pytest tests/test_intents.py -v --tb=short
+name: Tests
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  intents:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt || true
+          pip install pytest pytest-cov httpx
+      - name: Run Intent API Tests with coverage
+        working-directory: server
+        run: |
+          pytest tests/test_intents.py -v --tb=short \
+            --cov=server.api.intents \
+            --cov=server.services.intents.mixer_service \
+            --cov=server.services.intents.param_service \
+            --cov=server.services.intents.routing_service \
+            --cov-report=term-missing
 ```
 
 ---

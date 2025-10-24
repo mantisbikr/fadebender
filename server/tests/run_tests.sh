@@ -20,7 +20,13 @@ fi
 # Run tests with coverage
 echo ""
 echo "Running tests..."
-pytest tests/test_intents.py -v --tb=short --cov=server.api.intents --cov-report=term-missing
+pytest tests/test_intents.py \
+  -v --tb=short \
+  --cov=server.api.intents \
+  --cov=server.services.intents.mixer_service \
+  --cov=server.services.intents.param_service \
+  --cov=server.services.intents.routing_service \
+  --cov-report=term-missing
 
 echo ""
 echo "========================================"

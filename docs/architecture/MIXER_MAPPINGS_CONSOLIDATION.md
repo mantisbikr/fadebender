@@ -162,9 +162,10 @@ dB = -60.0 + 66.0 * (normalized ** (1/2.2))
 ## Code Updates Required
 
 ### Files to Update
-1. `server/api/intents.py` - intent/execute and intent/read for mixer params
-2. `server/api/overview.py` - snapshot endpoint may need mixer metadata
-3. Client code if rendering mixer controls
+1. `server/services/intents/mixer_service.py` – execute mixer params (API delegates here)
+2. `server/services/intents/utils/mixer.py` – display/fit helpers and metadata lookups
+3. `server/api/overview.py` – snapshot endpoint may need mixer metadata
+4. Client code if rendering mixer controls
 
 ### Migration Strategy
 1. Update intent/execute to use new mixer params_meta
@@ -204,7 +205,7 @@ dB = -60.0 + 66.0 * (normalized ** (1/2.2))
 
 ## Next Steps
 
-1. ⏳ Update `server/api/intents.py` for mixer params
+1. ⏳ Verify `mixer_service` uses consolidated `params_meta` end-to-end
 2. ⏳ Test with WebUI
 3. ⏳ Evaluate sidebar migration
 4. ⏳ Document API changes

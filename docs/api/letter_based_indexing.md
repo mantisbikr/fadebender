@@ -110,56 +110,24 @@ We now accept **letter references** alongside numeric indices:
 
 ## Implementation Details
 
-### New Fields in CanonicalIntent
+### CanonicalIntent Support
 
 ```python
-class CanonicalIntent(BaseModel):
-    # ... existing fields ...
-
-    # Returns: use either return_index OR return_ref
-    return_index: Optional[int] = None      # 0-based numeric (legacy)
-    return_ref: Optional[str] = None        # letter reference "A", "B", "C" (preferred)
-
-    # Sends: use either send_index OR send_ref
-    send_index: Optional[int] = None        # 0-based numeric (legacy)
-    send_ref: Optional[str] = None          # letter reference "A", "B", "C" (preferred)
+# Implemented in `server/models/intents_api.py`:
+# `CanonicalIntent` supports both numeric indices and letter refs
+# for returns (`return_index` or `return_ref`) and sends (`send_index` or `send_ref`).
 ```
 
 ### Resolution Functions
 
 ```python
-def _letter_to_index(letter: str) -> int:
-    """Convert letter reference to 0-based index.
+Implemented in `server/services/intents/utils/refs.py`:
 
-    "A" → 0, "B" → 1, "C" → 2, etc.
-    Case insensitive.
-    """
-    letter = letter.strip().upper()
-    if len(letter) != 1 or not letter.isalpha():
-        raise HTTPException(400, f"invalid_letter_reference:{letter}")
-    return ord(letter) - ord('A')
-
-def _resolve_return_index(intent: CanonicalIntent) -> int:
-    """Resolve return index from either return_index or return_ref."""
-    if intent.return_ref is not None:
-        return _letter_to_index(intent.return_ref)
-    if intent.return_index is not None:
-        idx = int(intent.return_index)
-        if idx < 0:
-            raise HTTPException(400, "return_index_must_be_at_least_0")
-        return idx
-    raise HTTPException(400, "return_index_or_return_ref_required")
-
-def _resolve_send_index(intent: CanonicalIntent) -> int:
-    """Resolve send index from either send_index or send_ref."""
-    if intent.send_ref is not None:
-        return _letter_to_index(intent.send_ref)
-    if intent.send_index is not None:
-        idx = int(intent.send_index)
-        if idx < 0:
-            raise HTTPException(400, "send_index_must_be_at_least_0")
-        return idx
-    raise HTTPException(400, "send_index_or_send_ref_required")
+```python
+def _letter_to_index(letter: str) -> int: ...
+def _resolve_return_index(return_index: Optional[int] = None, return_ref: Optional[str] = None) -> int: ...
+def _resolve_send_index(send_index: Optional[int] = None, send_ref: Optional[str] = None) -> int: ...
+```
 ```
 
 ## Backwards Compatibility
@@ -215,10 +183,12 @@ curl -X POST http://127.0.0.1:8722/intent/execute \
 
 ## Files Modified
 
-1. **server/api/intents.py**
-   - Added `return_ref` and `send_ref` fields to `CanonicalIntent`
-   - Added `_letter_to_index()`, `_resolve_return_index()`, `_resolve_send_index()`
-   - Updated all handlers to use resolver functions
+1. **server/models/intents_api.py**
+   - `CanonicalIntent` includes `return_ref` and `send_ref`
+2. **server/services/intents/utils/refs.py**
+   - `_letter_to_index()`, `_resolve_return_index()`, `_resolve_send_index()`
+3. **server/api/intents.py**
+   - Delegates to services; no inline resolver logic
 
 2. **docs/testing/intents_api_test_plan.md**
    - Updated all test cases to use letter-based references

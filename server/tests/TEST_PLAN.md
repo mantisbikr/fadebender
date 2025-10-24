@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the comprehensive test plan for the Intents API (`server/api/intents.py`), which provides a unified interface for controlling Ableton Live through natural language intents.
+This document outlines the comprehensive test plan for the Intents API (`server/api/intents.py`). The API layer is a thin dispatcher that delegates to service modules in `server/services/intents/*` for execution.
 
 ## Test Coverage Summary
 
@@ -59,18 +59,18 @@ This document outlines the comprehensive test plan for the Intents API (`server/
 
 ### Scenario 1: Basic Mixing
 ```json
-// Set track 0 volume to -6dB
+// Set track 1 volume to -6dB
 {
   "domain": "track",
   "action": "set",
-  "track_index": 0,
+  "track_index": 1,
   "field": "volume",
   "value": -6.0,
   "unit": "dB"
 }
 ```
 
-**Expected**: Volume converted from -6dB → ~0.501 (normalized)
+**Expected**: Volume converted from -6dB to the correct normalized value per mixer mapping and applied via mixer service.
 
 ### Scenario 2: Natural Language Parameter
 ```json
@@ -247,7 +247,12 @@ Add to GitHub Actions:
 - name: Run Intent API Tests
   run: |
     cd server
-    pytest tests/test_intents.py --cov=server.api.intents --cov-fail-under=90
+    pytest tests/test_intents.py \
+      --cov=server.api.intents \
+      --cov=server.services.intents.mixer_service \
+      --cov=server.services.intents.param_service \
+      --cov=server.services.intents.routing_service \
+      --cov-fail-under=90
 ```
 
 ## Coverage Goals
@@ -258,6 +263,11 @@ Add to GitHub Actions:
 
 Current coverage can be checked with:
 ```bash
-pytest tests/test_intents.py --cov=server.api.intents --cov-report=html
+pytest tests/test_intents.py \
+  --cov=server.api.intents \
+  --cov=server.services.intents.mixer_service \
+  --cov=server.services.intents.param_service \
+  --cov=server.services.intents.routing_service \
+  --cov-report=html
 open htmlcov/index.html
 ```
