@@ -155,11 +155,30 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
         idx = int(rt.get("index", 0))
         devs = request_op("get_return_devices", timeout=0.8, return_index=idx) or {}
         devs_data = data_or_raw(devs) or {}
-        names = [str(d.get("name", f"Device {int(d.get('index',0))}")) for d in (devs_data.get("devices") or [])]
+
+        # Enrich devices with device_type from Firestore
+        devices_enriched: List[Dict[str, Any]] = []
+        for d in (devs_data.get("devices") or []):
+            dev_obj: Dict[str, Any] = {
+                "index": int(d.get("index", 0)),
+                "name": str(d.get("name", f"Device {int(d.get('index',0))}")),
+            }
+            # Look up device_type from Firestore once during snapshot build
+            try:
+                from server.core.deps import get_store
+                store = get_store()
+                if store and store.enabled:
+                    device_type = store.get_device_type_by_name(dev_obj["name"])
+                    if device_type:
+                        dev_obj["device_type"] = device_type
+            except Exception:
+                pass
+            devices_enriched.append(dev_obj)
+
         out_returns.append({
             "index": idx,
             "name": str(rt.get("name", f"Return {idx}")),
-            "devices": names,
+            "devices": devices_enriched,
         })
 
     # Get LiveIndex and ValueRegistry data

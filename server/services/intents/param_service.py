@@ -382,9 +382,7 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
                             raise HTTPException(404, f"device_ordinal_out_of_range:{ord_hint}; matches={len(matches)}; devices=[{choices}]")
                 else:
                     di = matches[0]
-            else:
-                choices = ", ".join([f"{int(d.get('index',0))}:{str(d.get('name',''))}" for d in devs])
-                raise HTTPException(404, f"device_not_found_for_hint:{intent.device_name_hint}; devices=[{choices}]")
+            # NOTE: If no matches, don't raise error here - let DeviceResolver handle it below
         except HTTPException:
             raise
         except Exception:

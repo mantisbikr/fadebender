@@ -43,11 +43,22 @@ class LiveIndex:
             items = []
             for d in devs:
                 name = str(d.get("name", ""))
-                items.append({
+                item: Dict[str, Any] = {
                     "index": int(d.get("index", 0)),
                     "name": name,
                     "nname": _norm_name(name),
-                })
+                }
+                # Enrich with device_type from Firestore
+                try:
+                    from server.core.deps import get_store
+                    store = get_store()
+                    if store and store.enabled:
+                        device_type = store.get_device_type_by_name(name)
+                        if device_type:
+                            item["device_type"] = device_type
+                except Exception:
+                    pass
+                items.append(item)
             self._returns[int(ri)] = {"devices": items, "ts": time.time()}
         except Exception:
             pass
@@ -59,11 +70,22 @@ class LiveIndex:
             items = []
             for d in devs:
                 name = str(d.get("name", ""))
-                items.append({
+                item: Dict[str, Any] = {
                     "index": int(d.get("index", 0)),
                     "name": name,
                     "nname": _norm_name(name),
-                })
+                }
+                # Enrich with device_type from Firestore
+                try:
+                    from server.core.deps import get_store
+                    store = get_store()
+                    if store and store.enabled:
+                        device_type = store.get_device_type_by_name(name)
+                        if device_type:
+                            item["device_type"] = device_type
+                except Exception:
+                    pass
+                items.append(item)
             self._tracks[int(ti)] = {"devices": items, "ts": time.time()}
         except Exception:
             pass

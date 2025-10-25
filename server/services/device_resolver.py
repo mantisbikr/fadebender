@@ -41,8 +41,17 @@ def _resolve_by_name(devs: List[Dict[str, Any]], name_hint: str) -> List[int]:
         for d in devs:
             nn = str(d.get("nname", ""))
             nm = str(d.get("name", "")).lower()
+            # First check if any token is IN the device name (existing behavior)
             if any(t in nn or t in nm for t in toks):
                 res.append(int(d["index"]))
+                continue
+            # NEW: Check cached device_type (enriched by LiveIndex/snapshot)
+            device_type = d.get("device_type")
+            if device_type:
+                device_type_lower = str(device_type).lower()
+                # Check if hint matches device_type or if device_type matches any alias token
+                if device_type_lower == nhl or device_type_lower in toks:
+                    res.append(int(d["index"]))
         if res:
             return res
     return cont
