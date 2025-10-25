@@ -275,7 +275,9 @@ def set_track_send(intent: CanonicalIntent) -> Dict[str, Any]:
                 inv = apply_mixer_fit_inverse(pm, float(v))
                 v = float(inv) if inv is not None else v
             else:
-                raise HTTPException(400, "send_requires_unit_or_mapping_fit_for_track")
+                # Default to treating numeric input as dB for user-facing display semantics
+                # (Users provide display values unless explicitly marked as percent)
+                v = db_to_live_float_send(v)
 
     v = clamp(v, 0.0, 1.0) if intent.clamp else v
 
@@ -348,7 +350,9 @@ def set_return_send(intent: CanonicalIntent) -> Dict[str, Any]:
                 inv = apply_mixer_fit_inverse(pm, float(v))
                 v = float(inv) if inv is not None else v
             else:
-                raise HTTPException(400, "send_requires_unit_or_mapping_fit_for_return")
+                # Default to treating numeric input as dB for user-facing display semantics
+                # (Users provide display values unless explicitly marked as percent)
+                v = db_to_live_float_send(v)
 
     v = clamp(v, 0.0, 1.0) if intent.clamp else v
 
