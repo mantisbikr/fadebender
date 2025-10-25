@@ -59,10 +59,15 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
     if field == "volume" and not resolved_from_display:
         if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
             raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
-        if (intent.unit or "").lower() in ("db", "dB".lower()):
+        unit_l = (intent.unit or "").lower()
+        if unit_l in ("db", "dB".lower()):
             v = db_to_live_float(v)
-        elif (intent.unit or "").lower() in ("percent", "%"):
+        elif unit_l in ("percent", "%"):
             v = v / 100.0
+        else:
+            # Default to treating numeric input as dB for user-facing display semantics
+            # (Users provide display values unless explicitly marked as percent)
+            v = db_to_live_float(v)
         v = clamp(v, 0.0, 1.0) if intent.clamp else v
     elif field == "pan" and not resolved_from_display:
         if display_only_io and (intent.display is None) and -1.0 <= v <= 1.0 and not intent.unit:
@@ -156,10 +161,13 @@ def set_return_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
     if field == "volume" and not resolved_from_display:
         if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
             raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
-        if (intent.unit or "").lower() in ("db", "dB".lower()):
+        unit_l = (intent.unit or "").lower()
+        if unit_l in ("db", "dB".lower()):
             v = db_to_live_float(v)
-        elif (intent.unit or "").lower() in ("percent", "%"):
+        elif unit_l in ("percent", "%"):
             v = v / 100.0
+        else:
+            v = db_to_live_float(v)
         v = clamp(v, 0.0, 1.0) if intent.clamp else v
     elif field == "pan" and not resolved_from_display:
         if display_only_io and (intent.display is None) and -1.0 <= v <= 1.0 and not intent.unit:

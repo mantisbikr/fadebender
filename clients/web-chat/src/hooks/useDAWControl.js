@@ -265,6 +265,13 @@ export function useDAWControl() {
               current_display: result?.display_value,
             },
           };
+
+          // If this is a send parameter, add send_ref
+          if (pmeta.send_letter) {
+            editor.send_ref = pmeta.send_letter;
+          } else if (typeof pmeta.send_index === 'number') {
+            editor.send_ref = String.fromCharCode('A'.charCodeAt(0) + pmeta.send_index);
+          }
           addMessage({ type: 'info', content: `Edit ${paramName}`, data: { mixer_param_editor: editor } });
         } catch (e) {
           addMessage({ type: 'error', content: `Open mixer editor error: ${e.message}` });

@@ -3,7 +3,7 @@ import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider } f
 import { apiService } from '../services/api.js';
 
 export default function SingleMixerParamEditor({ editor }) {
-  const { entity_type, index_ref, title, param } = editor;
+  const { entity_type, index_ref, title, param, send_ref } = editor;
   const [busy, setBusy] = useState(false);
 
   const parsePanDisplay = (s, fallbackNorm, minD, maxD) => {
@@ -44,6 +44,20 @@ export default function SingleMixerParamEditor({ editor }) {
   const commit = async (val) => {
     setBusy(true);
     try {
+      // Handle sends specially
+      if (send_ref) {
+        if (entity_type === 'track') {
+          const ti1 = Number(index_ref) + 1;
+          const payload = { domain: 'track', field: 'send', track_index: ti1, send_ref, value: Number(val), unit: 'db' };
+          await apiService.executeCanonicalIntent(payload);
+        } else if (entity_type === 'return') {
+          const ri = index_ref.charCodeAt(0) - 'A'.charCodeAt(0);
+          const payload = { domain: 'return', field: 'send', return_index: ri, send_ref, value: Number(val), unit: 'db' };
+          await apiService.executeCanonicalIntent(payload);
+        }
+        return;
+      }
+
       // Use canonical intents path for unit/display-aware conversion
       const field = param.name;
       if (entity_type === 'track') {

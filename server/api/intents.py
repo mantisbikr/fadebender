@@ -65,6 +65,17 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
     raise HTTPException(400, "unsupported_intent")
 
 
+@router.post("/intent/read")
+def read_intent_endpoint(intent: ReadIntent) -> Dict[str, Any]:
+    """Read current parameter values for mixer and routing.
+
+    Used by the UI when clicking on capability chips to open parameter editors.
+    Returns current values with display formatting.
+    """
+    from server.services.intents.read_service import read_intent
+    return read_intent(intent)
+
+
 @router.post("/intent/query")
 async def query_intent(intent: QueryIntent) -> Dict[str, Any]:
     """Handle get_parameter intent by calling /snapshot/query endpoint."""

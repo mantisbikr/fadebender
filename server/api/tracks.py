@@ -146,29 +146,105 @@ def get_track_mixer_capabilities(index: int) -> Dict[str, Any]:
 
     for mp in params_meta:
         pname = mp.get("name")
-        item = {
-            "index": int(mp.get("index", 0)),
-            "name": pname,
-            "unit": mp.get("unit"),
-            "labels": mp.get("labels"),
-            "label_map": mp.get("label_map"),
-            "min_display": mp.get("min_display"),
-            "max_display": mp.get("max_display"),
-            "min": mp.get("min"),
-            "max": mp.get("max"),
-            "control_type": mp.get("control_type"),
-            "role": mp.get("role"),
-            "tooltip": (mp.get("audio_knowledge") or {}).get("audio_function"),
-        }
-        gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
-        if gname:
-            by_group.setdefault(gname, []).append(item)
-        else:
-            by_group.setdefault("Other", []).append(item)
+        control_type = mp.get("control_type")
 
-        # Attach current value + display
-        rv = raw_map.get(pname)
-        values[pname] = {"value": rv, "display_value": _display_for(pname, rv)}
+        # Special case: expand "sends" into individual Send A/B/C parameters
+        if control_type == "send_array" and pname == "sends":
+            # Fetch actual send values
+            try:
+                from server.volume_utils import live_float_to_db_send
+                # Remote script expects 1-based track indexing
+                track_index_1based = ti + 1
+                sends_resp = request_op("get_track_sends", timeout=2.0, track_index=track_index_1based)
+                sends_data = (sends_resp or {}).get("data") or sends_resp or {}
+                sends = sends_data.get("sends") or []
+
+                # If no sends available, skip expansion and fall through to regular parameter
+                if not sends:
+                    raise Exception("no_sends_available")
+
+                # Use same group resolution as regular parameters
+                gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or "Other"
+
+                # Create individual Send A/B/C parameters
+                for send in sends:
+                    send_idx = int(send.get("index", 0))
+                    send_letter = chr(ord('A') + send_idx)
+                    send_name = f"Send {send_letter}"
+                    send_value = send.get("value")
+                    send_display = send.get("display_value")
+
+                    if send_display is None and send_value is not None:
+                        try:
+                            send_display = f"{live_float_to_db_send(float(send_value)):.1f}"
+                        except Exception:
+                            send_display = None
+
+                    send_item = {
+                        "index": send_idx,
+                        "name": send_name,
+                        "unit": mp.get("unit"),  # Use unit from mapping (dB)
+                        "labels": None,
+                        "label_map": None,
+                        "min_display": mp.get("min_display"),  # Use from mapping
+                        "max_display": mp.get("max_display"),  # Use from mapping
+                        "min": mp.get("min"),
+                        "max": mp.get("max"),
+                        "control_type": "continuous",  # Individual sends are continuous
+                        "role": None,
+                        "tooltip": f"Send level to {send_letter}",
+                        "send_index": send_idx,
+                        "send_letter": send_letter,
+                    }
+                    by_group.setdefault(gname, []).append(send_item)
+                    values[send_name] = {"value": send_value, "display_value": send_display}
+            except Exception:
+                # Fallback: keep single "sends" parameter if send expansion fails
+                item = {
+                    "index": int(mp.get("index", 0)),
+                    "name": pname,
+                    "unit": mp.get("unit"),
+                    "labels": mp.get("labels"),
+                    "label_map": mp.get("label_map"),
+                    "min_display": mp.get("min_display"),
+                    "max_display": mp.get("max_display"),
+                    "min": mp.get("min"),
+                    "max": mp.get("max"),
+                    "control_type": control_type,
+                    "role": mp.get("role"),
+                    "tooltip": (mp.get("audio_knowledge") or {}).get("audio_function"),
+                }
+                gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
+                if gname:
+                    by_group.setdefault(gname, []).append(item)
+                else:
+                    by_group.setdefault("Other", []).append(item)
+                values[pname] = {"value": None, "display_value": None}
+        else:
+            # Regular parameter
+            item = {
+                "index": int(mp.get("index", 0)),
+                "name": pname,
+                "unit": mp.get("unit"),
+                "labels": mp.get("labels"),
+                "label_map": mp.get("label_map"),
+                "min_display": mp.get("min_display"),
+                "max_display": mp.get("max_display"),
+                "min": mp.get("min"),
+                "max": mp.get("max"),
+                "control_type": control_type,
+                "role": mp.get("role"),
+                "tooltip": (mp.get("audio_knowledge") or {}).get("audio_function"),
+            }
+            gname = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
+            if gname:
+                by_group.setdefault(gname, []).append(item)
+            else:
+                by_group.setdefault("Other", []).append(item)
+
+            # Attach current value + display
+            rv = raw_map.get(pname)
+            values[pname] = {"value": rv, "display_value": _display_for(pname, rv)}
 
     # Build groups list with descriptions
     for gname, plist in by_group.items():
