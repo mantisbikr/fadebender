@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from server.core.deps import get_store
 from server.services.mapping_utils import make_device_signature, detect_device_type
-from server.services.preset_enricher import generate_preset_metadata_llm
+from server.services.preset_metadata import generate_preset_metadata_llm
 
 
 async def auto_capture_preset(
@@ -29,7 +29,7 @@ async def auto_capture_preset(
         existing = store.get_preset(preset_id)
         if existing and isinstance(existing.get("values"), dict) and len(existing.get("values") or {}) >= 3:
             return
-        metadata = await generate_preset_metadata_llm(device_name, device_type, values)
+        metadata = await generate_preset_metadata_llm(device_name, device_type, values, store=store)
         preset_data = {
             "id": preset_id,
             "device_signature": structure_signature,

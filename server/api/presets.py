@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from server.core.deps import get_store
 from server.services.ableton_client import request_op, data_or_raw
 from server.services.mapping_utils import make_device_signature, detect_device_type
-from server.services.preset_enricher import generate_preset_metadata_llm
+from server.services.preset_metadata import generate_preset_metadata_llm
 
 
 router = APIRouter()
@@ -189,7 +189,7 @@ async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
                 preset["parameter_display_values"] = live_disp
         except Exception:
             pass
-    metadata = await generate_preset_metadata_llm(device_name=device_name, device_type=device_type, parameter_values=parameter_values)
+    metadata = await generate_preset_metadata_llm(device_name=device_name, device_type=device_type, parameter_values=parameter_values, store=store)
     allowed_keys = {"description", "audio_engineering", "natural_language_controls", "warnings", "genre_tags", "subcategory"}
     if body.fields_allowlist:
         allowed_keys = allowed_keys.intersection({k for k in body.fields_allowlist})

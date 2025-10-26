@@ -39,6 +39,15 @@ from server.config.param_registry import (
     reload_param_registry,
 )
 from server.services.mapping_store import MappingStore
+from server.services.mapping_utils import detect_device_type, make_device_signature
+from server.services.param_analysis import (
+    build_groups_from_params,
+    classify_control_type,
+    fit_models,
+    group_role_for_device,
+    parse_unit_from_display,
+)
+from server.services.preset_metadata import generate_preset_metadata_llm
 from server.core.deps import set_store_instance, get_live_index
 from server.core.events import broker, emit_event, schedule_emit
 from server.api.events import router as events_router
@@ -55,158 +64,9 @@ from server.api.intents import router as intents_router
 from server.api.overview import router as overview_router
 # from server.api.snapshot import router as snapshot_router  # Merged into overview_router
 from server.cloud.enrich_queue import enqueue_preset_enrich
-import hashlib
 import math
 from server.volume_parser import parse_volume_command
 _MASTER_DEDUP: dict[str, tuple[float, float]] = {}
-
-# --------- Param classification & grouping helpers ---------
-import re as _re
-
-def _parse_unit_from_display(disp: str) -> str | None:
-    if not disp:
-        return None
-    s = str(disp).strip()
-    # Common units: ms, s, Hz, kHz, %, dB, °
-    # Try suffix tokens
-    if "dB" in s or _re.search(r"\bdB\b", s):
-        return "dB"
-    if "%" in s:
-        return "%"
-    if "kHz" in s:
-        return "kHz"
-    if _re.search(r"\bHz\b", s):
-        return "Hz"
-    if _re.search(r"\bms\b", s):
-        return "ms"
-    if _re.search(r"\bs\b", s):
-        return "s"
-    if "°" in s:
-        return "deg"
-    return None
-
-def _classify_control_type(samples: list[dict], vmin: float, vmax: float) -> tuple[str, list[str]]:
-    # Return (control_type, labels)
-    if not samples:
-        # fallback on range heuristic
-        return ("continuous", [])
-    labels = list({str(s.get("display", "")) for s in samples if s.get("display") is not None})
-    # Count numeric-like labels
-    numeric_like = 0
-    for lab in labels:
-        if _re.search(r"-?\d+(?:\.\d+)?", lab):
-            numeric_like += 1
-    # Binary if there are two or fewer distinct labels (even if numeric-like)
-    # This captures toggles that display "0.0"/"1.0" and were misclassified as continuous.
-    if len(labels) <= 2:
-        return ("binary", labels)
-    # Quantized if small label set and not mostly numeric
-    if len(labels) > 0 and len(labels) <= 12 and numeric_like < len(labels):
-        return ("quantized", labels)
-    return ("continuous", [])
-
-def _group_role_for_reverb_param(pname: str) -> tuple[str | None, str | None, str | None]:
-    """Return (group_name, role, master_name) for Ableton Reverb param name.
-    role in {master, dependent, None}. master_name populated for dependents.
-    """
-    n = (pname or "").strip()
-    nlc = n.lower()
-    # Chorus
-    if nlc == "chorus on":
-        return ("Chorus", "master", None)
-    if nlc in ("chorus rate", "chorus amount"):
-        return ("Chorus", "dependent", "Chorus On")
-    # ER Spin (Early)
-    if nlc == "er spin on":
-        return ("Early", "master", None)
-    if nlc in ("er spin rate", "er spin amount"):
-        return ("Early", "dependent", "ER Spin On")
-    # Shelves / Filters (Tail)
-    if nlc in ("lowshelf on", "low shelf on", "low shelf enabled"):
-        return ("Tail", "master", None)
-    if nlc.startswith("lowshelf ") or nlc.startswith("low shelf "):
-        if nlc not in ("low shelf on", "lowshelf on"):
-            return ("Tail", "dependent", "LowShelf On")
-    if nlc in ("hishelf on", "high shelf on", "high shelf enabled"):
-        return ("Tail", "master", None)
-    if nlc.startswith("hishelf ") or nlc.startswith("high shelf "):
-        if nlc not in ("hishelf on", "high shelf on"):
-            return ("Tail", "dependent", "HiShelf On")
-    if nlc == "hifilter on":
-        return ("Tail", "master", None)
-    if nlc.startswith("hifilter "):
-        if nlc != "hifilter on":
-            return ("Tail", "dependent", "HiFilter On")
-    # Freeze (Global). Handle carefully: do NOT auto-enable master implicitly.
-    if nlc == "freeze on":
-        return ("Global", "master", None)
-    if nlc in ("flat on", "cut on"):
-        return ("Global", "dependent", "Freeze On")
-    # Input / Output / Global catch-alls based on names
-    if nlc in ("dry/wet", "dry wet", "reflect level", "diffuse level"):
-        return ("Output", None, None)
-    if nlc in ("predelay", "decay", "size", "stereo image", "density", "size smoothing", "scale", "diffusion"):
-        return ("Global", None, None)
-    # Input filters sometimes appear as "In HighCut On/Freq" etc.
-    if nlc.startswith("in ") or nlc.startswith("input "):
-        if nlc.endswith(" on"):
-            return ("Input", "master", None)
-        return ("Input", "dependent", None)
-    return (None, None, None)
-
-def _group_role_for_device(device_name: str | None, param_name: str) -> tuple[str | None, str | None, str | None]:
-    dn = (device_name or "").strip().lower()
-    pn = (param_name or "").strip()
-    # Config-driven first
-    try:
-        PLC = get_param_learn_config()
-        grp = PLC.get("grouping", {}) or {}
-        match_key = None
-        for key in grp.keys():
-            kl = str(key).lower()
-            if kl == "default":
-                continue
-            if kl in dn:
-                match_key = key
-                break
-        if match_key is None:
-            match_key = "default"
-        rules = grp.get(match_key) or {}
-        # Check dependents mapping exact/regex via pipes
-        deps = rules.get("dependents") or {}
-        for dep_name, master_name in deps.items():
-            # dep_name may be exact or partial; use case-insensitive contains
-            if str(dep_name).lower() == pn.lower():
-                return (match_key.title() if match_key != 'default' else None, "dependent", str(master_name))
-        # For masters list, allow "A|B|C" alternatives
-        for m in (rules.get("masters") or []):
-            alts = [s.strip() for s in str(m).split("|")]
-            if any(pn.lower() == a.lower() for a in alts):
-                return (match_key.title() if match_key != 'default' else None, "master", None)
-    except Exception:
-        pass
-    # Built-in fallbacks
-    if "reverb" in dn:
-        return _group_role_for_reverb_param(param_name)
-    return (None, None, None)
-
-def _build_groups_from_params(params: list[dict], device_name: str | None) -> list[dict]:
-    groups: dict[str, dict] = {}
-    # Map by name for quick lookup
-    by_name = {str(p.get("name", "")): p for p in params}
-    for p in params:
-        name = str(p.get("name", ""))
-        gname, role, master_name = _group_role_for_device(device_name, name)
-        if not gname:
-            continue
-        if gname not in groups:
-            groups[gname] = {"name": gname, "master": None, "dependents": []}
-        if role == "master":
-            groups[gname]["master"] = {"name": name, "index": int(p.get("index", 0))}
-        elif role == "dependent":
-            groups[gname]["dependents"].append({"name": name, "index": int(p.get("index", 0)), "master": master_name})
-    return list(groups.values())
-
 
 app = FastAPI(title="Fadebender Ableton Server", version="0.1.0")
 
@@ -242,176 +102,6 @@ try:  # optional dependency
     load_dotenv()
 except Exception:
     pass
-
-# Initialize Vertex AI (if env configured)
-try:
-    import vertexai  # type: ignore
-    _VERTEX_INITED = False
-    def _vertex_init_once() -> None:
-        global _VERTEX_INITED
-        if _VERTEX_INITED:
-            return
-        project = os.getenv("VERTEX_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
-        location = os.getenv("VERTEX_LOCATION") or "us-central1"
-        if project:
-            try:
-                vertexai.init(project=project, location=location)
-                _VERTEX_INITED = True
-            except Exception:
-                # Defer errors to first model call
-                _VERTEX_INITED = False
-except Exception:
-    def _vertex_init_once() -> None:
-        return
-
-
-def _json_lenient_parse(text: str) -> Optional[Dict[str, Any]]:
-    """Try to parse JSON with light repairs for common LLM artifacts.
-
-    Repairs:
-    - Strip markdown code fences
-    - Normalize smart quotes to ASCII
-    - Remove trailing commas before } or ]
-    - Try largest-brace substring
-    - As last resort, convert single quotes to double quotes (heuristic)
-    """
-    import re as _r
-    t = str(text or "")
-    if not t:
-        return None
-    # Strip code fences
-    if t.strip().startswith("```"):
-        parts = t.split("```")
-        if len(parts) >= 3:
-            t = parts[1] if parts[0].strip() == "" else parts[1]
-    # Normalize quotes
-    t = t.replace("“", '"').replace("”", '"').replace("‟", '"').replace("’", "'").replace("‘", "'")
-    # Remove trailing commas
-    t = _r.sub(r",\s*(\}|\])", r"\1", t)
-    # Try direct parse
-    try:
-        import json as _json
-        return _json.loads(t)
-    except Exception:
-        pass
-    # Try largest brace substring
-    i, j = t.find("{"), t.rfind("}")
-    if i >= 0 and j > i:
-        s = t[i:j+1]
-        s = _r.sub(r",\s*(\}|\])", r"\1", s)
-        try:
-            import json as _json
-            return _json.loads(s)
-        except Exception:
-            pass
-    # Heuristic: convert single quotes to double quotes (may over-correct)
-    t2 = t
-    if t2.count('"') < 2 and t2.count("'") >= 4:
-        t2 = t2.replace("'", '"')
-        t2 = _r.sub(r",\s*(\}|\])", r"\1", t2)
-        try:
-            import json as _json
-            return _json.loads(t2)
-        except Exception:
-            return None
-    return None
-
-
-def _preset_metadata_schema() -> Dict[str, Any]:
-    """JSON schema for LLM response to enforce strict JSON output."""
-    return {
-        "type": "object",
-        "properties": {
-            "description": {
-                "type": "object",
-                "properties": {
-                    "what": {"type": "string"},
-                    "when": {"type": "array", "items": {"type": "string"}},
-                    "why": {"type": "string"},
-                },
-                "required": ["what"],
-                "additionalProperties": True,
-            },
-            "audio_engineering": {"type": "object"},
-            "natural_language_controls": {"type": "object"},
-            "warnings": {"type": "object"},
-            "genre_tags": {"type": "array", "items": {"type": "string"}},
-            "subcategory": {"type": "string"},
-        },
-        "additionalProperties": True,
-    }
-
-
-def _basic_metadata_fallback(device_name: str, device_type: str, parameter_values: Dict[str, float]) -> Dict[str, Any]:
-    """Heuristic fallback metadata when LLM JSON is unavailable."""
-    desc = {
-        "what": f"{device_name} preset for {device_type}",
-        "when": ["general purpose", "subtle ambience"],
-        "why": "Automatically generated fallback without LLM."
-    }
-    # Try to pull a short rationale from local KB to extend the 'why' section
-    def _kb_excerpt(dtype: str) -> str:
-        try:
-            import pathlib
-            base = pathlib.Path(os.getcwd()) / "knowledge" / "audio-fundamentals"
-            fname = None
-            if dtype.lower() == "reverb":
-                fname = base / "deep_audio_engineering_reverb.md"
-            elif dtype.lower() == "delay":
-                fname = base / "deep_audio_engineering_delay.md"
-            if fname and fname.exists():
-                txt = fname.read_text(encoding="utf-8", errors="ignore")
-                return txt.strip().replace("\n", " ")[:600]
-        except Exception:
-            pass
-        return "This preset leverages time-domain processing and frequency-domain shaping to achieve the desired psychoacoustic perception in a mix."
-
-    ae: Dict[str, Any] = {}
-    if device_type == "reverb":
-        decay = None
-        # Try common names
-        for k in ("Decay", "Decay Time", "DecayTime"):
-            if k in parameter_values:
-                decay = float(parameter_values[k]); break
-        predelay = None
-        for k in ("Predelay", "PreDelay", "Pre-Delay"):
-            if k in parameter_values:
-                predelay = float(parameter_values[k]); break
-        ae = {
-            "space_type": "hall" if (decay or 0) >= 3.5 else "room",
-            "decay_time": f"~{decay:.2f}s" if decay is not None else None,
-            "predelay": f"~{predelay:.0f} ms" if predelay is not None else None,
-            "frequency_character": "neutral",
-            "stereo_width": "wide",
-            "diffusion": "smooth",
-            "use_cases": [
-                {"source": "vocal", "context": "ballad", "send_level": "15-25%", "notes": "Fallback guidance"}
-            ],
-        }
-    # Build at least 4 generic use cases when LLM metadata is unavailable
-    default_use_cases = [
-        {"source": "lead vocal", "context": "ballad", "send_level": "15-25%", "send_level_rationale": "maintain intelligibility while adding space", "eq_prep": "HPF 100 Hz, gentle de-ess", "eq_rationale": "reduce mud and sibilance feeding the reverb", "notes": "consider a pre-delay of 20-40 ms to preserve consonants"},
-        {"source": "electric guitar", "context": "solo", "send_level": "10-20%", "send_level_rationale": "share space without washing transients", "eq_prep": "HPF 120 Hz, tilt -1 dB @ 4 kHz", "eq_rationale": "avoid low-end buildup and harshness", "notes": "wider stereo helpful for size, beware mono collapse"},
-        {"source": "synth pad", "context": "ambient", "send_level": "25-40%", "send_level_rationale": "embrace tail for texture", "eq_prep": "HPF 80 Hz", "eq_rationale": "protect low-end clarity", "notes": "increase diffusion for smoother tail"},
-        {"source": "drums", "context": "room enhancement", "send_level": "5-12%", "send_level_rationale": "enhance room sense without blurring hits", "eq_prep": "HPF 150 Hz, notch 500 Hz", "eq_rationale": "control boxiness", "notes": "short decay <1.2s for punch"},
-    ]
-
-    return {
-        "description": desc,
-        "audio_engineering": {
-            **ae,
-            "use_cases": default_use_cases if device_type == "reverb" else default_use_cases[:4],
-        },
-        "natural_language_controls": {},
-        "warnings": {},
-        "genre_tags": [],
-        "subcategory": ae.get("space_type") if isinstance(ae, dict) else "unknown",
-        # Expand 'why' with KB excerpt to meet minimum richness
-        "description": {
-            **desc,
-            "why": (desc.get("why") or "") + " " + _kb_excerpt(device_type)
-        }
-    }
 
 def _cors_origins() -> list[str]:
     # Read from env: FB_CORS_ORIGINS as comma-separated list; if FB_ALLOW_ALL_CORS=1, allow '*'
@@ -470,26 +160,6 @@ STORE = MappingStore()
 set_store_instance(STORE)
 LEARN_JOBS: dict[str, dict] = {}
 BACKFILL_JOBS: dict[str, dict] = {}
-
-# --- Auto-capture dedupe for UI polling ---
-_CAPTURE_DEDUPE: dict[str, float] = {}
-
-def _should_capture_signature(sig: str, ttl_sec: float = 60.0) -> bool:
-    """Return True if we should trigger capture for this signature now.
-
-    Prevents repeated auto-capture on frequent UI polls for the same device
-    signature. TTL defaults to 60s; capture itself is idempotent and will
-    skip when sufficient values already exist.
-    """
-    try:
-        now = time.time()
-        last = _CAPTURE_DEDUPE.get(sig)
-        if last is not None and (now - last) < ttl_sec:
-            return False
-        _CAPTURE_DEDUPE[sig] = now
-        return True
-    except Exception:
-        return True
 
 app.include_router(events_router)
 app.include_router(transport_router)
@@ -751,885 +421,6 @@ class LearnDeviceBody(BaseModel):
     sleep_ms: int = 25
 
 
-def _detect_device_type(params: list[dict], device_name: str | None = None) -> str:
-    """Detect device type from parameter fingerprints.
-
-    Uses characteristic parameter names to identify device types.
-    Enables storing structures by type (reverb, delay, etc.) rather than
-    by device name.
-
-    Args:
-        params: List of parameter dictionaries with 'name' field
-
-    Returns:
-        Device type string (reverb, delay, compressor, eq, etc.) or "unknown"
-    """
-    name_lc = (device_name or "").strip().lower()
-    if name_lc:
-        if any(k in name_lc for k in ("delay", "echo")):
-            return "delay"
-        if any(k in name_lc for k in ("reverb", "hall", "plate", "room")):
-            return "reverb"
-        if any(k in name_lc for k in ("compressor", "glue")):
-            return "compressor"
-        if "eq" in name_lc and "eight" in name_lc:
-            return "eq8"
-        if "auto filter" in name_lc or ("filter" in name_lc and "auto" in name_lc):
-            return "autofilter"
-        if "saturator" in name_lc:
-            return "saturator"
-        if "amp" in name_lc:
-            return "amp"
-
-    param_set = set(p.get("name", "") for p in params)
-
-    # Ableton Reverb signature parameters
-    if {"ER Spin On", "Freeze On", "Chorus On", "Diffusion"}.issubset(param_set):
-        return "reverb"
-
-    # Ableton Delay signature parameters
-    if {"L Time", "R Time", "Ping Pong", "Feedback"}.issubset(param_set):
-        return "delay"
-
-    # Ableton Compressor signature parameters
-    if {"Threshold", "Ratio", "Attack", "Release", "Knee"}.issubset(param_set):
-        return "compressor"
-
-    # Ableton EQ Eight signature parameters
-    if {"1 Frequency A", "2 Frequency A", "3 Frequency A"}.issubset(param_set):
-        return "eq8"
-
-    # Ableton Auto Filter
-    if {"Filter Type", "Frequency", "Resonance", "LFO Amount"}.issubset(param_set):
-        return "autofilter"
-
-    # Ableton Saturator
-    if {"Drive", "Dry/Wet", "Color", "Type"}.issubset(param_set):
-        return "saturator"
-
-    # Ableton Amp
-    if {"Amp Type", "Bass", "Middle", "Treble", "Gain"}.issubset(param_set):
-        return "amp"
-
-    # Fallback: infer from common parameter name hints
-    if {"Time", "Feedback"}.intersection(param_set) and any("Time" in n for n in param_set):
-        return "delay"
-    if {"Decay", "Size"}.intersection(param_set):
-        return "reverb"
-    return "unknown"
-
-
-def _make_device_signature(name: str, params: list[dict]) -> str:
-    """Generate structure-based signature (excludes device name).
-
-    All Ableton Reverb presets (Arena Tail, Vocal Hall, etc.) share the same
-    parameter structure, so they get the same signature. This enables:
-    - Learning structure once, reusing for all presets
-    - Fast preset loading (just apply parameter values)
-    - Separating structure from preset variations
-
-    Args:
-        name: Device name (NOT USED in signature, kept for compatibility)
-        params: List of parameter dictionaries with 'name' field
-
-    Returns:
-        SHA1 hash of param_count|param_names (no device name)
-    """
-    param_names = ",".join([str(p.get("name", "")) for p in params])
-    base = f"{len(params)}|{param_names}"  # REMOVED device name
-    return hashlib.sha1(base.encode("utf-8")).hexdigest()
-
-
-async def _generate_preset_metadata_llm(
-    device_name: str,
-    device_type: str,
-    parameter_values: Dict[str, float],
-) -> Dict[str, Any]:
-    """Generate preset metadata using LLM analysis.
-
-    Uses Vertex AI LLM to analyze parameter values and generate:
-    - Description (what, when, why)
-    - Audio engineering explanation
-    - Natural language controls
-    - Use cases and rationale
-
-    Args:
-        device_name: Preset name (e.g., "Arena Tail", "Vocal Hall")
-        device_type: Device category (reverb, delay, etc.)
-        parameter_values: Dict of param_name -> value
-
-    Returns:
-        Dict with description, audio_engineering, natural_language_controls, etc.
-    """
-    import sys
-    import pathlib
-
-    # Import LLM utilities from nlp-service
-    nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
-    if nlp_dir.exists() and str(nlp_dir) not in sys.path:
-        sys.path.insert(0, str(nlp_dir))
-
-    try:
-        import vertexai
-        from vertexai.generative_models import GenerativeModel
-        from config.llm_config import get_llm_project_id, get_default_model_name
-
-        project = get_llm_project_id()
-        location = os.getenv("GCP_REGION", "us-central1")
-        model_name = get_default_model_name()  # Use configured model from .env
-
-        vertexai.init(project=project, location=location)
-
-        # Build context-aware prompt
-        prompt = f"""You are an expert audio engineer analyzing a {device_type} preset.
-
-Preset Name: {device_name}
-Device Type: {device_type}
-
-Parameter Values:
-{json.dumps(parameter_values, indent=2)}
-
-Audio Engineering Context:
-- Analyze the parameter values to understand the preset's character
-- Consider psychoacoustic principles and typical use cases
-- Reference standard audio engineering practices
-
-Generate a comprehensive metadata JSON with this structure:
-
-{{
-  "description": {{
-    "what": "Concise technical description of the preset's sonic character (1-2 sentences)",
-    "when": ["Use case 1", "Use case 2", "Use case 3", "Use case 4"],
-    "why": "Deep audio engineering explanation covering: decay characteristics, frequency response, stereo imaging, psychoacoustic perception (3-4 sentences)"
-  }},
-  "audio_engineering": {{
-    "space_type": "Type of space being simulated (e.g., hall, room, plate)",
-    "size": "Size descriptor with numeric reference if applicable",
-    "decay_time": "RT60-style decay description",
-    "predelay": "Predelay amount and spatial reasoning",
-    "frequency_character": "Frequency response description (bright/dark/neutral + EQ)",
-    "stereo_width": "Stereo width description with angle if applicable",
-    "diffusion": "Diffusion character (smooth/grainy/dense)",
-    "use_cases": [
-      {{
-        "source": "Audio source type",
-        "context": "Musical context",
-        "send_level": "Recommended send level (e.g., 15-25%)",
-        "send_level_rationale": "Why this send level",
-        "eq_prep": "Pre-send EQ recommendations",
-        "eq_rationale": "Why this EQ treatment",
-        "notes": "Additional mixing tips"
-      }}
-    ]
-  }},
-  "natural_language_controls": {{
-    "tighter": {{
-      "params": {{"param_name": relative_change_value}},
-      "explanation": "What happens and why"
-    }},
-    "looser": {{"params": {{}}, "explanation": "..."}},
-    "warmer": {{"params": {{}}, "explanation": "..."}},
-    "brighter": {{"params": {{}}, "explanation": "..."}},
-    "closer": {{"params": {{}}, "explanation": "..."}},
-    "further": {{"params": {{}}, "explanation": "..."}},
-    "wider": {{"params": {{}}, "explanation": "..."}},
-    "narrower": {{"params": {{}}, "explanation": "..."}}
-  }},
-  "subcategory": "Specific category (e.g., hall, room, plate for reverb)",
-  "warnings": {{
-    "mono_compatibility": "Mono playback considerations if stereo width is wide",
-    "cpu_usage": "CPU usage notes if complex settings",
-    "mix_context": "Mixing context warnings",
-    "frequency_buildup": "Frequency accumulation warnings",
-    "low_end_accumulation": "Low-end buildup warnings"
-  }},
-  "genre_tags": ["genre1", "genre2", "genre3"]
-}}
-
-Return ONLY valid JSON. Be specific and technical. Use actual parameter values to inform your analysis.
-"""
-
-        # Ensure Vertex is initialized
-        _vertex_init_once()
-        # Use env/config model with JSON-only response for robust parsing
-        # Resolve model name with sensible defaults
-        model_name = os.getenv("LLM_MODEL") or os.getenv("VERTEX_MODEL") or "gemini-2.5-flash"
-        # Encourage strict JSON via system instruction
-        # Load local KB context to enrich outputs
-        def _load_kb_for(dtype: str) -> str:
-            try:
-                import pathlib
-                base = pathlib.Path(os.getcwd()) / "knowledge" / "audio-fundamentals"
-                fname = None
-                if dtype.lower() == "reverb":
-                    fname = base / "deep_audio_engineering_reverb.md"
-                elif dtype.lower() == "delay":
-                    fname = base / "deep_audio_engineering_delay.md"
-                if fname and fname.exists():
-                    text = fname.read_text(encoding="utf-8", errors="ignore")
-                    # Trim to a sane size to keep prompt within context window
-                    return text[:20000]
-            except Exception:
-                pass
-            return ""
-
-        kb = _load_kb_for(device_type)
-
-        model = GenerativeModel(
-            model_name,
-            system_instruction=(
-                "You are an expert audio engineer. Respond with STRICT JSON only."
-            ),
-        )
-        try:
-            # First attempt: JSON-only MIME type
-            # Build enriched prompt with KB context and stricter content requirements
-            # Allow Firestore prompt template override per device_type
-            params_json = json.dumps(parameter_values or {}, indent=2, ensure_ascii=False)
-            custom_tpl = None
-            try:
-                custom_tpl = STORE.get_prompt_template(device_type)
-            except Exception:
-                custom_tpl = None
-            if custom_tpl and isinstance(custom_tpl, str) and custom_tpl.strip():
-                enriched_prompt = (custom_tpl
-                    .replace("{{device_type}}", str(device_type))
-                    .replace("{{device_name}}", str(device_name))
-                    .replace("{{parameter_values}}", params_json)
-                    .replace("{{kb_context}}", kb or ""))
-            else:
-                enriched_prompt = f"""
-You are generating authoritative audio engineering metadata for a {device_type} preset.
-
-KB Context (verbatim excerpts from internal knowledge):
----
-{kb}
----
-
-Preset Name: {device_name}
-Parameter Values:
-{params_json}
-
-Requirements:
-- Output STRICT JSON only (no prose).
-- Provide a deeply technical description and rationale grounded in the KB Context and parameter values.
-- audio_engineering.use_cases MUST include at least 4 detailed entries with send_level, eq_prep, and rationale fields.
-- natural_language_controls MUST include all listed controls with parameter suggestions and explanations grounded in psychoacoustics.
-- Prefer precise numeric guidance when possible.
-
-JSON schema/layout to follow:
-{{
-  "description": {{
-    "what": "1–2 sentence sonic character",
-    "when": ["Use case 1", "Use case 2", "Use case 3", "Use case 4"],
-    "why": "3–6 sentence technical explanation grounded in KB"
-  }},
-  "audio_engineering": {{
-    "space_type": "hall|room|plate|chamber|spring|convolution",
-    "size": "qualitative + numeric if known",
-    "decay_time": "RT60-like description",
-    "predelay": "ms with spatial reasoning",
-    "frequency_character": "bright|dark|neutral with EQ hints",
-    "stereo_width": "narrow|moderate|wide with angle if applicable",
-    "diffusion": "smooth|grainy|dense",
-    "use_cases": [
-      {{
-        "source": "e.g., vocal, guitar, synth",
-        "context": "mix context",
-        "send_level": "recommended % range",
-        "send_level_rationale": "why this send",
-        "eq_prep": "pre-send EQ moves",
-        "eq_rationale": "why those EQ moves",
-        "notes": "extra tips"
-      }}
-    ]
-  }},
-  "natural_language_controls": {{
-    "tighter": {{"params": {{}} , "explanation": "..."}},
-    "looser": {{"params": {{}} , "explanation": "..."}},
-    "warmer": {{"params": {{}} , "explanation": "..."}},
-    "brighter": {{"params": {{}} , "explanation": "..."}},
-    "closer": {{"params": {{}} , "explanation": "..."}},
-    "further": {{"params": {{}} , "explanation": "..."}},
-    "wider": {{"params": {{}} , "explanation": "..."}},
-    "narrower": {{"params": {{}} , "explanation": "..."}}
-  }},
-  "subcategory": "specific reverb subtype",
-  "warnings": {{
-    "mono_compatibility": "...",
-    "cpu_usage": "...",
-    "mix_context": "...",
-    "frequency_buildup": "...",
-    "low_end_accumulation": "..."
-  }},
-  "genre_tags": ["genre1", "genre2", "genre3"]
-}}
-
-Return ONLY valid JSON.
-"""
-
-            resp = model.generate_content(
-                enriched_prompt,
-                generation_config={
-                    "temperature": 0.0,
-                    "max_output_tokens": 4096,
-                    "top_p": 0.9,
-                    "response_mime_type": "application/json",
-                },
-            )
-        except Exception:
-            # Fallback: no special JSON constraint (some SDKs don't support response_mime_type)
-            resp = model.generate_content(
-                enriched_prompt,
-                generation_config={
-                    "temperature": 0.0,
-                    "max_output_tokens": 4096,
-                    "top_p": 0.9,
-                },
-            )
-
-        # Quality helpers
-        def _quality_ok(d: Dict[str, Any]) -> bool:
-            try:
-                why = str(((d or {}).get("description") or {}).get("why") or "")
-                ucs = ((d or {}).get("audio_engineering") or {}).get("use_cases") or []
-                return (len(why) >= 200) and (isinstance(ucs, list) and len(ucs) >= 4)
-            except Exception:
-                return False
-
-        def _try_enrich(meta_in: Dict[str, Any]) -> Dict[str, Any]:
-            try:
-                enrich_prompt = f"""
-You are enriching existing preset metadata using the KB Context.
-KB Context:
----
-{kb}
----
-Original Metadata JSON:
-{json.dumps(meta_in, indent=2)}
-
-Improve it to meet these minimums:
-- description.why >= 200 characters with deeper technical reasoning
-- audio_engineering.use_cases must contain at least 4 detailed entries (with send_level, eq_prep, and clear rationale)
-Return STRICT JSON only with the same keys expanded.
-"""
-                resp2 = model.generate_content(
-                    enrich_prompt,
-                    generation_config={
-                        "temperature": 0.2,
-                        "max_output_tokens": 4096,
-                        "top_p": 0.9,
-                        "response_mime_type": "application/json",
-                    },
-                )
-                txt2 = getattr(resp2, "text", None)
-                if txt2:
-                    meta2 = json.loads(txt2)
-                    if _quality_ok(meta2):
-                        return meta2
-                    # merge if partial improvement
-                    try:
-                        m = dict(meta_in)
-                        m.update(meta2)
-                        return m
-                    except Exception:
-                        return meta_in
-            except Exception:
-                return meta_in
-            return meta_in
-
-        # Prefer direct JSON text when available (JSON mode)
-        response_text = getattr(resp, "text", None)
-        if response_text:
-            try:
-                meta = _json_lenient_parse(response_text) or json.loads(response_text)
-                if not _quality_ok(meta):
-                    meta = _try_enrich(meta)
-                return meta
-            except Exception:
-                pass
-
-        # Vertex SDK variants: try candidates/parts
-        try:
-            cands = getattr(resp, "candidates", []) or []
-            for c in cands:
-                content = getattr(c, "content", None)
-                parts = getattr(content, "parts", []) if content else []
-                for p in parts:
-                    t = getattr(p, "text", None)
-                    if t:
-                        try:
-                            meta = _json_lenient_parse(t) or json.loads(t)
-                            if not _quality_ok(meta):
-                                meta = _try_enrich(meta)
-                            return meta
-                        except Exception:
-                            # Try brace extraction from part text
-                            s = str(t)
-                            i, j = s.find("{"), s.rfind("}")
-                            if i >= 0 and j > i:
-                                meta = _json_lenient_parse(s[i:j+1]) or json.loads(s[i:j+1])
-                                if not _quality_ok(meta):
-                                    meta = _try_enrich(meta)
-                                return meta
-        except Exception:
-            pass
-
-        # to_dict traversal (SDK variant)
-        try:
-            td = getattr(resp, "to_dict", None)
-            if callable(td):
-                d = td()
-                # Search recursively for JSON-like string
-                def _find_json_like(obj):
-                    if isinstance(obj, str) and obj.strip().startswith("{") and obj.strip().endswith("}"):
-                        try:
-                            return json.loads(obj)
-                        except Exception:
-                            # try brace extraction
-                            s = obj; i, j = s.find("{"), s.rfind("}")
-                            if i >= 0 and j > i:
-                                return json.loads(s[i:j+1])
-                    if isinstance(obj, dict):
-                        for v in obj.values():
-                            r = _find_json_like(v)
-                            if r is not None:
-                                return r
-                    if isinstance(obj, list):
-                        for it in obj:
-                            r = _find_json_like(it)
-                            if r is not None:
-                                return r
-                    return None
-                found = _find_json_like(d)
-                if found is not None:
-                    meta = found
-                    if not _quality_ok(meta):
-                        meta = _try_enrich(meta)
-                    return meta
-        except Exception:
-            pass
-
-        # Fallback extractor for raw text
-        raw = str(response_text or "").strip()
-        i, j = raw.find("{"), raw.rfind("}")
-        if i >= 0 and j > i:
-            try:
-                meta = _json_lenient_parse(raw[i:j + 1]) or json.loads(raw[i:j + 1])
-                if not _quality_ok(meta):
-                    meta = _try_enrich(meta)
-                return meta
-            except Exception:
-                pass
-
-        # Sectional generation fallback: generate smaller JSON chunks and merge
-        try:
-            def _gen_section(title: str, tpl: str) -> Dict[str, Any] | None:
-                p = f"""
-You are generating STRICT JSON for the '{title}' section only. No prose, no markdown.
-KB Context (may help):
----
-{kb}
----
-Preset: {device_name} ({device_type})
-Parameter Values:
-{json.dumps(parameter_values, indent=2)}
-
-Expected JSON skeleton to fill (return exactly this object with content populated):
-{tpl}
-"""
-                r = model.generate_content(p, generation_config={
-                    "temperature": 0.0,
-                    "max_output_tokens": 2048,
-                    "top_p": 0.9,
-                    "response_mime_type": "application/json",
-                })
-                txt = getattr(r, "text", None)
-                if not txt:
-                    return None
-                return _json_lenient_parse(txt) or json.loads(txt)
-
-            desc = _gen_section(
-                "description",
-                json.dumps({
-                    "description": {
-                        "what": "",
-                        "when": ["", "", "", ""],
-                        "why": ""
-                    }
-                }, indent=2),
-            ) or {}
-
-            eng = _gen_section(
-                "audio_engineering",
-                json.dumps({
-                    "audio_engineering": {
-                        "space_type": "",
-                        "size": "",
-                        "decay_time": "",
-                        "predelay": "",
-                        "frequency_character": "",
-                        "stereo_width": "",
-                        "diffusion": "",
-                        "use_cases": [
-                            {"source": "", "context": "", "send_level": "", "send_level_rationale": "", "eq_prep": "", "eq_rationale": "", "notes": ""}
-                        ]
-                    }
-                }, indent=2),
-            ) or {}
-
-            nlc = _gen_section(
-                "natural_language_controls",
-                json.dumps({
-                    "natural_language_controls": {
-                        "tighter": {"params": {}, "explanation": ""},
-                        "looser": {"params": {}, "explanation": ""},
-                        "warmer": {"params": {}, "explanation": ""},
-                        "brighter": {"params": {}, "explanation": ""},
-                        "closer": {"params": {}, "explanation": ""},
-                        "further": {"params": {}, "explanation": ""},
-                        "wider": {"params": {}, "explanation": ""},
-                        "narrower": {"params": {}, "explanation": ""}
-                    }
-                }, indent=2),
-            ) or {}
-
-            merged: Dict[str, Any] = {}
-            for part in (desc, eng, nlc):
-                try:
-                    for k, v in (part or {}).items():
-                        merged[k] = v
-                except Exception:
-                    continue
-            if merged:
-                # Ensure minimum quality via enrichment if needed
-                if not _quality_ok(merged):
-                    merged = _try_enrich(merged)
-                return merged
-        except Exception:
-            pass
-
-        # If we still could not parse, return structured fallback
-        return _basic_metadata_fallback(device_name, device_type, parameter_values)
-
-    except Exception as e:
-        print(f"[LLM] Failed to generate metadata: {e}")
-        # Return minimal fallback metadata
-        return {
-            "description": {"what": f"{device_name} preset for {device_type}"},
-            "subcategory": "unknown",
-            "genre_tags": [],
-        }
-
-
-async def _ensure_device_mapping(
-    device_signature: str,
-    device_type: str,
-    params: list[dict],
-) -> None:
-    """Create or update device mapping in Firestore.
-
-    Creates a device_mappings document with parameter structure on first preset capture.
-
-    Args:
-        device_signature: SHA1 hash of parameter structure
-        device_type: Device type (reverb, delay, etc.)
-        params: List of parameter dicts with index, name, min, max
-    """
-    try:
-        # Skip if params list is empty or too small (device in transition)
-        if not params or len(params) < 5:
-            return
-
-        # Check if device mapping already exists
-        mapping = STORE.get_device_mapping(device_signature)
-        if mapping:
-            return
-
-
-        # Build params_meta (consolidated structure with all parameter info)
-        params_meta = []
-        for p in params:
-            param_info = {
-                "index": p.get("index"),
-                "name": p.get("name"),
-                "min": p.get("min", 0.0),
-                "max": p.get("max", 1.0),
-                # Additional fields will be added later by LLM analysis
-                "control_type": None,
-                "unit": None,
-                "min_display": None,
-                "max_display": None,
-            }
-            params_meta.append(param_info)
-
-        # Create device mapping document
-        import time as _time
-        mapping_data = {
-            "device_signature": device_signature,
-            "device_type": device_type,
-            "params_meta": params_meta,
-            "param_count": len(params_meta),
-            "created_at": int(_time.time()),
-            "updated_at": int(_time.time()),
-            "metadata_status": "pending_analysis",  # Waiting for LLM analysis
-        }
-
-        # Save to Firestore
-        saved = STORE.save_device_mapping(device_signature, mapping_data)
-        if saved:
-            pass  # Successfully saved device mapping
-        else:
-            pass  # Failed to save device mapping
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-
-
-async def _auto_capture_preset(
-    return_index: int,
-    device_index: int,
-    device_name: str,
-    device_type: str,
-    structure_signature: str,
-    params: list[dict],
-) -> None:
-    """Auto-capture preset in background when device with learned structure is loaded.
-
-    Workflow:
-    1. Generate preset_id from device_type + device_name
-    2. Check if preset already exists in Firestore (skip if exists)
-    3. Extract parameter values from provided params
-    4. Call LLM to generate comprehensive metadata
-    5. Save to Firestore presets collection
-
-    Args:
-        return_index: Return track index
-        device_index: Device index on return track
-        device_name: Full device name (e.g., "Reverb Ambience Medium")
-        device_type: Detected device type (reverb, delay, etc.)
-        structure_signature: Structure-based signature
-        params: List of parameter dicts with 'name' and 'value'
-    """
-    try:
-        # Generate preset_id from device name
-        # Format: devicetype_presetname (e.g., reverb_ambience_medium)
-        preset_id = f"{device_type}_{device_name.lower().replace(' ', '_')}"
-
-        # Check if preset already exists; if it exists but has empty/partial values, refresh it
-        existing = STORE.get_preset(preset_id)
-        if existing:
-            pv = existing.get("parameter_values") or {}
-            status = str(existing.get("metadata_status") or "").lower()
-            version = int(existing.get("metadata_version") or 0)
-            # If this exists only locally, ensure it is present in Firestore
-            try:
-                saved_remote = STORE.save_preset(preset_id, existing, local_only=False)
-                if saved_remote:
-                    pass  # Successfully saved to Firestore
-            except Exception:
-                pass
-            # If values are sufficient, do not re-capture
-            if isinstance(pv, dict) and len(pv) >= 5:
-                # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment
-                return
-            else:
-                pass  # Need to refresh preset values
-
-        # Extract parameter values AND display values from provided params
-        parameter_values = {}
-        parameter_display_values = {}
-        for p in params:
-            param_name = p.get("name")
-            param_value = p.get("value")
-            param_display = p.get("display_value")
-
-            if param_name and param_value is not None:
-                parameter_values[param_name] = float(param_value)
-
-                # Store display value if available
-                if param_display is not None:
-                    parameter_display_values[param_name] = str(param_display)
-
-        # Generate metadata (fast-path optional)
-        metadata = {}
-        fast_path = str(os.getenv("SKIP_LOCAL_METADATA_GENERATION", "")).lower() in ("1","true","yes","on")
-        if fast_path:
-            metadata = {"metadata_status": "pending_enrichment"}
-        else:
-            metadata = await _generate_preset_metadata_llm(
-                device_name=device_name,
-                device_type=device_type,
-                parameter_values=parameter_values,
-            )
-
-        # Create preset data
-        import time as _time
-        preset_data = {
-            "name": device_name,
-            "device_name": device_name.split()[0] if ' ' in device_name else device_name,
-            "manufacturer": "Ableton",
-            "daw": "Ableton Live",
-            "structure_signature": structure_signature,
-            "device_signature": structure_signature,  # Alias for clarity
-            "category": device_type,
-            "preset_type": "stock",
-            "parameter_values": parameter_values,
-            "parameter_display_values": parameter_display_values,  # NEW: Display values
-            "values_status": "ok" if len(parameter_values) >= 5 else "pending",
-            "metadata_status": "captured",  # NEW: Track enrichment status
-            "captured_at": int(_time.time()),
-            "updated_at": int(_time.time()),
-            **metadata  # LLM-generated or pending_enrichment flag
-        }
-
-        # Create/update device mapping (first time only per device signature)
-        await _ensure_device_mapping(structure_signature, device_type, params)
-
-        # Save to Firestore (and local cache)
-        saved = STORE.save_preset(preset_id, preset_data, local_only=False)
-
-        if saved:
-            try:
-                # Notify UI via SSE so it can refresh preset listings/state
-                await broker.publish({
-                    "event": "preset_captured",
-                    "return": return_index,
-                    "device": device_index,
-                    "preset_id": preset_id,
-                    "device_type": device_type,
-                    "device_name": device_name,
-                    "signature": structure_signature,
-                })
-            except Exception:
-                pass
-            # NOTE: Old Cloud Run enrichment disabled - using ChatGPT batch enrichment instead
-            # Enrichment will be done manually after all presets are captured:
-            # 1. Export presets with export_for_enrichment.py
-            # 2. Feed to ChatGPT with enrichment prompt
-            # 3. Apply results with apply_enrichments.py
-            # try:
-            #     enqueued = enqueue_preset_enrich(preset_id, metadata_version=1)
-            #     if enqueued:
-            #         print(f"[PUBSUB] ✓ Enqueued preset_enrich_requested for {preset_id}")
-            #     else:
-            #         print(f"[PUBSUB] ⊘ Pub/Sub not configured (set PUBSUB_TOPIC in .env)")
-            # except Exception as e:
-            #     print(f"[PUBSUB] ✗ Failed to enqueue: {e}")
-            # Post-save verification and optional retry for empty values
-            try:
-                asyncio.create_task(_verify_and_retry_preset(preset_id, return_index, device_index))
-            except Exception:
-                pass
-        else:
-            pass  # Fast-path: metadata skipped
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-
-
-async def _verify_and_retry_preset(
-    preset_id: str,
-    return_index: int,
-    device_index: int,
-    *,
-    min_params: int = 5,
-    max_retries: int = 3,
-    attempt: int = 0,
-) -> None:
-    """Verify preset parameter_values persisted; if not, retry capture with backoff.
-
-    Uses live device indices to re-read values. Emits SSE events for progress.
-    """
-    try:
-        import asyncio as _asyncio
-        import time as _time
-        preset = STORE.get_preset(preset_id)
-        count = len((preset or {}).get("parameter_values") or {})
-        if count >= min_params:
-            # success
-            try:
-                await broker.publish({
-                    "event": "preset_verified",
-                    "preset_id": preset_id,
-                    "values_ok": True,
-                    "count": count,
-                })
-            except Exception:
-                pass
-            return
-
-        if attempt >= max_retries:
-            # give up
-            try:
-                await broker.publish({
-                    "event": "preset_verify_failed",
-                    "preset_id": preset_id,
-                    "values_ok": False,
-                    "count": count,
-                })
-            except Exception:
-                pass
-            return
-
-        # backoff: 1s, 3s, 10s
-        backoffs = [1.0, 3.0, 10.0]
-        delay = backoffs[min(attempt, len(backoffs)-1)]
-        await _asyncio.sleep(delay)
-
-        # Re-read live params and update preset values
-        rd = udp_request({
-            "op": "get_return_device_params",
-            "return_index": int(return_index),
-            "device_index": int(device_index),
-        }, timeout=1.2)
-        rparams = ((rd or {}).get("data") or {}).get("params") or []
-        live_vals: Dict[str, float] = {}
-        live_disp: Dict[str, str] = {}
-        for p in rparams:
-            nm = p.get("name")
-            val = p.get("value")
-            disp = p.get("display_value")
-            if nm is not None and val is not None:
-                live_vals[str(nm)] = float(val)
-            if nm is not None and disp is not None:
-                live_disp[str(nm)] = str(disp)
-
-        if live_vals:
-            # merge into preset doc
-            preset = preset or {}
-            preset["parameter_values"] = live_vals
-            preset["values_status"] = "ok" if len(live_vals) >= min_params else "pending"
-            preset["updated_at"] = int(_time.time())
-            if live_disp:
-                preset["parameter_display_values"] = live_disp
-            STORE.save_preset(preset_id, preset, local_only=False)
-
-        try:
-            await broker.publish({
-                "event": "preset_retry",
-                "preset_id": preset_id,
-                "attempt": attempt + 1,
-                "count": len(live_vals),
-            })
-        except Exception:
-            pass
-
-        # Recurse for next verify
-        await _verify_and_retry_preset(
-            preset_id,
-            return_index,
-            device_index,
-            min_params=min_params,
-            max_retries=max_retries,
-            attempt=attempt + 1,
-        )
-    except Exception:
-        pass
-
-
 @app.post("/return/device/learn")
 def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
     if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
@@ -1662,7 +453,7 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
     if not params:
         return {"ok": False, "reason": "no_params"}
 
-    signature = _make_device_signature(dname, params)
+    signature = make_device_signature(dname, params)
 
     learned_params: list[dict] = []
 
@@ -1706,7 +497,7 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
                     disp_num = float(m.group(0))
                 if unit is None:
                     # crude unit detection
-                    unit = _parse_unit_from_display(disp)
+                    unit = parse_unit_from_display(disp)
             except Exception:
                 disp_num = None
             samples.append({"value": float(val), "display": disp, "display_num": disp_num})
@@ -1721,9 +512,9 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
         }, timeout=0.6)
 
         # Classify control type and labels if any
-        ctype, labels = _classify_control_type(samples, vmin, vmax)
-        gname, role, _m = _group_role_for_device(dname, name)
-        fit = _fit_models(samples) if ctype == "continuous" else None
+        ctype, labels = classify_control_type(samples, vmin, vmax)
+        gname, role, _m = group_role_for_device(dname, name)
+        fit = fit_models(samples) if ctype == "continuous" else None
         label_map = None
         if ctype in ("binary", "quantized"):
             label_map = {}
@@ -1747,8 +538,8 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
         })
 
     # Save to mapping store (Firestore)
-    groups_meta = _build_groups_from_params(learned_params, dname)
-    device_type = _detect_device_type(params, dname)
+    groups_meta = build_groups_from_params(learned_params, dname)
+    device_type = detect_device_type(params, dname)
     saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
 
@@ -1793,7 +584,7 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                     break
             params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
             params = ((params_resp or {}).get("data") or {}).get("params") or []
-            signature = _make_device_signature(dname or f"Device {di}", params)
+            signature = make_device_signature(dname or f"Device {di}", params)
             total_steps = max(1, len(params) * res)
             LEARN_JOBS[job_id].update({"state": "running", "progress": 0, "total": total_steps, "signature": signature})
 
@@ -1890,7 +681,7 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                         if dp is None: continue
                         disp = str(dp.get("display_value", ""))
                         if unit is None:
-                            unit = _parse_unit_from_display(disp)
+                            unit = parse_unit_from_display(disp)
                         disp_num = None
                         try:
                             m = _re_search(r"-?\d+(?:\.\d+)?", disp)
@@ -1901,12 +692,12 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                         step += 1
                         LEARN_JOBS[job_id].update({"progress": min(step, total_steps), "message": f"{name}: {i+1}/{res}"})
                     control_type = "continuous"
-                    fit = _fit_models(samples) or None
+                    fit = fit_models(samples) or None
 
                 # restore
                 udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(v0)}, timeout=0.6)
                 # Group/role annotation
-                gname, role, _m = _group_role_for_device(dname, name)
+                gname, role, _m = group_role_for_device(dname, name)
                 learned_params.append({
                     "index": idx,
                     "name": name,
@@ -1924,8 +715,8 @@ async def learn_return_device_start(body: LearnStartBody) -> Dict[str, Any]:
                 })
 
             # Build groups metadata from learned params
-            groups_meta = _build_groups_from_params(learned_params, dname)
-            device_type = _detect_device_type(params, dname)
+            groups_meta = build_groups_from_params(learned_params, dname)
+            device_type = detect_device_type(params, dname)
             # Always save locally to avoid losing long scans
             local_saved = STORE.save_device_map_local(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
             saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
@@ -1969,7 +760,7 @@ def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
         raise HTTPException(404, "device_not_found")
     params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
     params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = _make_device_signature(dname or f"Device {di}", params)
+    signature = make_device_signature(dname or f"Device {di}", params)
 
     H = PLC.get("heuristics", {})
     lin_units = [str(u).lower() for u in (H.get("linear_units") or [])]
@@ -1987,7 +778,7 @@ def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
         vmin = float(p.get("min", 0.0)); vmax = float(p.get("max", 1.0))
         v0 = float(p.get("value", 0.0))
         span = vmax - vmin if vmax != vmin else 1.0
-        unit_guess = _parse_unit_from_display(str(p.get("display_value", "")))
+        unit_guess = parse_unit_from_display(str(p.get("display_value", "")))
 
         # Quick enum detection
         labels = set()
@@ -2051,17 +842,17 @@ def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
                 samples.append({"value": float(val), "display": disp, "display_num": dnum})
             for t in anchors:
                 probe(float(t))
-            fit = _fit_models(samples)
+            fit = fit_models(samples)
             if not fit or float(fit.get("r2", 0.0)) < r2_accept:
                 for t in extra_anchors[:max_extra]:
                     probe(float(t))
-                fit = _fit_models(samples)
+                fit = fit_models(samples)
 
         # restore
         udp_request({"op": "set_return_device_param", "return_index": ri, "device_index": di, "param_index": idx, "value": float(v0)}, timeout=0.6)
 
-        ctype, labels_list = _classify_control_type(samples, vmin, vmax)
-        gname, role, _m = _group_role_for_device(dname, name)
+        ctype, labels_list = classify_control_type(samples, vmin, vmax)
+        gname, role, _m = group_role_for_device(dname, name)
         learned_params.append({
             "index": idx,
             "name": name,
@@ -2077,8 +868,8 @@ def learn_return_device_quick(body: LearnQuickBody) -> Dict[str, Any]:
             "role": role,
         })
 
-    groups_meta = _build_groups_from_params(learned_params, dname)
-    device_type = _detect_device_type(params, dname)
+    groups_meta = build_groups_from_params(learned_params, dname)
+    device_type = detect_device_type(params, dname)
     local_ok = STORE.save_device_map_local(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     fs_ok = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
     return {"ok": True, "signature": signature, "local_saved": local_ok, "saved": fs_ok, "param_count": len(learned_params)}
@@ -2115,9 +906,9 @@ def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = 
         vmin = float(p.get("min", 0.0))
         vmax = float(p.get("max", 1.0))
         samples = p.get("samples") or []
-        unit = p.get("unit") or ( _parse_unit_from_display(str(samples[0].get("display", ""))) if samples else None )
-        ctype, labels = _classify_control_type(samples, vmin, vmax)
-        gname, role, _m = _group_role_for_device(data.get("device_name"), name)
+        unit = p.get("unit") or (parse_unit_from_display(str(samples[0].get("display", ""))) if samples else None)
+        ctype, labels = classify_control_type(samples, vmin, vmax)
+        gname, role, _m = group_role_for_device(data.get("device_name"), name)
         label_map = p.get("label_map")
         if ctype in ("binary", "quantized") and not label_map:
             label_map = {}
@@ -2125,7 +916,7 @@ def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = 
                 lab = str(s.get("display", ""))
                 if lab not in label_map:
                     label_map[lab] = float(s.get("value", vmin))
-        fit = p.get("fit") or (_fit_models(samples) if ctype == "continuous" else None)
+        fit = p.get("fit") or (fit_models(samples) if ctype == "continuous" else None)
         p.update({
             "control_type": ctype,
             "unit": unit,
@@ -2136,8 +927,8 @@ def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = 
             "role": role,
         })
         updated_params.append(p)
-    groups_meta = _build_groups_from_params(updated_params, data.get("device_name"))
-    device_type = _detect_device_type(updated_params, data.get("device_name"))
+    groups_meta = build_groups_from_params(updated_params, data.get("device_name"))
+    device_type = detect_device_type(updated_params, data.get("device_name"))
     ok_local = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
     ok_fs = STORE.save_device_map(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
     return {"ok": True, "signature": signature, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
@@ -2153,57 +944,7 @@ def _compute_signature_for(index: int, device: int) -> str:
             break
     params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
     params = ((params_resp or {}).get("data") or {}).get("params") or []
-    return _make_device_signature(dname or f"Device {device}", params)
-
-
-def _fit_models(samples: list[dict]) -> dict | None:
-    # Use numeric samples only
-    pts = [(float(s["value"]), float(s["display_num"])) for s in samples if s.get("display_num") is not None]
-    pts = [(x, y) for x, y in pts if math.isfinite(x) and math.isfinite(y)]
-    if len(pts) < 3:
-        return None
-    pts.sort(key=lambda t: t[0])
-    xs = [p[0] for p in pts]
-    ys = [p[1] for p in pts]
-    def lin_fit(u, v):
-        n = len(u)
-        sx = sum(u); sy = sum(v)
-        sxx = sum(a*a for a in u); sxy = sum(a*b for a,b in zip(u,v))
-        den = n*sxx - sx*sx
-        if den == 0: return None
-        a = (n*sxy - sx*sy) / den  # slope
-        b = (sy - a*sx)/n
-        # R^2
-        yhat = [a*t + b for t in u]
-        ss_res = sum((vi - hi)**2 for vi, hi in zip(v, yhat))
-        ymean = sy/n
-        ss_tot = sum((vi - ymean)**2 for vi in v) or 1.0
-        r2 = 1.0 - ss_res/ss_tot
-        return {"type": "linear", "a": a, "b": b, "r2": r2}
-    def log_fit(u, v):
-        u2 = [math.log(max(1e-9, t)) for t in u]
-        return lin_fit(u2, v) and {**lin_fit(u2, v), "type": "log", "x_transform": "ln(x)"}
-    def exp_fit(u, v):
-        # Fit ln(y) = a*x + b -> y = exp(b)*exp(a*x)
-        if any(val <= 0 for val in v):
-            return None
-        v2 = [math.log(val) for val in v]
-        fit = lin_fit(u, v2)
-        if not fit: return None
-        a = fit["a"]; b = fit["b"]; r2 = fit["r2"]
-        return {"type": "exp", "a": a, "b": b, "r2": r2}
-    cands = []
-    f1 = lin_fit(xs, ys)
-    if f1: cands.append(f1)
-    f2 = log_fit(xs, ys)
-    if f2: cands.append(f2)
-    f3 = exp_fit(xs, ys)
-    if f3: cands.append(f3)
-    best = max(cands, key=lambda d: d["r2"]) if cands else None
-    if best and best["r2"] >= 0.9:
-        return best
-    # Fallback: piecewise linear segments (store sorted sample pairs)
-    return {"type": "piecewise", "r2": best["r2"] if best else 0.0, "points": [{"x": x, "y": y} for x,y in pts]}
+    return make_device_signature(dname or f"Device {device}", params)
 
 
 """/mappings/fit moved to server.api.device_mapping"""
@@ -2267,10 +1008,11 @@ async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
             pass
 
     # Generate new metadata (with fallback handled inside the function)
-    metadata = await _generate_preset_metadata_llm(
+    metadata = await generate_preset_metadata_llm(
         device_name=device_name,
         device_type=device_type,
         parameter_values=parameter_values,
+        store=STORE,
     )
 
     # Allowed metadata keys to merge
@@ -2400,10 +1142,11 @@ async def backfill_preset_metadata(body: BackfillBody) -> Dict[str, Any]:
                         dtype = preset.get("category") or preset.get("device_type") or (device_type or "unknown")
                         pvals = dict(preset.get("parameter_values") or {})
 
-                        metadata = await _generate_preset_metadata_llm(
+                        metadata = await generate_preset_metadata_llm(
                             device_name=dname,
                             device_type=dtype,
                             parameter_values=pvals,
+                            store=STORE,
                         )
                         allowed = {"description", "audio_engineering", "natural_language_controls", "warnings", "genre_tags", "subcategory"}
                         if fields_allow:
@@ -2491,7 +1234,12 @@ async def backfill_preset_metadata_by_ids(body: BackfillIdsBody) -> Dict[str, An
                         completed += 1
                         await broker.publish({"event": "preset_backfill_item", "preset_id": pid, "status": "dry_run"})
                         return
-                    meta = await _generate_preset_metadata_llm(device_name=dname, device_type=dtype, parameter_values=pvals)
+                    meta = await generate_preset_metadata_llm(
+                        device_name=dname,
+                        device_type=dtype,
+                        parameter_values=pvals,
+                        store=STORE,
+                    )
                     allowed = {"description", "audio_engineering", "natural_language_controls", "warnings", "genre_tags", "subcategory"}
                     if fields_allow:
                         allowed = allowed.intersection(set(fields_allow))
@@ -3992,8 +2740,8 @@ def save_as_user_preset(body: SaveUserPresetBody) -> Dict[str, Any]:
         if nm is not None and val is not None:
             parameter_values[str(nm)] = float(val)
 
-    signature = _make_device_signature(device_name, params)
-    device_type = _detect_device_type(params, device_name)
+    signature = make_device_signature(device_name, params)
+    device_type = detect_device_type(params, device_name)
 
     preset_id = f"{device_type}_user_{body.preset_name.lower().replace(' ', '_')}"
     preset_data = {
