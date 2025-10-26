@@ -639,9 +639,8 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
         if updated_param:
             new_display = updated_param.get("display_value") or str(preview["value"])
             new_val = float(updated_param.get("value", preview["value"]))
-            devs = request_op("get_return_devices", timeout=0.8, return_index=ri)
-            devices = ((devs or {}).get("data") or {}).get("devices") or []
-            dname = next((str(d.get("name", "")) for d in devices if int(d.get("index", -1)) == di), f"Device {di}")
+            # Reuse device_name from earlier fetch (line 422-429) to avoid redundant request
+            dname = device_name if device_name else f"Device {di}"
             return_letter = chr(ord('A') + ri)
             summary = generate_device_param_summary(
                 param_name=str(sel.get("name", "")),

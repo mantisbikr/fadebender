@@ -6,12 +6,13 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from server.core.events import broker
+from server.core.events import broker, schedule_emit
 from server.services.ableton_client import request_op, data_or_raw
 from server.core.deps import get_store
 from server.services.mapping_utils import make_device_signature
 import re as _re
 from server.core.deps import get_store
+from server.services.history import DEVICE_BYPASS_CACHE, UNDO_STACK, REDO_STACK
 
 
 router = APIRouter()
@@ -59,6 +60,166 @@ def get_return_routing(index: int) -> Dict[str, Any]:
     except Exception:
         data["sends_capable"] = False
     return {"ok": True, "data": data}
+
+
+class BypassBody(BaseModel):
+    return_index: int
+    device_index: int
+    on: bool  # True = turn on, False = bypass/off
+
+
+def _find_device_param(params: list[dict], names: list[str]) -> Optional[dict]:
+    for nm in names:
+        p = next((x for x in params if str(x.get("name", "")).lower() == nm.lower()), None)
+        if p:
+            return p
+    return None
+
+
+@router.post("/return/device/bypass")
+def bypass_return_device(body: BypassBody) -> Dict[str, Any]:
+    ri = int(body.return_index)
+    di = int(body.device_index)
+    resp = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=di)
+    params = ((resp or {}).get("data") or resp or {}).get("params") or []
+    if not params:
+        raise HTTPException(404, "device_params_not_found")
+
+    dev_on = _find_device_param(params, ["Device On"])
+    if dev_on is not None:
+        idx = int(dev_on.get("index", -1))
+        if idx < 0:
+            raise HTTPException(500, "invalid_param_index")
+        prev = float(dev_on.get("value", 1.0))
+        target = 1.0 if body.on else 0.0
+        ok = request_op(
+            "set_return_device_param",
+            timeout=0.8,
+            return_index=ri,
+            device_index=di,
+            param_index=idx,
+            value=float(target),
+        )
+        if ok and ok.get("ok", True):
+            UNDO_STACK.append(
+                {
+                    "type": "device_param",
+                    "return_index": ri,
+                    "device_index": di,
+                    "param_index": idx,
+                    "prev": prev,
+                    "new": target,
+                }
+            )
+            REDO_STACK.clear()
+            try:
+                schedule_emit({"event": "device_bypass_changed", "return_index": ri, "device_index": di, "on": body.on})
+            except Exception:
+                pass
+            return {"ok": True, "method": "device_on", "prev": prev, "new": target}
+        raise HTTPException(502, "set_param_failed")
+
+    drywet = _find_device_param(params, ["Dry/Wet", "Mix"])
+    if drywet is None:
+        raise HTTPException(400, "no_bypass_strategy_available")
+    idx = int(drywet.get("index", -1))
+    if idx < 0:
+        raise HTTPException(500, "invalid_param_index")
+    prev = float(drywet.get("value", 0.0))
+    key = (ri, di)
+    if not body.on:
+        if prev > 0.0:
+            DEVICE_BYPASS_CACHE[key] = prev
+        target = 0.0
+    else:
+        restore = DEVICE_BYPASS_CACHE.get(key, None)
+        target = float(restore if restore is not None else max(prev, 0.25))
+    ok = request_op(
+        "set_return_device_param",
+        timeout=0.8,
+        return_index=ri,
+        device_index=di,
+        param_index=idx,
+        value=float(target),
+    )
+    if ok and ok.get("ok", True):
+        UNDO_STACK.append(
+            {
+                "type": "device_param",
+                "return_index": ri,
+                "device_index": di,
+                "param_index": idx,
+                "prev": prev,
+                "new": target,
+            }
+        )
+        REDO_STACK.clear()
+        if body.on and key in DEVICE_BYPASS_CACHE:
+            try:
+                del DEVICE_BYPASS_CACHE[key]
+            except Exception:
+                pass
+        try:
+            schedule_emit({"event": "device_bypass_changed", "return_index": ri, "device_index": di, "on": body.on})
+        except Exception:
+            pass
+        return {"ok": True, "method": "drywet", "prev": prev, "new": target}
+    raise HTTPException(502, "set_param_failed")
+
+
+class SaveUserPresetBody(BaseModel):
+    return_index: int
+    device_index: int
+    preset_name: str
+    user_id: Optional[str] = None
+
+
+@router.post("/return/device/save_as_user_preset")
+def save_as_user_preset(body: SaveUserPresetBody) -> Dict[str, Any]:
+    ri = int(body.return_index)
+    di = int(body.device_index)
+    devs = request_op("get_return_devices", timeout=1.0, return_index=ri) or {}
+    devices = ((devs.get("data") or devs) if isinstance(devs, dict) else devs).get("devices", [])
+    if di >= len(devices):
+        raise HTTPException(404, "device_index_out_of_range")
+    device = devices[di]
+    device_name = device.get("name", "Unknown")
+
+    params_resp = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=di) or {}
+    params = ((params_resp.get("data") or params_resp) if isinstance(params_resp, dict) else params_resp).get("params", [])
+    if not params:
+        raise HTTPException(500, "device_params_fetch_failed")
+
+    parameter_values: Dict[str, float] = {}
+    for p in params:
+        nm = p.get("name")
+        val = p.get("value")
+        if nm is not None and val is not None:
+            parameter_values[str(nm)] = float(val)
+
+    signature = make_device_signature(device_name, params)
+    device_type = detect_device_type(params, device_name)
+
+    preset_id = f"{device_type}_user_{body.preset_name.lower().replace(' ', '_')}"
+    preset_data = {
+        "name": body.preset_name,
+        "device_name": device_name,
+        "manufacturer": "Ableton",
+        "daw": "Ableton Live",
+        "structure_signature": signature,
+        "category": device_type,
+        "preset_type": "user",
+        "user_id": body.user_id,
+        "parameter_values": parameter_values,
+    }
+
+    store = get_store()
+    ok = store.save_preset(preset_id, preset_data, local_only=False)
+    try:
+        schedule_emit({"event": "preset_saved", "preset_id": preset_id, "name": body.preset_name})
+    except Exception:
+        pass
+    return {"ok": bool(ok), "preset_id": preset_id, "device_type": device_type, "signature": signature}
 
 
 @router.post("/return/routing")
