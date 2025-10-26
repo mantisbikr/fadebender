@@ -14,6 +14,7 @@ from config.llm_config import get_llm_project_id, get_llm_api_key, get_default_m
 from prompts.prompt_builder import build_daw_prompt
 from models.intent_types import Intent
 from fetchers import fetch_session_devices, fetch_preset_devices, fetch_mixer_params
+from parsers.typo_corrector import apply_typo_corrections
 
 
 def interpret_daw_command(
@@ -90,29 +91,8 @@ def interpret_daw_command(
 
 def _fallback_daw_parse(query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any]:
     """Simple rule-based fallback parser for basic DAW commands."""
-    q = query.lower().strip()
-    # Ordinal word mapping for device selection (first..tenth)
-    ordinal_words = {
-        'first': '1', 'second': '2', 'third': '3', 'fourth': '4', 'fifth': '5',
-        'sixth': '6', 'seventh': '7', 'eighth': '8', 'ninth': '9', 'tenth': '10'
-    }
-    for w, d in ordinal_words.items():
-        q = __import__('re').sub(rf"\b{w}\b", d, q)
-    # Light typo corrections to improve robustness when LLM is unavailable
-    # Config-driven typo corrections (falls back to defaults if config unavailable)
-    try:
-        from server.config.app_config import get_typo_corrections  # type: ignore
-        typo_map = get_typo_corrections() or {}
-    except Exception:
-        typo_map = {
-            'retrun': 'return', 'retun': 'return',
-            'revreb': 'reverb', 'reverbb': 'reverb', 'revebr': 'reverb', 'reverv': 'reverb',
-            'strereo': 'stereo', 'streo': 'stereo', 'stere': 'stereo',
-            'tack': 'track', 'trck': 'track', 'trac': 'track',
-            'sennd': 'send', 'snd': 'send',
-        }
-    for k, v in typo_map.items():
-        q = __import__('re').sub(rf"\b{k}\b", v, q)
+    # Apply typo corrections and expand ordinal words
+    q = apply_typo_corrections(query)
 
     # Absolute volume set: "set track 1 volume to -6 dB" (unit optional: dB, %, or normalized)
     # Also accept variants like "set the volume of track 1 to -6db", or without unit: "set track 1 volume to 0.5"
