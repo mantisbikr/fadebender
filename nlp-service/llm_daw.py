@@ -13,46 +13,7 @@ from typing import Any, Dict, List
 from config.llm_config import get_llm_project_id, get_llm_api_key, get_default_model_name
 from prompts.prompt_builder import build_daw_prompt
 from models.intent_types import Intent
-
-
-def _fetch_session_devices() -> List[Dict[str, str]] | None:
-    """Fetch all devices from current Live session snapshot."""
-    try:
-        import requests
-        resp = requests.get("http://127.0.0.1:8722/snapshot", timeout=2.0)
-        if not resp.ok:
-            return None
-
-        snapshot = resp.json()
-        if not snapshot or not snapshot.get("ok"):
-            return None
-
-        devices = []
-        seen = set()
-
-        # Extract from data.devices structure (more detailed)
-        data = snapshot.get("data", {})
-        device_data = data.get("devices", {})
-
-        # Process track devices
-        for track_idx, track_info in device_data.get("tracks", {}).items():
-            for dev in track_info.get("devices", []):
-                name = dev.get("name", "").strip()
-                if name and name not in seen:
-                    devices.append({"name": name, "type": "unknown"})
-                    seen.add(name)
-
-        # Process return devices
-        for return_idx, return_info in device_data.get("returns", {}).items():
-            for dev in return_info.get("devices", []):
-                name = dev.get("name", "").strip()
-                if name and name not in seen:
-                    devices.append({"name": name, "type": "unknown"})
-                    seen.add(name)
-
-        return devices if devices else None
-    except Exception:
-        return None
+from fetchers import fetch_session_devices, fetch_preset_devices, fetch_mixer_params
 
 
 def interpret_daw_command(
@@ -61,45 +22,15 @@ def interpret_daw_command(
     strict: bool | None = None,
 ) -> Intent:
     """Interpret user query into DAW commands using Vertex AI if available."""
-    mixer_params = None
-    known_devices = None
-
     # PRIORITY 1: Fetch devices from current Live session (most accurate)
-    try:
-        known_devices = _fetch_session_devices()
-    except Exception:
-        pass
+    known_devices = fetch_session_devices()
 
     # PRIORITY 2: Fall back to Firestore presets only if session fetch failed
     if not known_devices:
-        try:
-            import sys
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
-            from services.mapping_store import MappingStore
-            store = MappingStore()
-
-            presets = store.list_presets()
-            if presets:
-                known_devices = []
-                seen = set()
-                for p in presets:
-                    name = p.get("device_name") or p.get("name")
-                    dtype = p.get("device_type") or "unknown"
-                    if name and name not in seen:
-                        known_devices.append({"name": name, "type": dtype})
-                        seen.add(name)
-        except Exception:
-            pass
+        known_devices = fetch_preset_devices()
 
     # Fetch mixer params from Firestore
-    try:
-        import sys
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
-        from services.mapping_store import MappingStore
-        store = MappingStore()
-        mixer_params = store.get_mixer_param_names()
-    except Exception:
-        pass
+    mixer_params = fetch_mixer_params()
 
     # Fallback to hardcoded lists if Firestore unavailable
     if not mixer_params:
