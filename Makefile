@@ -159,7 +159,14 @@ outline:
 	@curl -sS --max-time 3 http://127.0.0.1:$${SERVER_PORT-8722}/project/outline | jq .
 
 launch-live:
-	@set -a && [ -f .env ] && . ./.env && set +a && python3 scripts/launch_live_mac.py
+	@set -a && [ -f .env ] && . ./.env && set +a && \
+	  if [ -n "$$APP" ]; then \
+	    python3 scripts/launch_live_mac.py --app-name "$$APP"; \
+	  elif [ -n "$$LIVE_APP_NAME" ]; then \
+	    python3 scripts/launch_live_mac.py --app-name "$$LIVE_APP_NAME"; \
+	  else \
+	    python3 scripts/launch_live_mac.py; \
+	  fi
 
 live-dev: stop-udp install-remote launch-live
 

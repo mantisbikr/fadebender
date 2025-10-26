@@ -924,6 +924,36 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     return () => clearInterval(id);
   }, [tab, selectedIndex, isAdjusting, trackRefreshMs]);
 
+  // Poll track sends when accordions are expanded
+  useEffect(() => {
+    if (tab !== 0) return;
+    const expandedTracks = Object.keys(trackSends).map(Number);
+    if (expandedTracks.length === 0) return;
+
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (now < adjustingUntilRef.current || isAdjusting) return;
+      expandedTracks.forEach(trackIdx => {
+        fetchTrackSends(trackIdx, { silent: true });
+      });
+    }, sendsFastRefreshMs);
+    return () => clearInterval(id);
+  }, [tab, trackSends, isAdjusting, sendsFastRefreshMs]);
+
+  // Poll return sends when accordions are expanded
+  useEffect(() => {
+    if (tab !== 1) return;
+    const expandedReturns = Object.keys(returnSends).map(Number);
+    if (expandedReturns.length === 0) return;
+
+    const id = setInterval(() => {
+      expandedReturns.forEach(returnIdx => {
+        fetchReturnSends(returnIdx, { silent: true });
+      });
+    }, sendsFastRefreshMs);
+    return () => clearInterval(id);
+  }, [tab, returnSends, sendsFastRefreshMs]);
+
   // When outline is fetched the first time, set selected to outline.selected_track if present
   useEffect(() => {
     if (!outline) return;

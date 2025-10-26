@@ -313,6 +313,19 @@ def set_track_send(intent: CanonicalIntent) -> Dict[str, Any]:
     except Exception:
         pass
 
+    # Emit SSE event for real-time UI updates
+    try:
+        import asyncio
+        from server.core.deps import get_broker
+        broker = get_broker()
+        asyncio.create_task(broker.publish({
+            "event": "send_changed",
+            "track": track_idx,
+            "send_index": send_idx,
+        }))
+    except Exception:
+        pass
+
     return resp
 
 
@@ -396,6 +409,19 @@ def set_return_send(intent: CanonicalIntent) -> Dict[str, Any]:
     try:
         from server.api.cap_utils import ensure_capabilities  # type: ignore
         resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
+    except Exception:
+        pass
+
+    # Emit SSE event for real-time UI updates
+    try:
+        import asyncio
+        from server.core.deps import get_broker
+        broker = get_broker()
+        asyncio.create_task(broker.publish({
+            "event": "return_send_changed",
+            "return": return_idx,
+            "send_index": send_idx,
+        }))
     except Exception:
         pass
 

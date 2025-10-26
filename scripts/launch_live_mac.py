@@ -7,6 +7,11 @@ Usage:
 
 Finds an Ableton Live app under /Applications if not specified, sets
 FADEBENDER_UDP_ENABLE=1 and ABLETON_UDP_* env, and execs the Live binary.
+
+Selection order when --app-name is not provided:
+  1) LIVE_APP_NAME or ABLETON_APP_NAME env (exact bundle name)
+  2) Prefer editions in order: Suite > Standard > Intro > (deprioritize Trial)
+  3) First glob match
 """
 from __future__ import annotations
 
@@ -15,15 +20,47 @@ import glob
 import os
 import subprocess
 from pathlib import Path
+from typing import Iterable
+
+
+def _score_name(name: str) -> int:
+    n = name.lower()
+    # Higher is better
+    if "suite" in n:
+        return 400
+    if "standard" in n:
+        return 300
+    if "intro" in n:
+        return 200
+    # Trial is deprioritized
+    if "trial" in n:
+        return 0
+    # Neutral default
+    return 100
+
+
+def _prefer(matches: Iterable[str]) -> Path | None:
+    items = list(matches)
+    if not items:
+        return None
+    items.sort(key=lambda s: (_score_name(s), s), reverse=True)
+    return Path(items[0])
 
 
 def find_live_app(app_name: str | None) -> Path | None:
+    # 1) explicit CLI arg
     if app_name:
         p = Path("/Applications") / app_name
         return p if p.exists() else None
-    # Fallback: pick the first match
+    # 2) environment override for exact bundle name
+    env_choice = os.getenv("LIVE_APP_NAME") or os.getenv("ABLETON_APP_NAME")
+    if env_choice:
+        p = Path("/Applications") / env_choice
+        if p.exists():
+            return p
+    # 3) prefer editions (Suite > Standard > Intro > Trial)
     matches = glob.glob("/Applications/Ableton Live *.app") or glob.glob("/Applications/Ableton Live*.app")
-    return Path(matches[0]) if matches else None
+    return _prefer(matches)
 
 
 def main() -> int:
