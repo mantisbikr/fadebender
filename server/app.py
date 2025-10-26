@@ -3258,6 +3258,46 @@ def chat(body: ChatBody) -> Dict[str, Any]:
 
     intent = interpret_daw_command(text_lc, model_preference=body.model, strict=body.strict)
 
+    # Transform NLP intent to canonical format (like /intent/parse does)
+    from server.services.intent_mapper import map_llm_to_canonical
+    canonical, errors = map_llm_to_canonical(intent)
+
+    # If we got a valid canonical intent, execute it directly
+    if canonical and body.confirm:
+        try:
+            from server.api.intents import execute_intent as exec_canonical
+            from server.models.intents_api import CanonicalIntent
+            # Convert dict to Pydantic model
+            canonical_intent = CanonicalIntent(**canonical)
+            result = exec_canonical(canonical_intent, debug=False)
+            # Return with the raw NLP intent for transparency
+            return {
+                "ok": result.get("ok", True),
+                "intent": intent,
+                "canonical": canonical,
+                "summary": result.get("summary", "Command executed"),
+                **result
+            }
+        except HTTPException as he:
+            # Return error with intent for debugging
+            return {
+                "ok": False,
+                "reason": "http_error",
+                "intent": intent,
+                "canonical": canonical,
+                "summary": f"Error: {he.detail}",
+                "error": str(he.detail)
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "reason": "execution_error",
+                "intent": intent,
+                "canonical": canonical,
+                "summary": f"Error: {str(e)}",
+                "error": str(e)
+            }
+
     # Handle help-style responses inline by consulting knowledge base
     if intent.get("intent") == "question_response":
         from server.services.knowledge import search_knowledge

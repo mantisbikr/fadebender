@@ -491,14 +491,15 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
     return () => window.removeEventListener('fb:refresh-project', handler);
   }, []);
 
-  const fetchTrackSends = async (trackIndex) => {
+  const fetchTrackSends = async (trackIndex, opts = {}) => {
+    const silent = !!opts.silent;
     try {
       const res = await apiService.getTrackSends(trackIndex);
       const sendsRaw = (res && res.data && Array.isArray(res.data.sends)) ? res.data.sends : [];
       const sends = sendsRaw.map(s => ({ ...s, volume: (typeof s.value === 'number') ? s.value : s.volume }));
       setTrackSends(prev => ({ ...prev, [trackIndex]: sends }));
     } catch {
-      setTrackSends(prev => ({ ...prev, [trackIndex]: [] }));
+      if (!silent) setTrackSends(prev => ({ ...prev, [trackIndex]: [] }));
     }
   };
 
@@ -827,7 +828,18 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
         refreshTrackThrottled(idx);
       }
     },
-    () => { if (tab === 0) { fetchOutline(false); } },
+    async (payload) => {
+      // Handle track send changes
+      if (payload?.event === 'send_changed') {
+        const trackIdx = (typeof payload.track === 'number') ? payload.track : (typeof payload.track_index === 'number' ? payload.track_index : null);
+        if (trackIdx != null && trackSends[trackIdx]) {
+          // Refresh sends if this track's sends accordion is expanded
+          await fetchTrackSends(trackIdx, { silent: true });
+        }
+        return;
+      }
+      if (tab === 0) { fetchOutline(false); }
+    },
     async (payload) => {
       // Handle return events on Returns tab as well, and master events on Master tab
       if (tab !== 0 && tab !== 1 && tab !== 2) return;
