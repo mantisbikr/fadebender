@@ -41,7 +41,8 @@ def build_clarification_response(
             "fallback": True,
             "error": error_msg,
             "model_selected": model_name,
-            "latency_ms": (time.perf_counter() - start_time) * 1000
+            "latency_ms": (time.perf_counter() - start_time) * 1000,
+            "pipeline": "failed"
         }
     }
 
@@ -79,6 +80,7 @@ def build_question_response(
             "utterance": query,
             "fallback": True,
             "error": error_msg,
-            "model_selected": model_name
+            "model_selected": model_name,
+            "pipeline": "regex_question"
         }
     }

@@ -15,6 +15,14 @@ from typing import Any, Dict
 from config.llm_config import get_default_model_name
 
 
+def _safe_model_name(model_preference: str | None) -> str:
+    """Safely get model name without throwing exceptions."""
+    try:
+        return _safe_model_name(model_preference)
+    except Exception:
+        return model_preference or "regex"
+
+
 # Common patterns
 DEV_PAT = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
 UNITS_PAT = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
@@ -106,7 +114,7 @@ def parse_track_device_param(q: str, query: str, error_msg: str, model_preferenc
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': (dev_norm or 'reverb'), 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -139,7 +147,7 @@ def parse_return_device_param(q: str, query: str, error_msg: str, model_preferen
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': (dev_norm or 'reverb'), 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -170,7 +178,7 @@ def parse_return_device_label(q: str, query: str, error_msg: str, model_preferen
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': plugin, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': label, 'unit': 'display'},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -199,7 +207,7 @@ def parse_return_device_label_arbitrary(q: str, query: str, error_msg: str, mode
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': device_name, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': label, 'unit': 'display'},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -223,7 +231,7 @@ def parse_return_device_numeric_arbitrary(q: str, query: str, error_msg: str, mo
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': device_name, 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -247,7 +255,7 @@ def parse_track_device_numeric_arbitrary(q: str, query: str, error_msg: str, mod
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': device_name, 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -272,7 +280,7 @@ def parse_track_device_label(q: str, query: str, error_msg: str, model_preferenc
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': plugin, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': label, 'unit': 'display'},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -302,7 +310,7 @@ def parse_return_device_ordinal(q: str, query: str, error_msg: str, model_prefer
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord)}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -326,7 +334,7 @@ def parse_track_device_ordinal(q: str, query: str, error_msg: str, model_prefere
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord)}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -352,7 +360,7 @@ def parse_return_device_generic(q: str, query: str, error_msg: str, model_prefer
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': (dev_norm or 'reverb'), 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
