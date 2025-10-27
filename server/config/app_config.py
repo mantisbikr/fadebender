@@ -144,6 +144,7 @@ def _load() -> Dict[str, Any]:
         },
         "nlp": {
             # Configurable typo corrections for fallback parser
+            # NOTE: These are learned over time from LLM successes
             "typo_corrections": {
                 "retrun": "return",
                 "retun": "return",
