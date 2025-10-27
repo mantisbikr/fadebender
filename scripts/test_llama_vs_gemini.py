@@ -13,6 +13,16 @@ from typing import Dict, Any, List
 # Add nlp-service to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'nlp-service'))
 
+# Load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    env_path = os.path.join(os.path.dirname(__file__), '..', 'nlp-service', '.env')
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+        print(f"Loaded environment from: {env_path}\n")
+except ImportError:
+    pass  # dotenv not installed, use existing environment
+
 from google import genai
 from google.genai import types
 from prompts.prompt_builder import build_daw_prompt
@@ -202,29 +212,37 @@ def compare_models():
     print(f"{'Errors':<30} {results['gemini']['errors']:>20} {results['llama']['errors']:>20}")
     print()
 
+    # Calculate Gemini stats
     if results["gemini"]["latencies"]:
         g_avg = sum(results["gemini"]["latencies"]) / len(results["gemini"]["latencies"])
         g_median = sorted(results["gemini"]["latencies"])[len(results["gemini"]["latencies"]) // 2]
         g_min = min(results["gemini"]["latencies"])
         g_max = max(results["gemini"]["latencies"])
-
-        print(f"{'Average Latency (ms)':<30} {g_avg:>20.2f} ", end="")
     else:
-        print(f"{'Average Latency (ms)':<30} {'N/A':>20} ", end="")
-        g_avg = 0
+        g_avg = g_median = g_min = g_max = 0
 
+    # Calculate Llama stats
     if results["llama"]["latencies"]:
         l_avg = sum(results["llama"]["latencies"]) / len(results["llama"]["latencies"])
         l_median = sorted(results["llama"]["latencies"])[len(results["llama"]["latencies"]) // 2]
         l_min = min(results["llama"]["latencies"])
         l_max = max(results["llama"]["latencies"])
+    else:
+        l_avg = l_median = l_min = l_max = 0
 
-        print(f"{l_avg:>20.2f}")
+    # Print latency stats
+    g_avg_str = f"{g_avg:.2f}" if g_avg > 0 else "N/A"
+    l_avg_str = f"{l_avg:.2f}" if l_avg > 0 else "N/A"
+    print(f"{'Average Latency (ms)':<30} {g_avg_str:>20} {l_avg_str:>20}")
+
+    if g_avg > 0 and l_avg > 0:
         print(f"{'Median Latency (ms)':<30} {g_median:>20.2f} {l_median:>20.2f}")
         print(f"{'Min Latency (ms)':<30} {g_min:>20.2f} {l_min:>20.2f}")
         print(f"{'Max Latency (ms)':<30} {g_max:>20.2f} {l_max:>20.2f}")
-    else:
-        print(f"{'N/A':>20}")
+    elif g_avg > 0:
+        print(f"{'Median Latency (ms)':<30} {g_median:>20.2f} {'N/A':>20}")
+        print(f"{'Min Latency (ms)':<30} {g_min:>20.2f} {'N/A':>20}")
+        print(f"{'Max Latency (ms)':<30} {g_max:>20.2f} {'N/A':>20}")
 
     print()
 
@@ -272,6 +290,8 @@ def compare_models():
 
 
 if __name__ == "__main__":
+    import sys
+
     print("\nTo run this test, you need:")
     print("1. VERTEX_MODEL or GEMINI_MODEL set to your Gemini model")
     print("2. LLM_PROJECT_ID set to your GCP project")
@@ -279,6 +299,11 @@ if __name__ == "__main__":
     print("4. LLAMA_VERTEX_MODEL set to the Llama endpoint (optional, defaults to meta/llama3-8b-instruct-maas)")
     print()
 
-    input("Press Enter to continue...")
+    # Skip interactive prompt if running non-interactively
+    if sys.stdin.isatty():
+        input("Press Enter to continue...")
+    else:
+        print("Running in non-interactive mode...")
+        print()
 
     compare_models()
