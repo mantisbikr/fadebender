@@ -18,7 +18,7 @@ from config.llm_config import get_default_model_name
 def _safe_model_name(model_preference: str | None) -> str:
     """Safely get model name without throwing exceptions."""
     try:
-        return _safe_model_name(model_preference)
+        return get_default_model_name(model_preference)
     except Exception:
         return model_preference or "regex"
 
