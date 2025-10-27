@@ -35,19 +35,40 @@ class NLPMode(str, Enum):
 
 
 def get_nlp_mode() -> NLPMode:
-    """Get NLP mode from environment variable.
+    """Get NLP mode from config or environment variable.
 
-    Set via: export NLP_MODE=regex_first
+    Priority order:
+    1. NLP_MODE environment variable (allows runtime override)
+    2. app_config.py nlp.mode setting (configurable default)
+    3. Fallback to regex_first (recommended for performance)
+
+    Set via config: Edit configs/app_config.json nlp.mode
+    Set via env: export NLP_MODE=regex_first
 
     Returns:
-        NLPMode enum value (defaults to LLM_FIRST to match original behavior)
+        NLPMode enum value (defaults to REGEX_FIRST for performance)
     """
-    mode_str = os.getenv("NLP_MODE", "llm_first").lower()
+    # Check env var first (highest priority)
+    env_mode = os.getenv("NLP_MODE")
+    if env_mode:
+        try:
+            return NLPMode(env_mode.lower())
+        except ValueError:
+            pass  # Fall through to config
+
+    # Check app_config (middle priority)
     try:
-        return NLPMode(mode_str)
-    except ValueError:
-        # Invalid mode, return default
-        return NLPMode.LLM_FIRST
+        from server.config.app_config import get_nlp_mode_config
+        config_mode = get_nlp_mode_config()
+        try:
+            return NLPMode(config_mode.lower())
+        except ValueError:
+            pass  # Fall through to default
+    except Exception:
+        pass  # Config not available (e.g., running from nlp-service standalone)
+
+    # Default to regex_first for performance
+    return NLPMode.REGEX_FIRST
 
 
 def get_llm_timeout() -> float:

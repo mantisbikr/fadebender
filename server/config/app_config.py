@@ -143,6 +143,12 @@ def _load() -> Dict[str, Any]:
             },
         },
         "nlp": {
+            # Execution mode: regex_first (RECOMMENDED) | llm_first (LEGACY) | regex_only | llm_only | parallel
+            # regex_first: Try fast patterns first, fallback to LLM (1651x faster, 0.10ms median)
+            # llm_first: Try LLM first, fallback to regex (legacy mode, ~400ms average)
+            # Can be overridden with NLP_MODE environment variable
+            "mode": "regex_first",
+
             # Configurable typo corrections for fallback parser
             # NOTE: These are learned over time from LLM successes
             "typo_corrections": {
@@ -216,6 +222,17 @@ def get_device_param_aliases() -> Dict[str, str]:
 def get_typo_corrections() -> Dict[str, str]:
     cfg = _load()
     return dict(cfg.get("nlp", {}).get("typo_corrections", {}))
+
+
+def get_nlp_mode_config() -> str:
+    """Get NLP mode from app config.
+
+    Returns:
+        NLP mode string (regex_first, llm_first, etc.)
+        Defaults to 'regex_first' for performance
+    """
+    cfg = _load()
+    return str(cfg.get("nlp", {}).get("mode", "regex_first"))
 
 
 def get_ui_settings() -> Dict[str, Any]:
