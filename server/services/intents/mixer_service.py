@@ -114,6 +114,32 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
     except Exception:
         pass
 
+    # Add a concise summary for chat/UI
+    try:
+        disp_txt = None
+        if field == "volume":
+            try:
+                disp_txt = f"{live_float_to_db(float(v)):.1f} dB"
+            except Exception:
+                pass
+        elif field == "pan":
+            try:
+                display_min, display_max = get_mixer_display_range("pan")
+                display_scale = max(abs(display_min), abs(display_max))
+                pan_val = float(v) * display_scale
+                disp_txt = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else ('L' if pan_val < 0 else 'C')}"
+            except Exception:
+                pass
+        elif field in ("mute", "solo"):
+            disp_txt = "On" if float(v) >= 0.5 else "Off"
+        if isinstance(resp, dict):
+            if disp_txt:
+                resp["summary"] = f"Set Track {track_idx} {field} to {disp_txt}"
+            else:
+                resp["summary"] = f"Set Track {track_idx} {field}"
+    except Exception:
+        pass
+
     # Ensure mixer capabilities (track)
     try:
         from server.api.cap_utils import ensure_capabilities  # type: ignore

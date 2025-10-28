@@ -57,7 +57,13 @@ class ApiService {
     return response.json();
   }
   async getAppConfig() {
-    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config`);
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/config`, {
+      cache: 'no-cache',  // Force fresh config on every load
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
     if (!response.ok) throw new Error(`Config fetch failed: ${response.statusText}`);
     return response.json();
   }
