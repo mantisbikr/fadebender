@@ -24,25 +24,57 @@ def _safe_model_name(model_preference: str | None) -> str:
 
 
 # Common patterns
-DEV_PAT = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
 UNITS_PAT = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+
+# Device pattern is built dynamically from config
+_DEV_PAT_CACHE = None
+
+
+def _get_device_pattern() -> str:
+    """Get device pattern from config (single source of truth).
+
+    Builds regex pattern from device_type_aliases in config.
+    Returns all device type aliases as alternation pattern.
+    """
+    global _DEV_PAT_CACHE
+    if _DEV_PAT_CACHE is not None:
+        return _DEV_PAT_CACHE
+
+    try:
+        from server.config.app_config import get_device_type_aliases
+
+        aliases_map = get_device_type_aliases()
+        all_aliases = []
+
+        for device_type, aliases in aliases_map.items():
+            all_aliases.extend(aliases)
+
+        # Special case for "align delay" (multi-word)
+        all_aliases.append(r"align\s+delay")
+
+        # Build pattern (sort by length desc to match longer patterns first)
+        all_aliases.sort(key=len, reverse=True)
+        _DEV_PAT_CACHE = "|".join(all_aliases)
+        return _DEV_PAT_CACHE
+
+    except Exception:
+        # Fallback if config unavailable
+        return r"reverb|delay|amp"
 
 
 def _normalize_device_name(device_raw: str) -> str | None:
-    """Normalize common device names."""
+    """Normalize device names (pass through - config will handle resolution)."""
     if not device_raw:
         return None
+
     dr = device_raw.lower().strip()
-    if dr in ("eq", "equalizer"):
-        return "eq"
-    elif dr == "compressor":
-        return "compressor"
-    elif dr == "delay":
-        return "delay"
-    elif dr.replace(" ", "") == "aligndelay":
+
+    # Special handling for multi-word devices
+    if dr.replace(" ", "") == "aligndelay":
         return "align delay"
-    else:
-        return dr
+
+    # Return as-is - server's intent normalizer will resolve aliases
+    return dr
 
 
 def _normalize_unit(unit_raw: str | None) -> str | None:
@@ -103,7 +135,8 @@ def parse_track_device_param(q: str, query: str, error_msg: str, model_preferenc
     """
     try:
         # Device name is now REQUIRED (removed trailing ?)
-        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
         if m:
             track_num = int(m.group(1))
             device_raw = m.group(2)  # No longer optional
@@ -144,7 +177,8 @@ def parse_return_device_param(q: str, query: str, error_msg: str, model_preferen
     """
     try:
         # Device name is now REQUIRED (removed trailing ?)
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
         if m:
             return_ref = m.group(1).upper()
             device_raw = m.group(2)  # No longer optional
@@ -181,7 +215,8 @@ def parse_return_device_param(q: str, query: str, error_msg: str, model_preferen
 def parse_return_device_label(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: set return A align delay mode to Distance"""
     try:
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
         if m:
             return_ref = m.group(1).upper()
             device_raw = m.group(2) or ''
@@ -283,7 +318,8 @@ def parse_track_device_numeric_arbitrary(q: str, query: str, error_msg: str, mod
 def parse_track_device_label(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: set track 1 reverb mode to Distance"""
     try:
-        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
         if m:
             track_num = int(m.group(1))
             device_raw = m.group(2) or ''
@@ -362,7 +398,8 @@ def parse_track_device_ordinal(q: str, query: str, error_msg: str, model_prefere
 def parse_return_device_generic(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: generic catch-all for return device parameters"""
     try:
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
         if m:
             return_ref = m.group(1).upper()
             device_raw = m.group(2) or ''

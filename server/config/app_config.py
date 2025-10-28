@@ -148,24 +148,9 @@ def _load() -> Dict[str, Any]:
             # Can be overridden with NLP_MODE environment variable
             "mode": "regex_first",
 
-            # Configurable typo corrections for fallback parser
-            # NOTE: These are learned over time from LLM successes
-            "typo_corrections": {
-                "retrun": "return",
-                "retun": "return",
-                "revreb": "reverb",
-                "reverbb": "reverb",
-                "revebr": "reverb",
-                "reverv": "reverb",
-                "strereo": "stereo",
-                "streo": "stereo",
-                "stere": "stereo",
-                "tack": "track",
-                "trck": "track",
-                "trac": "track",
-                "sennd": "send",
-                "snd": "send",
-            }
+            # Typo corrections loaded from configs/app_config.json
+            # Single source of truth - no hardcoded fallback
+            "typo_corrections": {}
         },
         "models": {
             # Operation-specific model selection
