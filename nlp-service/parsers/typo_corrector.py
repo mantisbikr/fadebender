@@ -22,40 +22,21 @@ ORDINAL_WORD_MAP = {
 
 
 def get_typo_corrections() -> Dict[str, str]:
-    """Get typo correction map (config-driven with fallback).
+    """Get typo correction map from config.
+
+    Single source of truth: configs/app_config.json
 
     Returns:
         Dictionary mapping common typos to correct spellings.
+        Returns empty dict if config unavailable (fail gracefully).
     """
     try:
         from server.config.app_config import get_typo_corrections as get_config_typos
-        return get_config_typos() or _get_default_typo_map()
+        return get_config_typos() or {}
     except Exception:
-        return _get_default_typo_map()
-
-
-def _get_default_typo_map() -> Dict[str, str]:
-    """Default typo corrections when config is unavailable.
-
-    Returns:
-        Dictionary of common typos and their corrections.
-    """
-    return {
-        'retrun': 'return',
-        'retun': 'return',
-        'revreb': 'reverb',
-        'reverbb': 'reverb',
-        'revebr': 'reverb',
-        'reverv': 'reverb',
-        'strereo': 'stereo',
-        'streo': 'stereo',
-        'stere': 'stereo',
-        'tack': 'track',
-        'trck': 'track',
-        'trac': 'track',
-        'sennd': 'send',
-        'snd': 'send',
-    }
+        # Config unavailable - return empty dict
+        # This should rarely happen in production
+        return {}
 
 
 def apply_typo_corrections(query: str) -> str:
