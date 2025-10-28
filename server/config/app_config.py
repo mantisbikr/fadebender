@@ -377,3 +377,32 @@ def set_model_for_operation(operation: str, model: str) -> Dict[str, str]:
     models = cfg.setdefault("models", {})
     models[operation] = str(model)
     return get_models_config()
+
+
+def add_typo_corrections(corrections: Dict[str, str]) -> Dict[str, str]:
+    """Add typo corrections to the configuration.
+
+    This is called by the learning system when LLM fallback detects typos.
+    New corrections are merged with existing ones.
+
+    Args:
+        corrections: Dictionary mapping typo -> correction (e.g., {"volme": "volume"})
+
+    Returns:
+        Updated typo corrections dictionary
+    """
+    if not isinstance(corrections, dict):
+        return get_typo_corrections()
+
+    cfg = _load()
+    nlp = cfg.setdefault("nlp", {})
+    typos = nlp.setdefault("typo_corrections", {})
+
+    # Merge new corrections
+    for typo, correction in corrections.items():
+        if isinstance(typo, str) and isinstance(correction, str):
+            # Only add if not already present
+            if typo.lower() not in typos:
+                typos[typo.lower()] = correction.lower()
+
+    return get_typo_corrections()

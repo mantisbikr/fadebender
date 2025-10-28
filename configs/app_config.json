@@ -9,7 +9,14 @@
     "simple_device_resolver": true,
     "use_intents_for_chat": true
   },
+  "models": {
+    "audio_analysis": "gemini-2.5-flash",
+    "context_analysis": "gemini-2.5-flash",
+    "default": "gemini-2.5-flash",
+    "intent_parsing": "gemini-2.5-flash-lite"
+  },
   "nlp": {
+    "mode": "regex_first",
     "typo_corrections": {
       "retrun": "return",
       "retun": "return",

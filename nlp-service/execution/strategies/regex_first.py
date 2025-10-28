@@ -12,6 +12,7 @@ from models.intent_types import Intent
 from execution.regex_executor import try_regex_parse
 from execution.llm_executor import call_llm
 from execution.response_builder import build_clarification_response
+from learning.typo_learner import learn_from_llm_success
 
 
 def execute(query: str, model_preference: str | None, strict: bool | None) -> Intent:
@@ -40,6 +41,19 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
         result = call_llm(query, model_preference)
         result['meta']['pipeline'] = 'llm_fallback'
         result['meta']['latency_ms'] = (time.perf_counter() - start) * 1000
+
+        # Learn from LLM success - detect typos for future fast lookups
+        # Wrapped in try-except to never block on learning errors
+        try:
+            detected_typos = learn_from_llm_success(query, result)
+            if detected_typos:
+                result['meta']['learned_typos'] = detected_typos
+        except Exception as learning_error:
+            # Non-fatal - log and continue
+            import os
+            if os.getenv("LOG_TYPO_LEARNING", "true").lower() in ("1", "true", "yes"):
+                print(f"[TYPO LEARNING] Non-fatal error: {learning_error}")
+
         return result
     except Exception as e:
         if strict is None:
