@@ -143,10 +143,10 @@ def _load() -> Dict[str, Any]:
         },
         "nlp": {
             # Execution mode: regex_first | llm_first (DEFAULT) | regex_only | llm_only | parallel
-            # regex_first: Try fast patterns first, fallback to LLM (1651x faster BUT needs stricter regex patterns)
+            # regex_first: Try fast patterns first, fallback to LLM (1651x faster, now with structural disambiguation!)
             # llm_first: Try LLM first, fallback to regex (safer, handles typos naturally)
             # Can be overridden with NLP_MODE environment variable
-            "mode": "llm_first",
+            "mode": "regex_first",
 
             # Configurable typo corrections for fallback parser
             # NOTE: These are learned over time from LLM successes
