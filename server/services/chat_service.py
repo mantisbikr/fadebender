@@ -73,17 +73,153 @@ def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
         return None
 
 def handle_chat(body: ChatBody) -> Dict[str, Any]:
+    """
+    Handle chat commands through unified NLP → Intent → Execution path.
+
+    This is the single source of truth for all command processing.
+    Both WebUI and command-line tests use this same path.
+    """
     # Import llm_daw from nlp-service/ dynamically (folder has a hyphen)
     import sys
     import pathlib
-    nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
+    nlp_dir = pathlib.Path(__file__).resolve().parent.parent.parent / "nlp-service"
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
+
     text_lc = body.text.strip()
-    # Normalize variants like "-10db" → "-10 dB" to make regex matching robust
+
+    # Step 1: Parse command with NLP service (handles typos, natural language)
+    try:
+        from llm_daw import interpret_daw_command  # type: ignore
+    except Exception as e:
+        raise HTTPException(500, f"NLP module not available: {e}")
+
+    intent = interpret_daw_command(text_lc, model_preference=body.model, strict=body.strict)
+
+    # Step 2: Transform to canonical format
+    from server.services.intent_mapper import map_llm_to_canonical
+    canonical, errors = map_llm_to_canonical(intent)
+
+    # Step 3: Execute canonical intent
+    if canonical and body.confirm:
+        try:
+            from server.api.intents import execute_intent as exec_canonical
+            from server.models.intents_api import CanonicalIntent
+            canonical_intent = CanonicalIntent(**canonical)
+            result = exec_canonical(canonical_intent, debug=False)
+
+            # Build response preserving all fields from result (especially 'data' with capabilities)
+            response = {
+                "ok": result.get("ok", True),
+                "intent": intent,
+                "canonical": canonical,
+            }
+
+            # Use summary from result if present, otherwise generate generic one
+            if "summary" in result:
+                response["summary"] = result["summary"]
+            else:
+                response["summary"] = "Command executed"
+
+            # Explicitly preserve data field with capabilities if present
+            if "data" in result:
+                response["data"] = result["data"]
+
+            # Add any other fields from result
+            for key, value in result.items():
+                if key not in response:
+                    response[key] = value
+
+            return response
+        except HTTPException as he:
+            return {
+                "ok": False,
+                "reason": "http_error",
+                "intent": intent,
+                "canonical": canonical,
+                "summary": f"Error: {he.detail}",
+                "error": str(he.detail)
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "reason": "execution_error",
+                "intent": intent,
+                "canonical": canonical,
+                "summary": f"Error: {str(e)}",
+                "error": str(e)
+            }
+
+    # Preview mode (confirm=False)
+    if not body.confirm:
+        return {
+            "ok": True,
+            "preview": canonical,
+            "intent": intent,
+            "summary": f"Preview: {intent.get('intent', 'unknown')}"
+        }
+
+    # Handle special intent types that don't use canonical execution
+
+    # Question/help responses
+    if intent.get("intent") == "question_response":
+        from server.services.knowledge import search_knowledge
+        q = intent.get("meta", {}).get("utterance") or body.text
+        matches = search_knowledge(q)
+        snippets: list[str] = []
+        sources: list[Dict[str, str]] = []
+        for src, title, body_text in matches:
+            sources.append({"source": src, "title": title})
+            snippets.append(f"{title}:\n" + body_text)
+        answer = "\n\n".join(snippets[:2]) if snippets else "Here are general tips: increase the track volume slightly, apply gentle compression (2–4 dB GR), and cut muddiness around 200–400 Hz."
+        suggested = [
+            "increase track 1 volume by 3 dB",
+            "set track 1 volume to -6 dB",
+            "reduce compressor threshold on track 1 by 3 dB",
+        ]
+        return {"ok": False, "summary": answer, "answer": answer, "suggested_intents": suggested, "sources": sources, "intent": intent}
+
+    # Transport controls
+    if intent.get("intent") == "transport":
+        op = intent.get("operation") or {}
+        action = str(op.get("action", ""))
+        value = op.get("value")
+        msg = {"op": "set_transport", "action": action}
+        if value is not None:
+            try:
+                msg["value"] = float(value)
+            except Exception:
+                pass
+        summary = f"Transport: {action}{(' ' + str(value)) if value is not None else ''}"
+        if not body.confirm:
+            return {"ok": True, "preview": msg, "intent": intent, "summary": summary}
+        resp = udp_request(msg, timeout=1.0)
+        try:
+            schedule_emit({"event": "transport_changed", "action": action})
+        except Exception:
+            pass
+        return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "intent": intent, "summary": summary}
+
+    # Fallback: Intent recognized but not executable
+    return {
+        "ok": False,
+        "intent": intent,
+        "summary": f"Intent '{intent.get('intent')}' recognized but not executed",
+        "reason": "intent_not_executable"
+    }
+
+
+def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
+    """
+    DEPRECATED: Legacy regex-based chat handler.
+    Kept for reference only. Do not use.
+    Use handle_chat() instead for unified NLP path.
+    """
+    text_lc = body.text.strip()
     import re
     text_norm = re.sub(r'(-?\d+(?:\.\d+)?)(?:db|dB)\b', r'\1 dB', text_lc, flags=re.I)
-    # Pre-parse common direct commands to avoid LLM ambiguity
+
+    # Pre-parse common direct commands
     m = re.search(r"\b(mute|unmute|solo|unsolo)\s+track\s+(\d+)\b", text_norm, flags=re.I)
     if m:
         action = m.group(1).lower()
@@ -131,7 +267,8 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
 
     # --- Send controls ---
     # Absolute: set track N send <idx|name> to X [dB|%]
-    m = re.search(r"\bset\s+track\s+(\d+)\s+(?:send\s+)?([\w\s]+?)\s+to\s+(-?\d+(?:\.\d+)?)\s*(db|dB|%|percent|percentage)?\b", text_norm, flags=re.I)
+    # IMPORTANT: "send" keyword is now REQUIRED to avoid false matches with typos like "volme"
+    m = re.search(r"\bset\s+track\s+(\d+)\s+send\s+([\w\s]+?)\s+to\s+(-?\d+(?:\.\d+)?)\s*(db|dB|%|percent|percentage)?\b", text_norm, flags=re.I)
     if m:
         track_index = int(m.group(1))
         send_label = (m.group(2) or '').strip()
@@ -179,7 +316,8 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
         return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
 
     # Relative: increase/decrease send <name> on track N by X [dB|%]
-    m = re.search(r"\b(increase|decrease|reduce|lower|raise)\s+(?:send\s+)?([\w\s]+?)\s+(?:on|for)?\s*track\s+(\d+)\s+by\s+(\d+(?:\.\d+)?)\s*(db|dB|%|percent|percentage)?\b", text_norm, flags=re.I)
+    # IMPORTANT: "send" keyword is now REQUIRED to avoid false matches
+    m = re.search(r"\b(increase|decrease|reduce|lower|raise)\s+send\s+([\w\s]+?)\s+(?:on|for)?\s*track\s+(\d+)\s+by\s+(\d+(?:\.\d+)?)\s*(db|dB|%|percent|percentage)?\b", text_norm, flags=re.I)
     if m:
         action = m.group(1).lower()
         send_label = (m.group(2) or '').strip()
@@ -274,6 +412,7 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
             pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
 
+    # Legacy path fallback: If no regex matched, try NLP
     try:
         from llm_daw import interpret_daw_command  # type: ignore
     except Exception as e:
@@ -281,7 +420,7 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
 
     intent = interpret_daw_command(text_lc, model_preference=body.model, strict=body.strict)
 
-    # Transform NLP intent to canonical format (like /intent/parse does)
+    # Transform NLP intent to canonical format
     from server.services.intent_mapper import map_llm_to_canonical
     canonical, errors = map_llm_to_canonical(intent)
 

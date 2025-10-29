@@ -31,7 +31,6 @@ def _load() -> Dict[str, Any]:
             "default_sidebar_tab": "tracks",
         },
         "features": {
-            "use_intents_for_chat": True,  # Use /intent/execute for chat commands (default enabled)
             "simple_device_resolver": True,  # Simplified device resolver for device intents (name/type/qualifier)
         },
         "server": {
@@ -143,23 +142,23 @@ def _load() -> Dict[str, Any]:
             },
         },
         "nlp": {
-            # Configurable typo corrections for fallback parser
-            "typo_corrections": {
-                "retrun": "return",
-                "retun": "return",
-                "revreb": "reverb",
-                "reverbb": "reverb",
-                "revebr": "reverb",
-                "reverv": "reverb",
-                "strereo": "stereo",
-                "streo": "stereo",
-                "stere": "stereo",
-                "tack": "track",
-                "trck": "track",
-                "trac": "track",
-                "sennd": "send",
-                "snd": "send",
-            }
+            # Execution mode: regex_first | llm_first (DEFAULT) | regex_only | llm_only | parallel
+            # regex_first: Try fast patterns first, fallback to LLM (1651x faster, now with structural disambiguation!)
+            # llm_first: Try LLM first, fallback to regex (safer, handles typos naturally)
+            # Can be overridden with NLP_MODE environment variable
+            "mode": "regex_first",
+
+            # Typo corrections loaded from configs/app_config.json
+            # Single source of truth - no hardcoded fallback
+            "typo_corrections": {}
+        },
+        "models": {
+            # Operation-specific model selection
+            # Allows choosing optimal models for different use cases
+            "intent_parsing": "gemini-2.5-flash-lite",  # Fast, low-cost for intent parsing
+            "audio_analysis": "gemini-2.5-flash",       # Complex reasoning for audio engineering
+            "context_analysis": "gemini-2.5-flash",     # Deep context understanding
+            "default": "gemini-2.5-flash",              # Fallback for unspecified operations
         },
         "debug": {
             "firestore": True,     # Firestore/mapping store debug prints
@@ -215,6 +214,17 @@ def get_device_param_aliases() -> Dict[str, str]:
 def get_typo_corrections() -> Dict[str, str]:
     cfg = _load()
     return dict(cfg.get("nlp", {}).get("typo_corrections", {}))
+
+
+def get_nlp_mode_config() -> str:
+    """Get NLP mode from app config.
+
+    Returns:
+        NLP mode string (regex_first, llm_first, etc.)
+        Defaults to 'regex_first' for performance
+    """
+    cfg = _load()
+    return str(cfg.get("nlp", {}).get("mode", "regex_first"))
 
 
 def get_ui_settings() -> Dict[str, Any]:
@@ -309,3 +319,75 @@ def get_snapshot_config() -> Dict[str, Any]:
         "device_chunk_size": int(os.getenv("DEVICE_REFRESH_CHUNK_SIZE", "3")),
         "device_chunk_delay_ms": int(os.getenv("DEVICE_REFRESH_CHUNK_DELAY_MS", "40")),
     }
+
+
+def get_model_for_operation(operation: str) -> str:
+    """Get the configured model for a specific operation from config file.
+
+    Args:
+        operation: Operation type (e.g., 'intent_parsing', 'audio_analysis', 'context_analysis')
+
+    Returns:
+        Model name string from config (e.g., 'gemini-2.5-flash-lite')
+        Falls back to 'default' model if operation not configured
+
+    Note:
+        This function only reads from config file. Environment variable handling
+        is done by the caller (llm_config.py) to maintain proper priority order.
+    """
+    cfg = _load()
+    models = cfg.get("models", {})
+
+    # Return operation-specific model or fall back to default
+    return models.get(operation, models.get("default", "gemini-2.5-flash"))
+
+
+def get_models_config() -> Dict[str, str]:
+    """Get all model configurations."""
+    cfg = _load()
+    return dict(cfg.get("models", {}))
+
+
+def set_model_for_operation(operation: str, model: str) -> Dict[str, str]:
+    """Set the model for a specific operation.
+
+    Args:
+        operation: Operation type (e.g., 'intent_parsing', 'audio_analysis')
+        model: Model name (e.g., 'gemini-2.5-flash-lite')
+
+    Returns:
+        Updated models configuration
+    """
+    cfg = _load()
+    models = cfg.setdefault("models", {})
+    models[operation] = str(model)
+    return get_models_config()
+
+
+def add_typo_corrections(corrections: Dict[str, str]) -> Dict[str, str]:
+    """Add typo corrections to the configuration.
+
+    This is called by the learning system when LLM fallback detects typos.
+    New corrections are merged with existing ones.
+
+    Args:
+        corrections: Dictionary mapping typo -> correction (e.g., {"volme": "volume"})
+
+    Returns:
+        Updated typo corrections dictionary
+    """
+    if not isinstance(corrections, dict):
+        return get_typo_corrections()
+
+    cfg = _load()
+    nlp = cfg.setdefault("nlp", {})
+    typos = nlp.setdefault("typo_corrections", {})
+
+    # Merge new corrections
+    for typo, correction in corrections.items():
+        if isinstance(typo, str) and isinstance(correction, str):
+            # Only add if not already present
+            if typo.lower() not in typos:
+                typos[typo.lower()] = correction.lower()
+
+    return get_typo_corrections()

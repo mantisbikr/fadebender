@@ -15,26 +15,88 @@ from typing import Any, Dict
 from config.llm_config import get_default_model_name
 
 
+def _safe_model_name(model_preference: str | None) -> str:
+    """Safely get model name without throwing exceptions."""
+    try:
+        return get_default_model_name(model_preference)
+    except Exception:
+        return model_preference or "regex"
+
+
 # Common patterns
-DEV_PAT = r"reverb|align\s+delay|delay|compressor|eq|equalizer"
 UNITS_PAT = r"db|dB|%|percent|ms|millisecond|milliseconds|s|sec|second|seconds|hz|khz|degree|degrees|deg|°"
+
+# Device pattern is built dynamically from config
+_DEV_PAT_CACHE = None
+
+
+def _get_device_pattern() -> str:
+    """Get device pattern from config and preset cache (single source of truth).
+
+    Builds regex pattern from:
+    1. device_type_aliases in config (static types: reverb, delay, etc.)
+    2. Device name aliases from Firestore preset cache (dynamic: cathedral, valhalla, etc.)
+
+    Returns all device aliases as alternation pattern.
+    """
+    global _DEV_PAT_CACHE
+    if _DEV_PAT_CACHE is not None:
+        return _DEV_PAT_CACHE
+
+    try:
+        from server.config.app_config import get_device_type_aliases
+
+        aliases_map = get_device_type_aliases()
+        all_aliases = []
+
+        # Add device type aliases (reverb, delay, eq, etc.)
+        for device_type, aliases in aliases_map.items():
+            all_aliases.extend(aliases)
+
+        # Add device name aliases from preset cache (cathedral, valhalla, proq, etc.)
+        try:
+            import sys
+            import os
+            # Add nlp-service to path if not already present
+            nlp_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            if nlp_path not in sys.path:
+                sys.path.insert(0, nlp_path)
+
+            from learning.preset_cache_store import get_device_aliases
+
+            device_name_aliases = get_device_aliases()
+            # Add all device name aliases (keys are the aliases like 'cathedral', 'valhalla')
+            all_aliases.extend(device_name_aliases.keys())
+        except Exception as e:
+            # Non-fatal - preset cache not available, continue with static aliases only
+            print(f"[DEVICE PARSER] Preset cache not available: {e}")
+
+        # Special case for "align delay" (multi-word)
+        all_aliases.append(r"align\s+delay")
+
+        # Build pattern (sort by length desc to match longer patterns first)
+        all_aliases.sort(key=len, reverse=True)
+        _DEV_PAT_CACHE = "|".join(all_aliases)
+        return _DEV_PAT_CACHE
+
+    except Exception:
+        # Fallback if config unavailable
+        return r"reverb|delay|amp"
 
 
 def _normalize_device_name(device_raw: str) -> str | None:
-    """Normalize common device names."""
+    """Normalize device names (pass through - config will handle resolution)."""
     if not device_raw:
         return None
+
     dr = device_raw.lower().strip()
-    if dr in ("eq", "equalizer"):
-        return "eq"
-    elif dr == "compressor":
-        return "compressor"
-    elif dr == "delay":
-        return "delay"
-    elif dr.replace(" ", "") == "aligndelay":
+
+    # Special handling for multi-word devices
+    if dr.replace(" ", "") == "aligndelay":
         return "align delay"
-    else:
-        return dr
+
+    # Return as-is - server's intent normalizer will resolve aliases
+    return dr
 
 
 def _normalize_unit(unit_raw: str | None) -> str | None:
@@ -88,25 +150,35 @@ def _normalize_label_param(pname: str) -> str:
 
 
 def parse_track_device_param(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
-    """Parse: set track 1 reverb decay to 2 s"""
+    """Parse: set track 1 reverb decay to 2 s
+
+    IMPORTANT: Device name is REQUIRED (not optional) to distinguish from mixer operations.
+    Mixer ops have 1 token (e.g., "volume"), device ops have 2+ tokens (e.g., "reverb decay").
+    """
     try:
-        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        # Device name is now REQUIRED (removed trailing ?)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
         if m:
             track_num = int(m.group(1))
-            device_raw = m.group(2) or ''
+            device_raw = m.group(2)  # No longer optional
             device_ord = m.group(3)
             pname = m.group(4).strip()
             value = float(m.group(5))
             unit_raw = m.group(6)
+
+            # Device name must be present (no fallback to 'reverb')
+            if not device_raw:
+                return None
 
             dev_norm = _normalize_device_name(device_raw)
             unit_out = _normalize_unit(unit_raw)
 
             out = {
                 'intent': 'set_parameter',
-                'targets': [{'track': f'Track {track_num}', 'plugin': (dev_norm or 'reverb'), 'parameter': pname}],
+                'targets': [{'track': f'Track {track_num}', 'plugin': dev_norm, 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -120,16 +192,26 @@ def parse_track_device_param(q: str, query: str, error_msg: str, model_preferenc
 
 
 def parse_return_device_param(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
-    """Parse: set return A reverb decay to 2 s"""
+    """Parse: set return A reverb decay to 2 s
+
+    IMPORTANT: Device name is REQUIRED (not optional) to distinguish from mixer operations.
+    Mixer ops have 1 token (e.g., "volume"), device ops have 2+ tokens (e.g., "reverb decay").
+    """
     try:
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        # Device name is now REQUIRED (removed trailing ?)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
         if m:
             return_ref = m.group(1).upper()
-            device_raw = m.group(2) or ''
+            device_raw = m.group(2)  # No longer optional
             device_ord = m.group(3)
             pname = m.group(4).strip()
             value = float(m.group(5))
             unit_raw = m.group(6)
+
+            # Device name must be present (no fallback to 'reverb')
+            if not device_raw:
+                return None
 
             dev_norm = _normalize_device_name(device_raw)
             param_ref = _normalize_param_name(pname)
@@ -137,9 +219,9 @@ def parse_return_device_param(q: str, query: str, error_msg: str, model_preferen
 
             out = {
                 'intent': 'set_parameter',
-                'targets': [{'track': f'Return {return_ref}', 'plugin': (dev_norm or 'reverb'), 'parameter': param_ref}],
+                'targets': [{'track': f'Return {return_ref}', 'plugin': dev_norm, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -155,7 +237,8 @@ def parse_return_device_param(q: str, query: str, error_msg: str, model_preferen
 def parse_return_device_label(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: set return A align delay mode to Distance"""
     try:
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
         if m:
             return_ref = m.group(1).upper()
             device_raw = m.group(2) or ''
@@ -170,7 +253,7 @@ def parse_return_device_label(q: str, query: str, error_msg: str, model_preferen
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': plugin, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': label, 'unit': 'display'},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -199,7 +282,7 @@ def parse_return_device_label_arbitrary(q: str, query: str, error_msg: str, mode
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': device_name, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': label, 'unit': 'display'},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -223,7 +306,7 @@ def parse_return_device_numeric_arbitrary(q: str, query: str, error_msg: str, mo
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': device_name, 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -247,7 +330,7 @@ def parse_track_device_numeric_arbitrary(q: str, query: str, error_msg: str, mod
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': device_name, 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -257,7 +340,8 @@ def parse_track_device_numeric_arbitrary(q: str, query: str, error_msg: str, mod
 def parse_track_device_label(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: set track 1 reverb mode to Distance"""
     try:
-        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
         if m:
             track_num = int(m.group(1))
             device_raw = m.group(2) or ''
@@ -272,7 +356,7 @@ def parse_track_device_label(q: str, query: str, error_msg: str, model_preferenc
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': plugin, 'parameter': param_ref}],
                 'operation': {'type': 'absolute', 'value': label, 'unit': 'display'},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -302,7 +386,7 @@ def parse_return_device_ordinal(q: str, query: str, error_msg: str, model_prefer
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord)}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -326,7 +410,7 @@ def parse_track_device_ordinal(q: str, query: str, error_msg: str, model_prefere
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Track {track_num}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord)}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -336,7 +420,8 @@ def parse_track_device_ordinal(q: str, query: str, error_msg: str, model_prefere
 def parse_return_device_generic(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: generic catch-all for return device parameters"""
     try:
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({DEV_PAT})(?:\s+(\d+))?\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(.+?)\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
         if m:
             return_ref = m.group(1).upper()
             device_raw = m.group(2) or ''
@@ -352,7 +437,7 @@ def parse_return_device_generic(q: str, query: str, error_msg: str, model_prefer
                 'intent': 'set_parameter',
                 'targets': [{'track': f'Return {return_ref}', 'plugin': (dev_norm or 'reverb'), 'parameter': pname}],
                 'operation': {'type': 'absolute', 'value': value, 'unit': unit_out},
-                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': get_default_model_name(model_preference)}
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
             }
             if device_ord:
                 try:
@@ -367,16 +452,18 @@ def parse_return_device_generic(q: str, query: str, error_msg: str, model_prefer
 
 # Main device parser coordinator
 DEVICE_PARSERS = [
-    parse_track_device_param,
-    parse_return_device_param,
-    parse_return_device_label,
-    parse_return_device_label_arbitrary,
-    parse_return_device_numeric_arbitrary,
-    parse_track_device_numeric_arbitrary,
-    parse_track_device_label,
-    parse_return_device_ordinal,
-    parse_track_device_ordinal,
-    parse_return_device_generic,
+    parse_track_device_param,           # "set track 1 reverb decay to 2 s" (device in DEV_PAT)
+    parse_return_device_param,          # "set return A reverb decay to 2 s" (device in DEV_PAT)
+    parse_return_device_label,          # "set return A reverb mode to hall" (label selection)
+    parse_track_device_label,           # "set track 1 eq type to parametric" (label selection)
+    parse_return_device_ordinal,        # "set return A device 2 decay to 1 s" (ordinal reference)
+    parse_track_device_ordinal,         # "set track 1 device 3 gain to 5" (ordinal reference)
+    # REMOVED: Arbitrary parsers too greedy - match unknown device names & keep typos
+    # Let LLM handle these, then learn corrections for typo dictionary
+    # parse_return_device_label_arbitrary,
+    # parse_return_device_numeric_arbitrary,
+    # parse_track_device_numeric_arbitrary,
+    # parse_return_device_generic,
 ]
 
 

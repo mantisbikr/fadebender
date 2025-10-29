@@ -9,22 +9,45 @@
     "simple_device_resolver": true,
     "use_intents_for_chat": true
   },
+  "models": {
+    "audio_analysis": "gemini-2.5-flash",
+    "context_analysis": "gemini-2.5-flash",
+    "default": "gemini-2.5-flash",
+    "intent_parsing": "gemini-2.5-flash-lite"
+  },
   "nlp": {
+    "mode": "regex_first",
     "typo_corrections": {
+      "alin": "align",
+      "bandpas": "bandpass",
+      "dcay": "decay",
+      "dlay": "delay",
+      "drywet": "dry wet",
+      "gan": "gain",
+      "mod": "mode",
+      "mut": "mute",
+      "paning": "pan",
+      "predlay": "predelay",
       "retrun": "return",
       "retun": "return",
       "revebr": "reverb",
       "reverbb": "reverb",
       "reverv": "reverb",
       "revreb": "reverb",
+      "screamr": "screamer",
       "sennd": "send",
+      "slo": "solo",
       "snd": "send",
       "stere": "stereo",
       "streo": "stereo",
       "strereo": "stereo",
       "tack": "track",
+      "testtypo": "testcorrect",
       "trac": "track",
-      "trck": "track"
+      "trck": "track",
+      "vilme": "volume",
+      "volme": "volume",
+      "volumz": "volume"
     }
   },
   "server": {
@@ -214,7 +237,7 @@
     "refresh_ms": 30000,
     "returns_refresh_ms": 3000,
     "sends_open_refresh_ms": 800,
-    "sidebar_width_px": 301,
+    "sidebar_width_px": 352,
     "sse_throttle_ms": 150,
     "track_refresh_ms": 3000
   }

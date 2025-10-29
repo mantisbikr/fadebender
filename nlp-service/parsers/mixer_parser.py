@@ -15,6 +15,14 @@ from typing import Any, Dict
 from config.llm_config import get_default_model_name
 
 
+def _safe_model_name(model_preference: str | None) -> str:
+    """Safely get model name without throwing exceptions."""
+    try:
+        return get_default_model_name(model_preference)
+    except Exception:
+        return model_preference or "regex"
+
+
 def parse_track_volume_absolute(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: set track 1 volume to -6 dB"""
     try:
@@ -38,7 +46,7 @@ def parse_track_volume_absolute(q: str, query: str, error_msg: str, model_prefer
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "volume"}],
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -61,7 +69,7 @@ def parse_track_volume_relative(q: str, query: str, error_msg: str, model_prefer
                 "intent": "relative_change",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "volume"}],
                 "operation": {"type": "relative", "value": value, "unit": "dB"},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     return None
 
@@ -81,7 +89,7 @@ def parse_track_pan(q: str, query: str, error_msg: str, model_preference: str | 
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": "pan"}],
                 "operation": {"type": "absolute", "value": pan_val, "unit": "%"},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -101,7 +109,7 @@ def parse_track_solo_mute(q: str, query: str, error_msg: str, model_preference: 
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": param}],
                 "operation": {"type": "absolute", "value": value, "unit": None},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -126,7 +134,7 @@ def parse_track_sends(q: str, query: str, error_msg: str, model_preference: str 
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": f"send {send_ref}"}],
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -160,7 +168,7 @@ def parse_track_sends(q: str, query: str, error_msg: str, model_preference: str 
                 "intent": "set_parameter",
                 "targets": [{"track": f"Track {track_num}", "plugin": None, "parameter": f"send {send_ref}"}],
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -186,7 +194,7 @@ def parse_return_sends(q: str, query: str, error_msg: str, model_preference: str
                 "intent": "set_parameter",
                 "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": f"send {send_ref}"}],
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -219,7 +227,7 @@ def parse_return_sends(q: str, query: str, error_msg: str, model_preference: str
                 "intent": "set_parameter",
                 "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": f"send {send_ref}"}],
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -244,7 +252,48 @@ def parse_return_volume(q: str, query: str, error_msg: str, model_preference: st
                 "intent": "set_parameter",
                 "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": "volume"}],
                 "operation": {"type": "absolute", "value": value, "unit": unit_out},
-                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": get_default_model_name(model_preference)}
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+    return None
+
+
+def parse_return_volume_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse: increase return A volume by 3 dB"""
+    if "volume" in q and any(word in q for word in ["increase", "decrease", "up", "down", "louder", "quieter"]):
+        # Try to extract return letter
+        return_match = re.search(r"return\s+([a-d])\b", q)
+        if return_match:
+            return_ref = return_match.group(1).upper()
+            # Determine direction and amount
+            value = 3  # default 3dB
+            if "decrease" in q or "down" in q or "quieter" in q:
+                value = -3
+
+            return {
+                "intent": "relative_change",
+                "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": "volume"}],
+                "operation": {"type": "relative", "value": value, "unit": "dB"},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
+            }
+    return None
+
+
+def parse_return_solo_mute(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse: solo return A, mute return B"""
+    try:
+        m = re.search(r"\b(solo|unsolo|mute|unmute)\s+return\s+([a-d])\b", q)
+        if m:
+            action = m.group(1).lower()
+            return_ref = m.group(2).upper()
+            param = 'solo' if 'solo' in action else 'mute'
+            value = 0.0 if action in ('unsolo', 'unmute') else 1.0
+            return {
+                "intent": "set_parameter",
+                "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": param}],
+                "operation": {"type": "absolute", "value": value, "unit": None},
+                "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
             }
     except Exception:
         pass
@@ -260,6 +309,8 @@ MIXER_PARSERS = [
     parse_track_sends,
     parse_return_sends,
     parse_return_volume,
+    parse_return_volume_relative,
+    parse_return_solo_mute,
 ]
 
 
