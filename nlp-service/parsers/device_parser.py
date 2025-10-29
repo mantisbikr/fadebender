@@ -31,10 +31,13 @@ _DEV_PAT_CACHE = None
 
 
 def _get_device_pattern() -> str:
-    """Get device pattern from config (single source of truth).
+    """Get device pattern from config and preset cache (single source of truth).
 
-    Builds regex pattern from device_type_aliases in config.
-    Returns all device type aliases as alternation pattern.
+    Builds regex pattern from:
+    1. device_type_aliases in config (static types: reverb, delay, etc.)
+    2. Device name aliases from Firestore preset cache (dynamic: cathedral, valhalla, etc.)
+
+    Returns all device aliases as alternation pattern.
     """
     global _DEV_PAT_CACHE
     if _DEV_PAT_CACHE is not None:
@@ -46,8 +49,27 @@ def _get_device_pattern() -> str:
         aliases_map = get_device_type_aliases()
         all_aliases = []
 
+        # Add device type aliases (reverb, delay, eq, etc.)
         for device_type, aliases in aliases_map.items():
             all_aliases.extend(aliases)
+
+        # Add device name aliases from preset cache (cathedral, valhalla, proq, etc.)
+        try:
+            import sys
+            import os
+            # Add nlp-service to path if not already present
+            nlp_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            if nlp_path not in sys.path:
+                sys.path.insert(0, nlp_path)
+
+            from learning.preset_cache_store import get_device_aliases
+
+            device_name_aliases = get_device_aliases()
+            # Add all device name aliases (keys are the aliases like 'cathedral', 'valhalla')
+            all_aliases.extend(device_name_aliases.keys())
+        except Exception as e:
+            # Non-fatal - preset cache not available, continue with static aliases only
+            print(f"[DEVICE PARSER] Preset cache not available: {e}")
 
         # Special case for "align delay" (multi-word)
         all_aliases.append(r"align\s+delay")

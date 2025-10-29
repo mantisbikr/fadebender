@@ -22,9 +22,11 @@
       "bandpas": "bandpass",
       "dcay": "decay",
       "dlay": "delay",
+      "drywet": "dry wet",
       "gan": "gain",
       "mod": "mode",
       "mut": "mute",
+      "paning": "pan",
       "predlay": "predelay",
       "retrun": "return",
       "retun": "return",
@@ -40,8 +42,12 @@
       "streo": "stereo",
       "strereo": "stereo",
       "tack": "track",
+      "testtypo": "testcorrect",
       "trac": "track",
-      "trck": "track"
+      "trck": "track",
+      "vilme": "volume",
+      "volme": "volume",
+      "volumz": "volume"
     }
   },
   "server": {
