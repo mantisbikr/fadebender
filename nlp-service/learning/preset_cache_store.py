@@ -26,6 +26,13 @@ _FIRESTORE_ENABLED = False
 # Configuration
 TTL_SECONDS = 60  # Refresh from Firestore every 60 seconds
 
+# Only load devices with these structure signatures (fully learned devices)
+LEARNED_STRUCTURE_SIGNATURES = {
+    '9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1',  # Delay
+    '64ccfc236b79371d0b45e913f81bf0f3a55c6db9',  # Reverb
+    'd554752f4be9eee62197c37b45b1c22237842c37',  # Amp
+}
+
 
 def _init_firestore():
     """Initialize Firestore client (lazy initialization)."""
@@ -41,15 +48,17 @@ def _init_firestore():
         database_id = os.getenv("FIRESTORE_DATABASE_ID", "(default)")
 
         # Initialize client with database parameter
-        if project_id and database_id and database_id != "(default)":
-            _FIRESTORE_CLIENT = firestore.Client(project=project_id, database=database_id)
+        if database_id and database_id != "(default)":
+            _FIRESTORE_CLIENT = firestore.Client(database=database_id)
+            print(f"[PRESET CACHE] Firestore initialized (database: {database_id})")
         elif project_id:
             _FIRESTORE_CLIENT = firestore.Client(project=project_id)
+            print(f"[PRESET CACHE] Firestore initialized (project: {project_id})")
         else:
             _FIRESTORE_CLIENT = firestore.Client()
+            print("[PRESET CACHE] Firestore initialized (default)")
 
         _FIRESTORE_ENABLED = True
-        print("[PRESET CACHE] Firestore initialized successfully")
     except Exception as e:
         print(f"[PRESET CACHE] Firestore initialization failed: {e}")
         _FIRESTORE_CLIENT = None
@@ -163,6 +172,11 @@ def _load_from_firestore() -> Tuple[Set[str], Dict[str, str]]:
 
             device_name = data.get('device_name')
             if device_name and device_name.lower().startswith('unknown'):
+                continue
+
+            # Only load devices with learned structure signatures
+            structure_sig = data.get('structure_signature')
+            if structure_sig not in LEARNED_STRUCTURE_SIGNATURES:
                 continue
 
             # Extract category (device type)
