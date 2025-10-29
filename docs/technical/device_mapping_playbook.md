@@ -170,6 +170,134 @@ You provide:
 
 ---
 
+## Phase 1.5: Generate Device Aliases from Presets (AUTOMATIC - 0 min)
+
+**NEW: Device types and aliases are now automatically generated from Firestore presets**
+
+### 1.5.1 How It Works
+
+The NLP system automatically loads device information from your Firestore `presets` collection:
+
+**What Gets Extracted:**
+- **Device Categories**: From `category` field (e.g., "reverb", "delay", "eq")
+- **Device Names**: From `device_name` field with auto-generated aliases
+
+**Alias Generation Example:**
+
+For device name "FabFilter Pro-Q 3", the system auto-generates:
+- `fabfilter pro-q 3` (full name)
+- `fabfilter pro q` (without version)
+- `pro q 3` (product + version)
+- `pro q` (product only)
+- `proq` (abbreviated)
+- `fabfilter` (brand only)
+
+**Cache & Performance:**
+- 60-second TTL cache (refreshes automatically)
+- No server restart needed when adding new presets
+- Shared across all server instances
+
+### 1.5.2 Preset Naming Convention
+
+**IMPORTANT**: When creating new presets in Firestore:
+
+```json
+{
+  "name": "Cathedral Hall",
+  "device_name": "Valhalla VintageVerb",  // ← Canonical device name
+  "category": "reverb",                    // ← Device type
+  "parameters": {...}
+}
+```
+
+**DO:**
+- ✅ Use consistent, exact device names (e.g., "FabFilter Pro-Q 3")
+- ✅ Use lowercase category names (reverb, delay, eq, compressor)
+- ✅ Include brand names for clarity (Valhalla, FabFilter, Soundtoys)
+
+**DON'T:**
+- ❌ Use `unknown_*` prefix (these are skipped for alias generation)
+- ❌ Mix capitalization ("Reverb" vs "reverb")
+- ❌ Use abbreviations in device_name field (full name only)
+
+### 1.5.3 Adding Aliases for New Devices
+
+**When you add a new device to Live and create presets:**
+
+1. **Create presets with proper naming:**
+   ```bash
+   # Preset document in Firestore:
+   presets/eq_pro_warm
+     - name: "Pro Warm"
+     - device_name: "FabFilter Pro-Q 3"
+     - category: "eq"
+   ```
+
+2. **Aliases auto-generate within 60 seconds:**
+   - No code changes needed
+   - No configuration updates needed
+   - System automatically recognizes new device type
+
+3. **Verify in NLP:**
+   ```bash
+   # Test query
+   curl -X POST http://127.0.0.1:8722/intent/parse \
+     -d '{"text":"set proq frequency to 1000"}'
+
+   # Should recognize "proq" as "FabFilter Pro-Q 3"
+   ```
+
+### 1.5.4 Unknown Devices (Manual Learning Required)
+
+**Presets starting with `unknown_*` are intentionally skipped:**
+
+```json
+{
+  "name": "Mystery Effect",
+  "device_name": "unknown_device_123",  // ← SKIPPED
+  "category": "unknown",                 // ← SKIPPED
+}
+```
+
+**Workflow for unknown devices:**
+
+1. Create preset with `unknown_*` prefix initially
+2. Research and identify the actual device
+3. Update preset with correct `device_name` and `category`
+4. Within 60 seconds, aliases auto-generate
+5. Document the mapping in this playbook
+
+**Why this matters:**
+- Prevents incorrect auto-learning of unidentified devices
+- Ensures only verified devices get aliases
+- Maintains NLP quality and accuracy
+
+### 1.5.5 Implementation Details
+
+**Files Involved:**
+- `nlp-service/learning/preset_cache_store.py` - Firestore loader with alias generation
+- `server/config/app_config.py` - Uses preset cache for `get_device_type_aliases()`
+- `scripts/test_preset_cache.py` - Test alias generation
+
+**Cache Structure:**
+```python
+# Categories (device types)
+categories: Set[str] = {'reverb', 'delay', 'eq', 'compressor'}
+
+# Device aliases (alias → canonical name)
+device_aliases: Dict[str, str] = {
+    'fabfilter': 'FabFilter Pro-Q 3',
+    'proq': 'FabFilter Pro-Q 3',
+    'valhalla': 'Valhalla VintageVerb',
+    'vintageverb': 'Valhalla VintageVerb',
+    ...
+}
+```
+
+**No Action Required**: This phase is fully automatic once presets exist in Firestore.
+
+---
+
 ## Phase 2: Initialize Device Structure (30-45 min)
 
 **NEW: This phase converts learn_device output to complete Reverb-style format**
@@ -1224,6 +1352,12 @@ def _check_requires_for_effect(mapping, params, target_param_name):
    - Capture all factory presets + screenshots
    - Gather device documentation
    - Verify we have good sample coverage
+
+1.5. **Generate Device Aliases from Presets** (0 min - AUTOMATIC)
+   - System auto-loads from Firestore presets
+   - Categories and device aliases generated automatically
+   - 60-second TTL cache, no restart needed
+   - **Action Required**: Ensure preset `device_name` and `category` fields are accurate
 
 2. **Initialize Device Structure** (30-45 min)
    - Run initialization script with device docs
