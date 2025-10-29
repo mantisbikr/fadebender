@@ -24,7 +24,7 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
     """
     start = time.perf_counter()
 
-    result = try_regex_parse(query, "", model_preference)
+    result, _ = try_regex_parse(query, "", model_preference)
     if result:
         result['meta']['pipeline'] = 'regex_only'
         result['meta']['latency_ms'] = (time.perf_counter() - start) * 1000

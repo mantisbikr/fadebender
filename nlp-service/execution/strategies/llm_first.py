@@ -39,7 +39,7 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
             raise
 
         # LLM failed - try regex fallback
-        result = try_regex_parse(query, str(e), model_preference)
+        result, _ = try_regex_parse(query, str(e), model_preference)
         if result:
             result['meta']['pipeline'] = 'regex_fallback'
             result['meta']['latency_ms'] = (time.perf_counter() - start) * 1000

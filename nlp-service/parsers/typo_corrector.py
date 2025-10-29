@@ -5,6 +5,20 @@ from __future__ import annotations
 import re
 from typing import Dict
 
+# Import typo sources at module level (avoid repeated imports)
+_firestore_typos = None
+_config_typos = None
+
+try:
+    from learning.typo_cache_store import get_typo_corrections as _firestore_typos
+except Exception:
+    pass
+
+try:
+    from server.config.app_config import get_typo_corrections as _config_typos
+except Exception:
+    pass
+
 
 # Ordinal word mapping for device selection (first..tenth)
 ORDINAL_WORD_MAP = {
@@ -22,21 +36,31 @@ ORDINAL_WORD_MAP = {
 
 
 def get_typo_corrections() -> Dict[str, str]:
-    """Get typo correction map from config.
+    """Get typo correction map from Firestore with TTL caching.
 
-    Single source of truth: configs/app_config.json
+    Single source of truth: Firestore (nlp_config/typo_corrections)
+    Fallback: configs/app_config.json if Firestore unavailable
 
     Returns:
         Dictionary mapping common typos to correct spellings.
-        Returns empty dict if config unavailable (fail gracefully).
+        Returns empty dict if both sources unavailable (fail gracefully).
     """
-    try:
-        from server.config.app_config import get_typo_corrections as get_config_typos
-        return get_config_typos() or {}
-    except Exception:
-        # Config unavailable - return empty dict
-        # This should rarely happen in production
-        return {}
+    # Primary: Firestore with TTL cache (fast in-memory reads)
+    if _firestore_typos:
+        try:
+            return _firestore_typos() or {}
+        except Exception:
+            pass
+
+    # Fallback: Local config file
+    if _config_typos:
+        try:
+            return _config_typos() or {}
+        except Exception:
+            pass
+
+    # Both sources failed
+    return {}
 
 
 def apply_typo_corrections(query: str) -> str:
@@ -62,7 +86,21 @@ def apply_typo_corrections(query: str) -> str:
 
     # Apply typo corrections
     typo_map = get_typo_corrections()
+
+    # Debug logging
+    import os
+    if os.getenv("DEBUG_TYPO_CORRECTION", "").lower() in ("1", "true", "yes"):
+        print(f"[TYPO CORRECTOR] Loaded {len(typo_map)} corrections")
+        if "pain" in query.lower():
+            print(f"[TYPO CORRECTOR] Query contains 'pain', checking corrections...")
+            print(f"[TYPO CORRECTOR] 'pain' in typo_map: {'pain' in typo_map}")
+            if 'pain' in typo_map:
+                print(f"[TYPO CORRECTOR] Will correct 'pain' → '{typo_map['pain']}'")
+
     for typo, correct in typo_map.items():
+        old_q = q
         q = re.sub(rf"\b{typo}\b", correct, q)
+        if old_q != q and os.getenv("DEBUG_TYPO_CORRECTION", "").lower() in ("1", "true", "yes"):
+            print(f"[TYPO CORRECTOR] Applied: '{typo}' → '{correct}'")
 
     return q

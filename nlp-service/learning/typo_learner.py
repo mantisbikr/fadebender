@@ -110,11 +110,16 @@ def _tokenize_query(query: str) -> List[str]:
     Returns:
         List of lowercase tokens (excluding stop words and numbers)
     """
-    # Stop words that don't need learning
+    # Stop words that don't need learning (including action words!)
     stop_words = {
+        # Query structure words
         'set', 'make', 'change', 'adjust', 'get', 'what', 'is', 'the',
-        'to', 'at', 'by', 'of', 'on', 'in', 'for', 'a', 'an',
+        'to', 'at', 'by', 'of', 'on', 'in', 'for', 'a', 'an', 'and',
+        # Target types (should never be learned as typos)
         'track', 'return', 'device', 'plugin',
+        # Action words (critical: never learn these!)
+        'mute', 'unmute', 'solo', 'unsolo', 'enable', 'disable',
+        'bypass', 'unbypass', 'arm', 'unarm',
     }
 
     # Tokenize on whitespace and common delimiters
@@ -138,59 +143,109 @@ def _extract_intent_terms(intent: Intent) -> Set[str]:
     # Extract parameter names from targets
     targets = intent.get('targets', [])
     for target in targets:
+        # Extract parameter name (e.g., "volume", "pan", "mute")
         if 'parameter' in target:
             param = target['parameter']
             # Check for None before calling .lower()
             if param is not None and isinstance(param, str):
                 terms.update(param.lower().split())
 
+        # Extract plugin name (e.g., "reverb", "delay")
         if 'plugin' in target:
             plugin = target['plugin']
             # Check for None before calling .lower()
             if plugin is not None and isinstance(plugin, str):
                 terms.update(plugin.lower().split())
 
+        # Extract target names (e.g., "Track 1" → "track", "Return A" → "return")
+        # This helps learn "rack" → "track", not "rack" → "mute"
+        for key in ['track', 'return', 'device']:
+            if key in target:
+                target_name = target[key]
+                if target_name is not None and isinstance(target_name, str):
+                    # Extract just the type word (e.g., "Track 1" → "track")
+                    words = target_name.lower().split()
+                    terms.update(words)
+
     return terms
 
 
-def detect_typos(query: str, intent: Intent) -> Dict[str, str]:
+def detect_typos(query: str, intent: Intent, suspected_typos: List[str] | None = None) -> Dict[str, str]:
     """Detect typos by comparing query tokens with intent terms.
 
-    Finds query tokens that are:
-    1. Not in known terms dictionary
-    2. Similar to an intent term (edit distance ≤ 2)
-    3. Different from that intent term
+    Prioritizes suspected typos (words that failed regex matching) for precise detection,
+    then falls back to fuzzy matching for any remaining unknown words.
 
     Args:
         query: Original user query with potential typos
         intent: LLM-corrected intent result
+        suspected_typos: Optional list of words that failed regex matching (e.g., ["paning"])
 
     Returns:
-        Dictionary mapping typo → correction (e.g., {"volme": "volume"})
+        Dictionary mapping typo → correction (e.g., {"paning": "pan", "volme": "volume"})
+
+    Examples:
+        With suspected typos (precise):
+        >>> detect_typos("set track 2 paning to left", intent, ["paning"])
+        {"paning": "pan"}
+
+        Without suspected typos (fuzzy fallback):
+        >>> detect_typos("set track 1 volme to -20", intent)
+        {"volme": "volume"}
     """
     # Disable learning if explicitly configured
     if os.getenv("DISABLE_TYPO_LEARNING", "").lower() in ("1", "true", "yes"):
         return {}
 
     typos = {}
-
-    # Get tokens from query and intent
-    query_tokens = _tokenize_query(query)
     intent_terms = _extract_intent_terms(intent)
     known_terms = _extract_known_terms()
 
-    # Find potential typos
+    # PRIORITY 1: Check suspected typos directly (precise detection)
+    if suspected_typos:
+        for suspected in suspected_typos:
+            suspected_lower = suspected.lower()
+
+            # Skip if already a known term
+            if suspected_lower in known_terms:
+                continue
+
+            # Find best match in intent terms (no distance threshold for suspected words!)
+            best_match = None
+            best_distance = float('inf')
+
+            for term in intent_terms:
+                if suspected_lower == term:
+                    continue
+
+                distance = _levenshtein_distance(suspected_lower, term)
+
+                # For suspected typos, be more lenient (distance ≤ 4 instead of 2)
+                # This catches "paning" → "pan" (distance 3)
+                if distance <= 4 and distance < best_distance:
+                    best_match = term
+                    best_distance = distance
+
+            if best_match:
+                typos[suspected_lower] = best_match
+
+    # PRIORITY 2: Fuzzy matching for any remaining unknown words (fallback)
+    query_tokens = _tokenize_query(query)
+
     for token in query_tokens:
+        # Skip if already detected as suspected typo
+        if token in typos:
+            continue
+
         # Skip if this is already a known term
         if token in known_terms:
             continue
 
-        # Check if similar to any intent term
+        # Check if similar to any intent term (strict threshold)
         for term in intent_terms:
             if token == term:
                 continue
 
-            # Calculate similarity
             distance = _levenshtein_distance(token, term)
 
             # If close enough (distance ≤ 2) and not already known, it's likely a typo
@@ -202,7 +257,12 @@ def detect_typos(query: str, intent: Intent) -> Dict[str, str]:
     return typos
 
 
-def learn_from_llm_success(query: str, intent: Intent, persist: bool = True) -> Dict[str, str]:
+def learn_from_llm_success(
+    query: str,
+    intent: Intent,
+    suspected_typos: List[str] | None = None,
+    persist: bool = True
+) -> Dict[str, str]:
     """Main entry point - detect and optionally persist typo corrections.
 
     This function is called when LLM fallback succeeds in regex_first mode.
@@ -211,12 +271,13 @@ def learn_from_llm_success(query: str, intent: Intent, persist: bool = True) -> 
     Args:
         query: Original user query
         intent: LLM-corrected intent result
+        suspected_typos: Optional list of words that failed regex matching
         persist: If True (default), save corrections to app_config.json
 
     Returns:
         Dictionary of detected typo corrections
     """
-    detected_typos = detect_typos(query, intent)
+    detected_typos = detect_typos(query, intent, suspected_typos)
 
     if detected_typos:
         # Log for monitoring (optional)

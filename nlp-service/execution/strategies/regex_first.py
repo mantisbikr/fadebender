@@ -29,7 +29,7 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
     start = time.perf_counter()
 
     # Try regex patterns first (fast!)
-    result = try_regex_parse(query, "", model_preference)
+    result, suspected_typos = try_regex_parse(query, "", model_preference)
     if result:
         result['meta']['pipeline'] = 'regex'
         result['meta']['latency_ms'] = (time.perf_counter() - start) * 1000
@@ -43,9 +43,10 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
         result['meta']['latency_ms'] = (time.perf_counter() - start) * 1000
 
         # Learn from LLM success - detect typos for future fast lookups
+        # Pass suspected typos from regex failure for precise detection
         # Wrapped in try-except to never block on learning errors
         try:
-            detected_typos = learn_from_llm_success(query, result)
+            detected_typos = learn_from_llm_success(query, result, suspected_typos)
             if detected_typos:
                 result['meta']['learned_typos'] = detected_typos
         except Exception as learning_error:

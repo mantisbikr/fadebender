@@ -31,7 +31,7 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
     lock = threading.Lock()
 
     def run_regex():
-        result = try_regex_parse(query, "", model_preference)
+        result, _ = try_regex_parse(query, "", model_preference)
         with lock:
             results['regex'] = result if result else None
 

@@ -12,11 +12,11 @@ from typing import Dict
 
 
 def persist_typos(corrections: Dict[str, str]) -> bool:
-    """Persist typo corrections to app_config.json.
+    """Persist typo corrections to Firestore.
 
     This function:
-    1. Adds corrections to in-memory config
-    2. Saves config to disk
+    1. Saves corrections to Firestore (instant availability)
+    2. Updates in-memory cache immediately
     3. Returns success/failure status
 
     Args:
@@ -33,27 +33,34 @@ def persist_typos(corrections: Dict[str, str]) -> bool:
         return True  # Nothing to save
 
     try:
-        # Import the SAME module instance that's already loaded in the server
-        # This is critical - using importlib.util would create a separate instance
-        # with its own _CONFIG variable, causing cache issues
-        from server.config.app_config import add_typo_corrections, save_config
+        # Primary: Save to Firestore with instant cache update
+        from learning.typo_cache_store import save_typo_corrections
 
-        # Add corrections to config (updates in-memory _CONFIG)
-        add_typo_corrections(corrections)
-
-        # Save to disk
-        success = save_config()
+        success = save_typo_corrections(corrections)
 
         if success:
-            print(f"[TYPO PERSISTENCE] Saved {len(corrections)} correction(s) to config")
+            print(f"[TYPO PERSISTENCE] Saved {len(corrections)} correction(s) to Firestore")
         else:
-            print(f"[TYPO PERSISTENCE] Failed to save corrections to config")
+            print(f"[TYPO PERSISTENCE] Failed to save corrections to Firestore")
 
         return success
 
     except Exception as e:
         print(f"[TYPO PERSISTENCE] Error persisting typos: {e}")
-        return False
+
+        # Fallback: Try saving to local config file
+        try:
+            from server.config.app_config import add_typo_corrections, save_config
+            add_typo_corrections(corrections)
+            fallback_success = save_config()
+
+            if fallback_success:
+                print(f"[TYPO PERSISTENCE] Fallback: Saved to local config file")
+
+            return fallback_success
+        except Exception as fallback_error:
+            print(f"[TYPO PERSISTENCE] Fallback also failed: {fallback_error}")
+            return False
 
 
 def can_persist() -> bool:
