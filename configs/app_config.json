@@ -17,6 +17,10 @@
   },
   "nlp": {
     "mode": "regex_first",
+    "relative_change_verbs": {
+      "increase": ["increase", "add", "up", "louder"],
+      "decrease": ["decrease", "subtract", "reduce", "down", "quieter"]
+    },
     "typo_corrections": {
       "alin": "align",
       "bandpas": "bandpass",

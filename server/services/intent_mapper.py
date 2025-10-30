@@ -95,7 +95,79 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     value = op.get("value")
     unit = op.get("unit")
 
-    # Validate operation type and value (only absolute supported for now)
+    # Handle relative changes: convert to absolute by reading current value
+    if op_type == "relative":
+        # Import here to avoid circular dependency
+        from server.core.deps import get_value_registry
+
+        try:
+            registry = get_value_registry()
+            mixer_data = registry.get_mixer()
+
+            # Get current value from registry
+            current_value = None
+            if domain == "track" and "track_index" in target_fields:
+                idx = target_fields["track_index"]
+                track_data = mixer_data.get("track", {}).get(idx, {})
+                param_data = track_data.get(parameter, {})
+                current_value = param_data.get("normalized")
+            elif domain == "return" and "return_ref" in target_fields:
+                # Map return letter to index (A=0, B=1, etc.)
+                letter = target_fields["return_ref"]
+                idx = ord(letter.upper()) - ord('A')
+                return_data = mixer_data.get("return", {}).get(idx, {})
+                param_data = return_data.get(parameter, {})
+                current_value = param_data.get("normalized")
+
+            if current_value is None:
+                # If we don't have a current value, can't do relative change
+                errors.append("relative_change_no_current_value")
+                return None, errors
+
+            # Calculate new absolute value
+            # Need to convert delta to same scale as current (normalized 0-1)
+            delta_value = float(value)
+            unit_l = (unit or "").lower()
+
+            if parameter == "volume":
+                # Import conversion functions
+                from server.volume_utils import live_float_to_db
+
+                # Current value is normalized (0-1), convert to dB for calculation
+                current_db = live_float_to_db(current_value)
+
+                if unit_l in ("%", "percent"):
+                    # Explicit % means multiplicative percentage change
+                    # E.g., "increase by 20%" means multiply amplitude by 1.20
+                    multiplier = 1.0 + (delta_value / 100.0)
+                    new_normalized = current_value * multiplier
+                    new_normalized = max(0.0, min(1.0, new_normalized))
+                    value = live_float_to_db(new_normalized)
+                    unit = "dB"
+                else:
+                    # No unit, "display", or "dB" → additive in standard unit (dB)
+                    # E.g., "increase by 3" or "increase by 3 dB" → add 3 dB
+                    new_db = current_db + delta_value
+                    value = new_db  # Keep as display value
+                    unit = "dB"
+            else:
+                # For other parameters (pan, etc.), treat as direct normalized delta
+                if unit_l in ("%", "percent"):
+                    delta_normalized = delta_value / 100.0
+                else:
+                    # For display values, assume they're already in the right scale
+                    delta_normalized = delta_value / 100.0  # Treat as percent
+
+                value = current_value + delta_normalized
+
+            # Now treat as absolute
+            op_type = "absolute"
+
+        except Exception as e:
+            errors.append(f"relative_change_error:{str(e)}")
+            return None, errors
+
+    # Validate operation type and value
     if op_type != "absolute":
         errors.append(f"unsupported_op_type:{op_type}")
         return None, errors

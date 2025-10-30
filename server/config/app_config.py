@@ -227,6 +227,20 @@ def get_nlp_mode_config() -> str:
     return str(cfg.get("nlp", {}).get("mode", "regex_first"))
 
 
+def get_relative_change_verbs_config() -> tuple[list[str], list[str]]:
+    """Get relative change verb aliases from app config.
+
+    Returns:
+        Tuple of (increase_verbs, decrease_verbs)
+        Defaults to standard sets if not configured
+    """
+    cfg = _load()
+    verbs = cfg.get("nlp", {}).get("relative_change_verbs", {})
+    increase = list(verbs.get("increase", ["increase", "add", "up", "louder"]))
+    decrease = list(verbs.get("decrease", ["decrease", "subtract", "reduce", "down", "quieter"]))
+    return (increase, decrease)
+
+
 def get_ui_settings() -> Dict[str, Any]:
     return dict(_load().get("ui", {}))
 
