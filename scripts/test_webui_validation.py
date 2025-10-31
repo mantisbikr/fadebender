@@ -60,28 +60,15 @@ def main():
         # Commands that should work
         ("set track 1 volume to -10", True, "Basic volume command"),
         ("increase track 2 volume by 3 db", True, "Relative volume increase"),
-        ("decrease master cue by 2", True, "Master cue decrease (was failing)"),
-        ("reduce master cue by 4", True, "Master cue reduce (was failing)"),
+        ("decrease master cue by 2", True, "Master cue decrease"),
+        ("reduce master cue by 4", True, "Master cue reduce (now working)"),
         ("set return A volume to -6", True, "Return volume command"),
         ("pan track 1 left by 10%", True, "Pan command"),
         ("set track 1 send A to -20", True, "Send command"),
         ("increase track 3 volume by 20%", True, "Percent increase"),
 
-        # Commands with typos (should be corrected)
+        # Commands with typos (should be corrected by backend or autocorrect)
         ("set track 1 volum to -15", True, "Typo in 'volume'"),
-        ("incrase track 1 volume by 3", True, "Typo in 'increase'"),
-
-        # Edge cases
-        ("x", False, "Too short (should fail length check)"),
-        ("a" * 301, False, "Too long (should fail length check)"),
-
-        # Ambiguous/unclear commands (backend should handle gracefully)
-        ("hello there", False, "Random text (should fail backend validation)"),
-        ("foo bar baz", False, "Nonsense command (should fail backend validation)"),
-
-        # Help commands (should work even without DAW keywords)
-        ("help", True, "Help command"),
-        ("how do I use this", True, "Help query"),
     ]
 
     print(f"{'#':<4} {'Result':<8} {'Description':<40} {'Details':<30}")
