@@ -63,6 +63,7 @@ class TextProcessor {
   }
 
   validateCommand(text) {
+    // Only validate basic constraints - let backend handle command validation
     if (!text || text.trim().length < 2) {
       return { valid: false, error: 'Command too short' };
     }
@@ -71,31 +72,7 @@ class TextProcessor {
       return { valid: false, error: 'Command too long' };
     }
 
-    // Expanded DAW-related keywords - be more inclusive
-    const dawKeywords = [
-      'track', 'volume', 'pan', 'set', 'make', 'increase', 'decrease', 'reduce', 'raise', 'lower',
-      'reverb', 'delay', 'echo', 'eq', 'bass', 'treble', 'gain', 'level',
-      'piano', 'guitar', 'drums', 'vocal', 'synth', 'kick', 'snare', 'hi-hat',
-      'loud', 'quiet', 'soft', 'hard', 'wet', 'dry', 'left', 'right', 'center',
-      'up', 'down', 'add', 'remove', 'turn', 'adjust', 'change', 'modify',
-      'more', 'less', 'higher', 'lower', 'boost', 'cut', 'mute', 'solo',
-      'db', 'percent', '%', 'amount', 'bit', 'little', 'much', 'lot',
-      // Sends/routing/help terms
-      'send', 'sends', 'routing', 'route', 'control', 'help', 'how', 'guide',
-      // Mixer entities
-      'master', 'return', 'cue'
-    ];
-
-    const hasKeyword = dawKeywords.some(keyword => text.includes(keyword));
-
-    if (!hasKeyword) {
-      // Allow help-style queries to pass through to /help
-      if (text.includes('how') || text.includes('help')) {
-        return { valid: true };
-      }
-      return { valid: false, error: 'Not a recognized DAW command' };
-    }
-
+    // All other validation handled by backend
     return { valid: true };
   }
 
