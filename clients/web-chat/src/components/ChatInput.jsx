@@ -3,7 +3,7 @@
  * Handles user input with validation and submission
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -11,18 +11,138 @@ import {
   IconButton,
   Typography,
   Container,
-  InputAdornment
+  Chip,
+  Fade,
 } from '@mui/material';
-import { Send as SendIcon } from '@mui/icons-material';
+import { Send as SendIcon, Undo as UndoIcon } from '@mui/icons-material';
+
+// Common DAW typo corrections (auto-correct on space/tab)
+const AUTOCORRECT_MAP = {
+  // Track references
+  'trak': 'track',
+  'tracj': 'track',
+
+  // Volume terms
+  'volum': 'volume',
+  'vollume': 'volume',
+  'loudr': 'louder',
+  'quiter': 'quieter',
+  'quietr': 'quieter',
+  'incrase': 'increase',
+  'increse': 'increase',
+  'increace': 'increase',
+
+  // Reduce/decrease
+  'redducce': 'reduce',
+  'redduce': 'reduce',
+  'reduuce': 'reduce',
+  'reducce': 'reduce',
+
+  // Pan terms
+  'pann': 'pan',
+  'centre': 'center',
+  'centr': 'center',
+
+  // Effects
+  'revreb': 'reverb',
+  'reverbb': 'reverb',
+  'revebr': 'reverb',
+  'reverv': 'reverb',
+
+  // Returns
+  'retrun': 'return',
+  'retun': 'return',
+
+  // Common
+  'strereo': 'stereo',
+  'streo': 'stereo',
+  'stere': 'stereo',
+};
+
+// Fuzzy match for typos (handle doubled chars, etc.)
+function findBestMatch(word) {
+  const lower = word.toLowerCase();
+
+  // Don't autocorrect very short words (they're often valid)
+  if (lower.length < 4) {
+    // Only exact matches for short words
+    return AUTOCORRECT_MAP[lower] || null;
+  }
+
+  // Exact match first
+  if (AUTOCORRECT_MAP[lower]) {
+    return AUTOCORRECT_MAP[lower];
+  }
+
+  // Try removing doubled characters (redducce → reduce)
+  const dedoubled = lower.replace(/(.)\1+/g, '$1');
+  if (AUTOCORRECT_MAP[dedoubled] && dedoubled !== lower) {
+    return AUTOCORRECT_MAP[dedoubled];
+  }
+
+  // For longer words (5+ chars), try fuzzy matching
+  if (lower.length >= 5) {
+    for (const [typo, correction] of Object.entries(AUTOCORRECT_MAP)) {
+      // Only match if lengths are similar
+      if (Math.abs(typo.length - lower.length) > 2) continue;
+
+      const distance = levenshteinDistance(lower, typo);
+      if (distance === 1) {  // Only 1 character difference (very conservative)
+        return correction;
+      }
+    }
+  }
+
+  return null;
+}
+
+// Simple Levenshtein distance for fuzzy matching
+function levenshteinDistance(a, b) {
+  const matrix = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
 
 export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
   const [input, setInput] = useState('');
+  const [lastCorrection, setLastCorrection] = useState(null); // {from, to, position}
+  const [showUndo, setShowUndo] = useState(false);
+  const textFieldRef = useRef(null);
 
   useEffect(() => {
     if (draft && typeof draft.text === 'string') {
       setInput(draft.text);
     }
   }, [draft?.ts]);
+
+  useEffect(() => {
+    if (showUndo) {
+      const timer = setTimeout(() => setShowUndo(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showUndo]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -33,18 +153,117 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
     setInput('');
   };
 
+  const applyAutocorrect = (text, cursorPosition) => {
+    // Find the word before cursor
+    const beforeCursor = text.substring(0, cursorPosition);
+    const words = beforeCursor.split(/\s+/);
+    const lastWord = words[words.length - 1];
+
+    if (!lastWord) return { text, newPosition: cursorPosition, correction: null };
+
+    // Use fuzzy matching to find best correction
+    const correction = findBestMatch(lastWord);
+    if (correction && correction !== lastWord.toLowerCase()) {
+      // Replace the last word with correction
+      const beforeWord = beforeCursor.substring(0, beforeCursor.lastIndexOf(lastWord));
+      const afterCursor = text.substring(cursorPosition);
+      const newText = beforeWord + correction + afterCursor;
+      const newPosition = beforeWord.length + correction.length;
+
+      return {
+        text: newText,
+        newPosition,
+        correction: { from: lastWord, to: correction, originalText: text, position: beforeWord.length }
+      };
+    }
+
+    return { text, newPosition: cursorPosition, correction: null };
+  };
+
+  const handleUndo = () => {
+    if (lastCorrection) {
+      setInput(lastCorrection.originalText);
+      setLastCorrection(null);
+      setShowUndo(false);
+
+      // Restore cursor position
+      setTimeout(() => {
+        if (textFieldRef.current) {
+          const inputElement = textFieldRef.current.querySelector('input');
+          if (inputElement) {
+            const pos = lastCorrection.position + lastCorrection.from.length;
+            inputElement.setSelectionRange(pos, pos);
+          }
+        }
+      }, 0);
+    }
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+      return;
+    }
+
+    // Auto-correct on space or tab
+    if (e.key === ' ' || e.key === 'Tab') {
+      const cursorPosition = e.target.selectionStart;
+      const { text: newText, newPosition, correction } = applyAutocorrect(input, cursorPosition);
+
+      if (newText !== input && correction) {
+        e.preventDefault();
+        setInput(newText + (e.key === ' ' ? ' ' : ''));
+        setLastCorrection(correction);
+        setShowUndo(true);
+
+        // Restore cursor position after React updates
+        setTimeout(() => {
+          const newCursor = newPosition + (e.key === ' ' ? 1 : 0);
+          e.target.setSelectionRange(newCursor, newCursor);
+        }, 0);
+      }
     }
   };
 
   return (
     <Paper elevation={2} sx={{ borderTop: 1, borderColor: 'divider' }}>
-      <Container maxWidth="lg" sx={{ py: 3 }}>
+      <Container maxWidth="lg" sx={{ py: 3, position: 'relative' }}>
+        {/* Autocorrect Undo Button - iPhone style */}
+        <Fade in={showUndo && lastCorrection}>
+          <Box
+            onClick={handleUndo}
+            sx={{
+              position: 'absolute',
+              top: 8,
+              left: lastCorrection ? `${Math.min(lastCorrection.position * 8 + 24, 600)}px` : '24px',
+              bgcolor: 'rgba(0, 0, 0, 0.7)',
+              color: 'white',
+              borderRadius: '12px',
+              px: 1,
+              py: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              cursor: 'pointer',
+              fontSize: '12px',
+              zIndex: 1000,
+              boxShadow: 2,
+              '&:hover': {
+                bgcolor: 'rgba(0, 0, 0, 0.85)',
+              },
+            }}
+          >
+            <UndoIcon sx={{ fontSize: 14 }} />
+            <Typography variant="caption" sx={{ color: 'white', fontSize: '11px' }}>
+              {lastCorrection ? `"${lastCorrection.from}"` : ''}
+            </Typography>
+          </Box>
+        </Fade>
+
         <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <TextField
+            ref={textFieldRef}
             fullWidth
             variant="outlined"
             value={input}
@@ -53,6 +272,9 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
             placeholder="Ask questions or send commands: 'set track 1 volume to -6 dB' or 'how to sidechain in Ableton?'"
             disabled={disabled}
             autoComplete="off"
+            inputProps={{
+              spellCheck: false, // Disable spell check - we handle autocorrect on space/tab
+            }}
             InputProps={{}}
             sx={{
               '& .MuiOutlinedInput-root': {
