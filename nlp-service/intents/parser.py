@@ -274,6 +274,19 @@ def fallback_parse(text: str) -> Dict[str, Any]:
             "meta": {"utterance": t, "fallback": True}
         }
 
+    # 2b) Relative volume by percent: increase/decrease track N by X%
+    m = re.search(r"(increase|decrease|make)\s+(?:track\s+(\d+)\s+)?(?:volume|it)?\s*(?:by\s*)?(\d+\.?\d*)%\b", s)
+    if m:
+        op = m.group(1); n = m.group(2); pct = float(m.group(3))
+        sign = 1 if op in ("increase", "make") else -1
+        track = _track_label(int(n)) if n else _track_label(1)
+        return {
+            "intent": "relative_change",
+            "targets": [{"track": track, "plugin": None, "parameter": "volume"}],
+            "operation": {"type": "relative", "value": sign * pct, "unit": "%"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+
     # 3) Pan track N left/right X%
     m = re.search(r"pan\s+track\s+(\d+)\s+(left|right)\s+(\d+)%", s)
     if m:
@@ -283,6 +296,42 @@ def fallback_parse(text: str) -> Dict[str, Any]:
             "intent": "set_parameter",
             "targets": [{"track": _track_label(n), "plugin": None, "parameter": "pan"}],
             "operation": {"type": "absolute", "value": val, "unit": "%"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+
+    # 3b) Pan master left/right by X (assume percent if no unit)
+    m = re.search(r"pan\s+master\s+(left|right)\s+(?:by\s*)?(\d+)(?:%?)\b", s)
+    if m:
+        dirn = m.group(1); amt = int(m.group(2))
+        val = -amt if dirn == 'left' else amt
+        return {
+            "intent": "relative_change",
+            "targets": [{"track": "Master", "plugin": None, "parameter": "pan"}],
+            "operation": {"type": "relative", "value": val, "unit": "%"},
+            "meta": {"utterance": t, "fallback": True}
+        }
+
+    # 1b) Set master volume to X [dB]
+    m = re.search(r"set\s+master\s+volume\s+to\s+(-?\d+\.?\d*)\s*(d?b)?\b", s)
+    if m:
+        val = float(m.group(1))
+        has_db = bool(m.group(2))
+        return {
+            "intent": "set_parameter",
+            "targets": [{"track": "Master", "plugin": None, "parameter": "volume"}],
+            "operation": {"type": "absolute", "value": val, "unit": "dB" if has_db or True else None},
+            "meta": {"utterance": t, "fallback": True}
+        }
+
+    # 1c) Set master cue to X [dB]
+    m = re.search(r"set\s+master\s+cue\s+to\s+(-?\d+\.?\d*)\s*(d?b)?\b", s)
+    if m:
+        val = float(m.group(1))
+        # default to dB semantics for cue as well
+        return {
+            "intent": "set_parameter",
+            "targets": [{"track": "Master", "plugin": None, "parameter": "cue"}],
+            "operation": {"type": "absolute", "value": val, "unit": "dB"},
             "meta": {"utterance": t, "fallback": True}
         }
 

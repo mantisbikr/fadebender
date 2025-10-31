@@ -17,6 +17,7 @@
   },
   "nlp": {
     "mode": "regex_first",
+    "percent_always_additive": ["pan"],
     "relative_change_verbs": {
       "increase": ["increase", "add", "up", "louder"],
       "decrease": ["decrease", "subtract", "reduce", "down", "quieter"]

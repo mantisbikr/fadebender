@@ -51,7 +51,6 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
                 result['meta']['learned_typos'] = detected_typos
         except Exception as learning_error:
             # Non-fatal - log and continue
-            import os
             if os.getenv("LOG_TYPO_LEARNING", "true").lower() in ("1", "true", "yes"):
                 print(f"[TYPO LEARNING] Non-fatal error: {learning_error}")
 

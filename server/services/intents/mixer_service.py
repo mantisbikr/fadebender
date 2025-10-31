@@ -8,12 +8,6 @@ from server.config.app_config import get_feature_flags
 from server.services.ableton_client import request_op
 from server.core.deps import get_value_registry
 from server.models.intents_api import CanonicalIntent
-from server.volume_utils import (
-    db_to_live_float,
-    live_float_to_db,
-    db_to_live_float_send,
-    live_float_to_db_send,
-)
 from server.services.intents.utils.mixer import (
     clamp,
     get_mixer_param_meta,
@@ -21,6 +15,7 @@ from server.services.intents.utils.mixer import (
     resolve_mixer_display_value,
     normalize_unit,
     apply_mixer_fit_inverse,
+    apply_mixer_fit_forward,
 )
 from server.services.intents.utils.refs import _resolve_send_index, _resolve_return_index
 
@@ -58,16 +53,17 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
 
     if field == "volume" and not resolved_from_display:
         if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
-            raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
+            raise HTTPException(400, "normalized_not_allowed_for_volume: provide display value or percent")
         unit_l = (intent.unit or "").lower()
-        if unit_l in ("db", "dB".lower()):
-            v = db_to_live_float(v)
-        elif unit_l in ("percent", "%"):
+        if unit_l in ("percent", "%"):
             v = v / 100.0
         else:
-            # Default to treating numeric input as dB for user-facing display semantics
-            # (Users provide display values unless explicitly marked as percent)
-            v = db_to_live_float(v)
+            # Use piecewise fit to convert dB -> normalized
+            pm = get_mixer_param_meta("track", "volume")
+            if pm and pm.get("fit"):
+                inv = apply_mixer_fit_inverse(pm, float(v))
+                if inv is not None:
+                    v = float(inv)
         v = clamp(v, 0.0, 1.0) if intent.clamp else v
     elif field == "pan" and not resolved_from_display:
         if display_only_io and (intent.display is None) and -1.0 <= v <= 1.0 and not intent.unit:
@@ -97,11 +93,13 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
             disp = intent.display
             unit = intent.unit if field == "volume" else None
         elif field == "volume":
-            try:
-                disp = f"{live_float_to_db(float(v)):.2f}"
-                unit = "dB"
-            except Exception:
-                pass
+            # Use piecewise fit for display
+            pm = get_mixer_param_meta("track", "volume")
+            if pm and pm.get("fit"):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp = f"{float(dval):.2f}"
+                    unit = "dB"
         elif field == "pan":
             try:
                 display_min, display_max = get_mixer_display_range("pan")
@@ -118,10 +116,12 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
     try:
         disp_txt = None
         if field == "volume":
-            try:
-                disp_txt = f"{live_float_to_db(float(v)):.1f} dB"
-            except Exception:
-                pass
+            # Use piecewise fit for summary
+            pm = get_mixer_param_meta("track", "volume")
+            if pm and pm.get("fit"):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp_txt = f"{float(dval):.1f} dB"
         elif field == "pan":
             try:
                 display_min, display_max = get_mixer_display_range("pan")
@@ -188,12 +188,15 @@ def set_return_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
         if display_only_io and (intent.unit is None) and 0.0 <= v <= 1.0:
             raise HTTPException(400, "normalized_not_allowed_for_volume: provide dB (unit='db') or percent")
         unit_l = (intent.unit or "").lower()
-        if unit_l in ("db", "dB".lower()):
-            v = db_to_live_float(v)
-        elif unit_l in ("percent", "%"):
+        if unit_l in ("percent", "%"):
             v = v / 100.0
         else:
-            v = db_to_live_float(v)
+            # Use piecewise fit to convert dB -> normalized
+            pm = get_mixer_param_meta("return", "volume")
+            if pm and pm.get("fit"):
+                inv = apply_mixer_fit_inverse(pm, float(v))
+                if inv is not None:
+                    v = float(inv)
         v = clamp(v, 0.0, 1.0) if intent.clamp else v
     elif field == "pan" and not resolved_from_display:
         if display_only_io and (intent.display is None) and -1.0 <= v <= 1.0 and not intent.unit:
@@ -222,11 +225,12 @@ def set_return_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
             disp = intent.display
             unit = intent.unit if field == "volume" else None
         elif field == "volume":
-            try:
-                disp = f"{live_float_to_db(float(v)):.2f}"
-                unit = "dB"
-            except Exception:
-                pass
+            pm = get_mixer_param_meta("return", "volume")
+            if pm and pm.get("fit"):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp = f"{float(dval):.2f}"
+                    unit = "dB"
         elif field == "pan":
             try:
                 display_min, display_max = get_mixer_display_range("pan")
@@ -243,10 +247,11 @@ def set_return_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
         letter = chr(ord('A') + int(return_idx))
         disp_txt = None
         if field == "volume":
-            try:
-                disp_txt = f"{live_float_to_db(float(v)):.1f} dB"
-            except Exception:
-                pass
+            pm = get_mixer_param_meta("return", "volume")
+            if pm and pm.get("fit"):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp_txt = f"{float(dval):.1f} dB"
         elif field == "pan":
             try:
                 display_min, display_max = get_mixer_display_range("pan")
@@ -284,26 +289,16 @@ def set_track_send(intent: CanonicalIntent) -> Dict[str, Any]:
         raise HTTPException(400, "track_index_must_be_at_least_1")
 
     v = float(intent.value if intent.value is not None else 0.0)
+    pm = get_mixer_param_meta("track", "send")  # Get once for both conversion and display
     unit_norm = normalize_unit(intent.unit)
-    if unit_norm in ("db",):
-        v = db_to_live_float_send(v)
-    elif unit_norm in ("percent", "%"):
+    if unit_norm in ("percent", "%"):
         v = v / 100.0
     else:
-        pm = get_mixer_param_meta("track", "send")
-        pm_unit = normalize_unit((pm or {}).get("unit")) if pm else None
-        if pm_unit in ("db",):
-            v = db_to_live_float_send(v)
-        elif pm_unit in ("percent", "%"):
-            v = v / 100.0
-        else:
-            if pm and isinstance(pm.get("fit"), dict):
-                inv = apply_mixer_fit_inverse(pm, float(v))
-                v = float(inv) if inv is not None else v
-            else:
-                # Default to treating numeric input as dB for user-facing display semantics
-                # (Users provide display values unless explicitly marked as percent)
-                v = db_to_live_float_send(v)
+        # Use piecewise fit to convert dB -> normalized
+        if pm and pm.get("fit"):
+            inv = apply_mixer_fit_inverse(pm, float(v))
+            if inv is not None:
+                v = float(inv)
 
     v = clamp(v, 0.0, 1.0) if intent.clamp else v
 
@@ -323,11 +318,12 @@ def set_track_send(intent: CanonicalIntent) -> Dict[str, Any]:
             disp = intent.display
             unit = intent.unit
         else:
-            try:
-                disp = f"{live_float_to_db_send(float(v)):.2f}"
-                unit = "dB"
-            except Exception:
-                pass
+            # Use piecewise fit for display
+            if pm and pm.get("fit"):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp = f"{float(dval):.2f}"
+                    unit = "dB"
         reg.update_mixer("track", track_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
     except Exception:
         pass
@@ -372,26 +368,16 @@ def set_return_send(intent: CanonicalIntent) -> Dict[str, Any]:
 
     send_idx = _resolve_send_index(intent.send_index, intent.send_ref)
     v = float(intent.value if intent.value is not None else 0.0)
+    pm = get_mixer_param_meta("return", "send")  # Get once for both conversion and display
     unit_norm = normalize_unit(intent.unit)
-    if unit_norm in ("db",):
-        v = db_to_live_float_send(v)
-    elif unit_norm in ("percent", "%"):
+    if unit_norm in ("percent", "%"):
         v = v / 100.0
     else:
-        pm = get_mixer_param_meta("return", "send")
-        pm_unit = normalize_unit((pm or {}).get("unit")) if pm else None
-        if pm_unit in ("db",):
-            v = db_to_live_float_send(v)
-        elif pm_unit in ("percent", "%"):
-            v = v / 100.0
-        else:
-            if pm and isinstance(pm.get("fit"), dict):
-                inv = apply_mixer_fit_inverse(pm, float(v))
-                v = float(inv) if inv is not None else v
-            else:
-                # Default to treating numeric input as dB for user-facing display semantics
-                # (Users provide display values unless explicitly marked as percent)
-                v = db_to_live_float_send(v)
+        # Use piecewise fit to convert dB -> normalized
+        if pm and pm.get("fit"):
+            inv = apply_mixer_fit_inverse(pm, float(v))
+            if inv is not None:
+                v = float(inv)
 
     v = clamp(v, 0.0, 1.0) if intent.clamp else v
 
@@ -406,9 +392,14 @@ def set_return_send(intent: CanonicalIntent) -> Dict[str, Any]:
         reg = get_value_registry()
         disp = None
         unit = None
+        # Prefer forward fit for display if available
         try:
-            disp = f"{live_float_to_db_send(float(v)):.2f}"
-            unit = "dB"
+            from server.services.intents.utils.mixer import apply_mixer_fit_forward
+            if pm and isinstance(pm.get("fit"), dict):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp = f"{float(dval):.2f}"
+                    unit = "dB"
         except Exception:
             pass
         reg.update_mixer("return", return_idx, f"send_{send_idx}", float(v), disp, unit, source="op")
@@ -420,7 +411,11 @@ def set_return_send(intent: CanonicalIntent) -> Dict[str, Any]:
         letter = chr(ord('A') + int(return_idx))
         disp_txt = None
         try:
-            disp_txt = f"{live_float_to_db_send(float(v)):.1f} dB"
+            # Use piecewise fit for summary
+            if pm and pm.get("fit"):
+                dval = apply_mixer_fit_forward(pm, float(v))
+                if dval is not None:
+                    disp_txt = f"{float(dval):.1f} dB"
         except Exception:
             pass
         if isinstance(resp, dict):
@@ -467,26 +462,28 @@ def set_master_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
             resolved_from_display = True
 
     if field == "volume" and not resolved_from_display:
-        if (intent.unit or "").lower() in ("db", "dB".lower()):
-            v = db_to_live_float(v)
-        elif (intent.unit or "").lower() in ("percent", "%"):
+        unit_l = (intent.unit or "").lower()
+        if unit_l in ("percent", "%"):
             v = v / 100.0
+        else:
+            # Use piecewise fit to convert dB -> normalized (default to dB semantics)
+            pm = get_mixer_param_meta("master", "volume")
+            if pm and pm.get("fit"):
+                inv = apply_mixer_fit_inverse(pm, float(v))
+                if inv is not None:
+                    v = float(inv)
         v = clamp(v, 0.0, 1.0) if intent.clamp else v
     elif field == "cue" and not resolved_from_display:
         unit_norm = normalize_unit(intent.unit)
-        if unit_norm in ("db",):
-            v = db_to_live_float(v)
-        elif unit_norm in ("percent", "%"):
+        if unit_norm in ("percent", "%"):
             v = v / 100.0
         else:
+            # Use piecewise fit to convert dB -> normalized (cue uses same mapping as volume)
             pm = get_mixer_param_meta("master", "cue")
-            if pm and isinstance(pm.get("fit"), dict):
+            if pm and pm.get("fit"):
                 inv = apply_mixer_fit_inverse(pm, float(v))
-                if inv is None:
-                    raise HTTPException(400, "cue_requires_unit_or_mapping_fit_for_master")
-                v = float(inv)
-            else:
-                raise HTTPException(400, "cue_requires_unit_or_mapping_fit_for_master")
+                if inv is not None:
+                    v = float(inv)
         v = clamp(v, 0.0, 1.0) if intent.clamp else v
     elif field == "pan":
         if abs(v) > 1.0:
@@ -512,7 +509,24 @@ def set_master_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
             unit = intent.unit if field in ("volume", "cue") else None
         elif field == "volume":
             try:
-                disp = f"{live_float_to_db(float(v)):.1f} dB"; unit = "db"
+                # Use piecewise fit for display
+                pm = get_mixer_param_meta("master", "volume")
+                if pm and pm.get("fit"):
+                    dval = apply_mixer_fit_forward(pm, float(v))
+                    if dval is not None:
+                        disp = f"{float(dval):.1f} dB"
+                        unit = "db"
+            except Exception:
+                pass
+        elif field == "cue":
+            try:
+                # Use piecewise fit for display (cue uses same mapping as volume)
+                pm = get_mixer_param_meta("master", "cue")
+                if pm and pm.get("fit"):
+                    dval = apply_mixer_fit_forward(pm, float(v))
+                    if dval is not None:
+                        disp = f"{float(dval):.1f} dB"
+                        unit = "db"
             except Exception:
                 pass
         reg.update_mixer("master", 0, field, float(v), disp, unit, source="op")

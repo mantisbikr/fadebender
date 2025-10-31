@@ -150,7 +150,11 @@ def _load() -> Dict[str, Any]:
 
             # Typo corrections loaded from configs/app_config.json
             # Single source of truth - no hardcoded fallback
-            "typo_corrections": {}
+            "typo_corrections": {},
+
+            # Parameters where % is always additive (not multiplicative)
+            # Loaded from configs/app_config.json
+            "percent_always_additive": ["pan"]
         },
         "models": {
             # Operation-specific model selection
@@ -239,6 +243,17 @@ def get_relative_change_verbs_config() -> tuple[list[str], list[str]]:
     increase = list(verbs.get("increase", ["increase", "add", "up", "louder"]))
     decrease = list(verbs.get("decrease", ["decrease", "subtract", "reduce", "down", "quieter"]))
     return (increase, decrease)
+
+
+def get_percent_always_additive_config() -> list[str]:
+    """Get list of parameters where percent is always additive (not multiplicative).
+
+    Returns:
+        List of parameter names (e.g., ["pan"])
+        Defaults to ["pan"] if not configured
+    """
+    cfg = _load()
+    return list(cfg.get("nlp", {}).get("percent_always_additive", ["pan"]))
 
 
 def get_ui_settings() -> Dict[str, Any]:

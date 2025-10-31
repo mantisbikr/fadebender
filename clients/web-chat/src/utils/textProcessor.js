@@ -73,7 +73,7 @@ class TextProcessor {
 
     // Expanded DAW-related keywords - be more inclusive
     const dawKeywords = [
-      'track', 'volume', 'pan', 'set', 'make', 'increase', 'decrease', 'raise', 'lower',
+      'track', 'volume', 'pan', 'set', 'make', 'increase', 'decrease', 'reduce', 'raise', 'lower',
       'reverb', 'delay', 'echo', 'eq', 'bass', 'treble', 'gain', 'level',
       'piano', 'guitar', 'drums', 'vocal', 'synth', 'kick', 'snare', 'hi-hat',
       'loud', 'quiet', 'soft', 'hard', 'wet', 'dry', 'left', 'right', 'center',
@@ -81,7 +81,9 @@ class TextProcessor {
       'more', 'less', 'higher', 'lower', 'boost', 'cut', 'mute', 'solo',
       'db', 'percent', '%', 'amount', 'bit', 'little', 'much', 'lot',
       // Sends/routing/help terms
-      'send', 'sends', 'routing', 'route', 'control', 'help', 'how', 'guide'
+      'send', 'sends', 'routing', 'route', 'control', 'help', 'how', 'guide',
+      // Mixer entities
+      'master', 'return', 'cue'
     ];
 
     const hasKeyword = dawKeywords.some(keyword => text.includes(keyword));
