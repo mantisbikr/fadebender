@@ -72,6 +72,105 @@ def _get_prev_mixer_value(track_index: int, field: str) -> Optional[float]:
     except Exception:
         return None
 
+
+def generate_summary_from_canonical(canonical: Dict[str, Any]) -> str:
+    """
+    Generate a human-readable summary from a canonical intent.
+
+    Examples:
+        - Set Track 1 volume to -10 dB
+        - Set Track 2 send A to -6 dB
+        - Mute Track 3
+        - Set Master cue to -20 dB
+    """
+    if not canonical:
+        return "Command executed"
+
+    domain = canonical.get("domain", "")
+    action = canonical.get("action", "set")
+    field = canonical.get("field", "")
+    value = canonical.get("value")
+    unit = canonical.get("unit", "")
+
+    # Build entity reference (Track 1, Return A, Master, Device)
+    entity = ""
+    if domain == "track":
+        track_idx = canonical.get("track_index", 1)
+        entity = f"Track {track_idx}"
+    elif domain == "return":
+        return_idx = canonical.get("return_index")
+        return_ref = canonical.get("return_ref")
+        if return_ref:
+            entity = f"Return {return_ref.upper()}"
+        elif return_idx is not None:
+            letter = chr(ord('A') + return_idx)
+            entity = f"Return {letter}"
+        else:
+            entity = "Return"
+    elif domain == "master":
+        entity = "Master"
+    elif domain == "device":
+        # Build device reference with return context
+        device_name = canonical.get("device_name_hint", "")
+        return_ref = canonical.get("return_ref")
+        return_idx = canonical.get("return_index")
+        device_idx = canonical.get("device_index")
+
+        parts = []
+        if return_ref:
+            parts.append(f"Return {return_ref.upper()}")
+        elif return_idx is not None:
+            letter = chr(ord('A') + return_idx)
+            parts.append(f"Return {letter}")
+
+        if device_name:
+            parts.append(device_name.capitalize())
+        elif device_idx is not None:
+            parts.append(f"Device {device_idx + 1}")
+        else:
+            parts.append("Device")
+
+        entity = " ".join(parts) if parts else "Device"
+    elif domain == "transport":
+        entity = "Transport"
+    else:
+        entity = domain.capitalize()
+
+    # Build field description
+    # Device parameters use param_ref instead of field
+    if domain == "device":
+        param_ref = canonical.get("param_ref", "")
+        field_desc = param_ref if param_ref else "parameter"
+    else:
+        field_desc = field
+        if field == "send":
+            send_ref = canonical.get("send_ref", "")
+            field_desc = f"send {send_ref.upper()}" if send_ref else "send"
+
+    # Build value description
+    value_desc = ""
+    if value is not None:
+        if unit:
+            value_desc = f"to {value} {unit}"
+        else:
+            value_desc = f"to {value}"
+
+    # Build action description
+    action_verb = action.capitalize()
+    if action == "set":
+        action_verb = "Set"
+    elif action == "increase":
+        action_verb = "Increased"
+    elif action == "decrease":
+        action_verb = "Decreased"
+
+    # Assemble summary
+    if value_desc:
+        return f"{action_verb} {entity} {field_desc} {value_desc}"
+    else:
+        return f"{action_verb} {entity} {field_desc}"
+
+
 def handle_chat(body: ChatBody) -> Dict[str, Any]:
     """
     Handle chat commands through unified NLP → Intent → Execution path.
@@ -115,11 +214,11 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
                 "canonical": canonical,
             }
 
-            # Use summary from result if present, otherwise generate generic one
+            # Use summary from result if present, otherwise generate from canonical
             if "summary" in result:
                 response["summary"] = result["summary"]
             else:
-                response["summary"] = "Command executed"
+                response["summary"] = generate_summary_from_canonical(canonical)
 
             # Explicitly preserve data field with capabilities if present
             if "data" in result:
@@ -437,7 +536,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
                 "ok": result.get("ok", True),
                 "intent": intent,
                 "canonical": canonical,
-                "summary": result.get("summary", "Command executed"),
+                "summary": result.get("summary", generate_summary_from_canonical(canonical)),
                 **result
             }
         except HTTPException as he:

@@ -193,32 +193,10 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
           <Typography variant="body1" fontWeight="medium" gutterBottom>
             {message.content}
           </Typography>
-          {/* If capabilities are present, render grouped param accordion */}
+          {/* If capabilities are present, render grouped param accordion with inline editors */}
           {message.data && message.data.capabilities && (
-            <ParamAccordion
-              capabilities={message.data.capabilities}
-              onParamClick={(p) => {
-                const caps = message.data.capabilities;
-                // Device capabilities path
-                if (typeof caps.device_index === 'number') {
-                  const letter = (typeof caps.return_index === 'number') ? String.fromCharCode('A'.charCodeAt(0) + caps.return_index) : 'A';
-                  const deviceName = caps.device_name || '';
-                  const payload = `__READ_PARAM__|${letter}|${caps.device_index}|${p.name}|${deviceName}`;
-                  onSuggestedIntent?.(payload);
-                  return;
-                }
-                // Mixer capabilities path: open mixer param editor
-                if (caps.entity_type) {
-                  let ref = '';
-                  if (caps.entity_type === 'track' && typeof caps.track_index === 'number') ref = String(caps.track_index);
-                  if (caps.entity_type === 'return' && typeof caps.return_index === 'number') ref = String.fromCharCode('A'.charCodeAt(0) + caps.return_index);
-                  const payload = `__OPEN_MIXER_PARAM__|${caps.entity_type}|${ref}|${p.name}`;
-                  onSuggestedIntent?.(payload);
-                }
-              }}
-            />
+            <ParamAccordion capabilities={message.data.capabilities} />
           )}
-          {/* No full editors here; editors render in intent cards after selecting a param */}
         </Box>
       );
     }
@@ -258,20 +236,7 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
             </Box>
             {message.data && message.data.capabilities && (
               <Box sx={{ mt: 2 }}>
-                <ParamAccordion
-                  capabilities={message.data.capabilities}
-                  onParamClick={(p) => {
-                    const caps = message.data.capabilities;
-                    // Device capabilities path
-                    if (typeof caps.device_index === 'number') {
-                      const letter = (typeof caps.return_index === 'number') ? String.fromCharCode('A'.charCodeAt(0) + caps.return_index) : 'A';
-                      const deviceName = caps.device_name || '';
-                      const payload = `__READ_PARAM__|${letter}|${caps.device_index}|${p.name}|${deviceName}`;
-                      onSuggestedIntent?.(payload);
-                      return;
-                    }
-                  }}
-                />
+                <ParamAccordion capabilities={message.data.capabilities} />
               </Box>
             )}
             </Box>

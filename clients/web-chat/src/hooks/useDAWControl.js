@@ -211,76 +211,6 @@ export function useDAWControl() {
         }
         return;
       }
-      // Fast path: open mixer param editor
-      if (rawInput && rawInput.startsWith('__OPEN_MIXER_PARAM__|')) {
-        setIsProcessing(true);
-        try {
-          const parts = rawInput.split('|');
-          const entity = parts[1]; // 'track' | 'return' | 'master'
-          const ref = parts[2];    // track index (string) or return letter (A/B/..) or '' for master
-          const paramName = parts[3];
-
-          // Read current via /intent/read for consistent formatting
-          let readBody = { domain: entity };
-          if (entity === 'track') {
-            // Caps carry 0-based index; intents read expects 1-based
-            readBody.track_index = Number(ref) + 1;
-          } else if (entity === 'return') {
-            readBody.return_ref = String(ref);
-          }
-          readBody.field = paramName;
-          const result = await apiService.readIntent(readBody);
-
-          // Pull mixer capabilities for param meta
-          let caps = null;
-          if (entity === 'track') {
-            caps = await apiService.getTrackMixerCapabilities(Number(ref));
-          } else if (entity === 'return') {
-            const ri = ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
-            caps = await apiService.getReturnMixerCapabilities(ri);
-          } else if (entity === 'master') {
-            caps = await apiService.getMasterMixerCapabilities();
-          }
-          const capData = caps?.data || {};
-          const params = [];
-          (capData.groups || []).forEach(g => (g.params || []).forEach(p => params.push(p)));
-          (capData.ungrouped || []).forEach(p => params.push(p));
-          const pmeta = params.find(p => String(p.name).toLowerCase() === String(paramName).toLowerCase()) || { name: paramName };
-
-          const editor = {
-            entity_type: entity,
-            index_ref: ref,
-            title: `${paramName} • ${entity === 'track' ? `Track ${Number(ref) + 1}` : entity === 'return' ? `Return ${ref}` : 'Master'}`,
-            param: {
-              name: pmeta.name,
-              control_type: pmeta.control_type,
-              unit: pmeta.unit,
-              labels: pmeta.labels,
-              label_map: pmeta.label_map,
-              min_display: pmeta.min_display,
-              max_display: pmeta.max_display,
-              min: pmeta.min,
-              max: pmeta.max,
-              current_value: result?.normalized_value,
-              current_display: result?.display_value,
-            },
-          };
-
-          // If this is a send parameter, add send_ref
-          if (pmeta.send_letter) {
-            editor.send_ref = pmeta.send_letter;
-          } else if (typeof pmeta.send_index === 'number') {
-            editor.send_ref = String.fromCharCode('A'.charCodeAt(0) + pmeta.send_index);
-          }
-          addMessage({ type: 'info', content: `Edit ${paramName}`, data: { mixer_param_editor: editor } });
-        } catch (e) {
-          addMessage({ type: 'error', content: `Open mixer editor error: ${e.message}` });
-        } finally {
-          setIsProcessing(false);
-        }
-        return;
-      }
-
       // Step 1: Process and validate input
       const processed = textProcessor.processInput(rawInput);
 
@@ -757,6 +687,10 @@ export function useDAWControl() {
       }
       if (mixerCapabilities) {
         successData.capabilities = mixerCapabilities;
+      }
+      // Also include capabilities from result.data if present (from /chat endpoint)
+      if (!successData.capabilities && result.data && result.data.capabilities) {
+        successData.capabilities = result.data.capabilities;
       }
 
       addMessage({

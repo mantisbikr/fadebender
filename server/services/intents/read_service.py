@@ -43,6 +43,10 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
         param_ref = intent.param_ref or field
         return _read_device_param(intent, param_ref)
 
+    # Handle mixer parameter reads (volume, pan, mute, solo, cue)
+    if domain in ("track", "return", "master") and field in ("volume", "pan", "mute", "solo", "cue"):
+        return _read_mixer_param(domain, intent, field)
+
     # Unsupported read
     raise HTTPException(400, "unsupported_read_intent")
 
@@ -165,3 +169,153 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         raise HTTPException(404, f"parameter_{param_name}_not_found")
 
     raise HTTPException(400, "track_index_or_return_index_required")
+
+
+def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, Any]:
+    """Read mixer parameter value (volume, pan, mute, solo) for track/return/master."""
+    from server.volume_utils import live_float_to_db
+
+    # Track mixer
+    if domain == "track":
+        if intent.track_index is None:
+            raise HTTPException(400, "track_index_required")
+        ti = int(intent.track_index)
+
+        resp = request_op("get_track_status", timeout=1.0, track_index=ti)
+        if not resp:
+            raise HTTPException(504, "no_reply")
+
+        data = ((resp.get("data") or resp) if isinstance(resp, dict) else resp)
+
+        # mute/solo are at data level, not in mixer dict
+        if field in ("mute", "solo"):
+            if field not in data:
+                raise HTTPException(404, f"{field}_not_found")
+            value = data.get(field)
+        else:
+            # volume/pan are in mixer dict
+            mixer = data.get("mixer", {})
+            if field not in mixer:
+                raise HTTPException(404, f"{field}_not_found_in_mixer")
+            value = mixer.get(field)
+
+        # Format display value
+        display = None
+        if field == "volume":
+            try:
+                display = f"{live_float_to_db(float(value)):.2f}"
+            except Exception:
+                pass
+        elif field == "pan":
+            try:
+                # Pan: [-1, 1] → [-50, 50] with L/R/C
+                pan_val = float(value) * 50.0
+                if abs(pan_val) < 0.1:
+                    display = "C"
+                else:
+                    display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
+            except Exception:
+                pass
+        elif field in ("mute", "solo"):
+            display = "On" if bool(value) else "Off"
+
+        return {
+            "ok": True,
+            "field": field,
+            "display_value": display,
+            "normalized_value": value,
+            "value": value
+        }
+
+    # Return mixer
+    elif domain == "return":
+        if intent.return_ref:
+            ri = _letter_to_index(intent.return_ref)
+        elif intent.return_index is not None:
+            ri = int(intent.return_index)
+        else:
+            raise HTTPException(400, "return_index_or_return_ref_required")
+
+        # Get all returns and find the one we want
+        resp = request_op("get_return_tracks", timeout=1.0)
+        if not resp:
+            raise HTTPException(504, "no_reply")
+
+        returns = ((resp.get("data") or resp) if isinstance(resp, dict) else resp).get("returns", [])
+        ret = next((r for r in returns if int(r.get("index", -1)) == ri), None)
+        if not ret:
+            raise HTTPException(404, "return_not_found")
+
+        # For returns, all fields (including mute/solo) are in mixer dict
+        mixer = ret.get("mixer", {})
+        if field not in mixer:
+            raise HTTPException(404, f"{field}_not_found_in_mixer")
+        value = mixer.get(field)
+
+        # Format display value
+        display = None
+        if field == "volume":
+            try:
+                display = f"{live_float_to_db(float(value)):.2f}"
+            except Exception:
+                pass
+        elif field == "pan":
+            try:
+                pan_val = float(value) * 50.0
+                if abs(pan_val) < 0.1:
+                    display = "C"
+                else:
+                    display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
+            except Exception:
+                pass
+        elif field in ("mute", "solo"):
+            display = "On" if bool(value) else "Off"
+
+        return {
+            "ok": True,
+            "field": field,
+            "display_value": display,
+            "normalized_value": value,
+            "value": value
+        }
+
+    # Master mixer
+    elif domain == "master":
+        resp = request_op("get_master_status", timeout=1.0)
+        if not resp:
+            raise HTTPException(504, "no_reply")
+
+        mixer = ((resp.get("data") or resp) if isinstance(resp, dict) else resp).get("mixer", {})
+
+        # Check if field exists in mixer (use 'in' to allow 0/False values)
+        if field not in mixer:
+            raise HTTPException(404, f"{field}_not_found_in_mixer")
+
+        value = mixer.get(field)
+
+        # Format display value
+        display = None
+        if field in ("volume", "cue"):
+            try:
+                display = f"{live_float_to_db(float(value)):.2f}"
+            except Exception:
+                pass
+        elif field == "pan":
+            try:
+                pan_val = float(value) * 50.0
+                if abs(pan_val) < 0.1:
+                    display = "C"
+                else:
+                    display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
+            except Exception:
+                pass
+
+        return {
+            "ok": True,
+            "field": field,
+            "display_value": display,
+            "normalized_value": value,
+            "value": value
+        }
+
+    raise HTTPException(400, "unsupported_mixer_domain")
