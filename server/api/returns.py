@@ -301,6 +301,10 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
         pname = mp.get("name")
         control_type = mp.get("control_type")
 
+        # Skip template parameters that aren't user-controllable
+        if pname == "send":  # Template for Send A/B/C conversions, not directly controllable
+            continue
+
         # Special case: expand "sends" into individual Send A/B/C parameters
         if control_type == "send_array" and pname == "sends":
             # Fetch actual send values
@@ -349,6 +353,9 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
                     }
                     by_group.setdefault(gname, []).append(send_item)
                     values[send_name] = {"value": send_value, "display_value": send_display}
+
+                # Successfully expanded sends, skip adding the "sends" array parameter itself
+                continue
             except Exception:
                 # Fallback: keep single "sends" parameter if send expansion fails
                 item = {
