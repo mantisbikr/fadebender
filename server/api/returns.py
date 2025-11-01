@@ -284,7 +284,7 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
                 return float(f"{live_float_to_db(float(raw)):.2f}")
             if name == "pan":
                 return float(f"{(float(raw) * 50.0):.2f}")
-            if name in ("mute",):
+            if name in ("mute", "solo"):
                 return "On" if bool(raw) else "Off"
             return raw
         except Exception:
@@ -294,6 +294,7 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
         "volume": mixer.get("volume"),
         "pan": mixer.get("pan"),
         "mute": mixer.get("mute"),
+        "solo": mixer.get("solo"),
     }
 
     for mp in params_meta:
