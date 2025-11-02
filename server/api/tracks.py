@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from server.core.events import broker
 from server.services.ableton_client import request_op, data_or_raw
 from server.core.deps import get_store
+from server.services.mapping_utils import make_device_signature
 import re as _re
 
 
@@ -86,6 +87,164 @@ def get_track_device_params(index: int, device: int) -> Dict[str, Any]:
     if not resp:
         return {"ok": False, "error": "no response"}
     return {"ok": True, "data": data_or_raw(resp)}
+
+
+@router.get("/track/device/capabilities")
+def get_track_device_capabilities(index: int, device: int) -> Dict[str, Any]:
+    """Return parameter capabilities for a track device: groups + params + current values.
+
+    Response shape:
+    { ok, data: {
+        track_index, device_index, device_name, device_type?,
+        groups: [{ name, params: [{ index, name, unit?, labels?, role? }] }],
+        ungrouped: [{ index, name, unit?, labels?, role? }],
+        values: { name -> { value, display_value } }
+    } }
+    """
+    ti = int(index); di = int(device)
+    # Read current params
+    pr = request_op("get_track_device_params", timeout=1.0, track_index=ti, device_index=di)
+    if not pr:
+        raise HTTPException(504, "no response")
+    pdata = data_or_raw(pr) or {}
+    params = list((pdata.get("params") or []))
+    # Resolve device name
+    dv = request_op("get_track_devices", timeout=0.8, track_index=ti) or {}
+    dlist = (data_or_raw(dv) or {}).get("devices") or []
+    dname = next((str(d.get("name", "")) for d in dlist if int(d.get("index", -1)) == di), f"Device {di}")
+    # Build signature and fetch mapping
+    sig = make_device_signature(dname, params)
+    store = get_store()
+    mapping = store.get_device_map(sig) if store.enabled else None
+
+    # Assemble values map, preferring ValueRegistry over fresh Live query
+    from server.core.deps import get_value_registry
+    reg = get_value_registry()
+    devices_map = reg.get_devices() if reg else {}
+    cached_device_values = devices_map.get("track", {}).get(ti, {}).get(di, {})
+
+    values = {}
+    for p in params:
+        pname = str(p.get("name", ""))
+        # Prefer cached value from ValueRegistry (most recent from operations)
+        if pname in cached_device_values:
+            cached = cached_device_values[pname]
+            values[pname] = {
+                "value": cached.get("normalized"),
+                "display_value": cached.get("display")
+            }
+        else:
+            # Fall back to fresh Live query value
+            try:
+                values[pname] = {"value": float(p.get("value", 0.0)), "display_value": p.get("display_value")}
+            except Exception:
+                values[pname] = {"value": p.get("value"), "display_value": p.get("display_value")}
+    # Build groups and ungrouped based on mapping params meta
+    groups = []
+    ungrouped = []
+    # Helper: live param lookup by index for min/max (normalized)
+    live_by_index = {int(p.get("index", 0)): p for p in params}
+    if mapping:
+        # Prefer Firestore params docs (stored in 'params_meta', not 'params')
+        mparams = mapping.get("params_meta") or mapping.get("params") or []
+        sections = mapping.get("sections") or {}
+        grouping = (mapping.get("grouping") or {})
+        dependents = (grouping.get("dependents") or {})
+
+        # Build section->params mapping if sections exist
+        section_params = {}
+        if sections:
+            for section_name, section_data in sections.items():
+                param_names = section_data.get("parameters", [])
+                section_params[section_name] = param_names
+
+        # Build group buckets with metadata
+        by_group = {}
+        param_to_section = {}
+        # Build reverse lookup: param name -> section name
+        for section_name, param_list in section_params.items():
+            for pname in param_list:
+                param_to_section[pname] = section_name
+
+        # Build param name -> metadata lookup
+        param_meta_map = {mp.get("name"): mp for mp in mparams}
+
+        for mp in mparams:
+            pname = mp.get("name")
+            # Check if param belongs to a section
+            g = param_to_section.get(pname) or str(mp.get("group") or "").strip() or None
+
+            # Extract audio knowledge for tooltip
+            audio_knowledge = mp.get("audio_knowledge", {})
+            sonic_effect = audio_knowledge.get("sonic_effect", {})
+            tooltip = None
+            if sonic_effect:
+                increasing = sonic_effect.get("increasing", "")
+                decreasing = sonic_effect.get("decreasing", "")
+                audio_function = audio_knowledge.get("audio_function", "")
+                if increasing and decreasing:
+                    tooltip = f"{audio_function}\n↑ {increasing}\n↓ {decreasing}"
+                elif audio_function:
+                    tooltip = audio_function
+
+            idx = int(mp.get("index", 0))
+            lp = live_by_index.get(idx, {})
+            label_map = mp.get("label_map") or {}
+            # Do not infer control_type for devices; require Firestore to provide it
+            control_type = mp.get("control_type")
+            # dependency (master) info
+            master_name = None
+            try:
+                for dep_k, dep_master in (dependents.items() if isinstance(dependents, dict) else []):
+                    if str(dep_k).strip().lower() == str(pname or '').strip().lower():
+                        master_name = str(dep_master)
+                        break
+            except Exception:
+                master_name = None
+
+            item = {
+                "index": idx,
+                "name": pname,
+                "unit": mp.get("unit"),
+                "labels": mp.get("labels") or (list(label_map.keys()) if isinstance(label_map, dict) else None),
+                "label_map": label_map if isinstance(label_map, dict) else None,
+                "role": mp.get("role"),
+                "tooltip": tooltip,
+                "min_display": mp.get("min_display"),
+                "max_display": mp.get("max_display"),
+                "min": lp.get("min"),
+                "max": lp.get("max"),
+                "control_type": control_type,
+                "has_master": bool(master_name),
+                "master_name": master_name,
+            }
+            if g:
+                by_group.setdefault(g, []).append(item)
+            else:
+                ungrouped.append(item)
+
+        # Convert to list with section metadata
+        for gname, plist in by_group.items():
+            section_meta = sections.get(gname, {})
+            groups.append({
+                "name": gname,
+                "params": plist,
+                "description": section_meta.get("description"),
+                "sonic_focus": section_meta.get("sonic_focus"),
+            })
+    else:
+        # Fallback: use live param list
+        for p in params:
+            ungrouped.append({"index": int(p.get("index", 0)), "name": p.get("name")})
+    return {"ok": True, "data": {
+        "track_index": ti,
+        "device_index": di,
+        "device_name": dname,
+        "structure_signature": sig,
+        "groups": groups,
+        "ungrouped": ungrouped,
+        "values": values,
+    }}
 
 
 @router.get("/track/mixer/capabilities")

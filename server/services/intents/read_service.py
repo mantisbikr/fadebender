@@ -14,6 +14,8 @@ from server.models.intents_api import ReadIntent
 from server.services.ableton_client import request_op
 from server.volume_utils import live_float_to_db_send
 from server.services.intents.utils.refs import _letter_to_index
+from server.services.mapping_utils import make_device_signature
+from server.core.deps import get_store
 
 
 def read_intent(intent: ReadIntent) -> Dict[str, Any]:
@@ -129,14 +131,42 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         params = ((resp.get("data") or resp) if isinstance(resp, dict) else resp).get("params", [])
         param_name_lower = param_name.lower()
 
+        # Get device name for signature lookup
+        dv = request_op("get_return_devices", timeout=0.8, return_index=ri) or {}
+        dlist = ((dv.get("data") or dv) if isinstance(dv, dict) else dv).get("devices") or []
+        dname = next((str(d.get("name", "")) for d in dlist if int(d.get("index", -1)) == di), f"Device {di}")
+
+        # Build signature and fetch mapping to get label_map for quantized params
+        sig = make_device_signature(dname, params)
+        store = get_store()
+        mapping = store.get_device_map(sig) if store.enabled else None
+
         for p in params:
             if str(p.get("name", "")).lower() == param_name_lower:
+                display_value = p.get("display_value")
+                normalized_value = p.get("value")
+
+                # For quantized params, look up the label from Firestore label_map
+                if mapping:
+                    mparams = mapping.get("params_meta") or mapping.get("params") or []
+                    mparam = next((mp for mp in mparams if str(mp.get("name", "")).lower() == param_name_lower), None)
+                    if mparam and mparam.get("label_map"):
+                        # Convert normalized value (e.g., 1.0) to label (e.g., "Fade")
+                        label_map = mparam.get("label_map")
+                        try:
+                            normalized_int = round(float(normalized_value))
+                            label_key = str(normalized_int)
+                            if label_key in label_map:
+                                display_value = label_map[label_key]
+                        except Exception:
+                            pass  # Fall back to original display_value
+
                 return {
                     "ok": True,
                     "field": param_name,
                     "param_index": p.get("index"),
-                    "display_value": p.get("display_value"),
-                    "normalized_value": p.get("value"),
+                    "display_value": display_value,
+                    "normalized_value": normalized_value,
                 }
 
         raise HTTPException(404, f"parameter_{param_name}_not_found")
@@ -156,14 +186,42 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         params = ((resp.get("data") or resp) if isinstance(resp, dict) else resp).get("params", [])
         param_name_lower = param_name.lower()
 
+        # Get device name for signature lookup
+        dv = request_op("get_track_devices", timeout=0.8, track_index=ti) or {}
+        dlist = ((dv.get("data") or dv) if isinstance(dv, dict) else dv).get("devices") or []
+        dname = next((str(d.get("name", "")) for d in dlist if int(d.get("index", -1)) == di), f"Device {di}")
+
+        # Build signature and fetch mapping to get label_map for quantized params
+        sig = make_device_signature(dname, params)
+        store = get_store()
+        mapping = store.get_device_map(sig) if store.enabled else None
+
         for p in params:
             if str(p.get("name", "")).lower() == param_name_lower:
+                display_value = p.get("display_value")
+                normalized_value = p.get("value")
+
+                # For quantized params, look up the label from Firestore label_map
+                if mapping:
+                    mparams = mapping.get("params_meta") or mapping.get("params") or []
+                    mparam = next((mp for mp in mparams if str(mp.get("name", "")).lower() == param_name_lower), None)
+                    if mparam and mparam.get("label_map"):
+                        # Convert normalized value (e.g., 1.0) to label (e.g., "Fade")
+                        label_map = mparam.get("label_map")
+                        try:
+                            normalized_int = round(float(normalized_value))
+                            label_key = str(normalized_int)
+                            if label_key in label_map:
+                                display_value = label_map[label_key]
+                        except Exception:
+                            pass  # Fall back to original display_value
+
                 return {
                     "ok": True,
                     "field": param_name,
                     "param_index": p.get("index"),
-                    "display_value": p.get("display_value"),
-                    "normalized_value": p.get("value"),
+                    "display_value": display_value,
+                    "normalized_value": normalized_value,
                 }
 
         raise HTTPException(404, f"parameter_{param_name}_not_found")

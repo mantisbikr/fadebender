@@ -6,7 +6,7 @@ export default function SingleDeviceParamEditor({ editor }) {
   const { return_index, device_index, title, param, current_values } = editor;
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [currentValue, setCurrentValue] = useState(current_values?.[param.name]?.value ?? param.current_value);
+  const [currentValue, setCurrentValue] = useState(current_values?.[param.name]?.display_value ?? param.current_value);
 
   console.log('[SingleDeviceParamEditor] Component mounted/updated:', {
     param_name: param?.name,
@@ -49,7 +49,7 @@ export default function SingleDeviceParamEditor({ editor }) {
         });
 
         if (response && response.ok) {
-          const newValue = response.normalized_value ?? response.value;
+          const newValue = response.display_value ?? response.normalized_value ?? response.value;
           console.log('[SingleDeviceParamEditor] Setting new value:', newValue);
           setCurrentValue(newValue);
         }
@@ -57,8 +57,8 @@ export default function SingleDeviceParamEditor({ editor }) {
         console.warn('[SingleDeviceParamEditor] Failed to fetch device current value:', error);
         // Fall back to current_values from capabilities
         const currentVal = current_values?.[param.name];
-        if (currentVal && currentVal.value !== null && currentVal.value !== undefined) {
-          setCurrentValue(currentVal.value);
+        if (currentVal && currentVal.display_value !== null && currentVal.display_value !== undefined) {
+          setCurrentValue(currentVal.display_value);
         } else {
           setCurrentValue(param.current_value);
         }
@@ -133,14 +133,26 @@ export default function SingleDeviceParamEditor({ editor }) {
   }
 
   if (computedType === 'quantized' && Array.isArray(param.labels) && param.labels.length) {
-    const current = String(param.current_label || '');
+    // For quantized params, currentValue now contains the label string directly from backend (e.g., "Fade")
+    // Backend's read_intent now looks up the label from Firestore label_map
+    let currentLabel = String(currentValue || '');
+
+    // Fallback to first label if nothing matches
+    if (!currentLabel || !param.labels.includes(currentLabel)) {
+      currentLabel = String(param.labels[0] || '');
+    }
+
     return (
       <Box>
         <Typography variant="body2" sx={{ mb: 0.5 }}>{title || param.name}</Typography>
-        <Select size="small" value={current} disabled={busy} onChange={async (e) => {
+        <Select size="small" value={currentLabel} disabled={busy} onChange={async (e) => {
           const selectedLabel = e.target.value;
-          if (param.label_map && param.label_map[selectedLabel] !== undefined) {
-            await commit(param.label_map[selectedLabel]);
+          // Find the normalized value (key) for this label in label_map
+          if (param.label_map) {
+            const normalizedValueKey = Object.keys(param.label_map).find(key => param.label_map[key] === selectedLabel);
+            if (normalizedValueKey !== undefined) {
+              await commit(Number(normalizedValueKey));
+            }
           }
         }}>
           {param.labels.map((lab) => (<MenuItem key={String(lab)} value={String(lab)}>{String(lab)}</MenuItem>))}
