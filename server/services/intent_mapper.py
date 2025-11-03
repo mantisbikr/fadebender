@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
-from server.config.app_config import get_mixer_param_aliases
+from server.config.app_config import get_mixer_param_aliases, get_device_param_aliases
 from server.services.intents.utils.mixer import get_mixer_param_meta, apply_mixer_fit_forward
 
 # Mixer field aliases (config-driven)
@@ -11,9 +11,22 @@ try:
 except Exception:
     _MIXER_PARAM_ALIASES = {}
 
+# Device parameter aliases (config-driven)
+_DEVICE_PARAM_ALIASES: Dict[str, str] = {}
+try:
+    _DEVICE_PARAM_ALIASES = get_device_param_aliases() or {}
+except Exception:
+    _DEVICE_PARAM_ALIASES = {}
+
 def _normalize_mixer_param(name: str) -> str:
     n = (name or "").strip().lower()
     return _MIXER_PARAM_ALIASES.get(n, n)
+
+
+def _normalize_device_param(name: str) -> str:
+    """Normalize device parameter name using aliases."""
+    n = (name or "").strip().lower()
+    return _DEVICE_PARAM_ALIASES.get(n, n)
 
 
 def _parse_track_target(track_str: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
@@ -100,8 +113,9 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     value = op.get("value")
     unit = op.get("unit")
 
-    # Handle relative changes: convert to absolute by reading current value
-    if op_type == "relative":
+    # Handle relative changes for MIXER parameters: convert to absolute by reading current value
+    # Device parameters are handled later in their own section (line 517+)
+    if op_type == "relative" and not (plugin or device_ordinal is not None):
         # Import here to avoid circular dependency
         from server.core.deps import get_value_registry
 
@@ -446,8 +460,8 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             errors.append(f"relative_change_error:{str(e)}")
             return None, errors
 
-    # Validate operation type and value
-    if op_type != "absolute":
+    # Validate operation type and value (skip for device parameters - they handle their own conversion)
+    if op_type != "absolute" and not (plugin or device_ordinal is not None):
         print(f"[DEBUG] Unsupported op_type: {op_type}")
         errors.append(f"unsupported_op_type:{op_type}")
         return None, errors
@@ -514,7 +528,214 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         }
         return intent, []
 
-    # Send controls: "send A", "send B", etc. (prefer this mapping even if a plugin is present)
+    # Device parameters: if plugin is specified OR device_ordinal is present
+    # Check this BEFORE send detection to avoid false matches
+    if plugin or device_ordinal is not None:
+        # For relative changes on device parameters, we need to fetch current value first
+        if op_type == "relative":
+            print(f"[DEBUG] Handling relative change for device parameter: {parameter}")
+
+            # Import read service to fetch current device parameter value
+            from server.services.intents.read_service import read_intent as _read_intent_func
+            from server.models.intents_api import ReadIntent
+
+            try:
+                # Normalize device parameter name using aliases
+                normalized_param = _normalize_device_param(parameter)
+                # Get lowercase version AFTER normalization for percent_additive check
+                param_lower = normalized_param.lower()
+                print(f"[DEBUG] Normalized param: {normalized_param}, lowercase: {param_lower}")
+
+                # Build read intent to fetch current value
+                read_payload = {
+                    "domain": "device",
+                    "param_ref": normalized_param,
+                }
+
+                # Convert target_fields to format expected by ReadIntent for device domain
+                # ReadIntent expects return_index (integer), not return_ref (letter)
+                if "return_ref" in target_fields:
+                    letter = target_fields["return_ref"]
+                    read_payload["return_index"] = ord(letter.upper()) - ord('A')
+                elif "track_index" in target_fields:
+                    read_payload["track_index"] = target_fields["track_index"]
+                # master domain doesn't need additional fields
+
+                # Add device_index - use device_ordinal if available (convert from 1-based to 0-based)
+                if device_ordinal is not None:
+                    read_payload["device_index"] = int(device_ordinal) - 1
+                else:
+                    read_payload["device_index"] = 0
+
+                print(f"[DEBUG] Fetching current device param value with: {read_payload}")
+                read_result = _read_intent_func(ReadIntent(**read_payload))
+                print(f"[DEBUG] Read result: {read_result}")
+
+                if not read_result.get("ok"):
+                    errors.append("relative_change_device_read_failed")
+                    return None, errors
+
+                current_normalized = read_result.get("normalized_value")
+                current_display = read_result.get("display_value")
+
+                if current_normalized is None:
+                    errors.append("relative_change_device_no_current_value")
+                    return None, errors
+
+                print(f"[DEBUG] Current device param - normalized: {current_normalized}, display: {current_display}")
+
+                # Apply relative change
+                delta_value = float(value)
+                unit_l = str(unit or "").strip().lower()
+
+                # Get percent_always_additive config
+                from server.config.app_config import get_percent_always_additive_config
+                percent_additive_params = [p.lower() for p in get_percent_always_additive_config()]
+
+                print(f"[DEBUG] Percent additive params: {percent_additive_params}")
+                print(f"[DEBUG] Is {param_lower} additive? {param_lower in percent_additive_params}")
+
+                # Check if this is a percent-based parameter (display value matches normalized * 100)
+                # E.g., dry/wet: normalized=0.5, display=50% → IS percent parameter
+                # E.g., predelay: normalized=0.77, display=60ms → NOT percent parameter
+                is_percent_parameter = False
+                if current_display is not None:
+                    try:
+                        display_val = float(current_display)
+                        expected_percent = float(current_normalized) * 100.0
+                        # Allow 5% tolerance for floating point comparison
+                        is_percent_parameter = abs(display_val - expected_percent) < 5.0
+                    except:
+                        pass
+
+                # Handle percent units - work in DISPLAY space (0-100), not normalized space!
+                if unit_l in ("%", "percent") and is_percent_parameter:
+                    # This is a percent-based parameter (like dry/wet)
+                    # Convert current normalized to display percent (0.5 → 50)
+                    current_display_percent = float(current_normalized) * 100.0
+
+                    # Check if this parameter uses additive math for percents
+                    if param_lower in percent_additive_params:
+                        # Additive: 50% + 20% = 70%
+                        new_display_percent = current_display_percent + delta_value
+                        print(f"[DEBUG] Using ADDITIVE math: {current_display_percent}% + {delta_value}% = {new_display_percent}%")
+                    else:
+                        # Multiplicative: 50% + 20% = 50% * 1.20 = 60%
+                        multiplier = 1.0 + (delta_value / 100.0)
+                        new_display_percent = current_display_percent * multiplier
+                        print(f"[DEBUG] Using MULTIPLICATIVE math: {current_display_percent}% * {multiplier} = {new_display_percent}%")
+
+                    # Clamp to valid range (0-100)
+                    new_display_percent = max(0.0, min(100.0, new_display_percent))
+                    value = new_display_percent
+                    unit = "percent"  # Keep as percent, let executor handle conversion
+
+                else:
+                    # For non-percent parameters (dB, Hz, ms, etc.)
+                    # BUT check if the CHANGE is specified as a percent!
+                    if current_display is None:
+                        # Fall back to normalized arithmetic
+                        new_normalized = float(current_normalized) + delta_value
+                        new_normalized = max(0.0, min(1.0, new_normalized))
+                        value = new_normalized
+                        unit = "normalized"
+                    else:
+                        # Display value arithmetic
+                        try:
+                            current_display_val = float(current_display)
+
+                            # Check if change is specified as percent of current value
+                            # E.g., "decrease predelay by 20%" where predelay is in ms
+                            if unit_l in ("%", "percent"):
+                                # Calculate percentage of current value
+                                # delta_value already has sign: +20 for increase, -20 for decrease
+                                # E.g., 60ms with delta=-20: 60 * (1 + -20/100) = 60 * 0.8 = 48ms
+                                multiplier = 1.0 + (delta_value / 100.0)
+                                new_display = current_display_val * multiplier
+                                print(f"[DEBUG] Percent change on non-percent param: {current_display_val} * {multiplier} = {new_display}")
+                            else:
+                                # Direct value change (e.g., "increase by 10ms")
+                                # delta_value already has sign: +10 or -10
+                                new_display = current_display_val + delta_value
+                                print(f"[DEBUG] Direct value change: {current_display_val} + {delta_value} = {new_display}")
+
+                            value = new_display
+                            # Keep original unit for display-space values
+                        except Exception:
+                            # Fall back to normalized
+                            new_normalized = float(current_normalized) + delta_value
+                            new_normalized = max(0.0, min(1.0, new_normalized))
+                            value = new_normalized
+                            unit = "normalized"
+
+                print(f"[DEBUG] Converted device relative to absolute: value={value}, unit={unit}")
+
+                # Update parameter to use normalized name (already set above)
+                parameter = normalized_param
+
+                # Mark as absolute so it passes validation below
+                op_type = "absolute"
+
+            except Exception as e:
+                print(f"[DEBUG] Exception in device relative change: {type(e).__name__}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                errors.append(f"relative_change_device_error:{str(e)}")
+                return None, errors
+
+        # Device params support numeric and display label values
+        intent: Dict[str, Any] = {
+            "domain": "device",
+            "action": "set",
+            "param_ref": parameter,
+        }
+
+        # Convert target_fields to format expected by executor for device domain
+        # Executor expects return_index (integer), but preserve return_ref for tests
+        if "return_ref" in target_fields:
+            letter = target_fields["return_ref"]
+            intent["return_ref"] = letter  # Preserve for tests
+            intent["return_index"] = ord(letter.upper()) - ord('A')
+        elif "track_index" in target_fields:
+            intent["track_index"] = target_fields["track_index"]
+        # master domain doesn't need additional fields
+        # Pass through device name as a hint unless it's a generic placeholder
+        try:
+            pl = str(plugin).strip().lower()
+            if pl not in ("device", "fx", "effect", "plugin") and pl:
+                intent["device_name_hint"] = str(plugin)
+        except Exception:
+            pass
+        try:
+            if device_ordinal is not None:
+                intent["device_ordinal_hint"] = int(device_ordinal)
+        except Exception:
+            pass
+        amount = _to_float(value)
+        unit_l = (unit or "").strip().lower()
+        if amount is not None:
+            intent["value"] = amount
+            if unit is not None and unit != "normalized":
+                intent["unit"] = unit
+        else:
+            # Treat as display string selection (e.g., Mode → Distance)
+            if isinstance(value, str):
+                intent["display"] = value
+                # Keep unit if explicitly marked as 'display', else omit
+                if unit_l == "display":
+                    intent["unit"] = unit
+            else:
+                errors.append("invalid_value_amount")
+                return None, errors
+        # Need device_index - use device_ordinal if available (convert from 1-based to 0-based)
+        if device_ordinal is not None:
+            intent["device_index"] = int(device_ordinal) - 1
+        else:
+            intent["device_index"] = 0
+        return intent, []
+
+    # Send controls: "send A", "send B", etc.
+    # Check this AFTER device parameters to avoid false matches when device_ordinal is present
     send_letter = None
     if parameter.startswith("send "):
         try:
@@ -541,47 +762,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             "unit": unit,
             **target_fields
         }
-        return intent, []
-
-    # Device parameters: if plugin is specified
-    if plugin:
-        # Device params support numeric and display label values
-        intent: Dict[str, Any] = {
-            "domain": "device",
-            "action": "set",
-            "param_ref": parameter,
-            **target_fields
-        }
-        # Pass through device name as a hint unless it's a generic placeholder
-        try:
-            pl = str(plugin).strip().lower()
-            if pl not in ("device", "fx", "effect", "plugin") and pl:
-                intent["device_name_hint"] = str(plugin)
-        except Exception:
-            pass
-        try:
-            if device_ordinal is not None:
-                intent["device_ordinal_hint"] = int(device_ordinal)
-        except Exception:
-            pass
-        amount = _to_float(value)
-        unit_l = (unit or "").strip().lower()
-        if amount is not None:
-            intent["value"] = amount
-            if unit is not None:
-                intent["unit"] = unit
-        else:
-            # Treat as display string selection (e.g., Mode → Distance)
-            if isinstance(value, str):
-                intent["display"] = value
-                # Keep unit if explicitly marked as 'display', else omit
-                if unit_l == "display":
-                    intent["unit"] = unit
-            else:
-                errors.append("invalid_value_amount")
-                return None, errors
-        # Need device_index - for now use 0 (first device on track/return)
-        intent["device_index"] = 0
         return intent, []
 
     errors.append(f"unsupported_parameter:{parameter}")

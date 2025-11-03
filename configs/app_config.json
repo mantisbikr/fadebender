@@ -17,7 +17,7 @@
   },
   "nlp": {
     "mode": "regex_first",
-    "percent_always_additive": ["pan"],
+    "percent_always_additive": ["diffusion", "dly < mod", "dry/wet", "feedback", "filter < mod", "l offset", "pan", "r offset", "scale"],
     "relative_change_verbs": {
       "increase": ["increase", "add", "up", "louder"],
       "decrease": ["decrease", "subtract", "reduce", "down", "quieter"]
@@ -179,6 +179,7 @@
         "dry": "dry/wet",
         "dry / wet": "dry/wet",
         "dry wet": "dry/wet",
+        "drywet": "dry/wet",
         "fbk": "feedback",
         "feed back": "feedback",
         "feedback amount": "feedback",
