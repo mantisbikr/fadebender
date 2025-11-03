@@ -17,6 +17,11 @@
   },
   "nlp": {
     "mode": "regex_first",
+    "percent_always_additive": ["diffusion", "dly < mod", "dry/wet", "feedback", "filter < mod", "l offset", "pan", "r offset", "scale"],
+    "relative_change_verbs": {
+      "increase": ["increase", "add", "up", "louder"],
+      "decrease": ["decrease", "subtract", "reduce", "down", "quieter"]
+    },
     "typo_corrections": {
       "alin": "align",
       "bandpas": "bandpass",
@@ -174,9 +179,11 @@
         "dry": "dry/wet",
         "dry / wet": "dry/wet",
         "dry wet": "dry/wet",
+        "drywet": "dry/wet",
         "fbk": "feedback",
         "feed back": "feedback",
         "feedback amount": "feedback",
+        "filter freq": "in filter freq",
         "hi cut": "high cut",
         "hi shelf": "hi shelf",
         "hicut": "high cut",

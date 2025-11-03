@@ -23,6 +23,9 @@ _CACHE_TIMESTAMP: float = 0
 _FIRESTORE_CLIENT = None
 _FIRESTORE_ENABLED = False
 
+# Just-in-time device lookup cache (alias -> device info)
+_JIT_DEVICE_CACHE: Dict[str, Dict[str, str] | None] = {}
+
 # Configuration
 TTL_SECONDS = 60  # Refresh from Firestore every 60 seconds
 
@@ -268,3 +271,85 @@ def force_refresh() -> Tuple[Set[str], Dict[str, str]]:
     _CACHE_TIMESTAMP = time.time()
 
     return _CATEGORY_CACHE or set(), _DEVICE_ALIAS_CACHE or {}
+
+
+def lookup_device_by_name(device_name: str) -> Dict[str, str] | None:
+    """Just-in-time lookup of device by name from Firestore.
+
+    Queries Firestore for a device matching the given name (case-insensitive).
+    Results are cached in memory to avoid repeated queries.
+
+    Args:
+        device_name: Device name or alias to lookup (e.g., "valhalla", "pro-q")
+
+    Returns:
+        Device info dict with keys: 'canonical_name', 'category', 'structure_signature'
+        Returns None if device not found or not a learned device.
+
+    Example:
+        >>> lookup_device_by_name("valhalla")
+        {'canonical_name': 'Valhalla VintageVerb', 'category': 'reverb', 'structure_signature': '...'}
+    """
+    global _JIT_DEVICE_CACHE
+
+    # Normalize search key (lowercase, strip whitespace)
+    search_key = device_name.lower().strip()
+
+    # Check cache first
+    if search_key in _JIT_DEVICE_CACHE:
+        return _JIT_DEVICE_CACHE[search_key]
+
+    # Initialize Firestore if needed
+    _init_firestore()
+
+    if not _FIRESTORE_ENABLED or not _FIRESTORE_CLIENT:
+        _JIT_DEVICE_CACHE[search_key] = None
+        return None
+
+    try:
+        # Query Firestore for presets matching device name (case-insensitive)
+        presets_ref = _FIRESTORE_CLIENT.collection("presets")
+
+        # We need to query all presets and filter in Python (Firestore doesn't support case-insensitive)
+        # To optimize, we could use .where('device_name', '>=', ...) range queries
+        # But for now, let's query all learned devices only
+
+        query = presets_ref.where('structure_signature', 'in', list(LEARNED_STRUCTURE_SIGNATURES))
+        results = list(query.stream())
+
+        # Search for matching device name or alias
+        for preset in results:
+            data = preset.to_dict()
+            preset_id = preset.id
+
+            # Skip unknown presets
+            if preset_id.startswith('unknown_'):
+                continue
+
+            device_name_canonical = data.get('device_name')
+            if not device_name_canonical or device_name_canonical.lower().startswith('unknown'):
+                continue
+
+            # Generate aliases and check for match
+            aliases = _generate_device_aliases(device_name_canonical)
+
+            if search_key in [a.lower() for a in aliases] or search_key == device_name_canonical.lower():
+                # Found a match!
+                result = {
+                    'canonical_name': device_name_canonical,
+                    'category': data.get('category', '').lower(),
+                    'structure_signature': data.get('structure_signature', '')
+                }
+                _JIT_DEVICE_CACHE[search_key] = result
+                print(f"[PRESET CACHE JIT] Found device: {search_key} -> {device_name_canonical} ({result['category']})")
+                return result
+
+        # Not found - cache the negative result
+        _JIT_DEVICE_CACHE[search_key] = None
+        print(f"[PRESET CACHE JIT] Device not found: {search_key}")
+        return None
+
+    except Exception as e:
+        print(f"[PRESET CACHE JIT] Error looking up device '{device_name}': {e}")
+        _JIT_DEVICE_CACHE[search_key] = None
+        return None

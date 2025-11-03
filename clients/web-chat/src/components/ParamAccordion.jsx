@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, Accordion, AccordionSummary, AccordionDetails, Typography, Chip, Button, Tooltip } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SingleMixerParamEditor from './SingleMixerParamEditor';
+import SingleDeviceParamEditor from './SingleDeviceParamEditor';
 
 export default function ParamAccordion({ capabilities, onParamClick }) {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [editingParam, setEditingParam] = useState(null); // {param, group}
   const accordionRef = useRef(null);
+
+  // Detect if this is device or mixer capabilities
+  const isDevice = typeof capabilities?.device_index === 'number';
+  const isMixer = typeof capabilities?.entity_type === 'string';
 
   if (!capabilities) return null;
   const groups = capabilities.groups || [];
@@ -37,13 +44,23 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
     }
   }, [expanded]);
 
+  const handleParamClick = (p) => {
+    // Show inline editor
+    console.log('[ParamAccordion] Parameter clicked:', {
+      param_name: p.name,
+      previous_editing: editingParam?.name
+    });
+    setEditingParam(p);
+  };
+
   const renderParamChip = (p) => {
     const chip = (
       <Chip
         key={`${p.index}-${p.name}`}
         label={p.name}
-        onClick={() => onParamClick && onParamClick(p)}
-        variant="outlined"
+        onClick={() => handleParamClick(p)}
+        variant={editingParam?.name === p.name ? 'filled' : 'outlined'}
+        color={editingParam?.name === p.name ? 'primary' : 'default'}
         size="small"
         sx={{ mr: 1, mb: 1, cursor: 'pointer' }}
       />
@@ -83,7 +100,10 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
             key={g.name}
             variant={activeGroup === g.name ? 'contained' : 'outlined'}
             size="small"
-            onClick={() => setSelectedGroup(g.name)}
+            onClick={() => {
+              setSelectedGroup(g.name);
+              setEditingParam(null); // Clear editor when switching groups
+            }}
             sx={{ textTransform: 'none' }}
           >
             {g.name}
@@ -98,7 +118,12 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
           <Accordion
             ref={accordionRef}
             expanded={expanded}
-            onChange={(_, isExpanded) => setExpanded(isExpanded)}
+            onChange={(_, isExpanded) => {
+              setExpanded(isExpanded);
+              if (!isExpanded) {
+                setEditingParam(null); // Clear editor when accordion closes
+              }
+            }}
             disableGutters
             sx={{ boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}
           >
@@ -126,6 +151,64 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
               <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
                 {(group?.params || []).map(renderParamChip)}
               </Box>
+
+              {/* Inline editor for selected parameter */}
+              {editingParam && (() => {
+                console.log('[ParamAccordion] Rendering inline editor for:', editingParam.name);
+
+                // For mixer parameters
+                if (isMixer) {
+                  const values = capabilities.values || {};
+                  const currentValue = values[editingParam.name] || {};
+
+                  const editorProps = {
+                    entity_type: capabilities.entity_type,
+                    index_ref: capabilities.entity_type === 'track'
+                      ? capabilities.track_index
+                      : (capabilities.entity_type === 'return'
+                        ? String.fromCharCode('A'.charCodeAt(0) + (capabilities.return_index || 0))
+                        : null),
+                    title: editingParam.name,
+                    param: {
+                      ...editingParam,
+                      current_value: currentValue.value,
+                      current_display: currentValue.display_value,
+                    },
+                    send_ref: editingParam.send_letter || null,
+                  };
+
+                  console.log('[ParamAccordion] Creating SingleMixerParamEditor with key:', editingParam.name);
+
+                  return (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                      <SingleMixerParamEditor key={editingParam.name} editor={editorProps} />
+                    </Box>
+                  );
+                }
+
+                // For device parameters
+                if (isDevice) {
+                  const currentValues = capabilities.current_values || {};
+
+                  const editorProps = {
+                    return_index: capabilities.return_index,
+                    device_index: capabilities.device_index,
+                    title: `${editingParam.name} • ${capabilities.device_name || 'Device'}`,
+                    param: editingParam,
+                    current_values: currentValues,
+                  };
+
+                  console.log('[ParamAccordion] Creating SingleDeviceParamEditor with key:', editingParam.name);
+
+                  return (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                      <SingleDeviceParamEditor key={editingParam.name} editor={editorProps} />
+                    </Box>
+                  );
+                }
+
+                return null;
+              })()}
             </AccordionDetails>
           </Accordion>
         );

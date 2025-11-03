@@ -92,3 +92,21 @@ def get_cache_ttl() -> int:
         Cache TTL in seconds (defaults to 5)
     """
     return int(os.getenv("CACHE_TTL_SECONDS", "5"))
+
+
+def get_relative_change_verbs() -> tuple[list[str], list[str]]:
+    """Get relative change verb aliases from config.
+
+    Returns:
+        Tuple of (increase_verbs, decrease_verbs)
+        Defaults to standard sets if config unavailable
+    """
+    try:
+        from server.config.app_config import get_relative_change_verbs_config
+        return get_relative_change_verbs_config()
+    except Exception:
+        # Fallback defaults
+        return (
+            ["increase", "add", "up", "louder"],
+            ["decrease", "subtract", "reduce", "down", "quieter"]
+        )

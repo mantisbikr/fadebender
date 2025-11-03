@@ -47,21 +47,21 @@ SUPPORTED COMMANDS:
 
 ## Track Controls (use "Track N" format):
 - Volume: "set track 1 volume to -6 dB", "increase track 2 volume by 3 dB"
-- Pan: "pan track 2 50% left", "pan track 1 25% right", "center track 3"
+- Pan: "pan track 2 50% left", "pan track 1 25% right", "center track 3", "pan track 2 to 30R" (compact: 30R=+30, 30L=-30)
 - Mute: "mute track 1", "unmute track 2"
 - Solo: "solo track 1", "unsolo track 2"
 - Sends: "set track 1 send A to -12 dB", "set track 2 send B to -6 dB" (use letter A, B, C, etc.)
 
 ## Return Track Controls (use "Return A/B/C" format with letters):
 - Volume: "set return A volume to -3 dB", "increase return B volume by 2 dB"
-- Pan: "pan return A 30% left"
+- Pan: "pan return A 30% left", "pan return A to 40L" (compact: 40L=-40, 40R=+40)
 - Mute: "mute return B", "unmute return A"
 - Solo: "solo return A"
 - Sends: "set return A send B to -10 dB"
 
 ## Master Track Controls:
 - Volume: "set master volume to -3 dB", "increase master volume by 1 dB"
-- Pan: "pan master 10% right"
+- Pan: "pan master 10% right", "pan master to 30L" (compact: 30L=-30, 25R=+25)
 
 ## Device Parameters (plugin is device name, parameter is knob/control):
 - Always set "plugin" to device name (e.g., reverb, delay, eq, compressor, align delay).
@@ -126,6 +126,10 @@ EXAMPLES (including typos/variations):
 - "set tack 1 vilme to -20" → {"intent": "set_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "volume"}], "operation": {"type": "absolute", "value": -20, "unit": null}} (TYPOS CORRECTED)
 - "set track 1 send A to -12 dB" → {"intent": "set_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "send A"}], "operation": {"type": "absolute", "value": -12, "unit": "dB"}}
 - "pan retun b 25% left" → {"intent": "set_parameter", "targets": [{"track": "Return B", "plugin": null, "parameter": "pan"}], "operation": {"type": "absolute", "value": -25, "unit": null}} (TYPO: retun→return)
+- "pan master to 30L" → {"intent": "set_parameter", "targets": [{"track": "Master", "plugin": null, "parameter": "pan"}], "operation": {"type": "absolute", "value": -30, "unit": "%"}} (COMPACT FORMAT: 30L means 30 left = -30)
+- "set master pan to 25R" → {"intent": "set_parameter", "targets": [{"track": "Master", "plugin": null, "parameter": "pan"}], "operation": {"type": "absolute", "value": 25, "unit": "%"}} (COMPACT FORMAT: 25R means 25 right = +25)
+- "pan return A to 40L" → {"intent": "set_parameter", "targets": [{"track": "Return A", "plugin": null, "parameter": "pan"}], "operation": {"type": "absolute", "value": -40, "unit": "%"}} (COMPACT FORMAT for return tracks)
+- "pan track 2 to 30R" → {"intent": "set_parameter", "targets": [{"track": "Track 2", "plugin": null, "parameter": "pan"}], "operation": {"type": "absolute", "value": 30, "unit": "%"}} (COMPACT FORMAT for tracks)
 
 **Device Operations (device name present):**
 - "set return A reverb decay to 2 seconds" → {"intent": "set_parameter", "targets": [{"track": "Return A", "plugin": "reverb", "parameter": "decay"}], "operation": {"type": "absolute", "value": 2, "unit": "seconds"}}

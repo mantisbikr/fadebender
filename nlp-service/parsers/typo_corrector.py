@@ -64,25 +64,34 @@ def get_typo_corrections() -> Dict[str, str]:
 
 
 def apply_typo_corrections(query: str) -> str:
-    """Apply typo corrections and expand ordinal words.
+    """Apply typo corrections, expand ordinal words, and normalize compact pan format.
 
     Args:
         query: User query string to correct
 
     Returns:
-        Corrected query string with typos fixed and ordinals expanded
+        Corrected query string with typos fixed, ordinals expanded, and compact pan normalized
 
     Examples:
         >>> apply_typo_corrections("set tack 1 vilme to -6")
         'set track 1 vilme to -6'
         >>> apply_typo_corrections("set first reverb decay to 2s")
         'set 1 reverb decay to 2s'
+        >>> apply_typo_corrections("pan master to 30L")
+        'pan master to -30'
+        >>> apply_typo_corrections("pan return A to 25R")
+        'pan return a to 25'
     """
     q = query.lower().strip()
 
     # Expand ordinal words (first → 1, second → 2, etc.)
     for word, digit in ORDINAL_WORD_MAP.items():
         q = re.sub(rf"\b{word}\b", digit, q)
+
+    # Normalize compact pan format: 30L → -30, 30R → 30
+    # Must happen after lowercase conversion so "30L" becomes "30l"
+    q = re.sub(r'\b(\d+)l\b', r'-\1', q)  # 30l → -30 (left is negative)
+    q = re.sub(r'\b(\d+)r\b', r'\1', q)   # 30r → 30 (right stays positive)
 
     # Apply typo corrections
     typo_map = get_typo_corrections()

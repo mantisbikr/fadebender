@@ -284,7 +284,7 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
                 return float(f"{live_float_to_db(float(raw)):.2f}")
             if name == "pan":
                 return float(f"{(float(raw) * 50.0):.2f}")
-            if name in ("mute",):
+            if name in ("mute", "solo"):
                 return "On" if bool(raw) else "Off"
             return raw
         except Exception:
@@ -294,11 +294,16 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
         "volume": mixer.get("volume"),
         "pan": mixer.get("pan"),
         "mute": mixer.get("mute"),
+        "solo": mixer.get("solo"),
     }
 
     for mp in params_meta:
         pname = mp.get("name")
         control_type = mp.get("control_type")
+
+        # Skip template parameters that aren't user-controllable
+        if pname == "send":  # Template for Send A/B/C conversions, not directly controllable
+            continue
 
         # Special case: expand "sends" into individual Send A/B/C parameters
         if control_type == "send_array" and pname == "sends":
@@ -348,6 +353,9 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
                     }
                     by_group.setdefault(gname, []).append(send_item)
                     values[send_name] = {"value": send_value, "display_value": send_display}
+
+                # Successfully expanded sends, skip adding the "sends" array parameter itself
+                continue
             except Exception:
                 # Fallback: keep single "sends" parameter if send expansion fails
                 item = {
@@ -451,13 +459,28 @@ def get_return_device_capabilities(index: int, device: int) -> Dict[str, Any]:
     store = get_store()
     mapping = store.get_device_map(sig) if store.enabled else None
 
-    # Assemble values map for convenience
+    # Assemble values map, preferring ValueRegistry over fresh Live query
+    from server.core.deps import get_value_registry
+    reg = get_value_registry()
+    devices_map = reg.get_devices() if reg else {}
+    cached_device_values = devices_map.get("return", {}).get(ri, {}).get(di, {})
+
     values = {}
     for p in params:
-        try:
-            values[str(p.get("name", ""))] = {"value": float(p.get("value", 0.0)), "display_value": p.get("display_value")}
-        except Exception:
-            values[str(p.get("name", ""))] = {"value": p.get("value"), "display_value": p.get("display_value")}
+        pname = str(p.get("name", ""))
+        # Prefer cached value from ValueRegistry (most recent from operations)
+        if pname in cached_device_values:
+            cached = cached_device_values[pname]
+            values[pname] = {
+                "value": cached.get("normalized"),
+                "display_value": cached.get("display")
+            }
+        else:
+            # Fall back to fresh Live query value
+            try:
+                values[pname] = {"value": float(p.get("value", 0.0)), "display_value": p.get("display_value")}
+            except Exception:
+                values[pname] = {"value": p.get("value"), "display_value": p.get("display_value")}
     # Build groups and ungrouped based on mapping params meta
     groups = []
     ungrouped = []

@@ -1,11 +1,90 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider } from '@mui/material';
+import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider, CircularProgress } from '@mui/material';
 import { apiService } from '../services/api.js';
 
 export default function SingleMixerParamEditor({ editor }) {
   const { entity_type, index_ref, title, param, send_ref } = editor;
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [currentValue, setCurrentValue] = useState(param?.current_value);
+  const [currentDisplay, setCurrentDisplay] = useState(param?.current_display);
 
+  console.log('[SingleMixerParamEditor] Component mounted/updated:', {
+    param_name: param?.name,
+    entity_type,
+    index_ref,
+    send_ref,
+    initial_current_value: currentValue,
+    initial_current_display: currentDisplay
+  });
+
+  // Determine control type
+  const computedType = useMemo(() => {
+    if (!param || !param.control_type) return null;
+    const ct = String(param.control_type).toLowerCase();
+    if (ct === 'binary' || ct === 'toggle') return 'toggle';
+    if (ct === 'quantized') return 'quantized';
+    return 'continuous';
+  }, [param]);
+
+  // Fetch fresh value when parameter changes
+  useEffect(() => {
+    console.log('[SingleMixerParamEditor] useEffect triggered for param:', param?.name);
+
+    const fetchCurrentValue = async () => {
+      let readBody = null;
+      try {
+        setLoading(true);
+        readBody = { domain: entity_type, field: param.name };
+
+        if (entity_type === 'track') {
+          readBody.track_index = Number(index_ref) + 1; // 1-based for backend
+        } else if (entity_type === 'return') {
+          readBody.return_ref = String(index_ref);
+        }
+
+        if (send_ref) {
+          readBody.field = 'send';
+          readBody.send_ref = send_ref;
+        }
+
+        console.log('[SingleMixerParamEditor] Fetching current value with:', readBody);
+
+        const response = await apiService.readIntent(readBody);
+
+        console.log('[SingleMixerParamEditor] Fetch response:', {
+          ok: response?.ok,
+          normalized_value: response?.normalized_value,
+          value: response?.value,
+          display_value: response?.display_value
+        });
+
+        if (response && response.ok) {
+          const newValue = response.normalized_value ?? response.value;
+          const newDisplay = response.display_value ?? response.value;
+          console.log('[SingleMixerParamEditor] Setting new values:', { newValue, newDisplay });
+          setCurrentValue(newValue);
+          setCurrentDisplay(newDisplay);
+        }
+      } catch (error) {
+        console.error('[SingleMixerParamEditor] Failed to fetch current value:', {
+          error: error,
+          errorMessage: error?.message,
+          errorString: String(error),
+          requestBody: readBody
+        });
+        // Fall back to param values
+        setCurrentValue(param.current_value);
+        setCurrentDisplay(param.current_display);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCurrentValue();
+  }, [entity_type, index_ref, param.name, send_ref]);
+
+  // Parse pan display value
   const parsePanDisplay = (s, fallbackNorm, minD, maxD) => {
     const str = String(s || '').trim();
     if (!str) {
@@ -26,25 +105,40 @@ export default function SingleMixerParamEditor({ editor }) {
     return num;
   };
 
+  // Calculate initial value for slider/input
   const initialValue = useMemo(() => {
     if (!param) return 0;
     if ((param.name || '').toLowerCase() === 'pan') {
-      return parsePanDisplay(param.current_display, param.current_value, param.min_display, param.max_display);
+      return parsePanDisplay(currentDisplay, currentValue, param.min_display, param.max_display);
     }
-    const v = param.current_display ?? param.current_value;
+    const v = currentDisplay ?? currentValue;
     const n = Number(v);
     if (Number.isFinite(n)) return n;
     const m = String(v || '').match(/-?\d+(?:\.\d+)?/);
     return m ? Number(m[0]) : 0;
-  }, [param]);
+  }, [param, currentValue, currentDisplay, loading]);
 
   const [value, setValue] = useState(initialValue);
   useEffect(() => { setValue(initialValue); }, [initialValue]);
 
+  // Initial toggle state
+  const initialToggleOn = useMemo(() => {
+    if (computedType !== 'toggle') return false;
+    const disp = String(currentDisplay || '');
+    if (/^on$/i.test(disp)) return true;
+    if (/^off$/i.test(disp)) return false;
+    const num = Number(currentValue);
+    if (Number.isFinite(num)) return num >= 0.5;
+    return false;
+  }, [computedType, currentValue, currentDisplay, loading]);
+
+  const [toggleOn, setToggleOn] = useState(initialToggleOn);
+  useEffect(() => { setToggleOn(initialToggleOn); }, [initialToggleOn]);
+
+  // Commit function
   const commit = async (val) => {
     setBusy(true);
     try {
-      // Handle sends specially
       if (send_ref) {
         if (entity_type === 'track') {
           const ti1 = Number(index_ref) + 1;
@@ -58,10 +152,8 @@ export default function SingleMixerParamEditor({ editor }) {
         return;
       }
 
-      // Use canonical intents path for unit/display-aware conversion
       const field = param.name;
       if (entity_type === 'track') {
-        // execute_intent expects 1-based track_index
         const ti1 = Number(index_ref) + 1;
         const payload = { domain: 'track', field, track_index: ti1 };
         if (field === 'volume') { payload.value = Number(val); payload.unit = 'db'; }
@@ -82,26 +174,21 @@ export default function SingleMixerParamEditor({ editor }) {
     } finally { setBusy(false); }
   };
 
-  const computedType = useMemo(() => {
-    const ct = String(param.control_type || '').toLowerCase();
-    if (ct === 'binary' || ct === 'toggle') return 'toggle';
-    if (ct === 'quantized') return 'quantized';
-    return 'continuous';
-  }, [param]);
+  // Early return after all hooks have been called
+  if (!param || !param.control_type) {
+    return <Typography variant="caption" color="text.secondary">No parameter data</Typography>;
+  }
 
-  if (!param || !param.control_type) return null;
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+        <CircularProgress size={16} />
+        <Typography variant="caption" color="text.secondary">Loading current value...</Typography>
+      </Box>
+    );
+  }
 
   if (computedType === 'toggle') {
-    const initialToggleOn = useMemo(() => {
-      const disp = String(param.current_display || '');
-      if (/^on$/i.test(disp)) return true;
-      if (/^off$/i.test(disp)) return false;
-      const num = Number(param.current_value);
-      if (Number.isFinite(num)) return num >= 0.5;
-      return false;
-    }, [param]);
-    const [toggleOn, setToggleOn] = useState(initialToggleOn);
-    useEffect(() => { setToggleOn(initialToggleOn); }, [initialToggleOn]);
     return (
       <Box>
         <FormControlLabel
@@ -117,10 +204,7 @@ export default function SingleMixerParamEditor({ editor }) {
     return (
       <Box>
         <Typography variant="body2" sx={{ mb: 0.5 }}>{title || param.name}</Typography>
-        <Select size="small" value={current} disabled={busy} onChange={async (e) => {
-          // For mixer we don't have label_map use-cases today; keep for parity
-          // Clients should convert label selections to numeric via server if needed
-        }}>
+        <Select size="small" value={current} disabled={busy}>
           {param.labels.map((lab) => (<MenuItem key={String(lab)} value={String(lab)}>{String(lab)}</MenuItem>))}
         </Select>
       </Box>
@@ -136,9 +220,11 @@ export default function SingleMixerParamEditor({ editor }) {
     return (r % 1 === 0) ? String(r) : String(r).replace(/\.?0+$/, '');
   };
 
+  const displayUnit = param.unit && param.unit !== 'display_value' ? param.unit : '';
+
   return (
     <Box>
-      <Typography variant="body2" sx={{ mb: 0.5 }}>{title || param.name} {param.unit ? `(${param.unit})` : ''}</Typography>
+      <Typography variant="body2" sx={{ mb: 0.5 }}>{title || param.name} {displayUnit ? `(${displayUnit})` : ''}</Typography>
       <Slider
         size="small"
         value={Number(value)}
@@ -149,9 +235,9 @@ export default function SingleMixerParamEditor({ editor }) {
         onChange={(_, v) => setValue(Number(v))}
         onChangeCommitted={(_, v) => commit(Number(v))}
         valueLabelDisplay="auto"
-        valueLabelFormat={(x) => `${formatNum(x)}${param.unit ? ' ' + param.unit : ''}`}
+        valueLabelFormat={(x) => `${formatNum(x)}${displayUnit ? ' ' + displayUnit : ''}`}
       />
-      <Typography variant="caption" color="text.secondary">{formatNum(isFinite(minD) ? minD : 0)} — {formatNum(isFinite(maxD) ? maxD : 1)} {param.unit || ''}</Typography>
+      <Typography variant="caption" color="text.secondary">{formatNum(isFinite(minD) ? minD : 0)} — {formatNum(isFinite(maxD) ? maxD : 1)} {displayUnit}</Typography>
     </Box>
   );
 }
