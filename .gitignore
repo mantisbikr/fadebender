@@ -26,8 +26,10 @@ build/
 # VS Code
 .vscode/
 .history/
-# Large files (place manuals under references/ locally; do not commit)
+# Large files and local sources (do not commit)
 references/
+data/sources/
+data/cache/
 
 # Environment files with secrets
 .env

@@ -127,7 +127,11 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
                 display_min, display_max = get_mixer_display_range("pan")
                 display_scale = max(abs(display_min), abs(display_max))
                 pan_val = float(v) * display_scale
-                disp_txt = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else ('L' if pan_val < 0 else 'C')}"
+                # Round to avoid scientific notation for values very close to zero
+                if abs(pan_val) < 0.5:
+                    disp_txt = "C"
+                else:
+                    disp_txt = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
         elif field in ("mute", "solo"):
@@ -256,7 +260,12 @@ def set_return_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
             try:
                 display_min, display_max = get_mixer_display_range("pan")
                 display_scale = max(abs(display_min), abs(display_max))
-                disp_txt = f"{float(v) * display_scale:.0f}{'R' if float(v) > 0 else ('L' if float(v) < 0 else 'C')}"
+                pan_val = float(v) * display_scale
+                # Round to avoid scientific notation for values very close to zero
+                if abs(pan_val) < 0.5:
+                    disp_txt = "C"
+                else:
+                    disp_txt = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
         elif field in ("mute", "solo"):

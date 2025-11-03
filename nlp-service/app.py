@@ -33,6 +33,13 @@ app.add_middleware(
 # Initialize lightweight LLM system
 from llm_daw import interpret_daw_command
 print("✅ Initialized lightweight LLM DAW interpreter")
+try:
+    # Mount audio assistant router (optional if sources available)
+    from routers.audio_assistant import router as audio_router
+    app.include_router(audio_router)
+    print("✅ Audio Assistant router mounted at /audio-assistant")
+except Exception as _e:
+    print("⚠️ Audio Assistant router not mounted:", _e)
 
 class ParseRequest(BaseModel):
     text: str

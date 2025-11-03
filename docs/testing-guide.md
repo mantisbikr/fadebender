@@ -10,8 +10,6 @@ bash scripts/run_all_pan_tests.sh
 **Run comprehensive NLP tests:**
 ```bash
 python3 scripts/test_nlp_comprehensive.py
-python3 scripts/test_nlp_get_comprehensive.py
-python3 scripts/test_webui_validation.py
 
 ```
 
@@ -62,6 +60,7 @@ Tests all NLP command types (mixer, device, get operations).
 ```bash
 # All mixer + device operations
 python3 scripts/test_nlp_comprehensive.py
+
 ```
 
 **What it tests:**

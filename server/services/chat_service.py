@@ -150,10 +150,25 @@ def generate_summary_from_canonical(canonical: Dict[str, Any]) -> str:
     # Build value description
     value_desc = ""
     if value is not None:
-        if unit:
-            value_desc = f"to {value} {unit}"
+        # Format the value to avoid scientific notation for small floats
+        if isinstance(value, (int, float)):
+            # Round to 2 decimal places for display, or show as integer if whole number
+            if abs(value) < 0.01:
+                # Values very close to zero - show as 0
+                formatted_value = "0"
+            elif abs(value - round(value)) < 0.01:
+                # Essentially a whole number
+                formatted_value = str(int(round(value)))
+            else:
+                # Show with up to 2 decimal places
+                formatted_value = f"{value:.2f}".rstrip('0').rstrip('.')
         else:
-            value_desc = f"to {value}"
+            formatted_value = str(value)
+
+        if unit:
+            value_desc = f"to {formatted_value} {unit}"
+        else:
+            value_desc = f"to {formatted_value}"
 
     # Build action description
     action_verb = action.capitalize()
