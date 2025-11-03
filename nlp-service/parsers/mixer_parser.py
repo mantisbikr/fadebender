@@ -522,6 +522,65 @@ def parse_return_volume_relative(q: str, query: str, error_msg: str, model_prefe
     return None
 
 
+def parse_return_pan_absolute(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse absolute return pan commands.
+
+    Handles all these formats:
+    - "pan return A to -25" (negative = left, positive = right)
+    - "pan return A to 30L" or "30l" (compact left, normalized in preprocessing)
+    - "pan return A to 25R" or "25r" (compact right, normalized in preprocessing)
+    - "pan return A to 30 left"
+    - "set return A pan to 25 right"
+    """
+    if "return" not in q or "pan" not in q:
+        return None
+
+    # Guard: relative change keywords should skip to relative parser
+    increase_verbs, decrease_verbs = get_relative_change_verbs()
+    all_verbs = increase_verbs + decrease_verbs
+    if any(word in q for word in all_verbs) or "by" in q:
+        return None
+
+    try:
+        # Extract return letter
+        return_match = re.search(r"return\s+([a-d])\b", q)
+        if not return_match:
+            return None
+
+        return_ref = return_match.group(1).upper()
+
+        # ONE flexible pattern: number + optional direction indicator
+        # Matches: "to 30", "to 30 left", "to -25", etc.
+        # Note: "30L" is already normalized to "-30" in preprocessing
+        match = re.search(r"(?:to|at)\s+(-?\d+(?:\.\d+)?)\s*(%|percent|left|right)?", q, re.IGNORECASE)
+        if not match:
+            return None
+
+        value = float(match.group(1))
+        direction = (match.group(2) or "").lower()
+
+        # Normalize direction to left/right or None
+        if direction in ("left",):
+            # Left means negative value
+            if value > 0:
+                value = -value
+        elif direction in ("right",):
+            # Right means positive value
+            if value < 0:
+                value = -value
+        # If no direction or just "%" or "percent", use value as-is
+
+        return {
+            "intent": "set_parameter",
+            "targets": [{"track": f"Return {return_ref}", "plugin": None, "parameter": "pan"}],
+            "operation": {"type": "absolute", "value": value, "unit": "%"},
+            "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
+        }
+    except Exception:
+        pass
+    return None
+
+
 def parse_return_pan_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: pan return A 20% to the right, or pan return A left by 10"""
     increase_verbs, decrease_verbs = get_relative_change_verbs()
@@ -693,6 +752,7 @@ MIXER_PARSERS = [
     parse_return_sends_relative,
     parse_return_volume,
     parse_return_volume_relative,
+    parse_return_pan_absolute,
     parse_return_pan_relative,
     parse_return_solo_mute,
     parse_master_volume_absolute,
@@ -789,6 +849,51 @@ def parse_master_cue_relative(q: str, query: str, error_msg: str, model_preferen
     return None
 
 
+def parse_master_pan_absolute(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse absolute master pan commands.
+
+    Handles all these formats:
+    - "pan master to -25" (negative = left, positive = right)
+    - "pan master to 30L" or "30l" (compact left)
+    - "pan master to 25R" or "25r" (compact right)
+    - "pan master to 30 left"
+    - "set master pan to 25 right"
+    """
+    if "master" not in q or "pan" not in q:
+        return None
+
+    try:
+        # ONE flexible pattern: number + optional direction indicator
+        # Matches: "to 30L", "to 30 left", "to -25", "to 30", etc.
+        match = re.search(r"(?:to|at)\s+(-?\d+(?:\.\d+)?)\s*(%|percent|l|left|r|right)?", q, re.IGNORECASE)
+        if not match:
+            return None
+
+        value = float(match.group(1))
+        direction = (match.group(2) or "").lower()
+
+        # Normalize direction to left/right or None
+        if direction in ("l", "left"):
+            # Left means negative value
+            if value > 0:
+                value = -value
+        elif direction in ("r", "right"):
+            # Right means positive value
+            if value < 0:
+                value = -value
+        # If no direction or just "%" or "percent", use value as-is
+
+        return {
+            "intent": "set_parameter",
+            "targets": [{"track": "Master", "plugin": None, "parameter": "pan"}],
+            "operation": {"type": "absolute", "value": value, "unit": "%"},
+            "meta": {"utterance": query, "fallback": True, "error": error_msg, "model_selected": _safe_model_name(model_preference)}
+        }
+    except Exception:
+        pass
+    return None
+
+
 def parse_master_pan_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
     """Parse: pan master left/right by X [%].
 
@@ -819,6 +924,7 @@ def parse_master_pan_relative(q: str, query: str, error_msg: str, model_preferen
 MIXER_PARSERS.extend([
     parse_master_cue_absolute,
     parse_master_cue_relative,
+    parse_master_pan_absolute,
     parse_master_pan_relative,
     parse_master_volume_relative,
 ])
