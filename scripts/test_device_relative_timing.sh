@@ -77,33 +77,33 @@ echo "================================"
 echo "VALIDATION"
 echo "================================"
 
-# Check if display value increased by ~0.2 (20%)
-python3 - "$DISPLAY" "$DISPLAY2" << 'EOF'
+# Check if normalized value increased by ~0.2 (20% additive in normalized space)
+python3 - "$NORMALIZED" "$NORMALIZED2" << 'EOF'
 import sys
 
-display_before = float(sys.argv[1]) if sys.argv[1] != 'null' else None
-display_after = float(sys.argv[2]) if sys.argv[2] != 'null' else None
+normalized_before = float(sys.argv[1]) if sys.argv[1] != 'null' else None
+normalized_after = float(sys.argv[2]) if sys.argv[2] != 'null' else None
 
-if display_before is None or display_after is None:
-    print("❌ FAIL: Could not read values")
+if normalized_before is None or normalized_after is None:
+    print("❌ FAIL: Could not read normalized values")
     sys.exit(1)
 
-# Expected increase is 20% additive
+# Expected increase is 20% additive (0.5 + 0.2 = 0.7)
 expected_increase = 0.2
-actual_increase = display_after - display_before
+actual_increase = normalized_after - normalized_before
 tolerance = 0.05
 
 if abs(actual_increase - expected_increase) <= tolerance:
     print(f"✅ PASS: Value increased correctly by 20%")
-    print(f"   Before: {display_before}")
-    print(f"   After:  {display_after}")
-    print(f"   Increase: {actual_increase:.2f} (expected: {expected_increase})")
+    print(f"   Before: {normalized_before:.3f}")
+    print(f"   After:  {normalized_after:.3f}")
+    print(f"   Increase: {actual_increase:.3f} (expected: {expected_increase})")
     sys.exit(0)
 else:
     print(f"❌ FAIL: Value did not increase as expected")
-    print(f"   Before: {display_before}")
-    print(f"   After:  {display_after}")
-    print(f"   Increase: {actual_increase:.2f} (expected: {expected_increase})")
+    print(f"   Before: {normalized_before:.3f}")
+    print(f"   After:  {normalized_after:.3f}")
+    print(f"   Increase: {actual_increase:.3f} (expected: {expected_increase})")
     sys.exit(1)
 EOF
 
