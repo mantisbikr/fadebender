@@ -170,6 +170,85 @@ def _extract_intent_terms(intent: Intent) -> Set[str]:
     return terms
 
 
+def _is_valid_correction(typo: str, correction: str) -> bool:
+    """Validate that a typo correction is sensible, not garbage.
+
+    Rejects corrections that are likely LLM hallucinations or parsing errors.
+
+    Args:
+        typo: The original word (potential typo)
+        correction: The proposed correction
+
+    Returns:
+        True if the correction is valid, False if it's garbage
+
+    Examples of INVALID corrections:
+        - "freq" → "a" (single letter correction)
+        - "from" → "1" (single digit correction)
+        - "filter" → "freq" (unrelated short word)
+        - "in filter freq" → "in freq a" (corrupted multi-word)
+
+    Examples of VALID corrections:
+        - "volme" → "volume" (legitimate typo)
+        - "paning" → "pan" (legitimate typo)
+        - "reverbb" → "reverb" (legitimate typo)
+    """
+    # Reject single-letter corrections (almost never legitimate)
+    if len(correction) == 1:
+        return False
+
+    # Reject single-digit corrections (numbers are not corrections)
+    if correction.isdigit() and len(correction) == 1:
+        return False
+
+    # Reject if correction contains only digits
+    if correction.isdigit():
+        return False
+
+    # Reject if typo contains spaces (multi-word) but correction doesn't (or vice versa)
+    # This catches "in filter freq" → "in freq a" type corruptions
+    typo_words = typo.split()
+    correction_words = correction.split()
+
+    if len(typo_words) > 1 or len(correction_words) > 1:
+        # For multi-word phrases, reject if word count changes significantly
+        # This prevents "in filter freq" → "a" type corruption
+        if len(correction_words) < len(typo_words) - 1:  # Lost more than 1 word
+            return False
+
+    # Reject corrections that are much shorter than the typo (likely truncation errors)
+    # Example: "filter" → "a" (6 chars → 1 char)
+    if len(typo) >= 5 and len(correction) <= 2:
+        return False
+
+    # Reject if length ratio is too different UNLESS one is a substring of the other
+    # Example: "filter" (6) → "freq" (4) = 67% which should be rejected
+    # Example: "paning" (6) → "pan" (3) = 50% but "pan" is substring, so ACCEPT
+    # Example: "volme" (5) → "volume" (6) = 83% which should be accepted
+    # Example: "parameter" (9) → "x" (1) = 11% which is clearly wrong
+    max_len = max(len(typo), len(correction))
+    min_len = min(len(typo), len(correction))
+
+    # Allow if one is a substring of the other (suffix/prefix removal)
+    is_substring = (correction in typo) or (typo in correction)
+
+    if not is_substring and min_len < max_len * 0.7:  # Less than 70% and not substring
+        return False
+
+    # Reject if the correction is completely different (no shared characters)
+    # This catches completely unrelated "corrections"
+    typo_chars = set(typo.lower())
+    correction_chars = set(correction.lower())
+    shared = typo_chars & correction_chars
+
+    # If less than 30% character overlap, likely not a typo
+    min_len = min(len(typo_chars), len(correction_chars))
+    if min_len > 0 and len(shared) / min_len < 0.3:
+        return False
+
+    return True
+
+
 def detect_typos(query: str, intent: Intent, suspected_typos: List[str] | None = None) -> Dict[str, str]:
     """Detect typos by comparing query tokens with intent terms.
 
@@ -254,7 +333,20 @@ def detect_typos(query: str, intent: Intent, suspected_typos: List[str] | None =
                 if token not in typos or distance < _levenshtein_distance(token, typos[token]):
                     typos[token] = term
 
-    return typos
+    # VALIDATION: Filter out garbage corrections before returning
+    validated_typos = {
+        typo: correction
+        for typo, correction in typos.items()
+        if _is_valid_correction(typo, correction)
+    }
+
+    # Log rejected corrections for debugging
+    rejected = set(typos.keys()) - set(validated_typos.keys())
+    if rejected and os.getenv("LOG_TYPO_LEARNING", "true").lower() in ("1", "true", "yes"):
+        for typo in rejected:
+            print(f"[TYPO LEARNING] REJECTED garbage correction: '{typo}' → '{typos[typo]}'")
+
+    return validated_typos
 
 
 def learn_from_llm_success(
