@@ -116,10 +116,16 @@ def _tokenize_query(query: str) -> List[str]:
         'set', 'make', 'change', 'adjust', 'get', 'what', 'is', 'the',
         'to', 'at', 'by', 'of', 'on', 'in', 'for', 'a', 'an', 'and',
         # Target types (should never be learned as typos)
-        'track', 'return', 'device', 'plugin',
+        'track', 'return', 'device', 'plugin', 'master',
         # Action words (critical: never learn these!)
         'mute', 'unmute', 'solo', 'unsolo', 'enable', 'disable',
         'bypass', 'unbypass', 'arm', 'unarm',
+        # Relative change verbs (CRITICAL: must never be mapped to parameters!)
+        'increase', 'decrease', 'reduce', 'add', 'subtract',
+        'up', 'down', 'raise', 'lower', 'boost', 'cut',
+        'louder', 'quieter', 'more', 'less',
+        # Toggle verbs
+        'toggle', 'flip', 'switch',
     }
 
     # Tokenize on whitespace and common delimiters
