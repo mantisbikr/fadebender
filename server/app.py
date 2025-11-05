@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from server.middleware.error_handler import ErrorHandlerMiddleware
+from server.middleware.request_id import RequestIDMiddleware
 
 from server.services.ableton_client import request_op
 from server.services.backcompat import udp_request
@@ -102,6 +103,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Attach request IDs for better tracing/logging
+app.add_middleware(RequestIDMiddleware)
 
 # Error handling middleware for consistent error responses
 app.add_middleware(ErrorHandlerMiddleware)
