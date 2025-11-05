@@ -8,6 +8,7 @@ import socket
 from fastapi import APIRouter, Response
 
 from server.services.ableton_client import request_op
+from server.config.feature_flags import get_flag_status
 
 
 router = APIRouter()
@@ -151,3 +152,13 @@ def readiness_check(response: Response) -> Dict[str, Any]:
             "reason": "connection_failed",
             "error": str(e)
         }
+
+
+@router.get("/features")
+def feature_flags() -> Dict[str, Any]:
+    """Get feature flag status for debugging.
+
+    Returns all feature flags with their current values and sources
+    (environment variable or default).
+    """
+    return {"flags": get_flag_status()}
