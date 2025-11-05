@@ -35,6 +35,38 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
   - Move `start_ableton_event_listener` and `schedule_live_index_tasks` from bottom of `server/app.py` into `@app.on_event("startup")` or FastAPI lifespan.
 - Centralize `udp_request` shim:
   - Create `server/services/backcompat.py` with `udp_request` and import where needed.
+- ValueRegistry boundary (low risk):
+  - Add `server/services/value_registry.py` façade with `update_mixer(...)`, `update_device_param(...)`, and event emission hooks.
+  - All write‑throughs import this façade instead of reaching into registry directly.
+- Event broker helper (low risk):
+  - Add `server/services/events.py` with `publish(event_name, **payload)` that wraps SSE publishing and handles exceptions/debouncing in one place.
+
+---
+
+## Phase 0a: Incremental Low‑Risk Wins (This Week)
+Focus on tiny, reversible changes that reduce risk and enable later phases.
+
+- Health/readiness endpoints
+  - Add `/health` (process up) and `/ready` (Remote Script reachable, store ready)
+  - Use in dev + CI smoke checks
+- Standard error DTO + middleware
+  - Error shape: `{ ok: false, code: string, message: string, detail?: any }`
+  - Map common errors (e.g., `track_out_of_range`, `unsupported_intent`) to codes
+- Config unification (typed settings)
+  - Single `Settings.from_env()` used in app + services (ports, origins, timeouts)
+- OpenAPI snapshot + diff check in CI
+  - Prevent accidental breaking changes before versioning
+- Feature flags
+  - Tiny env‑based flags per refactor area (e.g., `USE_NEW_ROUTING=false`)
+- Token‑bucket rate limiting (dev default off)
+  - Simple per‑route limiter for `/op/mixer` and `/op/send`
+
+Acceptance (Phase 0a)
+- `/health` and `/ready` return 200; `/ready` fails when Remote Script is down
+- Errors return standard DTO in JSON across routers
+- `settings.py` consumed by at least app.py and one service
+- OpenAPI diff job runs and reports clean
+- Env flags toggle behavior in one small area (smoke‑verified)
 
 ---
 
@@ -46,6 +78,13 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
 - Shared models:
   - New `server/models/requests.py` for request DTOs used across routers.
   - Ensure routers import shared DTOs; remove duplicates from files.
+- ValueRegistry façade + DI:
+  - Introduce `ValueRegistryService` (façade) and inject via FastAPI `Depends()` where needed.
+  - Replace direct `get_value_registry()` calls in routers/services with the façade.
+- Event publishing standardization:
+  - Replace scattered `broker.publish` calls with `Events.publish(...)` helper; add basic debouncing/backoff for bursty updates.
+- Error/logging middleware:
+  - Add centralized exception handler mapping to standard error DTO; enable structured JSON logs (request_id, route, latency, status).
 - Tests: add smoke tests for app import and basic route mount checks.
 
 ---
@@ -56,6 +95,9 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
   - `server/api/device_mapping.py` → carve out import/export helpers to `server/services/device_mapping_io.py`; keep router thin.
   - `server/api/returns.py` and `server/api/tracks.py` → extract repeated mixer/device helpers to `server/services/mixer_readers.py` and `server/services/device_readers.py`.
 - Move shared utilities now imported ad‑hoc (e.g., `ensure_capabilities`) under `server/api/cap_utils.py` or a service module and dedupe call‑sites.
+- Snapshot/cache invalidation policy:
+  - Document and implement when snapshot is authoritative vs. on‑demand reads.
+  - Add explicit cache TTLs; call invalidation hooks from mixer/device write paths.
 - Tests: unit tests for extracted services (pure functions), keep routers minimal.
 
 ---
@@ -71,6 +113,8 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
     - `chat_summarizer.py` (format/summary generation)
     - `chat_backcompat.py` (shim to canonical intent execution)
   - Remove local `udp_request`; import from `backcompat.py`.
+- Rate limiting + backpressure:
+  - Wrap learning and chat endpoints with light rate limits and background queue submission where appropriate.
 
 ---
 
@@ -89,6 +133,8 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
   - Offload long‑running probes/learning and periodic indexing to a background scheduler (e.g., `asyncio.create_task` + queues) rather than blocking handlers.
 - Update cadence manager:
   - Introduce `UpdateManager` to modulate polling (transport always; mixer/devices conditional) and make it per‑connection if feasible.
+- Observability baseline:
+  - Add minimal metrics (p50/p95 latency, 4xx/5xx) per router and export via `/metrics` (optional). Establish dashboards later.
 
 ---
 
@@ -181,6 +227,14 @@ Plan mentions model duplication but not:
 - Connection pooling and retry logic
 
 Recommendation: Add to Phase 1 or Phase 2.
+
+**3a. ValueRegistry Boundary (NEW)**
+
+Create a façade service for ValueRegistry updates/reads with a stable interface and event hooks. Replace direct calls across services/routers to reduce coupling and ease testing.
+
+**3b. Eventing Consistency (NEW)**
+
+Provide a single `Events.publish(name, **payload)` helper that wraps SSE broker usage, guards exceptions, and offers basic debouncing for bursty updates (e.g., sliders).
 
 **4. Phase Order Consideration**
 
@@ -284,6 +338,10 @@ Tasks:
   - Add simple feature flag system for toggling new vs old implementations
   - Example: `USE_NEW_MIXER_SERVICE` flag
   - Allows gradual rollout and easy rollback
+- **API Error DTO + Middleware:**
+  - Define `{ ok: false, code, message, detail? }` and install global handler
+- **Health/Readiness:**
+  - Add `/health` and `/ready` endpoints and wire into CI smoke tests
 
 - **Branch Strategy:**
   - Decide: feature branches per phase vs trunk-based with flags
@@ -294,6 +352,7 @@ Tasks:
 - Performance baselines recorded
 - Feature flag system functional
 - Rollback procedure tested
+- `/health` and `/ready` implemented; error DTO enforced
 
 ---
 
@@ -386,6 +445,7 @@ Apply similar phased approach to `nlp-service/`:
 | Phase | Original | Adjusted | Notes |
 |-------|----------|----------|-------|
 | Phase 0 (NEW) | - | 1-2 days | Critical for safety |
+| Phase 0a (NEW) | - | 1 day | Low‑risk enablers |
 | Quick Wins | 0.5-1 day | 1 day | Include testing |
 | Phase 1 | 1-2 days | 2-3 days | Add error handling |
 | Phase 2 | 3-5 days | 5-7 days | Complex router splits |
@@ -424,4 +484,3 @@ This refactoring plan is **solid and well-conceived**. The main enhancements nee
 4. **Rollback and risk mitigation strategies**
 
 With these additions, this plan provides a comprehensive, low-risk path to dramatically improving the codebase structure while maintaining stability and functionality.
-
