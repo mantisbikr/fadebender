@@ -10,6 +10,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from server.middleware.error_handler import ErrorHandlerMiddleware
+
 from server.services.ableton_client import request_op
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.intent_mapper import map_llm_to_canonical
@@ -141,6 +143,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Error handling middleware for consistent error responses
+app.add_middleware(ErrorHandlerMiddleware)
 
 
 # llm/health is now provided by the health router
