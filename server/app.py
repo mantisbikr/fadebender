@@ -13,6 +13,9 @@ from pydantic import BaseModel
 from server.middleware.error_handler import ErrorHandlerMiddleware
 
 from server.services.ableton_client import request_op
+from server.services.backcompat import udp_request
+from server.config.helpers import status_ttl_seconds, cors_origins, debug_enabled
+from server.models.requests import IntentParseBody, VolumeDbBody, SelectTrackBody
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
 from server.services.intent_mapper import map_llm_to_canonical
 from server.volume_utils import db_to_live_float, live_float_to_db, db_to_live_float_send, live_float_to_db_send
@@ -84,32 +87,6 @@ _MASTER_DEDUP: dict[str, tuple[float, float]] = {}
 
 app = FastAPI(title="Fadebender Ableton Server", version="0.1.0")
 
-# Back-compat shim: route legacy udp_request-style calls via request_op
-def udp_request(msg: Dict[str, Any], timeout: float = 1.0):
-    try:
-        op = str((msg or {}).get("op", ""))
-        params = dict(msg or {})
-        params.pop("op", None)
-        return request_op(op, timeout=timeout, **params)
-    except Exception:
-        return None
-
-
-def _status_ttl_seconds(default: float = 1.0) -> float:
-    try:
-        env = os.getenv("FB_STATUS_TTL_SECONDS")
-        if env is not None and str(env).strip() != "":
-            v = float(env)
-            return max(0.0, v)
-    except Exception:
-        pass
-    try:
-        cfg = get_app_config()
-        v = cfg.get("server", {}).get("status_ttl_seconds", default)
-        return max(0.0, float(v))
-    except Exception:
-        return default
-
 # Load .env at server startup so Vertex/LLM config can come from file
 try:  # optional dependency
     from dotenv import load_dotenv  # type: ignore
@@ -117,28 +94,10 @@ try:  # optional dependency
 except Exception:
     pass
 
-def _cors_origins() -> list[str]:
-    # Read from env: FB_CORS_ORIGINS as comma-separated list; if FB_ALLOW_ALL_CORS=1, allow '*'
-    allow_all = str(os.getenv("FB_ALLOW_ALL_CORS", "")).lower() in ("1", "true", "yes", "on")
-    if allow_all:
-        return ["*"]
-    env_val = os.getenv("FB_CORS_ORIGINS")
-    if env_val:
-        try:
-            vals = [v.strip() for v in env_val.split(",") if v.strip()]
-            if vals:
-                return vals
-        except Exception:
-            pass
-    return [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
-
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins(),
+    allow_origins=cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -188,17 +147,6 @@ app.include_router(health_router)
 """Param learn routes moved to server.api.config"""
 
 
-class IntentParseBody(BaseModel):
-    text: str
-    model: Optional[str] = None
-    strict: Optional[bool] = None
-
-
-class VolumeDbBody(BaseModel):
-    track_index: int
-    db: float
-
-
 @app.get("/ping")
 def ping() -> Dict[str, Any]:
     resp = request_op("ping", timeout=0.5)
@@ -211,7 +159,7 @@ def status() -> Dict[str, Any]:
     # short TTL cache to reduce poll churn
     try:
         now = time.time()
-        ttl = _status_ttl_seconds(1.0)
+        ttl = status_ttl_seconds(1.0)
         cache = globals().setdefault("_TTL_CACHE", {})  # type: ignore
         ent = cache.get("status") if isinstance(cache, dict) else None
         if ent and isinstance(ent, dict):
@@ -235,7 +183,7 @@ def project_outline() -> Dict[str, Any]:
     """Return lightweight project outline (tracks, selected track, scenes)."""
     try:
         now = time.time()
-        ttl = _status_ttl_seconds(1.0)
+        ttl = status_ttl_seconds(1.0)
         cache = globals().setdefault("_TTL_CACHE", {})  # type: ignore
         ent = cache.get("project_outline") if isinstance(cache, dict) else None
         if ent and isinstance(ent, dict):
@@ -1544,6 +1492,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     """Parse NL text to canonical intent JSON (no execution)."""
     import sys
     import pathlib
+    import re
     nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
@@ -1552,11 +1501,28 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(500, f"NLP module not available: {e}")
 
-    raw_intent = interpret_daw_command(body.text, model_preference=body.model, strict=body.strict)
+    # Lightweight pre-normalization for compact pan syntax (e.g., "25R"/"30L").
+    # Improves robustness for inputs like: "pan track 2 to 25R".
+    text = str(body.text or "")
+    m = re.search(r"\bpan\s+track\s+(\d+)\s+to\s+(-?\d+)\s*([LR])\b", text, flags=re.IGNORECASE)
+    if m:
+        idx = m.group(1)
+        amt = m.group(2)
+        side = m.group(3).upper()
+        side_word = "left" if side == "L" else "right"
+        text = re.sub(r"\bpan\s+track\s+\d+\s+to\s+-?\d+\s*[LR]\b",
+                      f"set track {idx} pan to {amt} {side_word}", text, flags=re.IGNORECASE)
+
+    raw_intent = interpret_daw_command(text, model_preference=body.model, strict=body.strict)
 
     canonical, errors = map_llm_to_canonical(raw_intent)
     if canonical is None:
-        # Attempt to provide clarifying choices from snapshot
+        # Preserve the original raw_intent for non-control intents (e.g., get_parameter)
+        # so NLP phase tests can validate intent structure.
+        if any(str(e).startswith("non_control_intent") for e in (errors or [])):
+            return {"ok": False, "errors": errors, "raw_intent": raw_intent}
+
+        # Otherwise, attempt to provide clarifying choices, but keep raw_intent unchanged
         try:
             ov = request_op("get_overview", timeout=1.0) or {}
             data = (ov.get("data") or ov) if isinstance(ov, dict) else ov
@@ -1570,27 +1536,11 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
                 "returns": [{"index": int(r.get("index",0)), "name": r.get("name"), "letter": chr(ord('A')+int(r.get("index",0))) } for r in rets],
             }
             clar = {"intent": "clarification_needed", "question": question, "choices": choices, "context": body.context}
-            return {"ok": False, "errors": errors, "raw_intent": clar}
+            return {"ok": False, "errors": errors, "raw_intent": raw_intent, "clarification": clar}
         except Exception:
             return {"ok": False, "errors": errors, "raw_intent": raw_intent}
 
     return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
-class SelectTrackBody(BaseModel):
-    track_index: int
-def _debug_enabled(name: str) -> bool:
-    try:
-        if name == "sse":
-            env = str(os.getenv("FB_DEBUG_SSE", "")).lower() in ("1","true","yes","on")
-            cfg = get_debug_settings().get("sse", False)
-            return bool(env or cfg)
-        if name == "auto_capture":
-            env = str(os.getenv("FB_DEBUG_AUTO_CAPTURE", "")).lower() in ("1","true","yes","on")
-            cfg = get_debug_settings().get("auto_capture", False)
-            return bool(env or cfg)
-    except Exception:
-        return False
-    return False
-
 
 
 @app.on_event("startup")

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from server.core.events import broker
 from server.services.ableton_client import request_op
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
+from server.models.requests import VolumeDbBody
 from server.volume_utils import db_to_live_float
 from server.core.deps import get_store, get_value_registry
 from server.services.mapping_utils import make_device_signature
@@ -227,11 +228,6 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
     except Exception:
         pass
     return resp
-
-
-class VolumeDbBody(BaseModel):
-    track_index: int
-    db: float
 
 
 @router.post("/op/volume_db")
