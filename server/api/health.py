@@ -5,7 +5,9 @@ from typing import Any, Dict
 from urllib.parse import urlparse
 import socket
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
+
+from server.services.ableton_client import request_op
 
 
 router = APIRouter()
@@ -106,3 +108,46 @@ def controller_health() -> Dict[str, Any]:
         }
     except Exception as e:
         return {"status": "unknown", "endpoint": base, "error": str(e)}
+
+
+@router.get("/ready")
+def readiness_check(response: Response) -> Dict[str, Any]:
+    """Readiness check: verifies Ableton Live Remote Script is reachable.
+
+    Returns 200 if Live is connected and responsive.
+    Returns 503 Service Unavailable if Live is not connected.
+
+    This is more stringent than /health - it actually tests connectivity
+    to the Ableton Live Remote Script.
+    """
+    try:
+        # Try a lightweight operation to test Live connectivity
+        # Using get_transport since it's a simple, fast operation
+        result = request_op("get_transport", timeout=0.5)
+
+        if result and isinstance(result, dict):
+            # Successfully got transport data from Live
+            return {
+                "status": "ready",
+                "service": "ableton_live",
+                "connected": True
+            }
+        else:
+            # Request returned but with unexpected data
+            response.status_code = 503
+            return {
+                "status": "not_ready",
+                "service": "ableton_live",
+                "connected": False,
+                "reason": "unexpected_response"
+            }
+    except Exception as e:
+        # Failed to connect to Live
+        response.status_code = 503
+        return {
+            "status": "not_ready",
+            "service": "ableton_live",
+            "connected": False,
+            "reason": "connection_failed",
+            "error": str(e)
+        }
