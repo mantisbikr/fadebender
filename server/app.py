@@ -81,6 +81,8 @@ from server.api.device_mapping import router as device_mapping_router
 from server.api.presets import router as presets_router
 from server.api.intents import router as intents_router
 from server.api.overview import router as overview_router
+from server.api.overview_status import router as overview_status_router
+from server.api.overview_devices import router as overview_devices_router
 # from server.api.snapshot import router as snapshot_router  # Merged into overview_router
 import math
 from server.volume_parser import parse_volume_command
@@ -129,7 +131,14 @@ app.include_router(device_mapping_router)
 app.include_router(presets_router)
 app.include_router(ops_router)
 app.include_router(intents_router)
-app.include_router(overview_router)
+from server.config.feature_flags import is_enabled
+if is_enabled("new_routing"):
+    # New split overview: status/snapshot and devices enrichment
+    app.include_router(overview_status_router)
+    app.include_router(overview_devices_router)
+else:
+    # Legacy monolithic overview router
+    app.include_router(overview_router)
 # app.include_router(snapshot_router)  # Merged into overview_router
 
 
