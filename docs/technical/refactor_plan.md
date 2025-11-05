@@ -116,3 +116,312 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
   - Centralize env/config in one module; remove repeated `MappingStore()` instantiation across fetchers.
   - Keep `audio_assistant/` modular (already in good shape); consider a small CLI to prebuild manual index for prod.
 
+---
+
+## Plan Assessment & Recommended Enhancements
+
+**Overall Score: 8/10** - Excellent foundation with strong architectural thinking and practical scoping.
+
+### Strengths
+
+**1. Excellent Phasing & Scoping**
+- Clear progression from Quick Wins → Complex phases
+- Realistic time estimates
+- Specific line number references and file sizes
+- Low-risk approach ("no behavior changes intended")
+
+**2. Addresses Real Pain Points**
+- 1,594-line `app.py` monolith
+- Multiple `udp_request` duplications
+- Blocking work in handlers
+- Scattered config/CORS logic
+
+**3. Good Architectural Principles**
+- Thin controllers, fat services
+- Single source of truth for models
+- Async-friendly design
+- Clear module boundaries
+
+**4. Measurable Success Criteria**
+- `app.py` < 300 lines
+- Routers < 400 lines
+- Concrete validation checklist
+
+---
+
+### Critical Gaps & Improvements
+
+**1. Testing Strategy (CRITICAL)**
+
+Add to each phase:
+- **Regression test suite BEFORE refactoring starts**
+- Integration tests to verify no behavior changes
+- How to run existing tests during refactor
+- Consider snapshot testing for API responses
+- Document which tests must pass before proceeding to next phase
+
+Recommendation: Add comprehensive testing requirements to Phase 0 (see below).
+
+**2. Error Handling & Logging Standardization**
+
+Missing from plan:
+- Centralized error handling middleware
+- Standardized logging format across modules (structured logging)
+- Error response DTOs with consistent shape
+- Exception hierarchy for domain errors
+
+Recommendation: Add to Phase 1 or create new "Phase 0.5" before router decomposition.
+
+**3. Data Access Layer**
+
+Plan mentions model duplication but not:
+- Firestore access patterns (are they duplicated too?)
+- Repository pattern for data access
+- Caching strategy for Firestore reads
+- Connection pooling and retry logic
+
+Recommendation: Add to Phase 1 or Phase 2.
+
+**4. Phase Order Consideration**
+
+Phase 4 (Security) should potentially come earlier:
+- CORS/token gating issues could block development/testing
+- Security should be established before large-scale refactoring
+
+Recommendation: Move CORS/security basics to Phase 1.5, leave token gating in Phase 4.
+
+**5. Rollback Strategy**
+
+Add:
+- Feature flags for gradual rollout (per phase or module)
+- Branch strategy (trunk-based vs feature branches per phase)
+- Rollback plan if phase fails in production
+- Canary deployment strategy
+
+**6. Dependency Injection Pattern**
+
+With many new services, clarify:
+- Service instantiation pattern
+- Dependency injection framework (FastAPI's `Depends()` pattern)
+- Service lifecycle management (singleton vs per-request)
+- Mock strategies for testing
+
+Example pattern to document:
+```python
+# server/dependencies.py
+def get_mixer_reader() -> MixerReader:
+    return MixerReader()
+
+# In router
+@router.get("/track/{track_id}/mixer")
+async def get_track_mixer(
+    track_id: int,
+    mixer_reader: MixerReader = Depends(get_mixer_reader)
+):
+    return await mixer_reader.get_track_mixer(track_id)
+```
+
+**7. Phase 2 Timeline May Be Optimistic**
+
+Splitting 4 large routers (937, 883, 648, 520 lines) in 3-5 days:
+- Hidden interdependencies often emerge during extraction
+- Testing each split thoroughly takes time
+
+Recommendation: Adjust to 5-7 days or split into Phase 2a/2b.
+
+**8. NLP Service Section Needs Detail**
+
+Expand with:
+- Specific phases for nlp-service refactor (similar granularity to server/)
+- MappingStore() duplication fix details
+- audio_assistant module boundaries and interfaces
+- CLI prebuild strategy and deployment integration
+
+**9. API Versioning Strategy**
+
+Router splits = good time to add:
+- `/v1/` prefix structure
+- Deprecation path for old endpoints
+- Version negotiation strategy
+- Migration guide for clients
+
+**10. Observability & Monitoring**
+
+Add to Phase 5 or establish baseline in Phase 0:
+- Metrics/monitoring for new services (latency, error rates)
+- Performance baseline BEFORE refactor
+- Performance targets POST-refactor
+- Health check endpoints for each major service
+- Distributed tracing support (OpenTelemetry?)
+
+---
+
+### Recommended Additions
+
+#### Phase 0: Pre-Refactor Preparation (1-2 days)
+
+**Purpose:** Establish safety nets and baseline metrics before making changes.
+
+Tasks:
+- **Regression Test Baseline:**
+  - Document all existing tests and their pass/fail status
+  - Add missing integration tests for critical paths (mixer operations, device control, chat commands)
+  - Create API contract tests (request/response shape verification)
+  - Set up automated test running on each commit
+
+- **Performance Baseline:**
+  - Measure and document current response times for key endpoints
+  - Measure startup time
+  - Document memory usage patterns
+  - Set acceptable degradation thresholds (e.g., no more than 10% slower)
+
+- **API Contract Documentation:**
+  - Document all endpoint contracts (request/response schemas)
+  - Create OpenAPI/Swagger docs if not present
+  - Identify any undocumented endpoints
+
+- **Feature Flag Infrastructure:**
+  - Add simple feature flag system for toggling new vs old implementations
+  - Example: `USE_NEW_MIXER_SERVICE` flag
+  - Allows gradual rollout and easy rollback
+
+- **Branch Strategy:**
+  - Decide: feature branches per phase vs trunk-based with flags
+  - Set up CI/CD pipeline to run tests on each phase branch
+
+**Success Criteria:**
+- All tests pass and are documented
+- Performance baselines recorded
+- Feature flag system functional
+- Rollback procedure tested
+
+---
+
+#### Enhanced Validation Checklist
+
+**Per-Phase Validation:**
+- All existing tests pass ✓
+- No API contract changes (or documented/versioned) ✓
+- Response times within 10% of baseline ✓
+- Error rates unchanged or improved ✓
+- Memory usage stable or reduced ✓
+- Logging captures all request/response cycles ✓
+- Code coverage maintained or improved ✓
+- No new linter warnings ✓
+- Documentation updated for changed modules ✓
+
+**End-to-End Validation:**
+- Full integration test suite passes
+- Manual smoke testing of critical workflows
+- Load testing shows acceptable performance
+- Security scan passes (no new vulnerabilities)
+- Deployment to staging environment successful
+
+---
+
+#### Risk Mitigation Strategy
+
+**Development Practices:**
+- Run each phase on feature branch first
+- Pair programming for critical refactors (`chat_service`, `app.py`, large routers)
+- Daily standups during active refactoring phases
+- Code review required for every phase completion
+
+**Deployment Strategy:**
+- Deploy each phase to staging environment first
+- Canary deployment (10% → 50% → 100% traffic)
+- Monitor error rates and performance metrics during rollout
+- Keep previous version running for quick rollback
+
+**Rollback Triggers:**
+- Error rate increases by >20%
+- Response time increases by >25%
+- Any critical functionality broken
+- Ableton Live communication failures
+
+**Communication:**
+- Notify team before starting each phase
+- Daily status updates during active work
+- Immediate notification of any issues
+- Post-mortem after each phase completion
+
+---
+
+### Expanded NLP Service Refactoring
+
+Apply similar phased approach to `nlp-service/`:
+
+**NLP Quick Wins (0.5 day):**
+- Centralize `MappingStore()` instantiation (single source)
+- Extract config loading to `nlp-service/config/settings.py`
+- Standardize error responses across fetchers
+
+**NLP Phase 1: Service Boundaries (1-2 days):**
+- Split intent parsing concerns:
+  - `nlp-service/parsers/mixer_parser.py`
+  - `nlp-service/parsers/device_parser.py`
+  - `nlp-service/parsers/transport_parser.py`
+- Shared models in `nlp-service/models/`
+- Service interfaces for each parser
+
+**NLP Phase 2: Audio Assistant Optimization (1-2 days):**
+- Clarify `audio_assistant/` module boundaries
+- Create CLI tool for prebuild manual index:
+  ```bash
+  python -m nlp_service.audio_assistant.build_index --output data/index.pkl
+  ```
+- Document deployment process for prebuilt indexes
+- Add index validation and health checks
+
+**NLP Phase 3: Firestore Access Layer (1 day):**
+- Repository pattern for Firestore access
+- Caching layer for frequently-accessed mappings
+- Connection pooling and retry logic
+- Mock Firestore client for testing
+
+---
+
+### Updated Timeline Estimate
+
+| Phase | Original | Adjusted | Notes |
+|-------|----------|----------|-------|
+| Phase 0 (NEW) | - | 1-2 days | Critical for safety |
+| Quick Wins | 0.5-1 day | 1 day | Include testing |
+| Phase 1 | 1-2 days | 2-3 days | Add error handling |
+| Phase 2 | 3-5 days | 5-7 days | Complex router splits |
+| Phase 3 | 3-5 days | 4-6 days | Chat service is critical |
+| Phase 4 | 1-2 days | 2-3 days | Security needs thorough testing |
+| Phase 5 | 2-3 days | 3-4 days | Performance tuning takes time |
+| **Total** | **11-18 days** | **18-26 days** | More realistic with testing |
+
+---
+
+### Execution Recommendations
+
+**Start with Phase 0:**
+Invest in testing infrastructure upfront - it pays dividends throughout the refactor.
+
+**One Phase at a Time:**
+Resist temptation to jump ahead. Complete validation before moving to next phase.
+
+**Maintain Working Software:**
+Every commit should leave the codebase in runnable state (even if behind feature flag).
+
+**Document as You Go:**
+Update architecture docs after each phase with new structure.
+
+**Celebrate Milestones:**
+Each phase completion is a win - acknowledge progress.
+
+---
+
+### Conclusion
+
+This refactoring plan is **solid and well-conceived**. The main enhancements needed are:
+1. **Testing infrastructure** (Phase 0)
+2. **Error handling standardization** (add to Phase 1)
+3. **More realistic timelines** (account for testing and unforeseen issues)
+4. **Rollback and risk mitigation strategies**
+
+With these additions, this plan provides a comprehensive, low-risk path to dramatically improving the codebase structure while maintaining stability and functionality.
+
