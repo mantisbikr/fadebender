@@ -1,0 +1,52 @@
+#!/bin/bash
+# postinstall for Fadebender pkg (runs as root)
+set -euo pipefail
+
+USER_NAME=${SUDO_USER:-$USER}
+USER_HOME=$(eval echo ~"$USER_NAME")
+APP_DIR="$USER_HOME/.fadebender"
+LAUNCHD_DIR="$USER_HOME/Library/LaunchAgents"
+REMOTE_DST="$USER_HOME/Music/Ableton/User Library/Remote Scripts/Fadebender"
+SRC_ROOT="/usr/local/share/fadebender"
+
+mkdir -p "$APP_DIR" "$LAUNCHD_DIR" "$REMOTE_DST"
+
+# Copy and patch run_server.sh
+cp -f "$SRC_ROOT/resources/run_server.sh" "$APP_DIR/run_server.sh"
+chmod +x "$APP_DIR/run_server.sh"
+
+# Replace %REPO_DIR% placeholder with a sensible default under user's home
+REPO_DIR_DEFAULT="$USER_HOME/ai-projects/fadebender"
+/usr/bin/sed -i '' "s|%REPO_DIR%|$REPO_DIR_DEFAULT|g" "$APP_DIR/run_server.sh"
+
+# Install Remote Script to User Library
+unzip -o "$SRC_ROOT/resources/remote_script.zip" -d "$REMOTE_DST" >/dev/null
+
+# Write LaunchAgent plist
+PLIST="$LAUNCHD_DIR/com.fadebender.agent.plist"
+cat > "$PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.fadebender.agent</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string>
+    <string>$APP_DIR/run_server.sh</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/fadebender.log</string>
+  <key>StandardErrorPath</key><string>/tmp/fadebender-error.log</string>
+</dict></plist>
+PL
+chmod 644 "$PLIST"
+chown -R "$USER_NAME" "$APP_DIR" "$LAUNCHD_DIR"
+
+# Load agent for the user session
+launchctl bootstrap gui/$(id -u "$USER_NAME") "$PLIST" || true
+launchctl enable gui/$(id -u "$USER_NAME")/com.fadebender.agent || true
+launchctl kickstart -k gui/$(id -u "$USER_NAME")/com.fadebender.agent || true
+
+echo "Fadebender installed for $USER_NAME"
+exit 0
+
