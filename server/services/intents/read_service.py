@@ -78,6 +78,9 @@ def _read_send(domain: str, intent: ReadIntent, send_ref: str) -> Dict[str, Any]
                     "send_index": send_idx,
                     "display_value": display,
                     "normalized_value": value,
+                    "min_display": -60,
+                    "max_display": 6,
+                    "unit": "dB",
                 }
         raise HTTPException(404, f"send_{send_ref}_not_found")
 
@@ -105,6 +108,9 @@ def _read_send(domain: str, intent: ReadIntent, send_ref: str) -> Dict[str, Any]
                     "send_index": send_idx,
                     "display_value": display,
                     "normalized_value": value,
+                    "min_display": -60,
+                    "max_display": 6,
+                    "unit": "dB",
                 }
         raise HTTPException(404, f"send_{send_ref}_not_found")
 
@@ -264,6 +270,18 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                 display = f"{live_float_to_db(float(value)):.2f}"
             except Exception:
                 pass
+            unit = "dB"
+            # Provide display-domain bounds for UI controls
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -60,
+                "max_display": 6,
+                "unit": unit,
+            }
         elif field == "pan":
             try:
                 # Pan: [-1, 1] → [-50, 50] with L/R/C
@@ -274,16 +292,26 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                     display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -50,
+                "max_display": 50,
+                "unit": None,
+            }
         elif field in ("mute", "solo"):
             display = "On" if bool(value) else "Off"
-
-        return {
-            "ok": True,
-            "field": field,
-            "display_value": display,
-            "normalized_value": value,
-            "value": value
-        }
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "unit": None,
+            }
 
     # Return mixer
     elif domain == "return":
@@ -317,6 +345,16 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                 display = f"{live_float_to_db(float(value)):.2f}"
             except Exception:
                 pass
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -60,
+                "max_display": 6,
+                "unit": "dB",
+            }
         elif field == "pan":
             try:
                 pan_val = float(value) * 50.0
@@ -326,16 +364,26 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                     display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -50,
+                "max_display": 50,
+                "unit": None,
+            }
         elif field in ("mute", "solo"):
             display = "On" if bool(value) else "Off"
-
-        return {
-            "ok": True,
-            "field": field,
-            "display_value": display,
-            "normalized_value": value,
-            "value": value
-        }
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "unit": None,
+            }
 
     # Master mixer
     elif domain == "master":
@@ -367,13 +415,35 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                     display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
-
-        return {
-            "ok": True,
-            "field": field,
-            "display_value": display,
-            "normalized_value": value,
-            "value": value
-        }
+        if field in ("volume", "cue"):
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -60,
+                "max_display": 6,
+                "unit": "dB",
+            }
+        elif field == "pan":
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -50,
+                "max_display": 50,
+                "unit": None,
+            }
+        else:
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+            }
 
     raise HTTPException(400, "unsupported_mixer_domain")

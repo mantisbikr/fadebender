@@ -18,6 +18,8 @@ KEY_PATHS = {
     "/chat",
     "/intent/parse",
     "/snapshot/query",
+    "/intent/execute",
+    "/op/mixer",
 }
 
 
@@ -45,4 +47,3 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     print(json.dumps(rec, separators=(",", ":")))
                 except Exception:
                     pass
-
