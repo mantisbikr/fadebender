@@ -25,8 +25,8 @@ from typing import Dict
 _DEFAULT_FLAGS: Dict[str, bool] = {
     # Error handling is already integrated, so it's on by default
     "new_error_handling": True,
-    # Future flags start disabled
-    "new_routing": False,
+    # New routing has been validated; enable by default
+    "new_routing": True,
     "strict_validation": False,
     "rate_limiting": False,
 }

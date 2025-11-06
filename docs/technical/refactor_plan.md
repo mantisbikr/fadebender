@@ -4,6 +4,42 @@ This plan outlines refactor opportunities across the codebase with low‑risk �
 
 ---
 
+## Progress Update (current status)
+
+What’s completed
+- App bootstrap hardening
+  - FastAPI init + CORS + error middleware installed; request ID middleware in place.
+  - Standard error DTO responses across routers.
+- Feature flags and defaults
+  - FB_FEATURE_NEW_ROUTING validated and now default ON (no env needed). Use env to disable if necessary.
+- Router decomposition (initial)
+  - Extracted routers: `server/api/chat.py`, `server/api/nlp.py`, `server/api/system.py`,
+    `server/api/overview_status.py`, `server/api/overview_devices.py`, `server/api/learn.py`.
+  - Overview split: `/snapshot` is now in `overview_status`; `/snapshot/query` delegated for parity.
+- Services extraction
+  - Readers: `mixer_readers.py`, `device_readers.py`.
+  - Chat split: `chat_models.py`, `chat_summarizer.py`, `chat_handlers.py`.
+  - Device mapping I/O: `device_mapping_io.py`.
+  - Learning: `param_learning_quick.py`, `param_learning_start.py`, `learn_jobs.py`.
+- Value/Unit enrichment
+  - `/intent/read` returns `unit`, `min_display`, `max_display` for mixer volume/pan/sends and device params when metadata is available.
+- Cleanup in `server/app.py`
+  - Removed legacy `op_*` stubs moved to `server/api/ops`.
+  - Large inlined learn handler left intentionally for testing (gated by `FB_DEBUG_LEGACY_LEARN`).
+
+What’s pending (pause here until device learning is tested)
+- Remove the inlined `/return/device/learn_start` legacy block in `server/app.py` once learning endpoints are verified; rely on `server/api/learn.py`.
+- Move remaining preset refresh handler and return-device helper utilities out of `server/app.py` into appropriate service/router modules.
+- Add fallback enrichment for device param reads when mapping meta is missing (unit/min/max may be null today).
+- Confirm logging middleware outputs single-line JSON including `request_id` and `duration_ms`.
+
+Validation snapshot
+- Pan tests: all green via `scripts/run_all_pan_tests.sh`.
+- NLP tests (Phase 1): all green for `test_nlp_comprehensive.py --phase1` and `test_nlp_get_comprehensive.py --phase1`.
+- WebUI validation: 8/9 passing with a known relative-volume increase failure; verified OK via WebChat UI.
+
+---
+
 ## Scope Summary
 - Monolith hotspots and mixed concerns:
   - `server/app.py:1` (~1,594 lines) mixes bootstrap, models, legacy shims, and long handlers.

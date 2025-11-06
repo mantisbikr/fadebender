@@ -1266,29 +1266,7 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
 """/return/device/learn_status moved to server.api.learn"""
 
 
-"""/op/mixer moved to server.api.ops"""
-def op_mixer(op: MixerOp) -> Dict[str, Any]:
-    ...
-
-
-"""/op/send moved to server.api.ops"""
-def op_send(op: SendOp) -> Dict[str, Any]:
-    ...
-
-
-"""/op/device/param moved to server.api.ops"""
-def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
-    ...
-
-
-"""/op/volume_db moved to server.api.ops"""
-def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
-    ...
-
-
-"""/op/select_track moved to server.api.ops"""
-def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
-    ...
+"""ops moved to server.api.ops (legacy stubs removed)"""
 
 
 
