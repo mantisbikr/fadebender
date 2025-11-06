@@ -8,9 +8,13 @@ import {
   ThemeProvider,
   CssBaseline,
   Box,
-  Container
+  Container,
+  IconButton,
+  Tooltip,
+  Fade
 } from '@mui/material';
 import { useMediaQuery } from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import ChatMessage from './components/ChatMessage.jsx';
 import ChatInput from './components/ChatInput.jsx';
 import Header from './components/Header.jsx';
@@ -20,6 +24,7 @@ import WelcomeCard from './components/WelcomeCard.jsx';
 import LoadingIndicator from './components/LoadingIndicator.jsx';
 import { useDAWControl } from './hooks/useDAWControl.js';
 import { lightTheme, darkTheme } from './theme.js';
+import TransportBar from './components/TransportBar.jsx';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -115,6 +120,9 @@ function App() {
           clearMessages={clearMessages}
         />
 
+        {/* Transport controls - full width */}
+        <TransportBar />
+
         {/* Content area: sidebar + main chat */}
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           {/* Sidebar - temporary for small screens */}
@@ -153,7 +161,35 @@ function App() {
 
           {/* Main chat area */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 3, position: 'relative' }}>
+              {/* Floating Clear Chat Button */}
+              {messages.length > 0 && (
+                <Fade in={true}>
+                  <Tooltip title="Clear Chat" arrow>
+                    <IconButton
+                      onClick={clearMessages}
+                      size="small"
+                      sx={{
+                        position: 'absolute',
+                        top: 16,
+                        right: 16,
+                        bgcolor: 'background.paper',
+                        boxShadow: 2,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        zIndex: 10,
+                        '&:hover': {
+                          bgcolor: '#dc2626',
+                          color: 'white',
+                          borderColor: '#dc2626'
+                        }
+                      }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Fade>
+              )}
               {messages.length === 0 ? (
                 <WelcomeCard />
               ) : (
@@ -178,6 +214,7 @@ function App() {
                 onHelp={processHelpQuery}
                 disabled={isProcessing}
                 draft={draftInput}
+                clearMessages={clearMessages}
               />
             </Box>
           </Box>

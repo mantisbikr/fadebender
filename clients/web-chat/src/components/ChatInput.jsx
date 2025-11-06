@@ -13,8 +13,9 @@ import {
   Container,
   Chip,
   Fade,
+  Button,
 } from '@mui/material';
-import { Send as SendIcon, Undo as UndoIcon } from '@mui/icons-material';
+import { Send as SendIcon, Undo as UndoIcon, Clear as ClearIcon } from '@mui/icons-material';
 
 // Common DAW typo corrections (auto-correct on space/tab)
 const AUTOCORRECT_MAP = {
@@ -228,14 +229,14 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
 
   return (
     <Paper elevation={2} sx={{ borderTop: 1, borderColor: 'divider' }}>
-      <Container maxWidth="lg" sx={{ py: 3, position: 'relative' }}>
+      <Container maxWidth="lg" sx={{ py: 1.5, position: 'relative' }}>
         {/* Autocorrect Undo Button - iPhone style */}
         <Fade in={showUndo && lastCorrection}>
           <Box
             onClick={handleUndo}
             sx={{
               position: 'absolute',
-              top: 8,
+              top: 6,
               left: lastCorrection ? `${Math.min(lastCorrection.position * 8 + 24, 600)}px` : '24px',
               bgcolor: 'rgba(0, 0, 0, 0.7)',
               color: 'white',
@@ -261,7 +262,7 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
           </Box>
         </Fade>
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
           <TextField
             ref={textFieldRef}
             fullWidth
@@ -274,6 +275,7 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
             autoComplete="off"
             inputProps={{
               spellCheck: false, // Disable spell check - we handle autocorrect on space/tab
+              style: { fontSize: '0.9rem' }
             }}
             InputProps={{}}
             sx={{
@@ -285,29 +287,21 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
           <IconButton
             type="submit"
             disabled={!input.trim() || disabled}
-            color="primary"
-            size="large"
+            size="small"
             sx={{
-              bgcolor: 'primary.main',
-              color: 'white',
+              color: '#1976d2 !important', // Force blue color
               '&:hover': {
-                bgcolor: 'primary.dark',
+                color: '#1565c0 !important', // Darker blue on hover
+                bgcolor: 'rgba(25, 118, 210, 0.04)',
               },
               '&:disabled': {
-                bgcolor: 'grey.300',
-                color: 'grey.500',
+                color: 'grey.400 !important',
               },
-              width: 48,
-              height: 48,
             }}
           >
-            <SendIcon />
+            <SendIcon sx={{ color: 'inherit' }} />
           </IconButton>
         </Box>
-
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, px: 1, display: 'block' }}>
-          💬 Send commands to control your DAW or ask questions about audio production • Press Enter to send
-        </Typography>
       </Container>
     </Paper>
   );

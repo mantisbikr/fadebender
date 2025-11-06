@@ -49,26 +49,26 @@ export default function TransportBar() {
 
   return (
     <Box sx={{
-      display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1,
+      display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.5,
       borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper',
       position: 'sticky', top: 0, zIndex: 2
     }}>
       <Tooltip title={state.is_playing ? 'Stop' : 'Play'}>
-        <IconButton size="small" onClick={() => setAction(state.is_playing ? 'stop' : 'play')}>
-          {state.is_playing ? <StopIcon /> : <PlayIcon />}
+        <IconButton size="small" onClick={() => setAction(state.is_playing ? 'stop' : 'play')} sx={{ p: 0.5 }}>
+          {state.is_playing ? <StopIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
         </IconButton>
       </Tooltip>
       <Tooltip title={state.is_recording ? 'Stop Recording' : 'Record'}>
-        <IconButton size="small" color={state.is_recording ? 'error' : 'default'} onClick={() => setAction('record')}>
-          <RecordIcon />
+        <IconButton size="small" color={state.is_recording ? 'error' : 'default'} onClick={() => setAction('record')} sx={{ p: 0.5 }}>
+          <RecordIcon fontSize="small" />
         </IconButton>
       </Tooltip>
       <Tooltip title={state.metronome ? 'Metronome Off' : 'Metronome On'}>
-        <IconButton size="small" color={state.metronome ? 'primary' : 'default'} onClick={() => setAction('metronome')}>
-          <MetronomeIcon />
+        <IconButton size="small" color={state.metronome ? 'primary' : 'default'} onClick={() => setAction('metronome')} sx={{ p: 0.5 }}>
+          <MetronomeIcon fontSize="small" />
         </IconButton>
       </Tooltip>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.5 }}>
         <TextField
           size="small"
           type="number"
@@ -80,8 +80,12 @@ export default function TransportBar() {
           placeholder="Tempo"
           InputProps={{
             step: 0.5,
-            inputProps: { min: 20, max: 999 },
-            endAdornment: <InputAdornment position="end">BPM</InputAdornment>
+            inputProps: { min: 20, max: 999, style: { fontSize: '0.875rem' } },
+            endAdornment: <InputAdornment position="end" sx={{ fontSize: '0.75rem' }}>BPM</InputAdornment>
+          }}
+          sx={{
+            '& .MuiInputBase-root': { fontSize: '0.875rem', height: '28px' },
+            '& .MuiInputBase-input': { py: 0.5 }
           }}
         />
       </Box>

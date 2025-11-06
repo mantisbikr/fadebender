@@ -14,8 +14,8 @@ export const lightTheme = createTheme({
       dark: '#047857', // green-700
     },
     background: {
-      default: '#f8fafc', // slate-50
-      paper: '#ffffff',
+      default: '#f1f5f9', // slate-100
+      paper: '#f8fafc', // slate-50 (soft off-white)
     },
     text: {
       primary: '#1f2937', // gray-800

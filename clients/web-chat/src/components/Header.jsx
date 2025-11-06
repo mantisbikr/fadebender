@@ -48,26 +48,26 @@ function Header({
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   return (
-    <AppBar position="static" color="inherit" elevation={1}>
-      <Toolbar sx={{ justifyContent: 'space-between', py: 2, minHeight: '80px' }}>
+    <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Toolbar sx={{ justifyContent: 'space-between', py: 0.75, minHeight: '48px' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flex: 1, gap: 1 }}>
           {/* Mobile menu button for sidebar */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-            <IconButton onClick={onToggleSidebar} color="inherit" title="Menu">
-              <MenuIcon />
+            <IconButton onClick={onToggleSidebar} color="inherit" title="Menu" size="small">
+              <MenuIcon fontSize="small" />
             </IconButton>
           </Box>
           <Box>
-            <Typography variant="h5" fontWeight="bold" color="text.primary" sx={{ lineHeight: 1.1 }}>
+            <Typography variant="h6" fontWeight="bold" color="text.primary" sx={{ lineHeight: 1.1, fontSize: '1.1rem' }}>
               FADEBENDER
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', display: 'block', textAlign: 'right' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', display: 'block', textAlign: 'right', fontSize: '0.65rem' }}>
               Bend your mix with AI
             </Typography>
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           {/* Moved Execute/Model/System to Settings modal */}
 
           <IconButton
@@ -75,8 +75,9 @@ function Header({
             color="inherit"
             title="Undo last change"
             disabled={!historyState?.undo_available}
+            size="small"
           >
-            <UndoIcon />
+            <UndoIcon fontSize="small" />
           </IconButton>
 
           <IconButton
@@ -84,34 +85,28 @@ function Header({
             color="inherit"
             title="Redo last change"
             disabled={!historyState?.redo_available}
+            size="small"
           >
-            <RedoIcon />
+            <RedoIcon fontSize="small" />
           </IconButton>
 
           <IconButton
             onClick={() => setDarkMode(!darkMode)}
             color="inherit"
             title="Toggle theme"
+            size="small"
           >
-            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+            {darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
           </IconButton>
 
           <IconButton
             onClick={() => setSettingsOpen(true)}
             color="inherit"
             title="Settings"
-          >
-            <SettingsIcon />
-          </IconButton>
-
-          <Button
-            onClick={clearMessages}
-            startIcon={<ClearIcon />}
-            variant="outlined"
             size="small"
           >
-            Clear Chat
-          </Button>
+            <SettingsIcon fontSize="small" />
+          </IconButton>
         </Box>
       </Toolbar>
       <SettingsModal

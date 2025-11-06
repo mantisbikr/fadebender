@@ -17,10 +17,31 @@
   },
   "nlp": {
     "mode": "regex_first",
-    "percent_always_additive": ["diffusion", "dly < mod", "dry/wet", "feedback", "filter < mod", "l offset", "pan", "r offset", "scale"],
+    "percent_always_additive": [
+      "diffusion",
+      "dly < mod",
+      "dry/wet",
+      "feedback",
+      "filter < mod",
+      "l offset",
+      "pan",
+      "r offset",
+      "scale"
+    ],
     "relative_change_verbs": {
-      "increase": ["increase", "add", "up", "louder"],
-      "decrease": ["decrease", "subtract", "reduce", "down", "quieter"]
+      "decrease": [
+        "decrease",
+        "subtract",
+        "reduce",
+        "down",
+        "quieter"
+      ],
+      "increase": [
+        "increase",
+        "add",
+        "up",
+        "louder"
+      ]
     },
     "typo_corrections": {
       "alin": "align",
@@ -244,7 +265,7 @@
     "refresh_ms": 30000,
     "returns_refresh_ms": 3000,
     "sends_open_refresh_ms": 800,
-    "sidebar_width_px": 352,
+    "sidebar_width_px": 314,
     "sse_throttle_ms": 150,
     "track_refresh_ms": 3000
   }

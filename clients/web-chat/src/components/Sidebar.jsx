@@ -39,8 +39,6 @@ import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 import TrackRow from './TrackRow.jsx';
-import TransportBar from './TransportBar.jsx';
-// apiService already imported above; remove duplicate import
 
 function ReturnSendSlider({ send, sendIndex, returnIndex, returnSends, setReturnSends }) {
   const [localVol, setLocalVol] = useState(null);
@@ -975,7 +973,6 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
 
   const content = (
     <>
-      <TransportBar />
       <Box sx={{ p: 1 }}>
         <Tabs
           value={tab}
