@@ -78,6 +78,9 @@ def _read_send(domain: str, intent: ReadIntent, send_ref: str) -> Dict[str, Any]
                     "send_index": send_idx,
                     "display_value": display,
                     "normalized_value": value,
+                    "min_display": -60,
+                    "max_display": 6,
+                    "unit": "dB",
                 }
         raise HTTPException(404, f"send_{send_ref}_not_found")
 
@@ -105,6 +108,9 @@ def _read_send(domain: str, intent: ReadIntent, send_ref: str) -> Dict[str, Any]
                     "send_index": send_idx,
                     "display_value": display,
                     "normalized_value": value,
+                    "min_display": -60,
+                    "max_display": 6,
+                    "unit": "dB",
                 }
         raise HTTPException(404, f"send_{send_ref}_not_found")
 
@@ -136,7 +142,7 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         dlist = ((dv.get("data") or dv) if isinstance(dv, dict) else dv).get("devices") or []
         dname = next((str(d.get("name", "")) for d in dlist if int(d.get("index", -1)) == di), f"Device {di}")
 
-        # Build signature and fetch mapping to get label_map for quantized params
+        # Build signature and fetch mapping to get unit/min/max/label_map for params
         sig = make_device_signature(dname, params)
         store = get_store()
         mapping = store.get_device_map(sig) if store.enabled else None
@@ -161,12 +167,27 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
                         except Exception:
                             pass  # Fall back to original display_value
 
+                # Enrich with min/max/unit from mapping if available
+                unit = None
+                min_display = None
+                max_display = None
+                if mapping:
+                    mparams = mapping.get("params_meta") or mapping.get("params") or []
+                    mparam = next((mp for mp in mparams if str(mp.get("name", "")).lower() == param_name_lower), None)
+                    if mparam:
+                        unit = mparam.get("unit")
+                        min_display = mparam.get("min_display")
+                        max_display = mparam.get("max_display")
+
                 return {
                     "ok": True,
                     "field": param_name,
                     "param_index": p.get("index"),
                     "display_value": display_value,
                     "normalized_value": normalized_value,
+                    "unit": unit,
+                    "min_display": min_display,
+                    "max_display": max_display,
                 }
 
         raise HTTPException(404, f"parameter_{param_name}_not_found")
@@ -191,7 +212,7 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         dlist = ((dv.get("data") or dv) if isinstance(dv, dict) else dv).get("devices") or []
         dname = next((str(d.get("name", "")) for d in dlist if int(d.get("index", -1)) == di), f"Device {di}")
 
-        # Build signature and fetch mapping to get label_map for quantized params
+        # Build signature and fetch mapping to get unit/min/max/label_map
         sig = make_device_signature(dname, params)
         store = get_store()
         mapping = store.get_device_map(sig) if store.enabled else None
@@ -216,12 +237,26 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
                         except Exception:
                             pass  # Fall back to original display_value
 
+                unit = None
+                min_display = None
+                max_display = None
+                if mapping:
+                    mparams = mapping.get("params_meta") or mapping.get("params") or []
+                    mparam = next((mp for mp in mparams if str(mp.get("name", "")).lower() == param_name_lower), None)
+                    if mparam:
+                        unit = mparam.get("unit")
+                        min_display = mparam.get("min_display")
+                        max_display = mparam.get("max_display")
+
                 return {
                     "ok": True,
                     "field": param_name,
                     "param_index": p.get("index"),
                     "display_value": display_value,
                     "normalized_value": normalized_value,
+                    "unit": unit,
+                    "min_display": min_display,
+                    "max_display": max_display,
                 }
 
         raise HTTPException(404, f"parameter_{param_name}_not_found")
@@ -264,6 +299,18 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                 display = f"{live_float_to_db(float(value)):.2f}"
             except Exception:
                 pass
+            unit = "dB"
+            # Provide display-domain bounds for UI controls
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -60,
+                "max_display": 6,
+                "unit": unit,
+            }
         elif field == "pan":
             try:
                 # Pan: [-1, 1] → [-50, 50] with L/R/C
@@ -274,16 +321,26 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                     display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -50,
+                "max_display": 50,
+                "unit": None,
+            }
         elif field in ("mute", "solo"):
             display = "On" if bool(value) else "Off"
-
-        return {
-            "ok": True,
-            "field": field,
-            "display_value": display,
-            "normalized_value": value,
-            "value": value
-        }
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "unit": None,
+            }
 
     # Return mixer
     elif domain == "return":
@@ -317,6 +374,16 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                 display = f"{live_float_to_db(float(value)):.2f}"
             except Exception:
                 pass
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -60,
+                "max_display": 6,
+                "unit": "dB",
+            }
         elif field == "pan":
             try:
                 pan_val = float(value) * 50.0
@@ -326,16 +393,26 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                     display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -50,
+                "max_display": 50,
+                "unit": None,
+            }
         elif field in ("mute", "solo"):
             display = "On" if bool(value) else "Off"
-
-        return {
-            "ok": True,
-            "field": field,
-            "display_value": display,
-            "normalized_value": value,
-            "value": value
-        }
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "unit": None,
+            }
 
     # Master mixer
     elif domain == "master":
@@ -367,13 +444,35 @@ def _read_mixer_param(domain: str, intent: ReadIntent, field: str) -> Dict[str, 
                     display = f"{abs(pan_val):.0f}{'R' if pan_val > 0 else 'L'}"
             except Exception:
                 pass
-
-        return {
-            "ok": True,
-            "field": field,
-            "display_value": display,
-            "normalized_value": value,
-            "value": value
-        }
+        if field in ("volume", "cue"):
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -60,
+                "max_display": 6,
+                "unit": "dB",
+            }
+        elif field == "pan":
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+                "min_display": -50,
+                "max_display": 50,
+                "unit": None,
+            }
+        else:
+            return {
+                "ok": True,
+                "field": field,
+                "display_value": display,
+                "normalized_value": value,
+                "value": value,
+            }
 
     raise HTTPException(400, "unsupported_mixer_domain")

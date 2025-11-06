@@ -6,11 +6,13 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from server.core.events import broker
+from server.services import events as Events
 from server.services.ableton_client import request_op
 from server.models.ops import MixerOp, SendOp, DeviceParamOp
+from server.models.requests import VolumeDbBody
 from server.volume_utils import db_to_live_float
-from server.core.deps import get_store, get_value_registry
+from server.core.deps import get_store
+from server.services import value_registry as VR
 from server.services.mapping_utils import make_device_signature
 import math
 import re as _re
@@ -41,8 +43,7 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
 
     # Update ValueRegistry for snapshot
     try:
-        reg = get_value_registry()
-        reg.update_device_param(
+        VR.update_device_param(
             domain="return",
             index=op.return_index,
             device_index=op.device_index,
@@ -50,7 +51,7 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
             normalized_value=op.value,
             display_value=resp.get("display_value"),
             unit=resp.get("unit"),
-            source="web_ui"
+            source="web_ui",
         )
         # Reset device cache timestamp to mark as fresh
         from server.api import overview
@@ -59,12 +60,10 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
         pass
 
     try:
-        asyncio.create_task(broker.publish({
-            "event": "return_device_param_changed",
-            "return": int(op.return_index),
-            "device": int(op.device_index),
-            "param": int(op.param_index),
-        }))
+        Events.publish(
+            "return_device_param_changed",
+            **{"return": int(op.return_index), "device": int(op.device_index), "param": int(op.param_index)}
+        )
     except Exception:
         pass
     return resp
@@ -88,11 +87,7 @@ def op_return_send(body: ReturnSendBody) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({
-            "event": "return_send_changed",
-            "return": int(body.return_index),
-            "send_index": int(body.send_index),
-        }))
+        Events.publish("return_send_changed", **{"return": int(body.return_index), "send_index": int(body.send_index)})
     except Exception:
         pass
     return resp
@@ -120,25 +115,20 @@ def op_return_mixer(body: ReturnMixerBody) -> Dict[str, Any]:
 
     # Update ValueRegistry for snapshot
     try:
-        reg = get_value_registry()
-        reg.update_mixer(
+        VR.update_mixer(
             entity="return",
             index=body.return_index,
             field=body.field,
             normalized_value=body.value,
             display_value=resp.get("display_value"),
             unit=resp.get("unit"),
-            source="web_ui"
+            source="web_ui",
         )
     except Exception:
         pass
 
     try:
-        asyncio.create_task(broker.publish({
-            "event": "return_mixer_changed",
-            "return": int(body.return_index),
-            "field": body.field,
-        }))
+        Events.publish("return_mixer_changed", **{"return": int(body.return_index), "field": body.field})
     except Exception:
         pass
     return resp
@@ -152,25 +142,20 @@ def op_mixer(op: MixerOp) -> Dict[str, Any]:
 
     # Update ValueRegistry for snapshot
     try:
-        reg = get_value_registry()
-        reg.update_mixer(
+        VR.update_mixer(
             entity="track",
             index=op.track_index,
             field=op.field,
             normalized_value=op.value,
             display_value=resp.get("display_value"),
             unit=resp.get("unit"),
-            source="web_ui"
+            source="web_ui",
         )
     except Exception:
         pass
 
     try:
-        asyncio.create_task(broker.publish({
-            "event": "mixer_changed",
-            "track": op.track_index,
-            "field": op.field,
-        }))
+        Events.publish("mixer_changed", track=op.track_index, field=op.field)
     except Exception:
         pass
     return resp
@@ -182,11 +167,7 @@ def op_send(op: SendOp) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({
-            "event": "send_changed",
-            "track": op.track_index,
-            "send_index": op.send_index,
-        }))
+        Events.publish("send_changed", track=op.track_index, send_index=op.send_index)
     except Exception:
         pass
     return resp
@@ -200,8 +181,7 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
 
     # Update ValueRegistry for snapshot
     try:
-        reg = get_value_registry()
-        reg.update_device_param(
+        VR.update_device_param(
             domain="track",
             index=op.track_index,
             device_index=op.device_index,
@@ -209,7 +189,7 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
             normalized_value=op.value,
             display_value=resp.get("display_value"),
             unit=resp.get("unit"),
-            source="web_ui"
+            source="web_ui",
         )
         # Reset device cache timestamp to mark as fresh
         from server.api import overview
@@ -218,20 +198,10 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
         pass
 
     try:
-        asyncio.create_task(broker.publish({
-            "event": "device_param_changed",
-            "track": op.track_index,
-            "device": op.device_index,
-            "param": op.param_index,
-        }))
+        Events.publish("device_param_changed", track=op.track_index, device=op.device_index, param=op.param_index)
     except Exception:
         pass
     return resp
-
-
-class VolumeDbBody(BaseModel):
-    track_index: int
-    db: float
 
 
 @router.post("/op/volume_db")
@@ -247,11 +217,7 @@ def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        asyncio.create_task(broker.publish({
-            "event": "mixer_changed",
-            "track": int(body.track_index),
-            "field": "volume",
-        }))
+        Events.publish("mixer_changed", track=int(body.track_index), field="volume")
     except Exception:
         pass
     return resp

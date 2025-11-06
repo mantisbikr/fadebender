@@ -1,77 +1,154 @@
+"""ValueRegistry service and façade wrappers.
+
+Defines the ValueRegistry class (in-memory last-known state) and provides
+simple wrapper functions to update via the global singleton without
+introducing import cycles.
+"""
+
 from __future__ import annotations
 
-import time
 from typing import Any, Dict, Optional
 
 
 class ValueRegistry:
-    """Lightweight, in-memory registry of last-known mixer and device param values.
+  """In-memory registry for last-known mixer/device/transport values.
 
-    - Mixer values stored per entity (track/return/master)
-    - Device params stored per domain (track/return) → index → device_index → param_name
-    - Stores both normalized values and display strings when known, plus unit and source
-    """
+  This mirrors the previous behavior expected throughout the codebase:
+  - update_mixer/update_device_param write-through from ops/services
+  - get_mixer/get_devices provide data to snapshot/overview APIs
+  - update_transport/get_transport track tempo/metronome state
+  """
 
-    def __init__(self) -> None:
-        self._mixer: Dict[str, Dict[int, Dict[str, Any]]] = {"track": {}, "return": {}, "master": {}}
-        self._device: Dict[str, Dict[int, Dict[int, Dict[str, Dict[str, Any]]]]] = {"track": {}, "return": {}}
-        self._transport: Dict[str, Any] = {}  # Transport state (tempo, metronome, etc.)
+  def __init__(self) -> None:
+    self._mixer: Dict[str, Dict[int, Dict[str, Dict[str, Any]]]] = {
+      "track": {},
+      "return": {},
+      "master": {},
+    }
+    # devices: domain -> index -> device_index -> param_name -> {normalized, display, unit}
+    self._devices: Dict[str, Dict[int, Dict[int, Dict[str, Dict[str, Any]]]]] = {
+      "track": {},
+      "return": {},
+    }
+    self._transport: Dict[str, Any] = {}
 
-    # ---------- Mixer ----------
-    def update_mixer(self, entity: str, index: int, field: str, normalized_value: Optional[float], display_value: Optional[str], unit: Optional[str], source: str = "op") -> None:
-        entity = entity.lower()
-        if entity not in ("track", "return", "master"):
-            return
-        idx = int(index)
-        ent = self._mixer.setdefault(entity, {})
-        row = ent.setdefault(idx, {})
-        ts = time.time()
-        row[str(field)] = {
-            "normalized": normalized_value,
-            "display": display_value,
-            "unit": unit,
-            "ts": ts,
-            "timestamp": ts,
-            "source": source,
-        }
+  # --- Mixer ---
+  def update_mixer(
+    self,
+    entity: str,
+    index: int,
+    field: str,
+    *,
+    normalized_value: Optional[float] = None,
+    display_value: Optional[str] = None,
+    unit: Optional[str] = None,
+    source: str = "op",
+  ) -> None:
+    try:
+      entity_map = self._mixer.setdefault(str(entity), {})
+      fields = entity_map.setdefault(int(index), {})
+      fields[str(field)] = {
+        "normalized": normalized_value,
+        "display": display_value,
+        "unit": unit,
+        "source": source,
+      }
+    except Exception:
+      pass
 
-    # ---------- Device params ----------
-    def update_device_param(self, domain: str, index: int, device_index: int, param_name: str, normalized_value: Optional[float], display_value: Optional[str], unit: Optional[str], source: str = "op") -> None:
-        d = domain.lower()
-        if d not in ("track", "return"):
-            return
-        idx = int(index)
-        di = int(device_index)
-        dom = self._device.setdefault(d, {})
-        ent = dom.setdefault(idx, {})
-        dev = ent.setdefault(di, {})
-        ts = time.time()
-        dev[str(param_name)] = {
-            "normalized": normalized_value,
-            "display": display_value,
-            "unit": unit,
-            "ts": ts,
-            "timestamp": ts,
-            "source": source,
-        }
+  def get_mixer(self) -> Dict[str, Any]:
+    return self._mixer
 
-    # ---------- Transport ----------
-    def update_transport(self, field: str, value: Any, source: str = "op") -> None:
-        """Update transport state (tempo, metronome, etc.)."""
-        ts = time.time()
-        self._transport[str(field)] = {
-            "value": value,
-            "ts": ts,
-            "timestamp": ts,
-            "source": source,
-        }
+  # --- Devices ---
+  def update_device_param(
+    self,
+    *,
+    domain: str,
+    index: int,
+    device_index: int,
+    param_name: str,
+    normalized_value: Optional[float] = None,
+    display_value: Optional[str] = None,
+    unit: Optional[str] = None,
+    source: str = "op",
+  ) -> None:
+    try:
+      dom = self._devices.setdefault(str(domain), {})
+      devs = dom.setdefault(int(index), {})
+      params = devs.setdefault(int(device_index), {})
+      params[str(param_name)] = {
+        "normalized": normalized_value,
+        "display": display_value,
+        "unit": unit,
+        "source": source,
+      }
+    except Exception:
+      pass
 
-    # ---------- Snapshots ----------
-    def get_mixer(self) -> Dict[str, Any]:
-        return self._mixer
+  def get_devices(self) -> Dict[str, Any]:
+    return self._devices
 
-    def get_devices(self) -> Dict[str, Any]:
-        return self._device
+  # --- Transport ---
+  def update_transport(self, name: str, value: Any, *, source: str = "op") -> None:
+    try:
+      self._transport[str(name)] = value
+    except Exception:
+      pass
 
-    def get_transport(self) -> Dict[str, Any]:
-        return self._transport
+  def get_transport(self) -> Dict[str, Any]:
+    return dict(self._transport)
+
+
+# --- Façade wrappers (import inside to avoid cycles) ---
+def update_mixer(
+  entity: str,
+  index: int,
+  field: str,
+  *,
+  normalized_value: Optional[float] = None,
+  display_value: Optional[str] = None,
+  unit: Optional[str] = None,
+  source: str = "op",
+) -> None:
+  try:
+    from server.core.deps import get_value_registry  # local import to avoid cycle
+    reg = get_value_registry()
+    reg.update_mixer(
+      entity=entity,
+      index=index,
+      field=field,
+      normalized_value=normalized_value,
+      display_value=display_value,
+      unit=unit,
+      source=source,
+    )
+  except Exception:
+    pass
+
+
+def update_device_param(
+  domain: str,
+  index: int,
+  device_index: int,
+  param_name: str,
+  *,
+  normalized_value: Optional[float] = None,
+  display_value: Optional[str] = None,
+  unit: Optional[str] = None,
+  source: str = "op",
+) -> None:
+  try:
+    from server.core.deps import get_value_registry  # local import to avoid cycle
+    reg = get_value_registry()
+    reg.update_device_param(
+      domain=domain,
+      index=index,
+      device_index=device_index,
+      param_name=param_name,
+      normalized_value=normalized_value,
+      display_value=display_value,
+      unit=unit,
+      source=source,
+    )
+  except Exception:
+    pass

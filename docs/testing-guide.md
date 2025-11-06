@@ -167,6 +167,42 @@ python3 scripts/test_webui_validation.py
 
 ---
 
+## Learning Endpoints (Gated)
+
+Fast device learning endpoints are gated to avoid accidental runs during development. Enable them only when you're ready to test against a running Live set.
+
+Enable gate (temporary):
+```bash
+export FB_DEBUG_LEGACY_LEARN=1
+```
+
+Disable gate (default):
+```bash
+unset FB_DEBUG_LEGACY_LEARN
+# or
+export FB_DEBUG_LEGACY_LEARN=0
+```
+
+Test quick learning (when gate is enabled):
+```bash
+curl -s -X POST \
+  http://127.0.0.1:8722/return/device/learn_quick \
+  -H 'Content-Type: application/json' \
+  -d '{"return_index":0,"device_index":0}' | jq .
+
+# Check learn status (for long-running jobs)
+curl -s "http://127.0.0.1:8722/return/device/learn_status?id=<JOB_ID>" | jq .
+
+# Verify mapping summary reflects structure shortly after
+curl -s "http://127.0.0.1:8722/return/device/map_summary?index=0&device=0" | jq .
+```
+
+Notes:
+- With the gate disabled, learning endpoints return `404 legacy_disabled` and perform no actions.
+- Keep the gate off during routine test runs to avoid unintended long operations.
+
+---
+
 ## Recommended Testing Workflow
 
 ### Before Every Commit:

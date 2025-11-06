@@ -12,6 +12,7 @@ from server.services.ableton_client import request_op, data_or_raw
 from server.services.mapping_utils import make_device_signature, detect_device_type
 from server.services.device_mapping_service import ensure_device_mapping
 from server.services.preset_service import save_base_preset
+from server.services import device_mapping_io as dmio
 import math
 import re as _re
 from server.services.mapping_utils import detect_device_type
@@ -20,44 +21,22 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# Simple in-process dedupe to avoid repeated background saves on frequent polls
-_CAPTURE_DEDUPE: Dict[str, float] = {}
-
-def _should_capture(sig: str, ttl_sec: float = 60.0) -> bool:
-    import time
-    now = time.time()
-    last = _CAPTURE_DEDUPE.get(sig)
-    if last is not None and (now - last) < ttl_sec:
-        return False
-    _CAPTURE_DEDUPE[sig] = now
-    return True
+_should_capture = dmio.should_capture
 
 
 @router.get("/return/device/map")
 async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     # Fetch device name and params to compute signature
-    devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    if dname is None:
+    try:
+        dname, live_params, signature, device_type = dmio.resolve_return_device_signature(int(index), int(device))
+    except ValueError:
         return {"ok": False, "error": "device_not_found"}
-    params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
-    live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = make_device_signature(dname, live_params)
     store = get_store()
     backend = store.backend
     exists = False
-    device_type = detect_device_type(live_params, dname)
 
     # Ensure base mapping exists immediately (non-blocking safety)
-    try:
-        ensure_device_mapping(signature, device_type, live_params)
-    except Exception:
-        pass
+    dmio.ensure_structure_and_capture(signature, device_type, int(index), int(device), dname, live_params)
 
     # New base mapping existence check
     mapping_exists = False
@@ -68,20 +47,7 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
         mapping_exists = False
 
     # Save a minimal preset (values + display) in background (idempotent)
-    try:
-        if _should_capture(signature):
-            asyncio.create_task(
-                save_base_preset(
-                    index,
-                    device,
-                    dname,
-                    device_type,
-                    signature,
-                    live_params,
-                )
-            )
-    except Exception:
-        pass
+    # capture handled in dmio.ensure_structure_and_capture
 
     # Legacy learned mapping check (samples)
     try:
@@ -113,18 +79,10 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
 
 @router.get("/return/device/map_summary")
 async def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
-    devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    if dname is None:
+    try:
+        dname, params, signature, _dtype = dmio.resolve_return_device_signature(int(index), int(device))
+    except ValueError:
         return {"ok": False, "error": "device_not_found"}
-    params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = make_device_signature(dname, params)
     store = get_store()
     backend = store.backend
     exists = False
@@ -138,10 +96,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
         pass
 
     # Prefer legacy learned mapping when present (samples data)
-    try:
-        legacy = store.get_device_map(signature) if store.enabled else store.get_device_map_local(signature)
-    except Exception:
-        legacy = None
+    legacy = dmio.get_legacy_map(signature)
 
     data = None
     if legacy:
@@ -169,7 +124,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
                 continue
         # Also check for base mapping
         try:
-            mapping_exists = bool(store.get_device_mapping(signature))
+            mapping_exists = bool(dmio.get_mapping(signature))
         except Exception:
             mapping_exists = False
         data = {
@@ -206,20 +161,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
             mapping_exists = False
 
     # Save minimal preset (values + display) in background (idempotent)
-    try:
-        if _should_capture(signature):
-            asyncio.create_task(
-                save_base_preset(
-                    index,
-                    device,
-                    dname,
-                    detect_device_type(params, dname),
-                    signature,
-                    params,
-                )
-            )
-    except Exception:
-        pass
+    dmio.ensure_structure_and_capture(signature, detect_device_type(params, dname), int(index), int(device), dname, params)
 
     # If neither mapping exists, derive minimal summary from live params
     if data is None:
@@ -639,8 +581,6 @@ def sanity_probe(body: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("/device_mapping/fits")
 def get_device_mapping_fits(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
     sig = (signature or "").strip()
     if not sig:
         if index is None or device is None:
@@ -809,8 +749,6 @@ def _fit_models(samples: list[dict]) -> dict | None:
 
 @router.post("/mappings/fit")
 def fit_mapping(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
     store = get_store()
     sig = (signature or "").strip()
     if not sig:
@@ -855,6 +793,87 @@ def delete_return_device_map(body: MapDeleteBody) -> Dict[str, Any]:
     signature = make_device_signature(dname, params)
     ok = store.delete_device_map(signature) if store.enabled else False
     return {"ok": ok, "signature": signature, "backend": store.backend}
+
+
+# Additional mapping maintenance endpoints
+
+@router.post("/mappings/push_local")
+def push_local_mappings(signature: Optional[str] = None) -> Dict[str, Any]:
+    store = get_store()
+    if signature:
+        ok = store.push_local_to_firestore(signature)
+        return {"ok": ok, "signature": signature, "backend": store.backend}
+    count = store.push_all_local()
+    return {"ok": True, "pushed": count, "backend": store.backend}
+
+
+@router.post("/mappings/migrate_schema")
+def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
+    from server.services.param_analysis import (
+        classify_control_type,
+        group_role_for_device,
+        fit_models,
+        parse_unit_from_display,
+        build_groups_from_params,
+    )
+    from server.services.mapping_utils import make_device_signature, detect_device_type
+
+    store = get_store()
+    sig = (signature or "").strip()
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "index_device_or_signature_required")
+        devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = make_device_signature(dname or f"Device {device}", live_params)
+
+    data = store.get_device_map_local(sig)
+    if not data and store.enabled:
+        data = store.get_device_map(sig)
+    if not data:
+        return {"ok": False, "error": "map_not_found", "signature": sig}
+
+    params = data.get("params") or []
+    updated_params: list[dict] = []
+    for p in params:
+        name = str(p.get("name", ""))
+        vmin = float(p.get("min", 0.0))
+        vmax = float(p.get("max", 1.0))
+        samples = p.get("samples") or []
+        unit = p.get("unit") or (parse_unit_from_display(str(samples[0].get("display", ""))) if samples else None)
+        ctype, labels = classify_control_type(samples, vmin, vmax)
+        gname, role, _m = group_role_for_device(data.get("device_name"), name)
+        label_map = p.get("label_map")
+        if ctype in ("binary", "quantized") and not label_map:
+            label_map = {}
+            for s in samples:
+                lab = str(s.get("display", ""))
+                if lab not in label_map:
+                    label_map[lab] = float(s.get("value", vmin))
+        fit = p.get("fit") or (fit_models(samples) if ctype == "continuous" else None)
+        p.update({
+            "control_type": ctype,
+            "unit": unit,
+            "labels": labels,
+            "label_map": label_map,
+            "fit": fit,
+            "group": gname,
+            "role": role,
+        })
+        updated_params.append(p)
+
+    groups_meta = build_groups_from_params(updated_params, data.get("device_name"))
+    device_type = detect_device_type(updated_params, data.get("device_name"))
+    ok_local = store.save_device_map_local(sig, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
+    ok_fs = store.save_device_map(sig, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
+    return {"ok": True, "signature": sig, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
 
 
 # --- Legacy learning endpoints (gated) ---

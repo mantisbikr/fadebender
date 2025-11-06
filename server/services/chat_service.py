@@ -32,18 +32,11 @@ from server.volume_utils import (
     live_float_to_db,
     live_float_to_db_send,
 )
+from server.services.chat_models import ChatBody, HelpBody
+from server.services.chat_summarizer import generate_summary_from_canonical
 
 
-class ChatBody(BaseModel):
-    text: str
-    confirm: bool = True
-    model: Optional[str] = None
-    strict: Optional[bool] = None
-
-
-class HelpBody(BaseModel):
-    query: str
-    context: Optional[Dict[str, Any]] = None
+"""Chat models moved to server.services.chat_models; summarizer moved to chat_summarizer."""
 
 
 def udp_request(msg: Dict[str, Any], timeout: float = 1.0):
