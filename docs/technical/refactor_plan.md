@@ -25,7 +25,11 @@ What’s completed
   - `/intent/read` returns `unit`, `min_display`, `max_display` for mixer volume/pan/sends and device params when metadata is available.
 - Cleanup in `server/app.py`
   - Removed legacy `op_*` stubs moved to `server/api/ops`.
-  - Large inlined learn handler left intentionally for testing (gated by `FB_DEBUG_LEGACY_LEARN`).
+  - Removed legacy inlined learn handler `/return/device/learn_start` (moved to `server/api/learn`).
+    - Commit: 3619fa9 chore: remove legacy /return/device/learn_start handler (moved to server.api.learn)
+    - Previous commit that default-enabled new routing and removed op stubs: 909b146
+  - Removed param-by-name helpers and endpoint residues; ops live in `server/api/ops`.
+    - Commit: c9cb576 refactor: remove param-by-name helpers from app.py; move mappings maintenance to device_mapping router
 
 What’s pending (pause here until device learning is tested)
 - Remove the inlined `/return/device/learn_start` legacy block in `server/app.py` once learning endpoints are verified; rely on `server/api/learn.py`.

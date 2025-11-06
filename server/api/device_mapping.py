@@ -581,8 +581,6 @@ def sanity_probe(body: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("/device_mapping/fits")
 def get_device_mapping_fits(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
     sig = (signature or "").strip()
     if not sig:
         if index is None or device is None:
@@ -751,8 +749,6 @@ def _fit_models(samples: list[dict]) -> dict | None:
 
 @router.post("/mappings/fit")
 def fit_mapping(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
     store = get_store()
     sig = (signature or "").strip()
     if not sig:

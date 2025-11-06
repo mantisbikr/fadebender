@@ -269,7 +269,7 @@ app.include_router(learn_router)
 
 
 """/op/return/param_by_name moved to server.api.ops"""
-
+"""
     # Fetch current params and signature
     p_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
     p_list = ((p_resp or {}).get("data") or {}).get("params") or []
@@ -327,12 +327,7 @@ app.include_router(learn_router)
         except Exception:
             pass
 
-    # Auto-enable group masters for dependents (except configured skips)
-    # Prefer new_map.grouping when available, fallback to legacy learned mapping
-    try:
-        master_name: str | None = None
-        skip_auto = False
-        desired_val = None
+# param_by_name logic removed (moved to server.api.ops)
 
         # NEW PATH: Use new_map.grouping if available
         if new_map and isinstance(new_map.get("grouping"), dict):
@@ -628,9 +623,10 @@ app.include_router(learn_router)
                         x = mid
     except Exception:
         pass
-    return {"ok": True, "signature": signature, "applied": {"value": x, "display": applied_disp}}
+# param_by_name return removed (moved to server.api.ops)
 
 
+"""
 """/return/device/learn_status moved to server.api.learn"""
 
 

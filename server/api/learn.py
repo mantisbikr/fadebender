@@ -29,14 +29,7 @@ class LearnQuickBody(BaseModel):
 
 @router.post("/return/device/learn_quick")
 def learn_quick(body: LearnQuickBody) -> Dict[str, Any]:
-    """Fast learning using minimal anchors + heuristics.
-
-    Matches legacy behavior; gated by FB_DEBUG_LEGACY_LEARN in app layer previously.
-    We keep endpoint behavior identical here.
-    """
-    import os
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
+    """Fast learning using minimal anchors + heuristics (always enabled)."""
     try:
         return svc_learn_quick(int(body.return_index), int(body.device_index))
     except ValueError as e:
@@ -54,7 +47,4 @@ class LearnStartBody(BaseModel):
 
 @router.post("/return/device/learn_start")
 async def learn_start(body: LearnStartBody) -> Dict[str, Any]:
-    import os
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
     return await svc_learn_start(int(body.return_index), int(body.device_index), int(body.resolution), int(body.sleep_ms))
