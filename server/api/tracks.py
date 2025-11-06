@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from server.core.events import broker
 from server.services.ableton_client import request_op, data_or_raw
+from server.services.mixer_readers import read_track_status, read_track_sends
+from server.services.device_readers import read_track_devices, read_track_device_params
 from server.core.deps import get_store
 from server.services.mapping_utils import make_device_signature
 import re as _re
@@ -18,18 +20,18 @@ router = APIRouter()
 
 @router.get("/track/status")
 def track_status(index: int) -> Dict[str, Any]:
-    resp = request_op("get_track_status", timeout=1.0, track_index=int(index))
-    if not resp:
+    data = read_track_status(int(index))
+    if not data:
         return {"ok": False, "error": "no response"}
-    return {"ok": True, "data": data_or_raw(resp)}
+    return {"ok": True, "data": data}
 
 
 @router.get("/track/sends")
 def track_sends(index: int) -> Dict[str, Any]:
-    resp = request_op("get_track_sends", timeout=1.0, track_index=int(index))
-    if not resp:
+    data = read_track_sends(int(index))
+    if not data:
         return {"ok": False, "error": "no response"}
-    return {"ok": True, "data": data_or_raw(resp)}
+    return {"ok": True, "data": data}
 
 
 class TrackRoutingSetBody(BaseModel):
@@ -73,20 +75,18 @@ def set_track_routing(body: TrackRoutingSetBody) -> Dict[str, Any]:
 
 @router.get("/track/devices")
 def get_track_devices(index: int) -> Dict[str, Any]:
-    resp = request_op("get_track_devices", timeout=1.0, track_index=int(index))
-    if not resp:
+    data = read_track_devices(int(index))
+    if not data:
         return {"ok": False, "error": "no response"}
-    return {"ok": True, "data": data_or_raw(resp)}
+    return {"ok": True, "data": data}
 
 
 @router.get("/track/device/params")
 def get_track_device_params(index: int, device: int) -> Dict[str, Any]:
-    resp = request_op(
-        "get_track_device_params", timeout=1.0, track_index=int(index), device_index=int(device)
-    )
-    if not resp:
+    data = read_track_device_params(int(index), int(device))
+    if not data:
         return {"ok": False, "error": "no response"}
-    return {"ok": True, "data": data_or_raw(resp)}
+    return {"ok": True, "data": data}
 
 
 @router.get("/track/device/capabilities")

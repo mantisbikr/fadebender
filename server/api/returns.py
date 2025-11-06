@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from server.core.events import broker, schedule_emit
 from server.services.ableton_client import request_op, data_or_raw
+from server.services.mixer_readers import read_return_sends
+from server.services.device_readers import read_return_devices
 from server.core.deps import get_store
 from server.services.mapping_utils import make_device_signature
 import re as _re
@@ -29,10 +31,10 @@ def get_returns() -> Dict[str, Any]:
 @router.get("/return/sends")
 def get_return_sends(index: int) -> Dict[str, Any]:
     try:
-        resp = request_op("get_return_sends", timeout=1.0, return_index=int(index))
-        if not resp:
+        data = read_return_sends(int(index))
+        if not data:
             return {"ok": False, "error": "no response"}
-        return {"ok": True, "data": data_or_raw(resp)}
+        return {"ok": True, "data": data}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -242,10 +244,10 @@ def set_return_routing(body: ReturnRoutingSetBody) -> Dict[str, Any]:
 
 @router.get("/return/devices")
 def get_return_devices(index: int) -> Dict[str, Any]:
-    resp = request_op("get_return_devices", timeout=1.0, return_index=int(index))
-    if not resp:
+    data = read_return_devices(int(index))
+    if not data:
         return {"ok": False, "error": "no response"}
-    return {"ok": True, "data": data_or_raw(resp)}
+    return {"ok": True, "data": data}
 
 
 @router.get("/return/mixer/capabilities")
