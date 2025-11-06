@@ -12,6 +12,7 @@ from server.services.ableton_client import request_op, data_or_raw
 from server.services.mapping_utils import make_device_signature, detect_device_type
 from server.services.device_mapping_service import ensure_device_mapping
 from server.services.preset_service import save_base_preset
+from server.services import device_mapping_io as dmio
 import math
 import re as _re
 from server.services.mapping_utils import detect_device_type
@@ -20,44 +21,22 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# Simple in-process dedupe to avoid repeated background saves on frequent polls
-_CAPTURE_DEDUPE: Dict[str, float] = {}
-
-def _should_capture(sig: str, ttl_sec: float = 60.0) -> bool:
-    import time
-    now = time.time()
-    last = _CAPTURE_DEDUPE.get(sig)
-    if last is not None and (now - last) < ttl_sec:
-        return False
-    _CAPTURE_DEDUPE[sig] = now
-    return True
+_should_capture = dmio.should_capture
 
 
 @router.get("/return/device/map")
 async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
     # Fetch device name and params to compute signature
-    devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    if dname is None:
+    try:
+        dname, live_params, signature, device_type = dmio.resolve_return_device_signature(int(index), int(device))
+    except ValueError:
         return {"ok": False, "error": "device_not_found"}
-    params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
-    live_params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = make_device_signature(dname, live_params)
     store = get_store()
     backend = store.backend
     exists = False
-    device_type = detect_device_type(live_params, dname)
 
     # Ensure base mapping exists immediately (non-blocking safety)
-    try:
-        ensure_device_mapping(signature, device_type, live_params)
-    except Exception:
-        pass
+    dmio.ensure_structure_and_capture(signature, device_type, int(index), int(device), dname, live_params)
 
     # New base mapping existence check
     mapping_exists = False
@@ -68,20 +47,7 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
         mapping_exists = False
 
     # Save a minimal preset (values + display) in background (idempotent)
-    try:
-        if _should_capture(signature):
-            asyncio.create_task(
-                save_base_preset(
-                    index,
-                    device,
-                    dname,
-                    device_type,
-                    signature,
-                    live_params,
-                )
-            )
-    except Exception:
-        pass
+    # capture handled in dmio.ensure_structure_and_capture
 
     # Legacy learned mapping check (samples)
     try:
@@ -113,18 +79,10 @@ async def get_return_device_map(index: int, device: int) -> Dict[str, Any]:
 
 @router.get("/return/device/map_summary")
 async def get_return_device_map_summary(index: int, device: int) -> Dict[str, Any]:
-    devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    if dname is None:
+    try:
+        dname, params, signature, _dtype = dmio.resolve_return_device_signature(int(index), int(device))
+    except ValueError:
         return {"ok": False, "error": "device_not_found"}
-    params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    signature = make_device_signature(dname, params)
     store = get_store()
     backend = store.backend
     exists = False
@@ -138,10 +96,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
         pass
 
     # Prefer legacy learned mapping when present (samples data)
-    try:
-        legacy = store.get_device_map(signature) if store.enabled else store.get_device_map_local(signature)
-    except Exception:
-        legacy = None
+    legacy = dmio.get_legacy_map(signature)
 
     data = None
     if legacy:
@@ -169,7 +124,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
                 continue
         # Also check for base mapping
         try:
-            mapping_exists = bool(store.get_device_mapping(signature))
+            mapping_exists = bool(dmio.get_mapping(signature))
         except Exception:
             mapping_exists = False
         data = {
@@ -206,20 +161,7 @@ async def get_return_device_map_summary(index: int, device: int) -> Dict[str, An
             mapping_exists = False
 
     # Save minimal preset (values + display) in background (idempotent)
-    try:
-        if _should_capture(signature):
-            asyncio.create_task(
-                save_base_preset(
-                    index,
-                    device,
-                    dname,
-                    detect_device_type(params, dname),
-                    signature,
-                    params,
-                )
-            )
-    except Exception:
-        pass
+    dmio.ensure_structure_and_capture(signature, detect_device_type(params, dname), int(index), int(device), dname, params)
 
     # If neither mapping exists, derive minimal summary from live params
     if data is None:
