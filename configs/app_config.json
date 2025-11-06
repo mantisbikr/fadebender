@@ -7,8 +7,8 @@
   "features": {
     "display_only_io": true,
     "simple_device_resolver": true,
-    "use_intents_for_chat": true,
-    "sticky_capabilities_card": true
+    "sticky_capabilities_card": true,
+    "use_intents_for_chat": true
   },
   "models": {
     "audio_analysis": "gemini-2.5-flash",
@@ -266,7 +266,7 @@
     "refresh_ms": 30000,
     "returns_refresh_ms": 3000,
     "sends_open_refresh_ms": 800,
-    "sidebar_width_px": 314,
+    "sidebar_width_px": 370,
     "sse_throttle_ms": 150,
     "track_refresh_ms": 3000
   }

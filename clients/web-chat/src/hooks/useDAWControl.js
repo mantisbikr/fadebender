@@ -19,6 +19,7 @@ export function useDAWControl() {
   const [liveSnapshot, setLiveSnapshot] = useState(null);
   const [currentCapabilities, setCurrentCapabilities] = useState(null);
   const [capabilitiesDrawerOpen, setCapabilitiesDrawerOpen] = useState(false);
+  const [capabilitiesDrawerPinned, setCapabilitiesDrawerPinned] = useState(false);
 
   // Load feature flags once
   useEffect(() => {
@@ -283,6 +284,71 @@ export function useDAWControl() {
         featureFlags,
         intent: parsed?.intent
       });
+
+      // Auto-close drawer if this intent targets a different entity than the open drawer
+      try {
+        if (capabilitiesDrawerOpen && parsed && parsed.ok && parsed.intent) {
+          const ci = parsed.intent;
+          const cap = currentCapabilities;
+          const normalizeCtx = (obj) => {
+            if (!obj) return null;
+            // Device context
+            if (typeof obj.device_index === 'number') {
+              const scope = (typeof obj.track_index === 'number') ? 'track' : (typeof obj.return_index === 'number' ? 'return' : 'unknown');
+              return { type: 'device', scope, track_index: obj.track_index, return_index: obj.return_index, device_index: obj.device_index };
+            }
+            // Mixer context signaled by entity_type
+            if (typeof obj.entity_type === 'string') {
+              const et = obj.entity_type; // e.g., 'track' | 'return' | 'master'
+              return { type: 'mixer', entity_type: et, track_index: obj.track_index, return_index: obj.return_index };
+            }
+            return null;
+          };
+          const capCtx = normalizeCtx(cap);
+          const intentCtx = (() => {
+            if (!ci) return null;
+            if (ci.domain === 'device' && typeof ci.device_index === 'number') {
+              // Prefer explicit indices; derive return_index from ref if needed
+              let ri = ci.return_index;
+              if (ri == null && typeof ci.return_ref === 'string') {
+                ri = ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+              }
+              return { type: 'device', scope: 'return', return_index: ri, device_index: ci.device_index };
+            }
+            if (ci.domain === 'track' && ci.field) {
+              return { type: 'mixer', entity_type: 'track', track_index: (typeof ci.track_index === 'number') ? (Number(ci.track_index) - 1) : undefined };
+            }
+            if (ci.domain === 'return' && ci.field) {
+              let ri = ci.return_index;
+              if (ri == null && typeof ci.return_ref === 'string') {
+                ri = ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+              }
+              return { type: 'mixer', entity_type: 'return', return_index: ri };
+            }
+            if (ci.domain === 'master' && ci.field) {
+              return { type: 'mixer', entity_type: 'master' };
+            }
+            return null;
+          })();
+          const differs = () => {
+            if (!capCtx || !intentCtx) return false; // no strong signal; do not close
+            if (capCtx.type !== intentCtx.type) return true;
+            if (capCtx.type === 'device') {
+              return (capCtx.return_index !== intentCtx.return_index) || (capCtx.device_index !== intentCtx.device_index);
+            }
+            if (capCtx.type === 'mixer') {
+              if (capCtx.entity_type !== intentCtx.entity_type) return true;
+              if (capCtx.entity_type === 'track') return capCtx.track_index !== intentCtx.track_index;
+              if (capCtx.entity_type === 'return') return capCtx.return_index !== intentCtx.return_index;
+              return false;
+            }
+            return false;
+          };
+          if (differs()) {
+            setCapabilitiesDrawerOpen(false);
+          }
+        }
+      } catch {}
 
       let result;
       let deviceCapabilities = null; // Store device capabilities to include in success message
@@ -833,25 +899,27 @@ export function useDAWControl() {
     })();
   }, []);
 
-  return {
-    messages,
-    isProcessing,
-    systemStatus,
-    conversationContext,
-    modelPref,
-    setModelPref,
-    confirmExecute,
-    setConfirmExecute,
-    undoLast,
-    redoLast,
-    historyState,
-    processControlCommand,
-    processHelpQuery,
-    checkSystemHealth,
-    clearMessages,
-    currentCapabilities,
-    featureFlags,
-    capabilitiesDrawerOpen,
-    setCapabilitiesDrawerOpen
-  };
+    return {
+      messages,
+      isProcessing,
+      systemStatus,
+      conversationContext,
+      modelPref,
+      setModelPref,
+      confirmExecute,
+      setConfirmExecute,
+      undoLast,
+      redoLast,
+      historyState,
+      processControlCommand,
+      processHelpQuery,
+      checkSystemHealth,
+      clearMessages,
+      currentCapabilities,
+      featureFlags,
+      capabilitiesDrawerOpen,
+      setCapabilitiesDrawerOpen,
+      capabilitiesDrawerPinned,
+      setCapabilitiesDrawerPinned
+    };
 }

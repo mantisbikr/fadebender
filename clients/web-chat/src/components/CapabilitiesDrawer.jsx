@@ -3,11 +3,11 @@
  * Right-anchored drawer showing capabilities for current track/return/device
  */
 
-import { Box, Drawer, Typography, IconButton, Divider } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Tooltip } from '@mui/material';
+import { Close as CloseIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon } from '@mui/icons-material';
 import ParamAccordion from './ParamAccordion.jsx';
 
-export default function CapabilitiesDrawer({ open, onClose, capabilities }) {
+export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned = false, onPinnedChange, ignoreCloseSelectors = [] }) {
   if (!capabilities) {
     return null;
   }
@@ -43,34 +43,68 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities }) {
     }
   }
 
+  const isInIgnoredArea = (event) => {
+    try {
+      const path = event.composedPath ? event.composedPath() : [];
+      for (const sel of ignoreCloseSelectors) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        if (path.includes(el) || (event.target && (el === event.target || el.contains(event.target)))) return true;
+      }
+    } catch {}
+    return false;
+  };
+
+  const handleClickAway = (event) => {
+    if (!open) return;
+    if (pinned) return; // do not close when pinned
+    if (isInIgnoredArea(event)) return; // allow typing in chat input without closing
+    onClose?.();
+  };
+
   return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      sx={{
-        '& .MuiDrawer-paper': {
-          width: 380,
-          maxWidth: '90vw'
-        }
-      }}
-    >
-      <Box sx={{ p: 2 }}>
-        {/* Header with title and close button */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6" fontWeight="bold" color="primary">
-            {title}
-          </Typography>
-          <IconButton onClick={onClose} size="small">
-            <CloseIcon />
-          </IconButton>
+    <ClickAwayListener onClickAway={handleClickAway} mouseEvent="onMouseDown" touchEvent="onTouchStart">
+      <Drawer
+        anchor="right"
+        open={open}
+        // Use persistent with no backdrop so the rest of the UI stays interactive
+        variant="persistent"
+        hideBackdrop
+        ModalProps={{
+          keepMounted: true,
+          disableEnforceFocus: true,
+        }}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: 380,
+            maxWidth: '90vw'
+          }
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Header with title, pin and close buttons */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" fontWeight="bold" color="primary">
+              {title}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title={pinned ? 'Unpin' : 'Pin'}>
+                <IconButton size="small" onClick={() => onPinnedChange?.(!pinned)}>
+                  {pinned ? <PushPinIcon /> : <PushPinOutlinedIcon />}
+                </IconButton>
+              </Tooltip>
+              <IconButton onClick={onClose} size="small">
+                <CloseIcon />
+              </IconButton>
+            </Box>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Capabilities content */}
+          <ParamAccordion capabilities={capabilities} />
         </Box>
-
-        <Divider sx={{ mb: 2 }} />
-
-        {/* Capabilities content */}
-        <ParamAccordion capabilities={capabilities} />
-      </Box>
-    </Drawer>
+      </Drawer>
+    </ClickAwayListener>
   );
 }

@@ -229,7 +229,7 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
 
   return (
     <Paper elevation={2} sx={{ borderTop: 1, borderColor: 'divider' }}>
-      <Container maxWidth="lg" sx={{ py: 1.5, position: 'relative' }}>
+      <Container id="chat-input-root" maxWidth="lg" sx={{ py: 1.5, position: 'relative' }}>
         {/* Autocorrect Undo Button - iPhone style */}
         <Fade in={showUndo && lastCorrection}>
           <Box
