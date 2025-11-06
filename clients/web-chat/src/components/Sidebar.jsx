@@ -370,6 +370,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
   const [returnSends, setReturnSends] = useState({}); // { [returnIndex]: sends[] }
   const [masterStatus, setMasterStatus] = useState(null); // Master track mixer state
+  const [expandAllReturns, setExpandAllReturns] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
   const adjustingUntilRef = useRef(0);
   const trackBusyUntilRef = useRef({}); // { [trackIndex]: ts }
@@ -478,6 +479,19 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       });
     } catch {}
   }, [selectedIndex, expandAllTracks]);
+
+  // Smoothly scroll the selected return into view so expanded controls are visible
+  useEffect(() => {
+    try {
+      if (expandAllReturns) return;
+      if (openReturn == null) return;
+      const el = document.getElementById(`return-item-${openReturn}`);
+      if (!el) return;
+      requestAnimationFrame(() => {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }); } catch {}
+      });
+    } catch {}
+  }, [openReturn, expandAllReturns]);
 
   // Load app config once to initialize UI timings
   useEffect(() => {
@@ -1266,7 +1280,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       {/* Returns Tab */}
       {tab === 1 && (
         <Box sx={{ p: 2, overflow: 'auto' }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Return Tracks</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle1">Return Tracks</Typography>
+            <Button size="small" onClick={() => setExpandAllReturns(v => !v)}>
+              {expandAllReturns ? 'Collapse all' : 'Expand all'}
+            </Button>
+          </Box>
           {loadingReturns && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}
@@ -1276,31 +1295,88 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           {!loadingReturns && returns && returns.length > 0 && (
             <List dense>
               {returns.map((r) => (
-                <ReturnRow
-                  key={r.index}
-                  returnTrack={r}
-                  openReturn={openReturn}
-                  setOpenReturn={setOpenReturn}
-                  returnDevices={returnDevices}
-                  setReturnDevices={setReturnDevices}
-                  learnedMap={learnedMap}
-                  setLearnedMap={setLearnedMap}
-                  setLearnJobs={setLearnJobs}
-                  fetchReturnDevices={fetchReturnDevices}
-                  fetchReturnSends={fetchReturnSends}
-                  fetchReturns={fetchReturns}
-                  returnSends={returnSends}
-                  setReturnSends={setReturnSends}
-                  onReturnMixerSet={(idx, field, value) => {
-                    const now = Date.now();
-                    returnBusyUntilRef.current[idx] = now + 1000;
-                    returnPendingRef.current[idx] = { ...(returnPendingRef.current[idx] || {}), [field]: Number(value) };
-                    setReturns(prev => {
-                      const list = Array.isArray(prev) ? prev : [];
-                      return list.map(x => (x.index === idx ? { ...x, mixer: { ...(x.mixer || {}), [field]: Number(value) } } : x));
-                    });
-                  }}
-                />
+                <Box key={r.index} id={`return-item-${r.index}`} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                  <ListItem
+                    onClick={async () => {
+                      const next = (openReturn === r.index) ? null : r.index;
+                      setOpenReturn(next);
+                      if (next != null) { await fetchReturnDevices(next); fetchReturnSends(next); }
+                    }}
+                    sx={{
+                      cursor: 'pointer',
+                      py: 0.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: openReturn === r.index ? 600 : 400 }}>
+                      {r.name || `Return ${r.index}`}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Tooltip title={r.mixer?.mute ? 'Unmute' : 'Mute'}>
+                        <IconButton size="small" onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const nextVal = r.mixer?.mute ? 0 : 1;
+                            await apiService.setReturnMixer(r.index, 'mute', nextVal);
+                            setReturns(prev => {
+                              const list = Array.isArray(prev) ? prev : [];
+                              return list.map(x => (x.index === r.index ? { ...x, mixer: { ...(x.mixer || {}), mute: !!nextVal } } : x));
+                            });
+                          } catch {}
+                        }}>
+                          <VolumeOffIcon fontSize="small" color={r.mixer?.mute ? 'warning' : 'inherit'} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={r.mixer?.solo ? 'Unsolo' : 'Solo'}>
+                        <IconButton size="small" onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const nextVal = r.mixer?.solo ? 0 : 1;
+                            await apiService.setReturnMixer(r.index, 'solo', nextVal);
+                            setReturns(prev => {
+                              const list = Array.isArray(prev) ? prev : [];
+                              return list.map(x => (x.index === r.index ? { ...x, mixer: { ...(x.mixer || {}), solo: !!nextVal } } : x));
+                            });
+                          } catch {}
+                        }}>
+                          <HeadphonesIcon fontSize="small" color={r.mixer?.solo ? 'success' : 'inherit'} />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </ListItem>
+                  {(expandAllReturns || openReturn === r.index) && (
+                    <Box sx={{ mt: 0.5, pl: 1, pr: 0.5 }}>
+                      <ReturnRow
+                        returnTrack={r}
+                        openReturn={openReturn}
+                        setOpenReturn={setOpenReturn}
+                        returnDevices={returnDevices}
+                        setReturnDevices={setReturnDevices}
+                        learnedMap={learnedMap}
+                        setLearnedMap={setLearnedMap}
+                        setLearnJobs={setLearnJobs}
+                        fetchReturnDevices={fetchReturnDevices}
+                        fetchReturnSends={fetchReturnSends}
+                        fetchReturns={fetchReturns}
+                        returnSends={returnSends}
+                        setReturnSends={setReturnSends}
+                        onReturnMixerSet={(idx, field, value) => {
+                          const now = Date.now();
+                          returnBusyUntilRef.current[idx] = now + 1000;
+                          returnPendingRef.current[idx] = { ...(returnPendingRef.current[idx] || {}), [field]: Number(value) };
+                          setReturns(prev => {
+                            const list = Array.isArray(prev) ? prev : [];
+                            return list.map(x => (x.index === idx ? { ...x, mixer: { ...(x.mixer || {}), [field]: Number(value) } } : x));
+                          });
+                        }}
+                      />
+                    </Box>
+                  )}
+                </Box>
               ))}
             </List>
           )}
