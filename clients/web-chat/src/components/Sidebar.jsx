@@ -1140,76 +1140,102 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
               </Accordion>
               )}
 
-              {/* Compact list of tracks: number and name only */}
+              {/* Compact list of tracks with inline expansion for selected */}
               <List dense>
-                {outline.tracks.map((t) => (
-                  <ListItem
-                    key={t.index}
-                    selected={selectedIndex === t.index}
-                    onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
-                    sx={{
-                      cursor: 'pointer',
-                      py: 0.5,
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: selectedIndex === t.index ? 600 : 400, fontSize: '0.875rem' }}>
-                      {t.index}. {t.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      {String(t.type || '').toLowerCase()}
-                    </Typography>
-                  </ListItem>
-                ))}
+                {outline.tracks.map((t) => {
+                  const st = getStatus(t.index) || {};
+                  return (
+                    <Box key={t.index} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                      <ListItem
+                        selected={selectedIndex === t.index}
+                        onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
+                        sx={{
+                          cursor: 'pointer',
+                          py: 0.5,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: selectedIndex === t.index ? 600 : 400, fontSize: '0.875rem' }}>
+                          {t.index}. {t.name}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                            {String(t.type || '').toLowerCase()}
+                          </Typography>
+                          <Tooltip title={st?.mute ? 'Unmute' : 'Mute'}>
+                            <IconButton size="small" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const cur = getStatus(t.index) || st || {};
+                                const next = cur?.mute ? 0 : 1;
+                                const now = Date.now();
+                                trackToggleUntilRef.current[t.index] = now + 800;
+                                await apiService.setMixer(t.index, 'mute', next);
+                              } catch {}
+                            }}>
+                              <VolumeOffIcon fontSize="small" color={st?.mute ? 'warning' : 'inherit'} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={st?.solo ? 'Unsolo' : 'Solo'}>
+                            <IconButton size="small" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const cur = getStatus(t.index) || st || {};
+                                const next = cur?.solo ? 0 : 1;
+                                const now = Date.now();
+                                trackToggleUntilRef.current[t.index] = now + 800;
+                                await apiService.setMixer(t.index, 'solo', next);
+                              } catch {}
+                            }}>
+                              <HeadphonesIcon fontSize="small" color={st?.solo ? 'success' : 'inherit'} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </ListItem>
+                      {selectedIndex === t.index && (
+                        <Box sx={{ mt: 0.5, pl: 1, pr: 0.5 }}>
+                          <TrackRow
+                            track={t}
+                            isSelected={true}
+                            getStatus={getStatus}
+                            refreshTrack={refreshTrack}
+                            setSelectedIndex={setSelectedIndex}
+                            onSetDraft={onSetDraft}
+                            onHoverPrime={ensureRowStatus}
+                            sends={trackSends}
+                            setSends={setTrackSends}
+                            fetchSends={fetchTrackSends}
+                            onAdjustStart={(idx) => {
+                              setIsAdjusting(true);
+                              const now = Date.now();
+                              adjustingUntilRef.current = now + 600;
+                              trackBusyUntilRef.current[idx] = now + 1000;
+                            }}
+                            onAdjustEnd={(idx) => { adjustingUntilRef.current = Date.now() + 400; setTimeout(() => setIsAdjusting(false), 420); }}
+                            onAdjustSet={(idx, field, value) => {
+                              trackBusyUntilRef.current[idx] = Date.now() + 1000;
+                              trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
+                              setRowStatuses((prev) => {
+                                const cur = prev[idx] || {};
+                                const mix = cur.mixer || {};
+                                return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
+                              });
+                            }}
+                            onToggleStart={(idx, field) => {
+                              const now = Date.now();
+                              trackToggleUntilRef.current[idx] = now + 800;
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })}
               </List>
-
-              {/* Expanded mixer controls for the selected track only */}
-              {typeof selectedIndex === 'number' && outline.tracks.some(tr => tr.index === selectedIndex) && (
-                <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-                  {(() => {
-                    const t = outline.tracks.find(tr => tr.index === selectedIndex);
-                    return (
-                      <TrackRow
-                        key={t.index}
-                        track={t}
-                        isSelected={true}
-                        getStatus={getStatus}
-                        refreshTrack={refreshTrack}
-                        setSelectedIndex={setSelectedIndex}
-                        onSetDraft={onSetDraft}
-                        onHoverPrime={ensureRowStatus}
-                        sends={trackSends}
-                        setSends={setTrackSends}
-                        fetchSends={fetchTrackSends}
-                        onAdjustStart={(idx) => {
-                          setIsAdjusting(true);
-                          const now = Date.now();
-                          adjustingUntilRef.current = now + 600;
-                          trackBusyUntilRef.current[idx] = now + 1000;
-                        }}
-                        onAdjustEnd={(idx) => { adjustingUntilRef.current = Date.now() + 400; setTimeout(() => setIsAdjusting(false), 420); }}
-                        onAdjustSet={(idx, field, value) => {
-                          trackBusyUntilRef.current[idx] = Date.now() + 1000;
-                          trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
-                          setRowStatuses((prev) => {
-                            const cur = prev[idx] || {};
-                            const mix = cur.mixer || {};
-                            return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
-                          });
-                        }}
-                        onToggleStart={(idx, field) => {
-                          const now = Date.now();
-                          trackToggleUntilRef.current[idx] = now + 800;
-                        }}
-                      />
-                    );
-                  })()}
-                </Box>
-              )}
             </>
           )}
         </Box>
