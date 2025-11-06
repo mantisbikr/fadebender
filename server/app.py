@@ -80,6 +80,7 @@ from server.api.ops import router as ops_router
 from server.api.device_mapping import router as device_mapping_router
 from server.api.presets import router as presets_router
 from server.api.intents import router as intents_router
+from server.api.nlp import router as nlp_router
 from server.api.overview import router as overview_router
 from server.api.overview_status import router as overview_status_router
 from server.api.overview_devices import router as overview_devices_router
@@ -133,6 +134,7 @@ app.include_router(device_mapping_router)
 app.include_router(presets_router)
 app.include_router(ops_router)
 app.include_router(intents_router)
+app.include_router(nlp_router)
 from server.config.feature_flags import is_enabled
 if is_enabled("new_routing"):
     # New split overview: status/snapshot and devices enrichment
@@ -1440,60 +1442,6 @@ def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
 
 
 
-@app.post("/intent/parse")
-def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
-    """Parse NL text to canonical intent JSON (no execution)."""
-    import sys
-    import pathlib
-    import re
-    nlp_dir = pathlib.Path(__file__).resolve().parent.parent / "nlp-service"
-    if nlp_dir.exists() and str(nlp_dir) not in sys.path:
-        sys.path.insert(0, str(nlp_dir))
-    try:
-        from llm_daw import interpret_daw_command  # type: ignore
-    except Exception as e:
-        raise HTTPException(500, f"NLP module not available: {e}")
-
-    # Lightweight pre-normalization for compact pan syntax (e.g., "25R"/"30L").
-    # Improves robustness for inputs like: "pan track 2 to 25R".
-    text = str(body.text or "")
-    m = re.search(r"\bpan\s+track\s+(\d+)\s+to\s+(-?\d+)\s*([LR])\b", text, flags=re.IGNORECASE)
-    if m:
-        idx = m.group(1)
-        amt = m.group(2)
-        side = m.group(3).upper()
-        side_word = "left" if side == "L" else "right"
-        text = re.sub(r"\bpan\s+track\s+\d+\s+to\s+-?\d+\s*[LR]\b",
-                      f"set track {idx} pan to {amt} {side_word}", text, flags=re.IGNORECASE)
-
-    raw_intent = interpret_daw_command(text, model_preference=body.model, strict=body.strict)
-
-    canonical, errors = map_llm_to_canonical(raw_intent)
-    if canonical is None:
-        # Preserve the original raw_intent for non-control intents (e.g., get_parameter)
-        # so NLP phase tests can validate intent structure.
-        if any(str(e).startswith("non_control_intent") for e in (errors or [])):
-            return {"ok": False, "errors": errors, "raw_intent": raw_intent}
-
-        # Otherwise, attempt to provide clarifying choices, but keep raw_intent unchanged
-        try:
-            ov = request_op("get_overview", timeout=1.0) or {}
-            data = (ov.get("data") or ov) if isinstance(ov, dict) else ov
-            tracks = data.get("tracks") or []
-            rs = request_op("get_return_tracks", timeout=1.0) or {}
-            rdata = (rs.get("data") or rs) if isinstance(rs, dict) else rs
-            rets = rdata.get("returns") or []
-            question = "Which track or return do you mean?"
-            choices = {
-                "tracks": [{"index": int(t.get("index",0)), "name": t.get("name") } for t in tracks],
-                "returns": [{"index": int(r.get("index",0)), "name": r.get("name"), "letter": chr(ord('A')+int(r.get("index",0))) } for r in rets],
-            }
-            clar = {"intent": "clarification_needed", "question": question, "choices": choices, "context": body.context}
-            return {"ok": False, "errors": errors, "raw_intent": raw_intent, "clarification": clar}
-        except Exception:
-            return {"ok": False, "errors": errors, "raw_intent": raw_intent}
-
-    return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
 
 @app.on_event("startup")
