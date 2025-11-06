@@ -15,8 +15,10 @@ export function useDAWControl() {
   const [modelPref, setModelPref] = useState('gemini-2.5-flash');
   const [confirmExecute, setConfirmExecute] = useState(true);
   const [historyState, setHistoryState] = useState({ undo_available: false, redo_available: false });
-  const [featureFlags, setFeatureFlags] = useState({ use_intents_for_chat: false });
+  const [featureFlags, setFeatureFlags] = useState({ use_intents_for_chat: false, sticky_capabilities_card: false });
   const [liveSnapshot, setLiveSnapshot] = useState(null);
+  const [currentCapabilities, setCurrentCapabilities] = useState(null);
+  const [capabilitiesDrawerOpen, setCapabilitiesDrawerOpen] = useState(false);
 
   // Load feature flags once
   useEffect(() => {
@@ -51,11 +53,19 @@ export function useDAWControl() {
   }, []);
 
   const addMessage = useCallback((message) => {
-    setMessages(prev => [...prev, {
+    const newMessage = {
       ...message,
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date()
-    }]);
+    };
+    setMessages(prev => [...prev, newMessage]);
+    return newMessage.id;
+  }, []);
+
+  const updateMessageStatus = useCallback((messageId, status) => {
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId ? { ...msg, status } : msg
+    ));
   }, []);
 
   const processControlCommand = useCallback(async (rawInput) => {
@@ -214,7 +224,7 @@ export function useDAWControl() {
       // Step 1: Process and validate input
       const processed = textProcessor.processInput(rawInput);
 
-      addMessage({
+      const userMessageId = addMessage({
         type: 'user',
         content: rawInput,
         original: processed.original,
@@ -223,6 +233,7 @@ export function useDAWControl() {
       });
 
       if (!processed.validation.valid) {
+        updateMessageStatus(userMessageId, 'error');
         addMessage({
           type: 'error',
           content: `Invalid command: ${processed.validation.error}`
@@ -235,6 +246,7 @@ export function useDAWControl() {
       try {
         parsed = await apiService.parseIntent(processed.processed, modelPref, undefined);
       } catch (e) {
+        updateMessageStatus(userMessageId, 'error');
         addMessage({ type: 'error', content: `Intent parse error: ${e.message}` });
         return;
       }
@@ -247,6 +259,7 @@ export function useDAWControl() {
           const help = await apiService.getHelp(processed.processed, conversationContext);
           addMessage({ type: 'info', content: help.answer, data: help });
         } catch (e) {
+          updateMessageStatus(userMessageId, 'error');
           addMessage({ type: 'error', content: `Help error: ${e.message}` });
         }
         return;
@@ -607,6 +620,7 @@ export function useDAWControl() {
               return;
             } catch (_) {}
           }
+          updateMessageStatus(userMessageId, 'error');
           addMessage({ type: 'error', content: `Intent error: ${msg}` });
           return;
         }
@@ -672,6 +686,7 @@ export function useDAWControl() {
       }
 
       if (result && result.ok === false) {
+        updateMessageStatus(userMessageId, 'error');
         addMessage({ type: 'error', content: result.error || result.reason || 'Execution failed', data: result });
         return;
       }
@@ -693,19 +708,32 @@ export function useDAWControl() {
         successData.capabilities = result.data.capabilities;
       }
 
-      addMessage({
-        type: 'success',
-        content: result.summary || (deviceCapabilities
-          ? 'Executed. Click a parameter below to view its current value.'
-          : 'Executed'),
-        data: Object.keys(successData).length > 0 ? successData : undefined
-      });
+      // Update capabilities and auto-open drawer if feature is enabled
+      if (featureFlags.sticky_capabilities_card && successData.capabilities) {
+        setCurrentCapabilities(successData.capabilities);
+        setCapabilitiesDrawerOpen(true); // Auto-open drawer on successful command
+      }
+
+      // Mark user message as successful
+      updateMessageStatus(userMessageId, 'success');
+
+      // Only show success message card if sticky capabilities feature is disabled
+      if (!featureFlags.sticky_capabilities_card) {
+        addMessage({
+          type: 'success',
+          content: result.summary || (deviceCapabilities
+            ? 'Executed. Click a parameter below to view its current value.'
+            : 'Executed'),
+          data: Object.keys(successData).length > 0 ? successData : undefined
+        });
+      }
       // Refresh history state after an executed command
       try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
       // Clear clarification banner on success
       setConversationContext(null);
 
     } catch (error) {
+      updateMessageStatus(userMessageId, 'error');
       addMessage({
         type: 'error',
         content: `❌ Error: ${error.message}`
@@ -820,6 +848,10 @@ export function useDAWControl() {
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,
-    clearMessages
+    clearMessages,
+    currentCapabilities,
+    featureFlags,
+    capabilitiesDrawerOpen,
+    setCapabilitiesDrawerOpen
   };
 }

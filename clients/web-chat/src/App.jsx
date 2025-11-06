@@ -14,7 +14,7 @@ import {
   Fade
 } from '@mui/material';
 import { useMediaQuery } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import { Close as CloseIcon, Tune as TuneIcon } from '@mui/icons-material';
 import ChatMessage from './components/ChatMessage.jsx';
 import ChatInput from './components/ChatInput.jsx';
 import Header from './components/Header.jsx';
@@ -25,6 +25,7 @@ import LoadingIndicator from './components/LoadingIndicator.jsx';
 import { useDAWControl } from './hooks/useDAWControl.js';
 import { lightTheme, darkTheme } from './theme.js';
 import TransportBar from './components/TransportBar.jsx';
+import CapabilitiesDrawer from './components/CapabilitiesDrawer.jsx';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -50,7 +51,11 @@ function App() {
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,
-    clearMessages
+    clearMessages,
+    currentCapabilities,
+    featureFlags,
+    capabilitiesDrawerOpen,
+    setCapabilitiesDrawerOpen
   } = useDAWControl();
 
   const theme = useMemo(
@@ -161,8 +166,17 @@ function App() {
 
           {/* Main chat area */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3, position: 'relative' }}>
-              {/* Floating Clear Chat Button */}
+            <Box
+              sx={{
+                flex: 1,
+                overflow: 'auto',
+                p: 3,
+                position: 'relative',
+                // Add scroll padding to prevent content from scrolling under sticky elements
+                scrollPaddingTop: '140px'
+              }}
+            >
+              {/* Sticky Clear Chat Button - stays at top right */}
               {messages.length > 0 && (
                 <Fade in={true}>
                   <Tooltip title="Clear Chat" arrow>
@@ -170,9 +184,10 @@ function App() {
                       onClick={clearMessages}
                       size="small"
                       sx={{
-                        position: 'absolute',
+                        position: 'sticky',
                         top: 16,
-                        right: 16,
+                        float: 'right',
+                        marginBottom: '-40px',
                         bgcolor: 'background.paper',
                         boxShadow: 2,
                         border: '1px solid',
@@ -190,16 +205,46 @@ function App() {
                   </Tooltip>
                 </Fade>
               )}
+
+              {/* Reopen Capabilities Drawer Button - shows when drawer is closed */}
+              {!capabilitiesDrawerOpen && currentCapabilities && featureFlags?.sticky_capabilities_card && (
+                <Fade in={true}>
+                  <Tooltip title="Show Controls" arrow>
+                    <IconButton
+                      onClick={() => setCapabilitiesDrawerOpen(true)}
+                      size="small"
+                      sx={{
+                        position: 'sticky',
+                        top: 64,
+                        float: 'right',
+                        marginBottom: '-40px',
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        boxShadow: 2,
+                        border: '1px solid',
+                        borderColor: 'primary.dark',
+                        zIndex: 10,
+                        '&:hover': {
+                          bgcolor: 'primary.dark'
+                        }
+                      }}
+                    >
+                      <TuneIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Fade>
+              )}
               {messages.length === 0 ? (
                 <WelcomeCard />
               ) : (
-                <Container maxWidth="lg">
+                <Container maxWidth="lg" sx={{ position: 'relative' }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {messages.map((message) => (
                       <ChatMessage
                         key={message.id}
                         message={message}
                         onSuggestedIntent={(intent) => processControlCommand(intent)}
+                        showCapabilitiesInline={!featureFlags?.sticky_capabilities_card}
                       />
                     ))}
                   </Box>
@@ -220,6 +265,15 @@ function App() {
           </Box>
         </Box>
       </Box>
+
+      {/* Capabilities Drawer - only render when feature is enabled */}
+      {featureFlags?.sticky_capabilities_card && (
+        <CapabilitiesDrawer
+          open={capabilitiesDrawerOpen}
+          onClose={() => setCapabilitiesDrawerOpen(false)}
+          capabilities={currentCapabilities}
+        />
+      )}
     </ThemeProvider>
   );
 }

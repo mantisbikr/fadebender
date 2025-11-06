@@ -7,7 +7,8 @@
   "features": {
     "display_only_io": true,
     "simple_device_resolver": true,
-    "use_intents_for_chat": true
+    "use_intents_for_chat": true,
+    "sticky_capabilities_card": true
   },
   "models": {
     "audio_analysis": "gemini-2.5-flash",
