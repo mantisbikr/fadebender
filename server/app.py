@@ -86,6 +86,7 @@ from server.api.overview_status import router as overview_status_router
 from server.api.overview_devices import router as overview_devices_router
 from server.api.chat import router as chat_router
 from server.api.system import router as system_router
+from server.api.learn import router as learn_router
 # from server.api.snapshot import router as snapshot_router  # Merged into overview_router
 import math
 from server.volume_parser import parse_volume_command
@@ -122,7 +123,7 @@ app.add_middleware(ErrorHandlerMiddleware)
 # --- Simple SSE event broker ---
 STORE = MappingStore()
 set_store_instance(STORE)
-LEARN_JOBS: dict[str, dict] = {}
+from server.services.learn_jobs import LEARN_JOBS
 
 app.include_router(events_router)
 app.include_router(transport_router)
@@ -149,6 +150,7 @@ else:
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(system_router)
+app.include_router(learn_router)
 
 
 # Transport routes moved to server.api.transport
@@ -1405,14 +1407,7 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     return {"ok": True, "signature": signature, "applied": {"value": x, "display": applied_disp}}
 
 
-@app.get("/return/device/learn_status")
-def learn_return_device_status(id: str) -> Dict[str, Any]:
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
-    job = LEARN_JOBS.get(id)
-    if not job:
-        return {"ok": False, "error": "unknown_job"}
-    return {"ok": True, **job}
+"""/return/device/learn_status moved to server.api.learn"""
 
 
 """/op/mixer moved to server.api.ops"""
