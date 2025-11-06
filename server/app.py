@@ -51,7 +51,7 @@ from server.services.param_analysis import (
     parse_unit_from_display,
 )
 from server.services.preset_metadata import generate_preset_metadata_llm
-from server.services.chat_service import ChatBody, HelpBody, handle_chat, handle_help
+# Chat routes are provided by server.api.chat router
 from server.services.history import (
     DEVICE_BYPASS_CACHE,
     LAST_SENT,
@@ -83,6 +83,8 @@ from server.api.intents import router as intents_router
 from server.api.overview import router as overview_router
 from server.api.overview_status import router as overview_status_router
 from server.api.overview_devices import router as overview_devices_router
+from server.api.chat import router as chat_router
+from server.api.system import router as system_router
 # from server.api.snapshot import router as snapshot_router  # Merged into overview_router
 import math
 from server.volume_parser import parse_volume_command
@@ -143,6 +145,8 @@ else:
 
 
 app.include_router(health_router)
+app.include_router(chat_router)
+app.include_router(system_router)
 
 
 # Transport routes moved to server.api.transport
@@ -160,62 +164,6 @@ app.include_router(health_router)
 """Param learn routes moved to server.api.config"""
 
 
-@app.get("/ping")
-def ping() -> Dict[str, Any]:
-    resp = request_op("ping", timeout=0.5)
-    ok = bool(resp and resp.get("ok", True))
-    return {"ok": ok, "remote": resp}
-
-
-@app.get("/status")
-def status() -> Dict[str, Any]:
-    # short TTL cache to reduce poll churn
-    try:
-        now = time.time()
-        ttl = status_ttl_seconds(1.0)
-        cache = globals().setdefault("_TTL_CACHE", {})  # type: ignore
-        ent = cache.get("status") if isinstance(cache, dict) else None
-        if ent and isinstance(ent, dict):
-            ts = float(ent.get("ts", 0.0))
-            if ttl > 0 and (now - ts) < ttl:
-                return ent.get("data")
-        resp = request_op("get_overview", timeout=1.0)
-        if not resp:
-            return {"ok": False, "error": "no response"}
-        cache["status"] = {"ts": now, "data": resp}
-        return resp
-    except Exception:
-        resp = request_op("get_overview", timeout=1.0)
-        if not resp:
-            return {"ok": False, "error": "no response"}
-        return resp
-
-
-@app.get("/project/outline")
-def project_outline() -> Dict[str, Any]:
-    """Return lightweight project outline (tracks, selected track, scenes)."""
-    try:
-        now = time.time()
-        ttl = status_ttl_seconds(1.0)
-        cache = globals().setdefault("_TTL_CACHE", {})  # type: ignore
-        ent = cache.get("project_outline") if isinstance(cache, dict) else None
-        if ent and isinstance(ent, dict):
-            ts = float(ent.get("ts", 0.0))
-            if ttl > 0 and (now - ts) < ttl:
-                return ent.get("data")
-        resp = request_op("get_overview", timeout=1.0)
-        if not resp:
-            return {"ok": False, "error": "no response"}
-        data = resp.get("data") if isinstance(resp, dict) else resp
-        out = {"ok": True, "data": data}
-        cache["project_outline"] = {"ts": now, "data": out}
-        return out
-    except Exception:
-        resp = request_op("get_overview", timeout=1.0)
-        if not resp:
-            return {"ok": False, "error": "no response"}
-        data = resp.get("data") if isinstance(resp, dict) else resp
-        return {"ok": True, "data": data}
 
 
 # Track status moved to server.api.tracks
@@ -1490,14 +1438,6 @@ def op_select_track(body: SelectTrackBody) -> Dict[str, Any]:
     ...
 
 
-@app.post("/chat")
-def chat(body: ChatBody) -> Dict[str, Any]:
-    return handle_chat(body)
-
-
-@app.post("/help")
-def help_endpoint(body: HelpBody) -> Dict[str, Any]:
-    return handle_help(body)
 
 
 @app.post("/intent/parse")
