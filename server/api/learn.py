@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from server.services.learn_jobs import LEARN_JOBS
 from pydantic import BaseModel
 from server.services.param_learning_quick import learn_return_device_quick as svc_learn_quick
+from server.services.param_learning_start import learn_return_device_start as svc_learn_start
 
 
 router = APIRouter()
@@ -42,3 +43,18 @@ def learn_quick(body: LearnQuickBody) -> Dict[str, Any]:
         if str(e) == "device_not_found":
             raise HTTPException(404, "device_not_found")
         raise
+
+
+class LearnStartBody(BaseModel):
+    return_index: int
+    device_index: int
+    resolution: int = 41
+    sleep_ms: int = 20
+
+
+@router.post("/return/device/learn_start")
+async def learn_start(body: LearnStartBody) -> Dict[str, Any]:
+    import os
+    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
+        raise HTTPException(404, "legacy_disabled")
+    return await svc_learn_start(int(body.return_index), int(body.device_index), int(body.resolution), int(body.sleep_ms))
