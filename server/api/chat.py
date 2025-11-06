@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 from server.services.chat_models import ChatBody, HelpBody
-from server.services.chat_service import handle_chat, handle_help
+from server.services.chat_handlers import handle_chat, handle_help
 
 
 router = APIRouter()
