@@ -362,6 +362,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [trackRefreshMs, setTrackRefreshMs] = useState(1200);
   const [returnsRefreshMs, setReturnsRefreshMs] = useState(3000);
   const [followSelection, setFollowSelection] = useState(true);
+  const [expandAllTracks, setExpandAllTracks] = useState(false);
   const [trackSends, setTrackSends] = useState({}); // { [trackIndex]: sends[] }
   const [returns, setReturns] = useState(null);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -461,6 +462,22 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (manual) setLoadingOutline(false);
     }
   };
+
+  // Smoothly scroll the selected track into view so expanded controls are visible
+  useEffect(() => {
+    try {
+      if (typeof selectedIndex !== 'number') return;
+      if (expandAllTracks) return; // no need when all are expanded
+      const el = document.getElementById(`track-item-${selectedIndex}`);
+      if (!el) return;
+      // Wait for DOM to render expanded content
+      requestAnimationFrame(() => {
+        try {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        } catch {}
+      });
+    } catch {}
+  }, [selectedIndex, expandAllTracks]);
 
   // Load app config once to initialize UI timings
   useEffect(() => {
@@ -990,7 +1007,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       {/* Project Tab */}
       {tab === 0 && (
         <Box sx={{ p: 2, overflow: 'auto' }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Tracks</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle1">Tracks</Typography>
+            <Button size="small" onClick={() => setExpandAllTracks(v => !v)}>
+              {expandAllTracks ? 'Collapse all' : 'Expand all'}
+            </Button>
+          </Box>
           {loadingOutline && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}
@@ -1145,7 +1167,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                 {outline.tracks.map((t) => {
                   const st = getStatus(t.index) || {};
                   return (
-                    <Box key={t.index} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                    <Box key={t.index} id={`track-item-${t.index}`} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
                       <ListItem
                         selected={selectedIndex === t.index}
                         onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
@@ -1196,7 +1218,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                           </Tooltip>
                         </Box>
                       </ListItem>
-                      {selectedIndex === t.index && (
+                      {(expandAllTracks || selectedIndex === t.index) && (
                         <Box sx={{ mt: 0.5, pl: 1, pr: 0.5 }}>
                           <TrackRow
                             track={t}
