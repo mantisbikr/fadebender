@@ -33,7 +33,10 @@ import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
   VolumeOff as VolumeOffIcon,
-  Headphones as HeadphonesIcon
+  Headphones as HeadphonesIcon,
+  Audiotrack as TrackIcon,
+  CallMerge as ReturnIcon,
+  GraphicEq as MasterIcon
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
@@ -362,6 +365,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [trackRefreshMs, setTrackRefreshMs] = useState(1200);
   const [returnsRefreshMs, setReturnsRefreshMs] = useState(3000);
   const [followSelection, setFollowSelection] = useState(true);
+  const [expandAllTracks, setExpandAllTracks] = useState(false);
   const [trackSends, setTrackSends] = useState({}); // { [trackIndex]: sends[] }
   const [returns, setReturns] = useState(null);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -369,6 +373,7 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
   const [returnDevices, setReturnDevices] = useState({}); // { [returnIndex]: devices[] }
   const [returnSends, setReturnSends] = useState({}); // { [returnIndex]: sends[] }
   const [masterStatus, setMasterStatus] = useState(null); // Master track mixer state
+  const [expandAllReturns, setExpandAllReturns] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
   const adjustingUntilRef = useRef(0);
   const trackBusyUntilRef = useRef({}); // { [trackIndex]: ts }
@@ -461,6 +466,35 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       if (manual) setLoadingOutline(false);
     }
   };
+
+  // Smoothly scroll the selected track into view so expanded controls are visible
+  useEffect(() => {
+    try {
+      if (typeof selectedIndex !== 'number') return;
+      if (expandAllTracks) return; // no need when all are expanded
+      const el = document.getElementById(`track-item-${selectedIndex}`);
+      if (!el) return;
+      // Wait for DOM to render expanded content
+      requestAnimationFrame(() => {
+        try {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        } catch {}
+      });
+    } catch {}
+  }, [selectedIndex, expandAllTracks]);
+
+  // Smoothly scroll the selected return into view so expanded controls are visible
+  useEffect(() => {
+    try {
+      if (expandAllReturns) return;
+      if (openReturn == null) return;
+      const el = document.getElementById(`return-item-${openReturn}`);
+      if (!el) return;
+      requestAnimationFrame(() => {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }); } catch {}
+      });
+    } catch {}
+  }, [openReturn, expandAllReturns]);
 
   // Load app config once to initialize UI timings
   useEffect(() => {
@@ -980,9 +1014,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           variant="fullWidth"
           size="small"
         >
-          <Tab icon={<ProjectIcon fontSize="small" />} iconPosition="start" label="Tracks" />
-          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Returns" />
-          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Master" />
+          <Tab icon={<TrackIcon fontSize="small" />} iconPosition="start" label="Tracks" />
+          <Tab icon={<ReturnIcon fontSize="small" />} iconPosition="start" label="Returns" />
+          <Tab icon={<MasterIcon fontSize="small" />} iconPosition="start" label="Master" />
         </Tabs>
       </Box>
       <Divider />
@@ -990,7 +1024,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       {/* Project Tab */}
       {tab === 0 && (
         <Box sx={{ p: 2, overflow: 'auto' }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Tracks</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle1">Tracks</Typography>
+            <Button size="small" onClick={() => setExpandAllTracks(v => !v)}>
+              {expandAllTracks ? 'Collapse all' : 'Expand all'}
+            </Button>
+          </Box>
           {loadingOutline && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}
@@ -1140,43 +1179,101 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
               </Accordion>
               )}
 
+              {/* Compact list of tracks with inline expansion for selected */}
               <List dense>
-                {outline.tracks.map((t) => (
-                <TrackRow
-                    key={t.index}
-                    track={t}
-                    isSelected={selectedIndex === t.index}
-                    getStatus={getStatus}
-                    refreshTrack={refreshTrack}
-                    setSelectedIndex={setSelectedIndex}
-                    onSetDraft={onSetDraft}
-                    onHoverPrime={ensureRowStatus}
-                    sends={trackSends}
-                    setSends={setTrackSends}
-                    fetchSends={fetchTrackSends}
-                    onAdjustStart={(idx) => {
-                      setIsAdjusting(true);
-                      const now = Date.now();
-                      adjustingUntilRef.current = now + 600;
-                      trackBusyUntilRef.current[idx] = now + 1000;
-                    }}
-                    onAdjustEnd={(idx) => { adjustingUntilRef.current = Date.now() + 400; setTimeout(() => setIsAdjusting(false), 420); }}
-                    onAdjustSet={(idx, field, value) => {
-                      trackBusyUntilRef.current[idx] = Date.now() + 1000;
-                      trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
-                      setRowStatuses((prev) => {
-                        const cur = prev[idx] || {};
-                        const mix = cur.mixer || {};
-                        return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
-                      });
-                    }}
-                    onToggleStart={(idx, field) => {
-                      const now = Date.now();
-                      // Extend suppression slightly to avoid jitter from near-simultaneous vol/pan SSE
-                      trackToggleUntilRef.current[idx] = now + 800;
-                    }}
-                  />
-                ))}
+                {outline.tracks.map((t) => {
+                  const st = getStatus(t.index) || {};
+                  return (
+                    <Box key={t.index} id={`track-item-${t.index}`} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                      <ListItem
+                        selected={selectedIndex === t.index}
+                        onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
+                        sx={{
+                          cursor: 'pointer',
+                          py: 0.5,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: selectedIndex === t.index ? 600 : 400, fontSize: '0.875rem' }}>
+                          {t.index}. {t.name}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                            {String(t.type || '').toLowerCase()}
+                          </Typography>
+                          <Tooltip title={st?.mute ? 'Unmute' : 'Mute'}>
+                            <IconButton size="small" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const cur = getStatus(t.index) || st || {};
+                                const next = cur?.mute ? 0 : 1;
+                                const now = Date.now();
+                                trackToggleUntilRef.current[t.index] = now + 800;
+                                await apiService.setMixer(t.index, 'mute', next);
+                              } catch {}
+                            }}>
+                              <VolumeOffIcon fontSize="small" color={st?.mute ? 'warning' : 'inherit'} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={st?.solo ? 'Unsolo' : 'Solo'}>
+                            <IconButton size="small" onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const cur = getStatus(t.index) || st || {};
+                                const next = cur?.solo ? 0 : 1;
+                                const now = Date.now();
+                                trackToggleUntilRef.current[t.index] = now + 800;
+                                await apiService.setMixer(t.index, 'solo', next);
+                              } catch {}
+                            }}>
+                              <HeadphonesIcon fontSize="small" color={st?.solo ? 'success' : 'inherit'} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </ListItem>
+                      {(expandAllTracks || selectedIndex === t.index) && (
+                        <Box sx={{ mt: 0.5, pl: 1, pr: 0.5 }}>
+                          <TrackRow
+                            track={t}
+                            isSelected={true}
+                            getStatus={getStatus}
+                            refreshTrack={refreshTrack}
+                            setSelectedIndex={setSelectedIndex}
+                            onSetDraft={onSetDraft}
+                            onHoverPrime={ensureRowStatus}
+                            sends={trackSends}
+                            setSends={setTrackSends}
+                            fetchSends={fetchTrackSends}
+                            onAdjustStart={(idx) => {
+                              setIsAdjusting(true);
+                              const now = Date.now();
+                              adjustingUntilRef.current = now + 600;
+                              trackBusyUntilRef.current[idx] = now + 1000;
+                            }}
+                            onAdjustEnd={(idx) => { adjustingUntilRef.current = Date.now() + 400; setTimeout(() => setIsAdjusting(false), 420); }}
+                            onAdjustSet={(idx, field, value) => {
+                              trackBusyUntilRef.current[idx] = Date.now() + 1000;
+                              trackPendingRef.current[idx] = { ...(trackPendingRef.current[idx] || {}), [field]: Number(value) };
+                              setRowStatuses((prev) => {
+                                const cur = prev[idx] || {};
+                                const mix = cur.mixer || {};
+                                return { ...prev, [idx]: { ...cur, mixer: { ...mix, [field]: Number(value) } } };
+                              });
+                            }}
+                            onToggleStart={(idx, field) => {
+                              const now = Date.now();
+                              trackToggleUntilRef.current[idx] = now + 800;
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })}
               </List>
             </>
           )}
@@ -1186,7 +1283,12 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
       {/* Returns Tab */}
       {tab === 1 && (
         <Box sx={{ p: 2, overflow: 'auto' }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Return Tracks</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle1">Return Tracks</Typography>
+            <Button size="small" onClick={() => setExpandAllReturns(v => !v)}>
+              {expandAllReturns ? 'Collapse all' : 'Expand all'}
+            </Button>
+          </Box>
           {loadingReturns && (
             <Typography variant="body2" color="text.secondary">Loading…</Typography>
           )}
@@ -1196,31 +1298,88 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           {!loadingReturns && returns && returns.length > 0 && (
             <List dense>
               {returns.map((r) => (
-                <ReturnRow
-                  key={r.index}
-                  returnTrack={r}
-                  openReturn={openReturn}
-                  setOpenReturn={setOpenReturn}
-                  returnDevices={returnDevices}
-                  setReturnDevices={setReturnDevices}
-                  learnedMap={learnedMap}
-                  setLearnedMap={setLearnedMap}
-                  setLearnJobs={setLearnJobs}
-                  fetchReturnDevices={fetchReturnDevices}
-                  fetchReturnSends={fetchReturnSends}
-                  fetchReturns={fetchReturns}
-                  returnSends={returnSends}
-                  setReturnSends={setReturnSends}
-                  onReturnMixerSet={(idx, field, value) => {
-                    const now = Date.now();
-                    returnBusyUntilRef.current[idx] = now + 1000;
-                    returnPendingRef.current[idx] = { ...(returnPendingRef.current[idx] || {}), [field]: Number(value) };
-                    setReturns(prev => {
-                      const list = Array.isArray(prev) ? prev : [];
-                      return list.map(x => (x.index === idx ? { ...x, mixer: { ...(x.mixer || {}), [field]: Number(value) } } : x));
-                    });
-                  }}
-                />
+                <Box key={r.index} id={`return-item-${r.index}`} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                  <ListItem
+                    onClick={async () => {
+                      const next = (openReturn === r.index) ? null : r.index;
+                      setOpenReturn(next);
+                      if (next != null) { await fetchReturnDevices(next); fetchReturnSends(next); }
+                    }}
+                    sx={{
+                      cursor: 'pointer',
+                      py: 0.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: openReturn === r.index ? 600 : 400 }}>
+                      {r.name || `Return ${r.index}`}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Tooltip title={r.mixer?.mute ? 'Unmute' : 'Mute'}>
+                        <IconButton size="small" onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const nextVal = r.mixer?.mute ? 0 : 1;
+                            await apiService.setReturnMixer(r.index, 'mute', nextVal);
+                            setReturns(prev => {
+                              const list = Array.isArray(prev) ? prev : [];
+                              return list.map(x => (x.index === r.index ? { ...x, mixer: { ...(x.mixer || {}), mute: !!nextVal } } : x));
+                            });
+                          } catch {}
+                        }}>
+                          <VolumeOffIcon fontSize="small" color={r.mixer?.mute ? 'warning' : 'inherit'} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={r.mixer?.solo ? 'Unsolo' : 'Solo'}>
+                        <IconButton size="small" onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const nextVal = r.mixer?.solo ? 0 : 1;
+                            await apiService.setReturnMixer(r.index, 'solo', nextVal);
+                            setReturns(prev => {
+                              const list = Array.isArray(prev) ? prev : [];
+                              return list.map(x => (x.index === r.index ? { ...x, mixer: { ...(x.mixer || {}), solo: !!nextVal } } : x));
+                            });
+                          } catch {}
+                        }}>
+                          <HeadphonesIcon fontSize="small" color={r.mixer?.solo ? 'success' : 'inherit'} />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </ListItem>
+                  {(expandAllReturns || openReturn === r.index) && (
+                    <Box sx={{ mt: 0.5, pl: 1, pr: 0.5 }}>
+                      <ReturnRow
+                        returnTrack={r}
+                        openReturn={openReturn}
+                        setOpenReturn={setOpenReturn}
+                        returnDevices={returnDevices}
+                        setReturnDevices={setReturnDevices}
+                        learnedMap={learnedMap}
+                        setLearnedMap={setLearnedMap}
+                        setLearnJobs={setLearnJobs}
+                        fetchReturnDevices={fetchReturnDevices}
+                        fetchReturnSends={fetchReturnSends}
+                        fetchReturns={fetchReturns}
+                        returnSends={returnSends}
+                        setReturnSends={setReturnSends}
+                        onReturnMixerSet={(idx, field, value) => {
+                          const now = Date.now();
+                          returnBusyUntilRef.current[idx] = now + 1000;
+                          returnPendingRef.current[idx] = { ...(returnPendingRef.current[idx] || {}), [field]: Number(value) };
+                          setReturns(prev => {
+                            const list = Array.isArray(prev) ? prev : [];
+                            return list.map(x => (x.index === idx ? { ...x, mixer: { ...(x.mixer || {}), [field]: Number(value) } } : x));
+                          });
+                        }}
+                      />
+                    </Box>
+                  )}
+                </Box>
               ))}
             </List>
           )}

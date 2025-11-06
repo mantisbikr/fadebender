@@ -15,8 +15,11 @@ export function useDAWControl() {
   const [modelPref, setModelPref] = useState('gemini-2.5-flash');
   const [confirmExecute, setConfirmExecute] = useState(true);
   const [historyState, setHistoryState] = useState({ undo_available: false, redo_available: false });
-  const [featureFlags, setFeatureFlags] = useState({ use_intents_for_chat: false });
+  const [featureFlags, setFeatureFlags] = useState({ use_intents_for_chat: false, sticky_capabilities_card: false });
   const [liveSnapshot, setLiveSnapshot] = useState(null);
+  const [currentCapabilities, setCurrentCapabilities] = useState(null);
+  const [capabilitiesDrawerOpen, setCapabilitiesDrawerOpen] = useState(false);
+  const [capabilitiesDrawerPinned, setCapabilitiesDrawerPinned] = useState(false);
 
   // Load feature flags once
   useEffect(() => {
@@ -51,11 +54,19 @@ export function useDAWControl() {
   }, []);
 
   const addMessage = useCallback((message) => {
-    setMessages(prev => [...prev, {
+    const newMessage = {
       ...message,
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date()
-    }]);
+    };
+    setMessages(prev => [...prev, newMessage]);
+    return newMessage.id;
+  }, []);
+
+  const updateMessageStatus = useCallback((messageId, status) => {
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId ? { ...msg, status } : msg
+    ));
   }, []);
 
   const processControlCommand = useCallback(async (rawInput) => {
@@ -214,7 +225,7 @@ export function useDAWControl() {
       // Step 1: Process and validate input
       const processed = textProcessor.processInput(rawInput);
 
-      addMessage({
+      const userMessageId = addMessage({
         type: 'user',
         content: rawInput,
         original: processed.original,
@@ -223,6 +234,7 @@ export function useDAWControl() {
       });
 
       if (!processed.validation.valid) {
+        updateMessageStatus(userMessageId, 'error');
         addMessage({
           type: 'error',
           content: `Invalid command: ${processed.validation.error}`
@@ -235,6 +247,7 @@ export function useDAWControl() {
       try {
         parsed = await apiService.parseIntent(processed.processed, modelPref, undefined);
       } catch (e) {
+        updateMessageStatus(userMessageId, 'error');
         addMessage({ type: 'error', content: `Intent parse error: ${e.message}` });
         return;
       }
@@ -247,6 +260,7 @@ export function useDAWControl() {
           const help = await apiService.getHelp(processed.processed, conversationContext);
           addMessage({ type: 'info', content: help.answer, data: help });
         } catch (e) {
+          updateMessageStatus(userMessageId, 'error');
           addMessage({ type: 'error', content: `Help error: ${e.message}` });
         }
         return;
@@ -270,6 +284,71 @@ export function useDAWControl() {
         featureFlags,
         intent: parsed?.intent
       });
+
+      // Auto-close drawer if this intent targets a different entity than the open drawer
+      try {
+        if (capabilitiesDrawerOpen && parsed && parsed.ok && parsed.intent) {
+          const ci = parsed.intent;
+          const cap = currentCapabilities;
+          const normalizeCtx = (obj) => {
+            if (!obj) return null;
+            // Device context
+            if (typeof obj.device_index === 'number') {
+              const scope = (typeof obj.track_index === 'number') ? 'track' : (typeof obj.return_index === 'number' ? 'return' : 'unknown');
+              return { type: 'device', scope, track_index: obj.track_index, return_index: obj.return_index, device_index: obj.device_index };
+            }
+            // Mixer context signaled by entity_type
+            if (typeof obj.entity_type === 'string') {
+              const et = obj.entity_type; // e.g., 'track' | 'return' | 'master'
+              return { type: 'mixer', entity_type: et, track_index: obj.track_index, return_index: obj.return_index };
+            }
+            return null;
+          };
+          const capCtx = normalizeCtx(cap);
+          const intentCtx = (() => {
+            if (!ci) return null;
+            if (ci.domain === 'device' && typeof ci.device_index === 'number') {
+              // Prefer explicit indices; derive return_index from ref if needed
+              let ri = ci.return_index;
+              if (ri == null && typeof ci.return_ref === 'string') {
+                ri = ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+              }
+              return { type: 'device', scope: 'return', return_index: ri, device_index: ci.device_index };
+            }
+            if (ci.domain === 'track' && ci.field) {
+              return { type: 'mixer', entity_type: 'track', track_index: (typeof ci.track_index === 'number') ? (Number(ci.track_index) - 1) : undefined };
+            }
+            if (ci.domain === 'return' && ci.field) {
+              let ri = ci.return_index;
+              if (ri == null && typeof ci.return_ref === 'string') {
+                ri = ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+              }
+              return { type: 'mixer', entity_type: 'return', return_index: ri };
+            }
+            if (ci.domain === 'master' && ci.field) {
+              return { type: 'mixer', entity_type: 'master' };
+            }
+            return null;
+          })();
+          const differs = () => {
+            if (!capCtx || !intentCtx) return false; // no strong signal; do not close
+            if (capCtx.type !== intentCtx.type) return true;
+            if (capCtx.type === 'device') {
+              return (capCtx.return_index !== intentCtx.return_index) || (capCtx.device_index !== intentCtx.device_index);
+            }
+            if (capCtx.type === 'mixer') {
+              if (capCtx.entity_type !== intentCtx.entity_type) return true;
+              if (capCtx.entity_type === 'track') return capCtx.track_index !== intentCtx.track_index;
+              if (capCtx.entity_type === 'return') return capCtx.return_index !== intentCtx.return_index;
+              return false;
+            }
+            return false;
+          };
+          if (differs()) {
+            setCapabilitiesDrawerOpen(false);
+          }
+        }
+      } catch {}
 
       let result;
       let deviceCapabilities = null; // Store device capabilities to include in success message
@@ -607,6 +686,7 @@ export function useDAWControl() {
               return;
             } catch (_) {}
           }
+          updateMessageStatus(userMessageId, 'error');
           addMessage({ type: 'error', content: `Intent error: ${msg}` });
           return;
         }
@@ -672,6 +752,7 @@ export function useDAWControl() {
       }
 
       if (result && result.ok === false) {
+        updateMessageStatus(userMessageId, 'error');
         addMessage({ type: 'error', content: result.error || result.reason || 'Execution failed', data: result });
         return;
       }
@@ -693,19 +774,32 @@ export function useDAWControl() {
         successData.capabilities = result.data.capabilities;
       }
 
-      addMessage({
-        type: 'success',
-        content: result.summary || (deviceCapabilities
-          ? 'Executed. Click a parameter below to view its current value.'
-          : 'Executed'),
-        data: Object.keys(successData).length > 0 ? successData : undefined
-      });
+      // Update capabilities and auto-open drawer if feature is enabled
+      if (featureFlags.sticky_capabilities_card && successData.capabilities) {
+        setCurrentCapabilities(successData.capabilities);
+        setCapabilitiesDrawerOpen(true); // Auto-open drawer on successful command
+      }
+
+      // Mark user message as successful
+      updateMessageStatus(userMessageId, 'success');
+
+      // Only show success message card if sticky capabilities feature is disabled
+      if (!featureFlags.sticky_capabilities_card) {
+        addMessage({
+          type: 'success',
+          content: result.summary || (deviceCapabilities
+            ? 'Executed. Click a parameter below to view its current value.'
+            : 'Executed'),
+          data: Object.keys(successData).length > 0 ? successData : undefined
+        });
+      }
       // Refresh history state after an executed command
       try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
       // Clear clarification banner on success
       setConversationContext(null);
 
     } catch (error) {
+      updateMessageStatus(userMessageId, 'error');
       addMessage({
         type: 'error',
         content: `❌ Error: ${error.message}`
@@ -805,21 +899,27 @@ export function useDAWControl() {
     })();
   }, []);
 
-  return {
-    messages,
-    isProcessing,
-    systemStatus,
-    conversationContext,
-    modelPref,
-    setModelPref,
-    confirmExecute,
-    setConfirmExecute,
-    undoLast,
-    redoLast,
-    historyState,
-    processControlCommand,
-    processHelpQuery,
-    checkSystemHealth,
-    clearMessages
-  };
+    return {
+      messages,
+      isProcessing,
+      systemStatus,
+      conversationContext,
+      modelPref,
+      setModelPref,
+      confirmExecute,
+      setConfirmExecute,
+      undoLast,
+      redoLast,
+      historyState,
+      processControlCommand,
+      processHelpQuery,
+      checkSystemHealth,
+      clearMessages,
+      currentCapabilities,
+      featureFlags,
+      capabilitiesDrawerOpen,
+      setCapabilitiesDrawerOpen,
+      capabilitiesDrawerPinned,
+      setCapabilitiesDrawerPinned
+    };
 }

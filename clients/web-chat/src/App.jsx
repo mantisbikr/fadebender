@@ -11,10 +11,12 @@ import {
   Container,
   IconButton,
   Tooltip,
-  Fade
+  Fade,
+  Drawer,
+  ClickAwayListener
 } from '@mui/material';
 import { useMediaQuery } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import { Close as CloseIcon, Tune as TuneIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon } from '@mui/icons-material';
 import ChatMessage from './components/ChatMessage.jsx';
 import ChatInput from './components/ChatInput.jsx';
 import Header from './components/Header.jsx';
@@ -25,6 +27,7 @@ import LoadingIndicator from './components/LoadingIndicator.jsx';
 import { useDAWControl } from './hooks/useDAWControl.js';
 import { lightTheme, darkTheme } from './theme.js';
 import TransportBar from './components/TransportBar.jsx';
+import CapabilitiesDrawer from './components/CapabilitiesDrawer.jsx';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -34,6 +37,8 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const [isResizing, setIsResizing] = useState(false);
   const [draftInput, setDraftInput] = useState(null);
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(true);
+  const [leftDrawerPinned, setLeftDrawerPinned] = useState(true);
 
   const {
     messages,
@@ -50,7 +55,13 @@ function App() {
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,
-    clearMessages
+    clearMessages,
+    currentCapabilities,
+    featureFlags,
+    capabilitiesDrawerOpen,
+    setCapabilitiesDrawerOpen,
+    capabilitiesDrawerPinned,
+    setCapabilitiesDrawerPinned
   } = useDAWControl();
 
   const theme = useMemo(
@@ -73,7 +84,7 @@ function App() {
     })();
   }, []);
 
-  // Resizer handlers
+  // Resizer handlers (desktop only)
   useEffect(() => {
     if (!isResizing) return;
     const onMove = (e) => {
@@ -98,6 +109,17 @@ function App() {
       window.removeEventListener('mouseup', onUp);
     };
   }, [isResizing, sidebarWidth]);
+
+  // Close left drawer on outside click when not pinned (desktop only)
+  const handleLeftClickAway = (event) => {
+    if (!leftDrawerOpen) return;
+    if (leftDrawerPinned) return;
+    // Ignore clicks on resizer to avoid accidental close while resizing
+    const resizer = document.querySelector('#left-resizer');
+    const path = event.composedPath ? event.composedPath() : [];
+    if (resizer && (path.includes(resizer) || (event.target && (resizer === event.target || resizer.contains(event.target))))) return;
+    setLeftDrawerOpen(false);
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -137,32 +159,142 @@ function App() {
               widthPx={sidebarWidth}
             />
           </Box>
-          {/* Sidebar - permanent for desktop */}
+          {/* Sidebar - persistent drawer for desktop */}
           <Box sx={{ display: { xs: 'none', md: 'flex' }, height: '100%' }}>
-            <Sidebar
-              messages={messages}
-              onReplay={(cmd) => processControlCommand(cmd)}
-              variant="permanent"
-              onSetDraft={(cmd) => setDraftInput({ text: cmd, ts: Date.now() })}
-              widthPx={sidebarWidth}
-            />
-            {/* Resizer handle */}
-            <Box
-              onMouseDown={() => setIsResizing(true)}
-              sx={{
-                width: '6px',
-                height: '100%',
-                cursor: 'col-resize',
-                backgroundColor: 'transparent',
-                '&:hover': { backgroundColor: 'action.hover' }
-              }}
-            />
+            <ClickAwayListener onClickAway={handleLeftClickAway} mouseEvent="onMouseDown" touchEvent="onTouchStart">
+              <Box sx={{ display: 'flex', height: '100%' }}>
+                {leftDrawerOpen && (
+                  <Drawer
+                    anchor="left"
+                    variant="persistent"
+                    open={leftDrawerOpen}
+                    hideBackdrop
+                    ModalProps={{ keepMounted: true, disableEnforceFocus: true }}
+                    PaperProps={{ sx: { width: sidebarWidth, boxSizing: 'border-box', position: 'relative' } }}
+                  >
+                    {/* Inline controls (pin/close) overlay */}
+                    <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 2, display: 'flex', gap: 0.5 }}>
+                      <Tooltip title={leftDrawerPinned ? 'Unpin' : 'Pin'}>
+                        <IconButton size="small" onClick={() => setLeftDrawerPinned(v => !v)}>
+                          {leftDrawerPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Close">
+                        <IconButton size="small" onClick={() => setLeftDrawerOpen(false)}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    <Sidebar
+                      messages={messages}
+                      onReplay={(cmd) => processControlCommand(cmd)}
+                      variant="permanent"
+                      onSetDraft={(cmd) => setDraftInput({ text: cmd, ts: Date.now() })}
+                      widthPx={sidebarWidth}
+                    />
+                  </Drawer>
+                )}
+                {/* Resizer handle (only when open) */}
+                {leftDrawerOpen && (
+                  <Box
+                    id="left-resizer"
+                    onMouseDown={() => setIsResizing(true)}
+                    sx={{
+                      width: '6px',
+                      height: '100%',
+                      cursor: 'col-resize',
+                      backgroundColor: 'transparent',
+                      '&:hover': { backgroundColor: 'action.hover' }
+                    }}
+                  />
+                )}
+                {/* Collapsed opener: compact vertical tab with grip lines */}
+                {!leftDrawerOpen && (
+                  <Box sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+                    <Box
+                      onClick={() => setLeftDrawerOpen(true)}
+                      title="Open Mixer Controls"
+                      sx={{
+                        width: 32,
+                        height: 120,
+                        backgroundColor: 'background.paper',
+                        borderRight: 1,
+                        borderTop: 1,
+                        borderBottom: 1,
+                        borderColor: 'divider',
+                        borderTopRightRadius: 8,
+                        borderBottomRightRadius: 8,
+                        boxShadow: 1,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        '&:hover': (theme) => ({ backgroundColor: theme.palette.action.hover })
+                      }}
+                    >
+                      {/* Vertical label */}
+                      <Box sx={{
+                        transform: 'rotate(-90deg)',
+                        whiteSpace: 'nowrap',
+                        fontSize: '11px',
+                        letterSpacing: '0.06em',
+                        color: 'text.secondary'
+                      }}>
+                        Mixer Controls
+                      </Box>
+                      {/* Grip with vertical lines (theme-aware, beveled for depth) */}
+                      <Box sx={(theme) => {
+                        const isDark = theme.palette.mode === 'dark';
+                        if (isDark) {
+                          const colorA = 'rgba(255,255,255,0.60)';
+                          const colorB = 'rgba(0,0,0,0.40)';
+                          return {
+                            position: 'absolute',
+                            right: 3,
+                            top: 10,
+                            bottom: 10,
+                            width: 6,
+                            borderRadius: 1,
+                            backgroundImage: `repeating-linear-gradient(90deg, ${colorA} 0, ${colorA} 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, transparent 0, transparent 1px, ${colorB} 1px, ${colorB} 2px, transparent 2px, transparent 3px)`,
+                            backgroundSize: '3px 100%, 3px 100%',
+                            backgroundPosition: '0 0, 1px 0',
+                            boxShadow: 'inset 0 0 5px rgba(0,0,0,0.28)'
+                          };
+                        }
+                        // Light mode: softer single-layer lines with gentle inset shadow
+                        return {
+                          position: 'absolute',
+                          right: 3,
+                          top: 10,
+                          bottom: 10,
+                          width: 6,
+                          borderRadius: 1,
+                          backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px)',
+                          boxShadow: 'inset 0 0 4px rgba(0,0,0,0.08)'
+                        };
+                      }} />
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            </ClickAwayListener>
           </Box>
 
           {/* Main chat area */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3, position: 'relative' }}>
-              {/* Floating Clear Chat Button */}
+            <Box
+              sx={{
+                flex: 1,
+                overflow: 'auto',
+                p: 3,
+                position: 'relative',
+                // Add scroll padding to prevent content from scrolling under sticky elements
+                scrollPaddingTop: '140px'
+              }}
+            >
+              {/* Sticky Clear Chat Button - stays at top right */}
               {messages.length > 0 && (
                 <Fade in={true}>
                   <Tooltip title="Clear Chat" arrow>
@@ -170,9 +302,10 @@ function App() {
                       onClick={clearMessages}
                       size="small"
                       sx={{
-                        position: 'absolute',
+                        position: 'sticky',
                         top: 16,
-                        right: 16,
+                        float: 'right',
+                        marginBottom: '-40px',
                         bgcolor: 'background.paper',
                         boxShadow: 2,
                         border: '1px solid',
@@ -190,16 +323,46 @@ function App() {
                   </Tooltip>
                 </Fade>
               )}
+
+              {/* Reopen Capabilities Drawer Button - shows when drawer is closed */}
+              {!capabilitiesDrawerOpen && currentCapabilities && featureFlags?.sticky_capabilities_card && (
+                <Fade in={true}>
+                  <Tooltip title="Show Controls" arrow>
+                    <IconButton
+                      onClick={() => setCapabilitiesDrawerOpen(true)}
+                      size="small"
+                      sx={{
+                        position: 'sticky',
+                        top: 64,
+                        float: 'right',
+                        marginBottom: '-40px',
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        boxShadow: 2,
+                        border: '1px solid',
+                        borderColor: 'primary.dark',
+                        zIndex: 10,
+                        '&:hover': {
+                          bgcolor: 'primary.dark'
+                        }
+                      }}
+                    >
+                      <TuneIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Fade>
+              )}
               {messages.length === 0 ? (
                 <WelcomeCard />
               ) : (
-                <Container maxWidth="lg">
+                <Container maxWidth="lg" sx={{ position: 'relative' }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {messages.map((message) => (
                       <ChatMessage
                         key={message.id}
                         message={message}
                         onSuggestedIntent={(intent) => processControlCommand(intent)}
+                        showCapabilitiesInline={!featureFlags?.sticky_capabilities_card}
                       />
                     ))}
                   </Box>
@@ -220,6 +383,18 @@ function App() {
           </Box>
         </Box>
       </Box>
+
+      {/* Capabilities Drawer - only render when feature is enabled */}
+      {featureFlags?.sticky_capabilities_card && (
+        <CapabilitiesDrawer
+          open={capabilitiesDrawerOpen}
+          onClose={() => setCapabilitiesDrawerOpen(false)}
+          capabilities={currentCapabilities}
+          pinned={capabilitiesDrawerPinned}
+          onPinnedChange={setCapabilitiesDrawerPinned}
+          ignoreCloseSelectors={[ '#chat-input-root' ]}
+        />
+      )}
     </ThemeProvider>
   );
 }

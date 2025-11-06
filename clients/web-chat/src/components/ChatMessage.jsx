@@ -19,14 +19,16 @@ import {
   Error as ErrorIcon,
   Info as InfoIcon,
   HelpOutline as QuestionIcon,
-  LiveHelp as HelpIcon
+  LiveHelp as HelpIcon,
+  Check as CheckIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import ClickAwayAccordion from './ClickAwayAccordion.jsx';
 import ParamAccordion from './ParamAccordion.jsx';
 import SingleMixerParamEditor from './SingleMixerParamEditor.jsx';
 import SingleParamEditor from './SingleParamEditor.jsx';
 
-export default function ChatMessage({ message, onSuggestedIntent }) {
+export default function ChatMessage({ message, onSuggestedIntent, showCapabilitiesInline = true }) {
   const renderHelpResponse = (data) => {
     const answer = data.answer || data.intent?.answer || data.summary || data.content;
     const suggestedIntents = data.suggested_intents || data.intent?.suggested_intents || [];
@@ -193,8 +195,8 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
           <Typography variant="body1" fontWeight="medium" gutterBottom>
             {message.content}
           </Typography>
-          {/* If capabilities are present, render grouped param accordion with inline editors */}
-          {message.data && message.data.capabilities && (
+          {/* If capabilities are present and showCapabilitiesInline is true, render grouped param accordion with inline editors */}
+          {showCapabilitiesInline && message.data && message.data.capabilities && (
             <ParamAccordion capabilities={message.data.capabilities} />
           )}
         </Box>
@@ -373,6 +375,16 @@ export default function ChatMessage({ message, onSuggestedIntent }) {
             {content}
           </Box>
         </Box>
+        {/* Status icon for user messages */}
+        {message.type === 'user' && message.status && (
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            {message.status === 'success' ? (
+              <CheckIcon sx={{ color: 'success.main', fontSize: 20 }} />
+            ) : message.status === 'error' ? (
+              <CloseIcon sx={{ color: 'error.main', fontSize: 20 }} />
+            ) : null}
+          </Box>
+        )}
         <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
           {new Date(message.timestamp).toLocaleTimeString()}
         </Typography>
