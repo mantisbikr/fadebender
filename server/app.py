@@ -185,19 +185,7 @@ app.include_router(learn_router)
 # Return sends moved to server.api.returns
 
 
-# ==================== Return Routing & Sends Mode ====================
-
-class ReturnRoutingSetBody(BaseModel):
-    return_index: int
-    audio_to_type: Optional[str] = None
-    audio_to_channel: Optional[str] = None
-    sends_mode: Optional[str] = None  # "pre" | "post" (optional capability)
-
-
-# Return routing GET moved to server.api.returns
-
-
-# Return routing POST moved to server.api.returns
+"""Return routing & sends moved to server.api.returns"""
 
 
 # Return devices moved to server.api.returns
@@ -234,42 +222,7 @@ class ReturnRoutingSetBody(BaseModel):
 """Map delete and return op bodies moved to server.api.* (removed duplicates)."""
 
 
-# ---------------- Device Mapping Import (LLM + Numeric Fits) ----------------
-
-class MappingImportBody(BaseModel):
-    signature: str
-    device_type: Optional[str] = None
-    grouping: Optional[dict] = None
-    params_meta: Optional[list] = None
-    sources: Optional[dict] = None
-    analysis_status: Optional[str] = None  # e.g., "partial_fits" | "analyzed"
-
-
-# moved: /device_mapping/import handled by server.api.device_mapping
-def import_device_mapping(body: MappingImportBody) -> Dict[str, Any]:
-    # Keep a thin shim to avoid breaking any imports; delegate to router impl
-    from server.api.device_mapping import import_device_mapping as _imp
-    return _imp(body)
-
-
-# moved: /device_mapping handled by server.api.device_mapping
-def get_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    from server.api.device_mapping import get_device_mapping as _get
-    return _get(signature=signature, index=index, device=device)
-
-
-# moved: /device_mapping/validate handled by server.api.device_mapping
-def validate_device_mapping(signature: Optional[str] = None, index: Optional[int] = None, device: Optional[int] = None) -> Dict[str, Any]:
-    from server.api.device_mapping import validate_device_mapping as _val
-    return _val(signature=signature, index=index, device=device)
-
-
-class SanityProbeBody(BaseModel):
-    return_index: int
-    device_index: int
-    param_ref: str  # name substring or index string
-    target_display: str
-    restore: Optional[bool] = True
+"""Device mapping import/get/validate moved to server.api.device_mapping"""
 
 
 """/device_mapping/sanity_probe moved to server.api.device_mapping"""
@@ -282,145 +235,10 @@ class SanityProbeBody(BaseModel):
 """/device_mapping/enumerate_labels moved to server.api.device_mapping"""
 
 
-class ReturnMixerBody(BaseModel):
-    return_index: int
-    field: str  # 'volume' | 'pan' | 'mute' | 'solo'
-    value: float
-
-
 """/op/return/mixer moved to server.api.ops"""
-def op_return_mixer(body: ReturnMixerBody) -> Dict[str, Any]:
-    ...
 
 
-class LearnDeviceBody(BaseModel):
-    return_index: int
-    device_index: int
-    resolution: int = 21
-    sleep_ms: int = 25
-
-
-@app.post("/return/device/learn")
-def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
-    if str(os.getenv("FB_DEBUG_LEGACY_LEARN", "")).lower() not in ("1", "true", "yes", "on"):
-        raise HTTPException(404, "legacy_disabled")
-    """Sweep device params to build value->display mapping and store in Firestore.
-
-    For each parameter, samples 'resolution' points between min..max, reading display_value.
-    Restores the original value after sampling.
-    """
-    import time
-
-    ri = int(body.return_index)
-    di = int(body.device_index)
-    res = max(3, int(body.resolution))
-    delay = max(0, int(body.sleep_ms)) / 1000.0
-
-    # Fetch device name and params
-    devs = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == di:
-            dname = str(d.get("name", f"Device {di}"))
-            break
-    if dname is None:
-        raise HTTPException(404, "device_not_found")
-
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    if not params:
-        return {"ok": False, "reason": "no_params"}
-
-    signature = make_device_signature(dname, params)
-
-    learned_params: list[dict] = []
-
-    for p in params:
-        idx = int(p.get("index", 0))
-        name = str(p.get("name", f"Param {idx}"))
-        vmin = float(p.get("min", 0.0))
-        vmax = float(p.get("max", 1.0))
-        v0 = float(p.get("value", 0.0))
-        samples: list[dict] = []
-        unit: str | None = None
-
-        # Guard: avoid zero-length spans
-        span = vmax - vmin if vmax != vmin else 1.0
-        for i in range(res):
-            t = i / float(res - 1)
-            val = vmin + span * t
-            # set param
-            udp_request({
-                "op": "set_return_device_param",
-                "return_index": ri,
-                "device_index": di,
-                "param_index": idx,
-                "value": float(val)
-            }, timeout=0.6)
-            if delay:
-                time.sleep(delay)
-            # readback
-            rd = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
-            rparams = ((rd or {}).get("data") or {}).get("params") or []
-            dp = next((rp for rp in rparams if int(rp.get("index", -1)) == idx), None)
-            if dp is None:
-                continue
-            disp = str(dp.get("display_value", ""))
-            disp_num = None
-            # Try parse numeric from display if present
-            try:
-                import re
-                m = re.search(r"-?\d+(?:\.\d+)?", disp)
-                if m:
-                    disp_num = float(m.group(0))
-                if unit is None:
-                    # crude unit detection
-                    unit = parse_unit_from_display(disp)
-            except Exception:
-                disp_num = None
-            samples.append({"value": float(val), "display": disp, "display_num": disp_num})
-
-        # restore
-        udp_request({
-            "op": "set_return_device_param",
-            "return_index": ri,
-            "device_index": di,
-            "param_index": idx,
-            "value": float(v0)
-        }, timeout=0.6)
-
-        # Classify control type and labels if any
-        ctype, labels = classify_control_type(samples, vmin, vmax)
-        gname, role, _m = group_role_for_device(dname, name)
-        fit = fit_models(samples) if ctype == "continuous" else None
-        label_map = None
-        if ctype in ("binary", "quantized"):
-            label_map = {}
-            for s in samples:
-                lab = str(s.get("display", ""))
-                if lab not in label_map:
-                    label_map[lab] = float(s.get("value", vmin))
-        learned_params.append({
-            "index": idx,
-            "name": name,
-            "min": vmin,
-            "max": vmax,
-            "samples": samples,
-            "control_type": ctype,
-            "unit": unit,
-            "labels": labels,
-            "label_map": label_map,
-            "fit": fit,
-            "group": gname,
-            "role": role,
-        })
-
-    # Save to mapping store (Firestore)
-    groups_meta = build_groups_from_params(learned_params, dname)
-    device_type = detect_device_type(params, dname)
-    saved = STORE.save_device_map(signature, {"name": dname, "device_type": device_type, "groups": groups_meta}, learned_params)
-    return {"ok": True, "signature": signature, "saved": saved, "backend": STORE.backend, "param_count": len(learned_params)}
+"""Legacy /return/device/learn moved to server.api.learn"""
 
 
 """/return/device/learn_start moved to server.api.learn (legacy handler removed)"""
@@ -429,76 +247,13 @@ def learn_return_device(body: LearnDeviceBody) -> Dict[str, Any]:
 """/return/device/learn_quick moved to server.api.learn"""
 
 
-@app.post("/mappings/push_local")
-def push_local_mappings(signature: Optional[str] = None) -> Dict[str, Any]:
-    if signature:
-        ok = STORE.push_local_to_firestore(signature)
-        return {"ok": ok, "signature": signature, "backend": STORE.backend}
-    count = STORE.push_all_local()
-    return {"ok": True, "pushed": count, "backend": STORE.backend}
+"""/mappings/push_local moved to server.api.device_mapping"""
 
 
-@app.post("/mappings/migrate_schema")
-def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
-    """Backfill control_type/unit/labels/groups on an existing map and save locally; also push to Firestore if available.
-
-    Provide either (index, device) to compute signature from Live, or a signature directly.
-    """
-    if not signature:
-        if index is None or device is None:
-            raise HTTPException(400, "index_device_or_signature_required")
-        signature = _compute_signature_for(int(index), int(device))
-    data = STORE.get_device_map_local(signature)
-    if not data and STORE.enabled:
-        data = STORE.get_device_map(signature)
-    if not data:
-        return {"ok": False, "error": "map_not_found", "signature": signature}
-    params = data.get("params") or []
-    updated_params: list[dict] = []
-    for p in params:
-        name = str(p.get("name", ""))
-        vmin = float(p.get("min", 0.0))
-        vmax = float(p.get("max", 1.0))
-        samples = p.get("samples") or []
-        unit = p.get("unit") or (parse_unit_from_display(str(samples[0].get("display", ""))) if samples else None)
-        ctype, labels = classify_control_type(samples, vmin, vmax)
-        gname, role, _m = group_role_for_device(data.get("device_name"), name)
-        label_map = p.get("label_map")
-        if ctype in ("binary", "quantized") and not label_map:
-            label_map = {}
-            for s in samples:
-                lab = str(s.get("display", ""))
-                if lab not in label_map:
-                    label_map[lab] = float(s.get("value", vmin))
-        fit = p.get("fit") or (fit_models(samples) if ctype == "continuous" else None)
-        p.update({
-            "control_type": ctype,
-            "unit": unit,
-            "labels": labels,
-            "label_map": label_map,
-            "fit": fit,
-            "group": gname,
-            "role": role,
-        })
-        updated_params.append(p)
-    groups_meta = build_groups_from_params(updated_params, data.get("device_name"))
-    device_type = detect_device_type(updated_params, data.get("device_name"))
-    ok_local = STORE.save_device_map_local(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
-    ok_fs = STORE.save_device_map(signature, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
-    return {"ok": True, "signature": signature, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
+"""/mappings/migrate_schema moved to server.api.device_mapping"""
 
 
-def _compute_signature_for(index: int, device: int) -> str:
-    devs = udp_request({"op": "get_return_devices", "return_index": int(index)}, timeout=1.0)
-    devices = ((devs or {}).get("data") or {}).get("devices") or []
-    dname = None
-    for d in devices:
-        if int(d.get("index", -1)) == int(device):
-            dname = str(d.get("name", f"Device {device}"))
-            break
-    params_resp = udp_request({"op": "get_return_device_params", "return_index": int(index), "device_index": int(device)}, timeout=1.2)
-    params = ((params_resp or {}).get("data") or {}).get("params") or []
-    return make_device_signature(dname or f"Device {device}", params)
+"""Signature helper moved to server.api.device_mapping"""
 
 
 """/mappings/fit moved to server.api.device_mapping"""
@@ -507,219 +262,13 @@ def _compute_signature_for(index: int, device: int) -> str:
 """Preset endpoints moved to server.api.presets (removed legacy stubs)."""
 
 
-class RefreshPresetBody(BaseModel):
-    preset_id: str
-    update_values_from_live: Optional[bool] = False
-    return_index: Optional[int] = None
-    device_index: Optional[int] = None
-    fields_allowlist: Optional[list[str]] = None
+"""Preset refresh moved to server.api.presets"""
 
 
-# moved: /presets/refresh_metadata handled by server.api.presets
-async def refresh_preset_metadata(body: RefreshPresetBody) -> Dict[str, Any]:
-    """Regenerate preset metadata via LLM and optionally refresh values from live device.
-
-    - Resolves preset by `preset_id` (e.g., reverb_arena_tail)
-    - If `update_values_from_live` and indices provided, reads current param values
-    - Calls LLM to generate metadata; merges selected fields
-    - Saves back to storage and emits `preset_updated` SSE event
-    """
-    preset_id = body.preset_id.strip()
-    preset = STORE.get_preset(preset_id)
-    if not preset:
-        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
-
-    device_type = preset.get("category") or preset.get("device_type") or "unknown"
-    device_name = preset.get("name") or preset.get("device_name") or preset_id
-    parameter_values = dict(preset.get("parameter_values") or {})
-
-    # Optionally refresh parameter values (and display values) from live device
-    if body.update_values_from_live and body.return_index is not None and body.device_index is not None:
-        try:
-            rd = udp_request({
-                "op": "get_return_device_params",
-                "return_index": int(body.return_index),
-                "device_index": int(body.device_index),
-            }, timeout=1.2)
-            rparams = ((rd or {}).get("data") or {}).get("params") or []
-            live_vals = {}
-            live_disp = {}
-            for p in rparams:
-                nm = p.get("name")
-                val = p.get("value")
-                disp = p.get("display_value")
-                if nm is not None and val is not None:
-                    live_vals[str(nm)] = float(val)
-                if nm is not None and disp is not None:
-                    live_disp[str(nm)] = str(disp)
-            if live_vals:
-                parameter_values = live_vals
-            if live_disp:
-                # attach display values alongside normalized values
-                preset["parameter_display_values"] = live_disp
-        except Exception:
-            # keep existing values if live read fails
-            pass
-
-    # Generate new metadata (with fallback handled inside the function)
-    metadata = await generate_preset_metadata_llm(
-        device_name=device_name,
-        device_type=device_type,
-        parameter_values=parameter_values,
-        store=STORE,
-    )
-
-    # Allowed metadata keys to merge
-    allowed_keys = {
-        "description",
-        "audio_engineering",
-        "natural_language_controls",
-        "warnings",
-        "genre_tags",
-        "subcategory",
-    }
-    if body.fields_allowlist:
-        allowed_keys = allowed_keys.intersection({k for k in body.fields_allowlist})
-
-    updates: Dict[str, Any] = {}
-    if isinstance(metadata, dict):
-        for k in allowed_keys:
-            if k in metadata:
-                updates[k] = metadata[k]
-
-    # Apply updates to preset
-    preset.update(updates)
-    preset["parameter_values"] = parameter_values
-
-    saved = STORE.save_preset(preset_id, preset, local_only=False)
-    try:
-        await broker.publish({
-            "event": "preset_updated",
-            "preset_id": preset_id,
-            "device_type": device_type,
-            "device_name": device_name,
-            "updated_fields": list(updates.keys()),
-        })
-    except Exception:
-        pass
-
-    return {"ok": bool(saved), "preset_id": preset_id, "updated_fields": list(updates.keys()), "values_refreshed": bool(parameter_values)}
-
-
-class ReturnParamByNameBody(BaseModel):
-    return_ref: str  # e.g., "A", "0", or name substring
-    device_ref: str  # device name substring
-    param_ref: str   # parameter name substring (as shown by Live)
-    target_display: Optional[str] = None  # e.g., "25 ms", "20%", "High"
-    target_value: Optional[float] = None  # optional numeric y for continuous
-    mode: Optional[str] = "absolute"
-
-
-def _resolve_return_index(ref: str) -> int:
-    # Try A/B/C → 0/1/2
-    r = ref.strip().lower()
-    if len(r) == 1 and r in "abcd":
-        return ord(r) - ord('a')
-    if r.isdigit():
-        return int(r)
-    # Fallback: scan names
-    resp = udp_request({"op": "get_return_tracks"}, timeout=1.0)
-    returns = ((resp or {}).get("data") or {}).get("returns") or []
-    for rt in returns:
-        nm = str(rt.get("name", "")).lower()
-        if r in nm:
-            return int(rt.get("index", 0))
-    raise HTTPException(404, f"return_not_found:{ref}")
-
-
-def _resolve_device_index(ri: int, ref: str) -> int:
-    resp = udp_request({"op": "get_return_devices", "return_index": ri}, timeout=1.0)
-    devices = ((resp or {}).get("data") or {}).get("devices") or []
-    r = ref.strip().lower()
-    if r.isdigit():
-        return int(r)
-    for d in devices:
-        nm = str(d.get("name", "")).lower()
-        if r in nm:
-            return int(d.get("index", 0))
-    raise HTTPException(404, f"device_not_found:{ref}")
-
-
-def _resolve_param_index(ri: int, di: int, ref: str) -> int:
-    resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.0)
-    params = ((resp or {}).get("data") or {}).get("params") or []
-    r = ref.strip().lower()
-    if r.isdigit():
-        return int(r)
-    for p in params:
-        nm = str(p.get("name", "")).lower()
-        if r in nm:
-            return int(p.get("index", 0))
-    raise HTTPException(404, f"param_not_found:{ref}")
-
-
-def _invert_fit_to_value(fit: dict, target_y: float, vmin: float, vmax: float) -> float:
-    t = (lambda a, b, y: (y - b) / a)
-    ftype = fit.get("type")
-    coeffs = fit.get("coeffs", {})
-
-    if ftype == "linear":
-        a = float(coeffs.get("a", 1.0))
-        b = float(coeffs.get("b", 0.0))
-        x = t(a, b, target_y)
-    elif ftype == "log":
-        a = float(coeffs.get("a", 1.0))
-        b = float(coeffs.get("b", 0.0))
-        # y = a*ln(x)+b -> x = exp((y-b)/a)
-        x = math.exp((target_y - b)/a) if a != 0 else vmin
-    elif ftype == "exp":
-        # y = a * exp(b*x) -> x = ln(y/a) / b
-        a = float(coeffs.get("a", 1.0))
-        b = float(coeffs.get("b", 1.0))
-        if target_y <= 0:
-            x = vmin
-        else:
-            x = math.log(target_y / a) / b if (a != 0 and b != 0) else vmin
-    else:
-        # piecewise
-        pts = fit.get("points") or []
-        pts = sorted([(float(p.get("y")), float(p.get("x"))) for p in pts if p.get("x") is not None and p.get("y") is not None])
-        if not pts:
-            return vmin
-        # find neighbors
-        lo = None; hi = None
-        for y, x in pts:
-            if y <= target_y:
-                lo = (y, x)
-            if y >= target_y and hi is None:
-                hi = (y, x)
-        if lo and hi and hi[0] != lo[0]:
-            # interpolate
-            y1, x1 = lo; y2, x2 = hi
-            tfrac = (target_y - y1) / (y2 - y1)
-            x = x1 + tfrac * (x2 - x1)
-        else:
-            # clamp to nearest
-            x = lo[1] if lo else hi[1]
-    return max(vmin, min(vmax, float(x)))
-
-
-def _parse_target_display(s: str) -> Optional[float]:
-    try:
-        import re
-        m = re.search(r"-?\d+(?:\.\d+)?", str(s))
-        if not m: return None
-        return float(m.group(0))
-    except Exception:
-        return None
+"""Param-by-name helpers moved to server.api.ops"""
 
 
 """/op/return/param_by_name moved to server.api.ops"""
-def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
-    # Resolve indices
-    ri = _resolve_return_index(body.return_ref)
-    di = _resolve_device_index(ri, body.device_ref)
-    pi = _resolve_param_index(ri, di, body.param_ref)
 
     # Fetch current params and signature
     p_resp = udp_request({"op": "get_return_device_params", "return_index": ri, "device_index": di}, timeout=1.2)

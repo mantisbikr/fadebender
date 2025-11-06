@@ -799,6 +799,87 @@ def delete_return_device_map(body: MapDeleteBody) -> Dict[str, Any]:
     return {"ok": ok, "signature": signature, "backend": store.backend}
 
 
+# Additional mapping maintenance endpoints
+
+@router.post("/mappings/push_local")
+def push_local_mappings(signature: Optional[str] = None) -> Dict[str, Any]:
+    store = get_store()
+    if signature:
+        ok = store.push_local_to_firestore(signature)
+        return {"ok": ok, "signature": signature, "backend": store.backend}
+    count = store.push_all_local()
+    return {"ok": True, "pushed": count, "backend": store.backend}
+
+
+@router.post("/mappings/migrate_schema")
+def migrate_mapping_schema(index: Optional[int] = None, device: Optional[int] = None, signature: Optional[str] = None) -> Dict[str, Any]:
+    from server.services.param_analysis import (
+        classify_control_type,
+        group_role_for_device,
+        fit_models,
+        parse_unit_from_display,
+        build_groups_from_params,
+    )
+    from server.services.mapping_utils import make_device_signature, detect_device_type
+
+    store = get_store()
+    sig = (signature or "").strip()
+    if not sig:
+        if index is None or device is None:
+            raise HTTPException(400, "index_device_or_signature_required")
+        devs = request_op("get_return_devices", timeout=1.0, return_index=int(index))
+        devices = ((devs or {}).get("data") or {}).get("devices") or []
+        dname = None
+        for d in devices:
+            if int(d.get("index", -1)) == int(device):
+                dname = str(d.get("name", f"Device {device}"))
+                break
+        params_resp = request_op("get_return_device_params", timeout=1.2, return_index=int(index), device_index=int(device))
+        live_params = ((params_resp or {}).get("data") or {}).get("params") or []
+        sig = make_device_signature(dname or f"Device {device}", live_params)
+
+    data = store.get_device_map_local(sig)
+    if not data and store.enabled:
+        data = store.get_device_map(sig)
+    if not data:
+        return {"ok": False, "error": "map_not_found", "signature": sig}
+
+    params = data.get("params") or []
+    updated_params: list[dict] = []
+    for p in params:
+        name = str(p.get("name", ""))
+        vmin = float(p.get("min", 0.0))
+        vmax = float(p.get("max", 1.0))
+        samples = p.get("samples") or []
+        unit = p.get("unit") or (parse_unit_from_display(str(samples[0].get("display", ""))) if samples else None)
+        ctype, labels = classify_control_type(samples, vmin, vmax)
+        gname, role, _m = group_role_for_device(data.get("device_name"), name)
+        label_map = p.get("label_map")
+        if ctype in ("binary", "quantized") and not label_map:
+            label_map = {}
+            for s in samples:
+                lab = str(s.get("display", ""))
+                if lab not in label_map:
+                    label_map[lab] = float(s.get("value", vmin))
+        fit = p.get("fit") or (fit_models(samples) if ctype == "continuous" else None)
+        p.update({
+            "control_type": ctype,
+            "unit": unit,
+            "labels": labels,
+            "label_map": label_map,
+            "fit": fit,
+            "group": gname,
+            "role": role,
+        })
+        updated_params.append(p)
+
+    groups_meta = build_groups_from_params(updated_params, data.get("device_name"))
+    device_type = detect_device_type(updated_params, data.get("device_name"))
+    ok_local = store.save_device_map_local(sig, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
+    ok_fs = store.save_device_map(sig, {"name": data.get("device_name"), "device_type": device_type, "groups": groups_meta}, updated_params)
+    return {"ok": True, "signature": sig, "local_saved": ok_local, "firestore_saved": ok_fs, "updated_params": len(updated_params)}
+
+
 # --- Legacy learning endpoints (gated) ---
 
 class LearnDeviceBody(BaseModel):
