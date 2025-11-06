@@ -33,7 +33,10 @@ import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
   VolumeOff as VolumeOffIcon,
-  Headphones as HeadphonesIcon
+  Headphones as HeadphonesIcon,
+  Audiotrack as TrackIcon,
+  CallMerge as ReturnIcon,
+  GraphicEq as MasterIcon
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
 import { liveFloatToDb, liveFloatToDbSend, dbFromStatus, panLabelFromStatus } from '../utils/volumeUtils.js';
@@ -1011,9 +1014,9 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
           variant="fullWidth"
           size="small"
         >
-          <Tab icon={<ProjectIcon fontSize="small" />} iconPosition="start" label="Tracks" />
-          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Returns" />
-          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label="Master" />
+          <Tab icon={<TrackIcon fontSize="small" />} iconPosition="start" label="Tracks" />
+          <Tab icon={<ReturnIcon fontSize="small" />} iconPosition="start" label="Returns" />
+          <Tab icon={<MasterIcon fontSize="small" />} iconPosition="start" label="Master" />
         </Tabs>
       </Box>
       <Divider />
