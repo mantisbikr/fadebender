@@ -29,6 +29,8 @@ _DEFAULT_FLAGS: Dict[str, bool] = {
     "new_routing": True,
     "strict_validation": False,
     "rate_limiting": False,
+    # Enable Gemini File Search-backed /help answers
+    "help_rag": False,
 }
 
 

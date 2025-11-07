@@ -24,6 +24,13 @@ from server.services.history import (
 )
 from server.services.intent_mapper import map_llm_to_canonical
 from server.services.knowledge import search_knowledge
+from server.config.feature_flags import is_enabled
+
+try:
+    from server.services.help_rag import try_gemini_file_search  # type: ignore
+except Exception:
+    def try_gemini_file_search(query: str, context=None):  # type: ignore
+        return None
 from server.services.mapping_utils import detect_device_type, make_device_signature
 from server.volume_parser import parse_volume_command
 from server.volume_utils import (
@@ -1029,6 +1036,20 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
     Response shape:
     { ok, answer, sources: [{source, title}] }
     """
+    # If feature flag is enabled, try Gemini File Search first
+    if is_enabled("help_rag"):
+        try:
+            rag = try_gemini_file_search(body.query, body.context)
+            if rag and rag.get("ok") and rag.get("answer"):
+                # Ensure consistent shape with existing client expectations
+                return {
+                    "ok": True,
+                    "answer": rag.get("answer"),
+                    "sources": rag.get("sources", []),
+                }
+        except Exception:
+            pass
+
     matches = search_knowledge(body.query)
     # Compose a short answer from top matches if any
     snippets: list[str] = []

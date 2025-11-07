@@ -21,6 +21,7 @@ help:
 	@echo "  make stop-udp        - stop any process bound to ABLETON_UDP_PORT"
 	@echo "  make returns-status  - print return tracks/devices/params via server"
 	@echo "  make verify-vertex   - validate Vertex creds/model access"
+	@echo "  make import-rag      - create/import File Search store from data/sources"
 	@echo "  make index-knowledge - list discovered knowledge files/headings"
 	@echo "  make export-digest   - export per-signature digest to JSON (OUT=/path SIG=sha1 or RET=0 DEV=0)"
 	@echo "  make import-mapping  - import mapping/grouping/params_meta from JSON (FILE=/path)"
@@ -137,6 +138,16 @@ returns-status:
 # ---- Vertex verification ----
 verify-vertex:
 	cd nlp-service && . .venv/bin/activate && cd .. && python3 scripts/verify_vertex.py
+
+# ---- File Search (RAG) import ----
+import-rag:
+	@echo "Importing RAG sources into Gemini File Search (uses ADC via google-genai)"
+	@set -a && [ -f .env ] && . ./.env && set +a && \
+	  if [ -x "nlp-service/.venv/bin/python" ]; then \
+	    nlp-service/.venv/bin/python scripts/rag_import.py; \
+	  else \
+	    python3 scripts/rag_import.py; \
+	  fi
 
 # ---- Knowledge index ----
 index-knowledge:
