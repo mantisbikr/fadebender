@@ -84,9 +84,16 @@ def search_local(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
     if not _DOCS:
         return []
     q = (query or "").lower()
+    # Lightweight query expansion for common abbreviations
+    expansions: List[str] = []
+    if "er shape" in q:
+        expansions += ["early reflections shape", "early reflection shape"]
+    if re.search(r"\ber\b", q):
+        expansions += [q.replace(" er ", " early reflections ")]
     # tokens: words >= 3 chars, plus keep quoted phrases as-is
     keywords = set(re.findall(r"[a-z0-9_]{3,}", q))
     phrase_boost = [p.lower() for p in re.findall(r"([A-Za-z][A-Za-z\s]{1,40}[A-Za-z])", query or "") if len(p.split()) >= 2]
+    phrase_boost += expansions
     scored: List[Tuple[float, str, str, str]] = []
     for src, title, body in _DOCS:
         hay = (title + "\n" + body).lower()
@@ -156,4 +163,3 @@ def answer_local_rag(query: str) -> Optional[Dict[str, Any]]:
 
 
 __all__ = ["search_local", "answer_local_rag"]
-
