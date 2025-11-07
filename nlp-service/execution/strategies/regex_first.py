@@ -31,6 +31,8 @@ def execute(query: str, model_preference: str | None, strict: bool | None) -> In
     # Try regex patterns first (fast!)
     result, suspected_typos = try_regex_parse(query, "", model_preference)
     if result:
+        if not isinstance(result.get('meta'), dict):
+            result['meta'] = {}
         result['meta']['pipeline'] = 'regex'
         result['meta']['latency_ms'] = (time.perf_counter() - start) * 1000
         result['meta']['cache_hit'] = True  # Always true for regex (no fetching needed)

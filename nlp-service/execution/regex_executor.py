@@ -250,18 +250,20 @@ def _open_capabilities_from_regex(q: str):
         ti = int(m.group(1))
         return {
             "intent": "open_capabilities",
-            "target": {"type": "mixer", "entity": "track", "track_index": ti}
+            "target": {"type": "mixer", "entity": "track", "track_index": ti},
+            "meta": {"parsed_by": "regex_open"}
         }
     m = _re.search(r"open\s+return\s+([a-c])(?:\s+(?:controls|mixer))?\b", qs)
     if m:
         letter = m.group(1).upper()
         return {
             "intent": "open_capabilities",
-            "target": {"type": "mixer", "entity": "return", "return_ref": letter}
+            "target": {"type": "mixer", "entity": "return", "return_ref": letter},
+            "meta": {"parsed_by": "regex_open"}
         }
     m = _re.search(r"open\s+master(?:\s+(?:controls|mixer))?\b", qs)
     if m:
-        return {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "master"}}
+        return {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "master"}, "meta": {"parsed_by": "regex_open"}}
 
     # Sends group (preselect)
     m = _re.search(r"open\s+track\s+(\d+)\s+send\s+([a-c])(?:\s+controls)?\b", qs)
@@ -269,7 +271,8 @@ def _open_capabilities_from_regex(q: str):
         ti = int(m.group(1)); letter = m.group(2).upper()
         return {
             "intent": "open_capabilities",
-            "target": {"type": "mixer", "entity": "track", "track_index": ti, "group_hint": "Sends", "send_ref": letter}
+            "target": {"type": "mixer", "entity": "track", "track_index": ti, "group_hint": "Sends", "send_ref": letter},
+            "meta": {"parsed_by": "regex_open"}
         }
 
     # Device on return by index
@@ -278,7 +281,8 @@ def _open_capabilities_from_regex(q: str):
         letter = m.group(1).upper(); di = int(m.group(2))
         return {
             "intent": "open_capabilities",
-            "target": {"type": "device", "scope": "return", "return_ref": letter, "device_index": di}
+            "target": {"type": "device", "scope": "return", "return_ref": letter, "device_index": di},
+            "meta": {"parsed_by": "regex_open"}
         }
 
     # Device on return by name (+ optional ordinal)
@@ -289,20 +293,20 @@ def _open_capabilities_from_regex(q: str):
         if ords:
             try: payload["device_ordinal_hint"] = int(ords)
             except Exception: pass
-        return {"intent": "open_capabilities", "target": payload}
+        return {"intent": "open_capabilities", "target": payload, "meta": {"parsed_by": "regex_open"}}
 
     # Drawer actions
     m = _re.search(r"open\s+controls\b", qs)
     if m:
-        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "open"}}
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "open"}, "meta": {"parsed_by": "regex_open"}}
     m = _re.search(r"close\s+controls\b", qs)
     if m:
-        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "close"}}
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "close"}, "meta": {"parsed_by": "regex_open"}}
     m = _re.search(r"pin\s+controls\b", qs)
     if m:
-        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "pin"}}
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "pin"}, "meta": {"parsed_by": "regex_open"}}
     m = _re.search(r"unpin\s+controls\b", qs)
     if m:
-        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "unpin"}}
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "unpin"}, "meta": {"parsed_by": "regex_open"}}
 
     return None

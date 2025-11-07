@@ -877,9 +877,17 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
                     if v is None:
                         return ""
                     if isinstance(v, (int, float, str)):
-                        return str(v)
+                        s = str(v)
+                        # Hide Python object reprs like "<Track.RoutingChannel object at 0x...>"
+                        if '<' in s and 'object at' in s:
+                            return ""
+                        # Normalize names
+                        return s.replace('Main', 'Master')
                     if isinstance(v, dict):
-                        return str(v.get("name") or v.get("display") or v.get("channel") or v.get("type") or "").strip()
+                        s = str(v.get("name") or v.get("display") or v.get("channel") or v.get("type") or "").strip()
+                        if '<' in s and 'object at' in s:
+                            return ""
+                        return s.replace('Main', 'Master')
                     return ""
                 if isinstance(at, dict):
                     parts.append("to " + " ".join([_s(at.get('type')), _s(at.get('channel'))]).strip())
