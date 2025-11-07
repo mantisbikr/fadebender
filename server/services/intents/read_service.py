@@ -147,6 +147,7 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         store = get_store()
         mapping = store.get_device_map(sig) if store.enabled else None
 
+        # Exact name match (case-insensitive)
         for p in params:
             if str(p.get("name", "")).lower() == param_name_lower:
                 display_value = p.get("display_value")
@@ -190,6 +191,39 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
                     "max_display": max_display,
                 }
 
+        # Fallback: relaxed matching using normalized keys and contains
+        def _norm(s: str) -> str:
+            import re as _re
+            return _re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+        target_norm = _norm(param_name)
+        # (a) normalized equality
+        for p in params:
+            if _norm(p.get("name", "")) == target_norm:
+                return {
+                    "ok": True,
+                    "field": p.get("name"),
+                    "param_index": p.get("index"),
+                    "display_value": p.get("display_value"),
+                    "normalized_value": p.get("value"),
+                    "unit": None,
+                    "min_display": None,
+                    "max_display": None,
+                }
+        # (b) contains
+        cands = [p for p in params if target_norm and target_norm in _norm(p.get("name", ""))]
+        if len(cands) == 1:
+            p = cands[0]
+            return {
+                "ok": True,
+                "field": p.get("name"),
+                "param_index": p.get("index"),
+                "display_value": p.get("display_value"),
+                "normalized_value": p.get("value"),
+                "unit": None,
+                "min_display": None,
+                "max_display": None,
+            }
+
         raise HTTPException(404, f"parameter_{param_name}_not_found")
 
     # Track device
@@ -217,6 +251,7 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
         store = get_store()
         mapping = store.get_device_map(sig) if store.enabled else None
 
+        # Exact name match (case-insensitive)
         for p in params:
             if str(p.get("name", "")).lower() == param_name_lower:
                 display_value = p.get("display_value")
@@ -258,6 +293,37 @@ def _read_device_param(intent: ReadIntent, param_name: str) -> Dict[str, Any]:
                     "min_display": min_display,
                     "max_display": max_display,
                 }
+
+        # Fallback: relaxed matching
+        def _norm2(s: str) -> str:
+            import re as _re
+            return _re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+        target_norm2 = _norm2(param_name)
+        for p in params:
+            if _norm2(p.get("name", "")) == target_norm2:
+                return {
+                    "ok": True,
+                    "field": p.get("name"),
+                    "param_index": p.get("index"),
+                    "display_value": p.get("display_value"),
+                    "normalized_value": p.get("value"),
+                    "unit": None,
+                    "min_display": None,
+                    "max_display": None,
+                }
+        cands2 = [p for p in params if target_norm2 and target_norm2 in _norm2(p.get("name", ""))]
+        if len(cands2) == 1:
+            p = cands2[0]
+            return {
+                "ok": True,
+                "field": p.get("name"),
+                "param_index": p.get("index"),
+                "display_value": p.get("display_value"),
+                "normalized_value": p.get("value"),
+                "unit": None,
+                "min_display": None,
+                "max_display": None,
+            }
 
         raise HTTPException(404, f"parameter_{param_name}_not_found")
 
