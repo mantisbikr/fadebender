@@ -78,6 +78,21 @@ def get_track_devices(index: int) -> Dict[str, Any]:
     data = read_track_devices(int(index))
     if not data:
         return {"ok": False, "error": "no response"}
+
+    # Enrich devices with device_type from Firestore
+    devices = data.get("devices", [])
+    store = get_store()
+    if store and store.enabled:
+        for device in devices:
+            device_name = device.get("name")
+            if device_name:
+                try:
+                    device_type = store.get_device_type_by_name(device_name)
+                    if device_type:
+                        device["device_type"] = device_type
+                except Exception:
+                    pass
+
     return {"ok": True, "data": data}
 
 
