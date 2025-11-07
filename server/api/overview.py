@@ -625,6 +625,7 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
     devices_pat = (pn == "devices" or pn == "device list")
     sources_pat = (pn in ("sources", "source tracks", "inputs"))
     state_pat = (pn == "state")
+    returns_pat = (pn == "returns")
 
     # Helper to get return letter/index from A/B/C
     def _letter_to_index(letter: str) -> int:
@@ -739,6 +740,43 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
             "source": "snapshot" if tracks_map else "live_fallback",
         }
 
+    # Track sends summary (returns)
+    if returns_pat and domain == "track" and isinstance(index, int):
+        try:
+            # Try Live directly to get up-to-date send values
+            resp = request_op("get_track_sends", timeout=1.0, track_index=int(index)) or {}
+            data = data_or_raw(resp) or {}
+            sends = data.get("sends") or []
+            # Build letter-keyed map with readable display (prefer dB if provided; fallback to normalized %)
+            from server.volume_utils import live_float_to_db_send
+            items = []
+            for s in sends:
+                si = int(s.get("index", 0))
+                letter = chr(ord('A') + si)
+                val = s.get("value")
+                disp = s.get("display_value")
+                if disp is None and val is not None:
+                    try:
+                        disp = f"{live_float_to_db_send(float(val)):.1f} dB"
+                    except Exception:
+                        disp = f"{round(float(val)*100)}%"
+                items.append((letter, disp or "0%"))
+            items.sort(key=lambda x: x[0])
+            display = ", ".join([f"Send {k}: {v}" for k, v in items]) or "(no sends)"
+            return {
+                "track": f"Track {index}",
+                "parameter": "returns",
+                "value": {k: v for k, v in items},
+                "display_value": display,
+                "source": "live",
+            }
+        except Exception:
+            return {
+                "track": f"Track {index}",
+                "parameter": "returns",
+                "error": "failed_to_fetch_sends",
+            }
+
     # Mixer state bundle (volume, pan, mute, solo) + routing summary (on-demand, no warm-up)
     if state_pat and isinstance(index, int):
         from typing import Tuple
@@ -829,14 +867,24 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
         if "mute" in out: parts.append(f"mute {out['mute']['display_value']}")
         if "solo" in out: parts.append(f"solo {out['solo']['display_value']}")
         try:
-            if routing:
-                # Prefer a short routing summary
-                mon = (routing.get("routing", {}) if isinstance(routing, dict) else {}).get("monitor_state") if "routing" in (routing or {}) else routing.get("monitor_state") if isinstance(routing, dict) else None
-                at = (routing.get("routing", {}) if isinstance(routing, dict) else {}).get("audio_to") if "routing" in (routing or {}) else routing.get("audio_to") if isinstance(routing, dict) else None
-                if at and isinstance(at, dict):
-                    parts.append(f"to {at.get('type','')} {at.get('channel','')}".strip())
+            if routing and isinstance(routing, dict):
+                # Accept either {routing:{...}} or flat keys
+                r = routing.get("routing") if isinstance(routing.get("routing"), dict) else routing
+                mon = r.get("monitor_state") if isinstance(r, dict) else None
+                at = r.get("audio_to") if isinstance(r, dict) else None
+                # Sanitize values to readable strings
+                def _s(v):
+                    if v is None:
+                        return ""
+                    if isinstance(v, (int, float, str)):
+                        return str(v)
+                    if isinstance(v, dict):
+                        return str(v.get("name") or v.get("display") or v.get("channel") or v.get("type") or "").strip()
+                    return ""
+                if isinstance(at, dict):
+                    parts.append("to " + " ".join([_s(at.get('type')), _s(at.get('channel'))]).strip())
                 if mon:
-                    parts.append(f"monitor {mon}")
+                    parts.append(f"monitor {_s(mon)}")
         except Exception:
             pass
 

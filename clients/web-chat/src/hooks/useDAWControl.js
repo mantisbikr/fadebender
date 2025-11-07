@@ -1084,6 +1084,7 @@ export function useDAWControl() {
     setCapabilitiesDrawerOpen,
     capabilitiesDrawerPinned,
     setCapabilitiesDrawerPinned,
-    typoCorrections
+    typoCorrections,
+    drawerInit
   };
 }

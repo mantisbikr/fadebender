@@ -62,6 +62,7 @@ function App() {
     setCapabilitiesDrawerOpen,
     capabilitiesDrawerPinned,
     setCapabilitiesDrawerPinned,
+    drawerInit,
     typoCorrections
   } = useDAWControl();
 

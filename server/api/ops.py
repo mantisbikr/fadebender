@@ -14,6 +14,7 @@ from server.volume_utils import db_to_live_float
 from server.core.deps import get_store
 from server.services import value_registry as VR
 from server.services.mapping_utils import make_device_signature
+from server.services import history as History
 import math
 import re as _re
 
@@ -447,3 +448,16 @@ def set_return_param_by_name(body: ReturnParamByNameBody) -> Dict[str, Any]:
     else:
         raise HTTPException(400, "target_required")
     return {"ok": True, "signature": sig, "param": cur.get("name"), "applied_display": applied_disp}
+@router.get("/op/history_state")
+def op_history_state() -> Dict[str, Any]:
+    return History.history_state()
+
+
+@router.post("/op/undo_last")
+def op_undo_last() -> Dict[str, Any]:
+    return History.undo_last(request_op)
+
+
+@router.post("/op/redo_last")
+def op_redo_last() -> Dict[str, Any]:
+    return History.redo_last(request_op)

@@ -208,6 +208,20 @@ def try_regex_parse(
     except Exception:
         pass
 
+    # Pattern: returns summary (track sends)
+    try:
+        import re as _re
+        m = _re.search(r"what\s+is\s+track\s+(\d+)\s+returns\b", q)
+        if m:
+            ti = int(m.group(1))
+            return {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Track {ti}", "plugin": None, "parameter": "returns"}],
+                "meta": {"parsed_by": "regex_returns"}
+            }, []
+    except Exception:
+        pass
+
     # Questions about problems (treat as help-style queries)
     if any(phrase in q for phrase in [
         "too soft", "too quiet", "can't hear", "how to", "what does",
