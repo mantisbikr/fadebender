@@ -24,6 +24,7 @@ from server.services.history import (
 )
 from server.services.intent_mapper import map_llm_to_canonical
 from server.services.knowledge import search_knowledge
+from server.services.local_rag import answer_local_rag
 from server.config.feature_flags import is_enabled
 
 try:
@@ -1036,12 +1037,20 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
     Response shape:
     { ok, answer, sources: [{source, title}] }
     """
-    # If feature flag is enabled, try Gemini File Search first
+    # If feature flag is enabled, try enhanced help paths in order:
+    # 1) Local RAG (no external services), 2) Gemini File Search (if available)
     if is_enabled("help_rag"):
+        # Local RAG first (fast, no network)
+        try:
+            local = answer_local_rag(body.query)
+            if local and local.get("ok") and local.get("answer"):
+                return local
+        except Exception:
+            pass
+        # Optional: File Search (if SDK supports it and store is configured)
         try:
             rag = try_gemini_file_search(body.query, body.context)
             if rag and rag.get("ok") and rag.get("answer"):
-                # Ensure consistent shape with existing client expectations
                 return {
                     "ok": True,
                     "answer": rag.get("answer"),
