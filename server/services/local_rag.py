@@ -110,6 +110,16 @@ def search_local(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
     return [(src, title, body) for _, src, title, body in scored[:limit]]
 
 
+def _trim_lines(text: str, max_lines: int = 6, max_len: int = 120) -> str:
+    lines = [ln.strip() for ln in (text or '').splitlines() if ln.strip()]
+    out = []
+    for ln in lines[:max_lines]:
+        if len(ln) > max_len:
+            ln = ln[: max_len - 1].rstrip() + '…'
+        out.append(ln)
+    return "\n".join(out)
+
+
 def _llm_summarize(question: str, snippets: List[Tuple[str, str, str]]) -> Optional[str]:
     """Ask LLM (Vertex) to answer using provided snippets. Returns None on error."""
     try:
@@ -133,10 +143,12 @@ def _llm_summarize(question: str, snippets: List[Tuple[str, str, str]]) -> Optio
         context = "\n\n".join(kb_text[:3])
         sys_prompt = (
             "You are an audio engineering assistant for Ableton Live."
-            " Answer concisely using the provided context only."
-            " If advice varies by material, add one or two short bullets."
+            " Answer ONLY using the provided context."
+            " Format as 3–5 terse bullets, max ~80 chars each."
+            " Cover: what it does, how to set it, typical ranges."
+            " No preamble, no outro, no fluff."
         )
-        cfg = types.GenerateContentConfig(temperature=0.1, max_output_tokens=512)
+        cfg = types.GenerateContentConfig(temperature=0.1, max_output_tokens=220)
         contents = [
             types.Content(role="user", parts=[f"{sys_prompt}\n\nContext:\n{context}\n\nQuestion: {question}\nAnswer:"])
         ]
@@ -144,7 +156,7 @@ def _llm_summarize(question: str, snippets: List[Tuple[str, str, str]]) -> Optio
         text = getattr(resp, "text", None)
         if not text:
             return None
-        return text.strip()
+        return _trim_lines(text.strip(), max_lines=6, max_len=120)
     except Exception:
         return None
 
