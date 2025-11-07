@@ -4,7 +4,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SingleMixerParamEditor from './SingleMixerParamEditor';
 import SingleDeviceParamEditor from './SingleDeviceParamEditor';
 
-export default function ParamAccordion({ capabilities, onParamClick }) {
+export default function ParamAccordion({ capabilities, onParamClick, initialGroup = null, initialParam = null }) {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [editingParam, setEditingParam] = useState(null); // {param, group}
@@ -27,6 +27,31 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
 
   // Select first group by default
   const activeGroup = selectedGroup || (allGroups.length > 0 ? allGroups[0].name : null);
+
+  // Apply initial group/param focus when provided
+  useEffect(() => {
+    if (!capabilities) return;
+    let applied = false;
+    if (initialGroup) {
+      const g = allGroups.find(g => String(g.name || '').toLowerCase() === String(initialGroup).toLowerCase());
+      if (g) {
+        setSelectedGroup(g.name);
+        setExpanded(true);
+        applied = true;
+      }
+    }
+    if (initialParam) {
+      try {
+        const gname = applied ? initialGroup : (selectedGroup || (allGroups[0] && allGroups[0].name));
+        const g = allGroups.find(x => x.name === gname) || { params: [] };
+        const p = (g.params || []).find(p => String(p.name || '').toLowerCase() === String(initialParam).toLowerCase());
+        if (p) {
+          setEditingParam(p);
+          setExpanded(true);
+        }
+      } catch {}
+    }
+  }, [capabilities, initialGroup, initialParam]);
 
   // Reset local UI state when capabilities context changes (prevent stale group/expanded state)
   useEffect(() => {

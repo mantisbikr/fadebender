@@ -325,6 +325,11 @@ class ApiService {
     if (!response.ok) throw new Error(`Return device params failed: ${response.statusText}`);
     return response.json();
   }
+  async getReturnDevices(index) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/devices?index=${index}`);
+    if (!response.ok) throw new Error(`Return devices failed: ${response.statusText}`);
+    return response.json();
+  }
   async getReturnDeviceCapabilities(index, device) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/return/device/capabilities?index=${index}&device=${device}`);
     if (!response.ok) throw new Error(`Return device capabilities failed: ${response.statusText}`);

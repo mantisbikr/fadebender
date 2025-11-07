@@ -127,6 +127,14 @@ def try_regex_parse(
     except Exception:
         pass
 
+    # Open capabilities (drawer) requests
+    try:
+        oc = _open_capabilities_from_regex(q)
+        if oc:
+            return oc, []
+    except Exception:
+        pass
+
     # Pattern: device list queries
     try:
         import re as _re
@@ -210,3 +218,77 @@ def try_regex_parse(
     # No match - extract suspected typos for learning
     suspected_typos = _extract_suspected_typos(query)
     return None, suspected_typos
+
+
+def _open_capabilities_from_regex(q: str):
+    """Recognize "open …" drawer requests and return an open_capabilities intent.
+
+    Returns intent dict or None.
+    """
+    import re as _re
+    qs = q.strip().lower()
+    if not qs.startswith("open "):
+        return None
+
+    # Mixer scopes
+    m = _re.search(r"open\s+track\s+(\d+)(?:\s+(?:controls|mixer))?\b", qs)
+    if m:
+        ti = int(m.group(1))
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "track", "track_index": ti}
+        }
+    m = _re.search(r"open\s+return\s+([a-c])(?:\s+(?:controls|mixer))?\b", qs)
+    if m:
+        letter = m.group(1).upper()
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "return", "return_ref": letter}
+        }
+    m = _re.search(r"open\s+master(?:\s+(?:controls|mixer))?\b", qs)
+    if m:
+        return {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "master"}}
+
+    # Sends group (preselect)
+    m = _re.search(r"open\s+track\s+(\d+)\s+send\s+([a-c])(?:\s+controls)?\b", qs)
+    if m:
+        ti = int(m.group(1)); letter = m.group(2).upper()
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "track", "track_index": ti, "group_hint": "Sends", "send_ref": letter}
+        }
+
+    # Device on return by index
+    m = _re.search(r"open\s+return\s+([a-c])\s+device\s+(\d+)\b", qs)
+    if m:
+        letter = m.group(1).upper(); di = int(m.group(2))
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "device", "scope": "return", "return_ref": letter, "device_index": di}
+        }
+
+    # Device on return by name (+ optional ordinal)
+    m = _re.search(r"open\s+return\s+([a-c])\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?\b", qs)
+    if m:
+        letter = m.group(1).upper(); name = m.group(2).strip(); ords = m.group(3)
+        payload = {"type": "device", "scope": "return", "return_ref": letter, "device_name_hint": name}
+        if ords:
+            try: payload["device_ordinal_hint"] = int(ords)
+            except Exception: pass
+        return {"intent": "open_capabilities", "target": payload}
+
+    # Drawer actions
+    m = _re.search(r"open\s+controls\b", qs)
+    if m:
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "open"}}
+    m = _re.search(r"close\s+controls\b", qs)
+    if m:
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "close"}}
+    m = _re.search(r"pin\s+controls\b", qs)
+    if m:
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "pin"}}
+    m = _re.search(r"unpin\s+controls\b", qs)
+    if m:
+        return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "unpin"}}
+
+    return None

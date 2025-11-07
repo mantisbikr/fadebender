@@ -394,6 +394,8 @@ function App() {
           capabilities={currentCapabilities}
           pinned={capabilitiesDrawerPinned}
           onPinnedChange={setCapabilitiesDrawerPinned}
+          initialGroup={drawerInit?.group}
+          initialParam={drawerInit?.param}
           ignoreCloseSelectors={[ '#chat-input-root' ]}
         />
       )}

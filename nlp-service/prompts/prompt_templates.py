@@ -157,6 +157,14 @@ EXAMPLES (including typos/variations):
 - "what does track 1 send A affect" → {"intent": "get_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "send A effects"}]}
 - "what is track 1 state" → {"intent": "get_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "state"}]}
 
+# UI / Drawer control (open capabilities)
+- "open track 1 controls" → {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "track", "track_index": 1}}
+- "open return A" → {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "return", "return_ref": "A"}}
+- "open master mixer" → {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "master"}}
+- "open track 1 send A controls" → {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "track", "track_index": 1, "group_hint": "Sends", "send_ref": "A"}}
+- "open return A device 1" → {"intent": "open_capabilities", "target": {"type": "device", "scope": "return", "return_ref": "A", "device_index": 1}}
+- "open return B reverb" → {"intent": "open_capabilities", "target": {"type": "device", "scope": "return", "return_ref": "B", "device_name_hint": "reverb"}}
+
 - "how do I control sends?" → {"intent": "question_response", "answer": "You can control sends by specifying the track and send letter...", "suggested_intents": ["set track 1 send A to -12 dB", "increase track 2 send B by 3 dB"]}
 - "boost vocals" → {"intent": "clarification_needed", "question": "Which track contains the vocals?", "context": {"action": "increase", "parameter": "volume"}}
 

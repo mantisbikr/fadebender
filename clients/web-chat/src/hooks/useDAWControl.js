@@ -20,6 +20,7 @@ export function useDAWControl() {
   const [currentCapabilities, setCurrentCapabilities] = useState(null);
   const [capabilitiesDrawerOpen, setCapabilitiesDrawerOpen] = useState(false);
   const [capabilitiesDrawerPinned, setCapabilitiesDrawerPinned] = useState(false);
+  const [drawerInit, setDrawerInit] = useState({ group: null, param: null });
   const [typoCorrections, setTypoCorrections] = useState({});
 
   // Load feature flags once
@@ -339,6 +340,79 @@ export function useDAWControl() {
           }
         } catch (e) {
           addMessage({ type: 'error', content: `Query error: ${e.message}` });
+        }
+        return;
+      }
+
+      // Handle open_capabilities (UI-only) intents
+      if (rawIntent && rawIntent.intent === 'open_capabilities' && rawIntent.target) {
+        try {
+          const t = rawIntent.target || {};
+          const type = t.type;
+          if (type === 'drawer') {
+            const act = String(t.action || 'open');
+            if (act === 'open') setCapabilitiesDrawerOpen(true);
+            if (act === 'close') setCapabilitiesDrawerOpen(false);
+            if (act === 'pin') setCapabilitiesDrawerPinned(true);
+            if (act === 'unpin') setCapabilitiesDrawerPinned(false);
+            return;
+          }
+          if (type === 'mixer') {
+            setDrawerInit({ group: t.group_hint || null, param: (t.send_ref ? `Send ${t.send_ref.toUpperCase()}` : null) });
+            if (t.entity === 'track' && typeof t.track_index === 'number') {
+              const caps = await apiService.getTrackMixerCapabilities(Number(t.track_index) - 1);
+              if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+              return;
+            }
+            if (t.entity === 'return' && typeof t.return_ref === 'string') {
+              const ri = t.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+              const caps = await apiService.getReturnMixerCapabilities(ri);
+              if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+              return;
+            }
+            if (t.entity === 'master') {
+              const caps = await apiService.getMasterMixerCapabilities();
+              if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+              return;
+            }
+          }
+          if (type === 'device' && t.scope === 'return') {
+            const ri = typeof t.return_index === 'number' ? Number(t.return_index) : (typeof t.return_ref === 'string' ? t.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0) : null);
+            if (ri == null) throw new Error('Missing return ref');
+            let di = t.device_index;
+            if (typeof di !== 'number' && t.device_name_hint) {
+              // Resolve by name
+              try {
+                const devs = await apiService.getReturnDevices(ri);
+                const list = (devs && devs.data && Array.isArray(devs.data.devices)) ? devs.data.devices : [];
+                const name = String(t.device_name_hint).toLowerCase();
+                const matches = list.filter(d => String(d.name || '').toLowerCase().includes(name));
+                if (matches.length === 1) di = Number(matches[0].index);
+                if (matches.length > 1 && typeof t.device_ordinal_hint === 'number') {
+                  const ord = Math.max(1, Number(t.device_ordinal_hint));
+                  di = Number(matches[ord - 1]?.index);
+                }
+                if (typeof di !== 'number') {
+                  const suggestions = matches.slice(0, 6).map(d => ({ label: d.name, value: `open return ${String.fromCharCode('A'.charCodeAt(0)+ri)} ${d.name}` }));
+                  addMessage({ type: 'question', content: 'Which device?', data: { suggested_intents: suggestions } });
+                  return;
+                }
+              } catch (e) {
+                addMessage({ type: 'error', content: `Unable to resolve device: ${e.message}` });
+                return;
+              }
+            }
+            // Open capabilities
+            const caps = await apiService.getReturnDeviceCapabilities(ri, Number(di));
+            if (caps && caps.ok) {
+              setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true);
+              // Optional focus: if param_hint present, set drawerInit
+              setDrawerInit({ group: null, param: (t.param_hint || null) });
+            }
+            return;
+          }
+        } catch (e) {
+          addMessage({ type: 'error', content: `Open error: ${e.message}` });
         }
         return;
       }

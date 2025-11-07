@@ -7,7 +7,7 @@ import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Toolti
 import { Close as CloseIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon } from '@mui/icons-material';
 import ParamAccordion from './ParamAccordion.jsx';
 
-export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned = false, onPinnedChange, ignoreCloseSelectors = [] }) {
+export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned = false, onPinnedChange, ignoreCloseSelectors = [], initialGroup = null, initialParam = null }) {
   if (!capabilities) {
     return null;
   }
@@ -102,7 +102,7 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
           <Divider sx={{ mb: 2 }} />
 
           {/* Capabilities content */}
-          <ParamAccordion capabilities={capabilities} />
+          <ParamAccordion capabilities={capabilities} initialGroup={initialGroup} initialParam={initialParam} />
         </Box>
       </Drawer>
     </ClickAwayListener>
