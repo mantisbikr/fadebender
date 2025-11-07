@@ -130,11 +130,19 @@ def search_local(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
         if any(t in ("reverb", "delay", "compressor", "eq", "chorus", "flanger", "phaser") for t in device_terms):
             if "instrument" in title_lc or "/instruments/" in src_lc:
                 score -= 3.0
+            # If none of the device terms exist in title/src/body, demote strongly
+            if not any(t in hay or t in title_lc or t in src_lc for t in device_terms):
+                score -= 4.0
         if score > 0:
             # prefer shorter sections slightly
             score += max(0.0, 2.0 - min(len(body), 2000) / 2000.0)
             scored.append((score, src, title, body))
     scored.sort(key=lambda x: x[0], reverse=True)
+    # Final filter: if strong device intent, keep only entries that mention any device term
+    if device_terms:
+        filtered = [(s, t, b) for _, s, t, b in scored if any(dt in (s.lower() + t.lower() + b.lower()) for dt in device_terms)]
+        if filtered:
+            return filtered[:limit]
     return [(src, title, body) for _, src, title, body in scored[:limit]]
 
 
@@ -167,7 +175,8 @@ def _llm_summarize(question: str, snippets: List[Tuple[str, str, str]]) -> Optio
         client = genai.Client(vertexai=True, project=project, location=location)
         kb_text = []
         for src, title, body in snippets:
-            kb_text.append(f"Source: {src}\nTitle: {title}\n---\n{body}\n")
+            excerpt = _best_windows(body, [w for w in re.findall(r"[a-z0-9_]{3,}", (question or "").lower())], max_chars=700)
+            kb_text.append(f"Source: {src}\nTitle: {title}\n---\n{excerpt}\n")
         context = "\n\n".join(kb_text[:3])
         sys_prompt = (
             "You are an audio engineering assistant for Ableton Live."
@@ -197,9 +206,58 @@ def answer_local_rag(query: str) -> Optional[Dict[str, Any]]:
     # Try LLM summarize; fallback to concatenated snippets
     ans = _llm_summarize(query, matches)
     if not ans:
-        ans = "\n\n".join([f"{t}:\n{b}" for _, t, b in matches[:2]])
+        # Build compact excerpts around best keyword windows
+        terms = [w for w in re.findall(r"[a-z0-9_]{3,}", (query or "").lower())]
+        excerpts: List[str] = []
+        for _, t, b in matches[:2]:
+            ex = _best_windows(b, terms, max_chars=600)
+            if ex:
+                excerpts.append(f"{t}:\n{ex}")
+        ans = "\n\n".join(excerpts) if excerpts else ""
     sources = [{"source": s, "title": t} for s, t, _ in matches]
     return {"ok": True, "answer": ans, "sources": sources}
+
+
+def _best_windows(text: str, terms: List[str], max_chars: int = 600, window: int = 360) -> str:
+    """Return concatenated windows around first few term matches, limited in size."""
+    if not text:
+        return ""
+    tl = text
+    found: List[Tuple[int, int]] = []
+    tl_low = tl.lower()
+    for t in terms[:6]:
+        if not t or len(t) < 3:
+            continue
+        i = tl_low.find(t)
+        if i >= 0:
+            start = max(0, i - window // 2)
+            end = min(len(tl), i + window // 2)
+            found.append((start, end))
+    if not found:
+        return tl[:max_chars]
+    # Merge overlapping windows
+    found.sort()
+    merged: List[Tuple[int, int]] = []
+    for s, e in found:
+        if not merged or s > merged[-1][1] + 20:
+            merged.append((s, e))
+        else:
+            ps, pe = merged[-1]
+            merged[-1] = (ps, max(pe, e))
+    # Build excerpt with ellipses between
+    parts: List[str] = []
+    used = 0
+    for s, e in merged:
+        seg = tl[s:e].strip()
+        if not seg:
+            continue
+        if used + len(seg) > max_chars:
+            seg = seg[: max(0, max_chars - used - 1)].rstrip() + "…"
+        parts.append(seg)
+        used += len(seg)
+        if used >= max_chars:
+            break
+    return " …\n… ".join(parts)
 
 
 __all__ = ["search_local", "answer_local_rag"]
