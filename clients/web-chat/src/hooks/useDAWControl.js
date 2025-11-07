@@ -260,8 +260,15 @@ export function useDAWControl() {
           const help = await apiService.getHelp(processed.processed, conversationContext);
           addMessage({ type: 'info', content: help.answer, data: help });
         } catch (e) {
-          updateMessageStatus(userMessageId, 'error');
-          addMessage({ type: 'error', content: `Help error: ${e.message}` });
+          // Fallback: route through /chat which also handles question_response
+          try {
+            const fallback = await apiService.chat(processed.processed, true, modelPref);
+            const text = fallback.answer || fallback.summary || 'Help response';
+            addMessage({ type: 'info', content: text, data: fallback });
+          } catch (e2) {
+            updateMessageStatus(userMessageId, 'error');
+            addMessage({ type: 'error', content: `Help error: ${e.message}; fallback failed: ${e2.message}` });
+          }
         }
         return;
       }
@@ -824,12 +831,19 @@ export function useDAWControl() {
         content: `❓ ${query}`
       });
 
-      const response = await apiService.getHelp(query, conversationContext);
-      addMessage({
-        type: 'info',
-        content: response.answer,
-        data: response
-      });
+      try {
+        const response = await apiService.getHelp(query, conversationContext);
+        addMessage({ type: 'info', content: response.answer, data: response });
+      } catch (e) {
+        // Fallback: try routing through /chat and show summary/answer
+        try {
+          const fallback = await apiService.chat(query, true, modelPref);
+          const text = fallback.answer || fallback.summary || 'Help response';
+          addMessage({ type: 'info', content: text, data: fallback });
+        } catch (e2) {
+          addMessage({ type: 'error', content: `❌ Help error: ${e.message}; fallback failed: ${e2.message}` });
+        }
+      }
 
     } catch (error) {
       addMessage({
