@@ -78,6 +78,21 @@ def _ensure_index() -> None:
     _INDEX_BUILT = True
 
 
+def _device_hints(q: str) -> List[str]:
+    ql = (q or "").lower()
+    hints = []
+    for w in [
+        "reverb", "delay", "compressor", "eq", "equalizer", "chorus", "flanger",
+        "phaser", "saturator", "tension", "operator", "analog", "wavetable",
+    ]:
+        if w in ql:
+            hints.append(w)
+    # special phrase
+    if "early reflections" in ql or " er " in f" {ql} ":
+        hints.append("early reflections")
+    return hints
+
+
 def search_local(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
     """Return top (source, title, body) matches by simple keyword scoring."""
     _ensure_index()
@@ -94,6 +109,7 @@ def search_local(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
     keywords = set(re.findall(r"[a-z0-9_]{3,}", q))
     phrase_boost = [p.lower() for p in re.findall(r"([A-Za-z][A-Za-z\s]{1,40}[A-Za-z])", query or "") if len(p.split()) >= 2]
     phrase_boost += expansions
+    device_terms = _device_hints(q)
     scored: List[Tuple[float, str, str, str]] = []
     for src, title, body in _DOCS:
         hay = (title + "\n" + body).lower()
@@ -102,6 +118,18 @@ def search_local(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
         for ph in phrase_boost:
             if ph in hay:
                 score += 4.0
+        # Device/path/title boosts
+        src_lc = (src or "").lower()
+        title_lc = (title or "").lower()
+        for t in device_terms:
+            if t in src_lc:
+                score += 3.0
+            if t in title_lc:
+                score += 2.0
+        # Prefer audio effects over instruments for effect queries
+        if any(t in ("reverb", "delay", "compressor", "eq", "chorus", "flanger", "phaser") for t in device_terms):
+            if "instrument" in title_lc or "/instruments/" in src_lc:
+                score -= 3.0
         if score > 0:
             # prefer shorter sections slightly
             score += max(0.0, 2.0 - min(len(body), 2000) / 2000.0)
