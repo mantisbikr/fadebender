@@ -1095,3 +1095,17 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
                 "- Pre/Post: see Return routing via /return/routing (field ‘sends_mode’)."
             )
             return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
+
+    # Default answer path: if we have snippets, return a concise merge of top matches.
+    if snippets:
+        # Keep it compact: join top 1-2 sections
+        answer = "\n\n".join(snippets[:2])
+        return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
+
+    # Final fallback when nothing matched
+    answer = (
+        "I couldn't find a specific section for that.\n"
+        "Try being more specific (device + parameter), e.g., 'Explain ER Shape in Ableton Reverb'. "
+        "Common tips: increase predelay (20–50 ms) for vocal clarity, keep decay moderate, and use high‑cut to reduce harshness."
+    )
+    return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
