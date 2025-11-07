@@ -493,6 +493,11 @@ Examples:
         action='store_true',
         help='Run Phase 1 only (NLP layer testing, no Live needed)'
     )
+    parser.add_argument(
+        '--yes', '-y',
+        action='store_true',
+        help='Auto-confirm Live is running (for automated testing)'
+    )
     args = parser.parse_args()
 
     print(color_text("\n🎛️  FadeBender Comprehensive NLP Testing Suite", 'BLUE'))
@@ -570,10 +575,14 @@ Examples:
     print_phase_header(2, "Integration Testing", "Live execution and capabilities validation (requires Ableton Live)")
 
     print(color_text("⚠️  This phase requires Ableton Live to be running with UDP enabled.\n", 'YELLOW'))
-    user_input = input(color_text("Is Live running and ready? (y/N): ", 'YELLOW'))
-    if user_input.lower() != 'y':
-        print(color_text("\nSkipping Phase 2. Start Live and run again.\n", 'YELLOW'))
-        return 0
+
+    if args.yes:
+        print(color_text("Auto-confirming Live is running (--yes flag)\n", 'YELLOW'))
+    else:
+        user_input = input(color_text("Is Live running and ready? (y/N): ", 'YELLOW'))
+        if user_input.lower() != 'y':
+            print(color_text("\nSkipping Phase 2. Start Live and run again.\n", 'YELLOW'))
+            return 0
 
     all_results.extend(phase2_execution_and_capabilities())
     all_results.extend(phase2_error_handling())

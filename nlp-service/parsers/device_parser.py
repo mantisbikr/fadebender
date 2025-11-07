@@ -655,7 +655,162 @@ def parse_return_device_generic(q: str, query: str, error_msg: str, model_prefer
 
 
 # Main device parser coordinator
+def parse_return_device_param_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse: increase return A reverb decay by 20 percent
+
+    Matches relative device parameter changes using increase/decrease by pattern.
+    """
+    try:
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\b(increase|decrease|raise|lower)\s+return\s+([a-d])\s+(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+by\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        if m:
+            verb = m.group(1)
+            return_ref = m.group(2).upper()
+            device_raw = m.group(3)
+            device_ord = m.group(4)
+            pname = m.group(5).strip()
+            value = float(m.group(6))
+            unit_raw = m.group(7)
+
+            # Device name must be present
+            if not device_raw:
+                return None
+
+            # Apply sign based on verb (decrease/lower = negative)
+            if verb in ('decrease', 'lower'):
+                value = -value
+
+            dev_norm = _normalize_device_name(device_raw)
+            param_ref = _normalize_param_name(pname)
+            unit_out = _normalize_unit(unit_raw)
+
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{'track': f'Return {return_ref}', 'plugin': dev_norm, 'parameter': param_ref}],
+                'operation': {'type': 'relative', 'value': value, 'unit': unit_out},
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
+            }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
+    except Exception:
+        pass
+    return None
+
+
+def parse_track_device_param_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse: increase track 1 reverb decay by 20 percent
+
+    Matches relative device parameter changes using increase/decrease by pattern.
+    """
+    try:
+        dev_pat = _get_device_pattern()
+        m = re.search(rf"\b(increase|decrease|raise|lower)\s+track\s+(\d+)\s+(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+(?!device\s+\d+\b)(.+?)\s+by\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        if m:
+            verb = m.group(1)
+            track_num = int(m.group(2))
+            device_raw = m.group(3)
+            device_ord = m.group(4)
+            pname = m.group(5).strip()
+            value = float(m.group(6))
+            unit_raw = m.group(7)
+
+            # Device name must be present
+            if not device_raw:
+                return None
+
+            # Apply sign based on verb (decrease/lower = negative)
+            if verb in ('decrease', 'lower'):
+                value = -value
+
+            dev_norm = _normalize_device_name(device_raw)
+            unit_out = _normalize_unit(unit_raw)
+
+            out = {
+                'intent': 'set_parameter',
+                'targets': [{'track': f'Track {track_num}', 'plugin': dev_norm, 'parameter': pname}],
+                'operation': {'type': 'relative', 'value': value, 'unit': unit_out},
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
+            }
+            if device_ord:
+                try:
+                    out['targets'][0]['device_ordinal'] = int(device_ord)
+                except Exception:
+                    pass
+            return out
+    except Exception:
+        pass
+    return None
+
+
+def parse_return_device_ordinal_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse: increase return A device 2 feedback by 20 percent"""
+    try:
+        m = re.search(rf"\b(increase|decrease|raise|lower)\s+return\s+([a-d])\s+device\s+(\d+)\s+(.+?)\s+by\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        if m:
+            verb = m.group(1)
+            return_ref = m.group(2).upper()
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            value = float(m.group(5))
+            unit_raw = m.group(6)
+
+            # Apply sign based on verb (decrease/lower = negative)
+            if verb in ('decrease', 'lower'):
+                value = -value
+
+            unit_out = _normalize_unit(unit_raw)
+
+            return {
+                'intent': 'set_parameter',
+                'targets': [{'track': f'Return {return_ref}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord)}],
+                'operation': {'type': 'relative', 'value': value, 'unit': unit_out},
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+    return None
+
+
+def parse_track_device_ordinal_relative(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
+    """Parse: increase track 1 device 2 feedback by 20 percent"""
+    try:
+        m = re.search(rf"\b(increase|decrease|raise|lower)\s+track\s+(\d+)\s+device\s+(\d+)\s+(.+?)\s+by\s+(-?\d+(?:\.\d+)?)(?:\s*({UNITS_PAT}))?\b", q)
+        if m:
+            verb = m.group(1)
+            track_num = int(m.group(2))
+            device_ord = m.group(3)
+            pname = m.group(4).strip()
+            value = float(m.group(5))
+            unit_raw = m.group(6)
+
+            # Apply sign based on verb (decrease/lower = negative)
+            if verb in ('decrease', 'lower'):
+                value = -value
+
+            unit_out = _normalize_unit(unit_raw)
+
+            return {
+                'intent': 'set_parameter',
+                'targets': [{'track': f'Track {track_num}', 'plugin': 'device', 'parameter': pname, 'device_ordinal': int(device_ord)}],
+                'operation': {'type': 'relative', 'value': value, 'unit': unit_out},
+                'meta': {'utterance': query, 'fallback': True, 'error': error_msg, 'model_selected': _safe_model_name(model_preference)}
+            }
+    except Exception:
+        pass
+    return None
+
+
 DEVICE_PARSERS = [
+    # Relative parsers (try these first for performance - catch increase/decrease before trying absolutes)
+    parse_return_device_param_relative,     # "increase return A reverb decay by 20%" (RELATIVE)
+    parse_track_device_param_relative,      # "increase track 1 reverb decay by 20%" (RELATIVE)
+    parse_return_device_ordinal_relative,   # "increase return A device 1 decay by 20%" (RELATIVE)
+    parse_track_device_ordinal_relative,    # "increase track 1 device 2 gain by 3 dB" (RELATIVE)
+    # Absolute parsers
     parse_track_device_param,           # "set track 1 reverb decay to 2 s" (device in DEV_PAT)
     parse_return_device_param,          # "set return A reverb decay to 2 s" (device in DEV_PAT)
     parse_return_device_label,          # "set return A reverb mode to hall" (label selection)

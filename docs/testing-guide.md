@@ -2,6 +2,13 @@
 
 ## Quick Start
 
+**Run ALL tests (recommended before commits/deploys):**
+```bash
+bash scripts/run_all_tests.sh
+```
+
+This runs all functional tests + optional performance tests and provides a summary.
+
 **Run all pan tests (recommended after any pan-related changes):**
 ```bash
 bash scripts/run_all_pan_tests.sh
@@ -71,6 +78,18 @@ python3 scripts/test_nlp_comprehensive.py
 - Typo correction
 - Relative changes ("increase by X")
 
+#### Device Relative Changes (Regex Parser Validation):
+```bash
+python3 scripts/test_device_relative_parsers.py
+```
+
+**What it tests:**
+- All 4 device relative parsers (return/track × param/ordinal)
+- Increase/decrease/raise/lower verbs
+- Correct sign application (decrease = negative value)
+- Multiple units (%, dB, ms)
+- Expected: All 8 test cases pass with operation.type='relative'
+
 #### Get Operations:
 ```bash
 # Query operations (what is X?)
@@ -102,6 +121,27 @@ bash scripts/test_device_relative_timing.sh
 - Regex vs LLM fallback performance
 - Expected: <10ms for regex hits, 300-400ms for LLM
 
+#### Absolute vs Relative Performance Comparison:
+```bash
+python3 scripts/profile_relative_comparison.py
+```
+
+**What it tests:**
+- Validates relative operations are as fast as absolute operations
+- Confirms regex-first optimization is working
+- Expected: ~0.07ms for both (warm cache)
+- Regression indicator: If relative falls back to LLM, optimization broke
+
+#### Parser Flow Trace (Debugging):
+```bash
+python3 scripts/trace_parsing_flow.py
+```
+
+**What it tests:**
+- Shows detailed parsing flow step-by-step
+- Identifies which parser matched and when
+- Useful for debugging why a query is slow or failing
+
 #### Typo Learning Timing:
 ```bash
 bash scripts/test_typo_learning_timing.sh
@@ -116,6 +156,7 @@ bash scripts/test_typo_learning_timing.sh
 - After optimization changes
 - When investigating performance issues
 - Before/after regex parser additions
+- To validate performance hasn't regressed
 
 ---
 
@@ -205,21 +246,31 @@ Notes:
 
 ## Recommended Testing Workflow
 
-### Before Every Commit:
+### Before Every Commit (Quick):
 ```bash
-# 1. Run pan tests (if you changed pan-related code)
-bash scripts/run_all_pan_tests.sh
-
-# 2. Run comprehensive NLP tests
-python3 scripts/test_nlp_comprehensive.py
-
-# 3. Run get operations tests
-python3 scripts/test_nlp_get_comprehensive.py
+# Run all critical tests in one command
+bash scripts/run_all_tests.sh
 ```
+
+This single command runs:
+- Pan command tests
+- NLP comprehensive tests
+- Device relative parser tests
+- Get operations tests
+- Web UI validation
+- Optional performance tests
+
+**Exit code:** `0` = all pass, `1` = some failed
 
 ### After Parser Changes:
 ```bash
-# Verify regex performance is maintained
+# 1. Verify functional correctness
+python3 scripts/test_device_relative_parsers.py
+
+# 2. Verify regex performance is maintained
+python3 scripts/profile_relative_comparison.py
+
+# 3. Check detailed timing
 bash scripts/test_device_relative_timing.sh
 ```
 
@@ -231,11 +282,8 @@ python3 scripts/test_nlp_comprehensive.py
 
 ### Before Production Deploy:
 ```bash
-# All validation tests
-bash scripts/run_all_pan_tests.sh
-python3 scripts/test_nlp_comprehensive.py
-python3 scripts/test_nlp_get_comprehensive.py
-python3 scripts/test_webui_validation.py
+# All validation tests in one command
+bash scripts/run_all_tests.sh
 ```
 
 ---
@@ -272,6 +320,12 @@ SUMMARY: X passed, Y failed
 ### For new device operations:
 1. Add test cases to `test_nlp_comprehensive.py`
 2. Consider adding to `test_device_relative_timing.sh` for performance
+
+### For new regex parsers (optimization):
+1. Add functional tests to validate correct parsing (e.g., `test_device_relative_parsers.py`)
+2. Add performance comparison test (e.g., `profile_relative_comparison.py`)
+3. Verify operation.type is correct ('absolute' vs 'relative')
+4. Document expected performance baseline (<1ms for regex)
 
 ### For new query operations:
 1. Add test cases to `test_nlp_get_comprehensive.py`
@@ -321,12 +375,13 @@ python3 scripts/test_webui_validation.py
 | **Pan Commands** | 26 | Master/Return/Track pan (all formats) |
 | **Mixer Operations** | ~100 | Volume/pan/solo/mute/sends |
 | **Device Operations** | ~50 | Reverb/delay/eq/amp parameters |
+| **Device Relative** | 8 | Return/track relative changes (regex validation) |
 | **Get Operations** | ~30 | Query/read operations |
-| **Performance** | 10 | Latency benchmarks |
+| **Performance** | 13 | Latency benchmarks + parser profiling |
 | **Backend** | 20 | Ableton integration |
 | **Web UI** | 15 | HTTP API endpoints |
 
-**Total: ~250+ automated tests**
+**Total: ~262+ automated tests**
 
 ---
 
