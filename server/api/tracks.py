@@ -423,10 +423,18 @@ def get_track_mixer_capabilities(index: int) -> Dict[str, Any]:
             "sonic_focus": sec_meta.get("sonic_focus"),
         })
 
+    # Resolve human track name from overview for nicer titles
+    try:
+        ov = request_op("get_overview", timeout=0.8) or {}
+        tracks = (data_or_raw(ov) or {}).get("tracks") or []
+        tname = next((str(t.get("name", f"Track {ti+1}")) for t in tracks if int(t.get("index", -1)) == ti+1), f"Track {ti+1}")
+    except Exception:
+        tname = f"Track {ti+1}"
+
     return {"ok": True, "data": {
         "entity_type": "track",
         "track_index": ti,
-        "device_name": f"Track {ti+1} Mixer",
+        "device_name": f"{tname} Mixer",
         "groups": groups,
         "ungrouped": [],
         "values": values,

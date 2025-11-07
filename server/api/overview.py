@@ -703,7 +703,7 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
         for ti, fields in tracks_map.items():
             try:
                 val = fields.get(send_key, {}).get("normalized")
-                if isinstance(val, (int, float)) and val and val > 0.001:
+                if isinstance(val, (int, float)) and val and val > 1e-7:
                     sources.append(int(ti))
             except Exception:
                 continue
@@ -721,7 +721,7 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
                         sends = sdata.get("sends") or []
                         send_idx = int(ord(letter) - ord('A'))
                         send = next((s for s in sends if int(s.get("index", -1)) == send_idx), None)
-                        if send and isinstance(send.get("value"), (int, float)) and float(send.get("value")) > 0.001:
+                        if send and isinstance(send.get("value"), (int, float)) and float(send.get("value")) > 1e-7:
                             sources.append(ti)
                             # opportunistically update snapshot
                             try:

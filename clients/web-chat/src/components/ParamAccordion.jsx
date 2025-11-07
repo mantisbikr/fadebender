@@ -33,7 +33,11 @@ export default function ParamAccordion({ capabilities, onParamClick, initialGrou
     if (!capabilities) return;
     let applied = false;
     if (initialGroup) {
-      const g = allGroups.find(g => String(g.name || '').toLowerCase() === String(initialGroup).toLowerCase());
+      const ig = String(initialGroup).toLowerCase();
+      let g = allGroups.find(g => String(g.name || '').toLowerCase() === ig);
+      if (!g) {
+        g = allGroups.find(g => String(g.name || '').toLowerCase().includes(ig));
+      }
       if (g) {
         setSelectedGroup(g.name);
         setExpanded(true);
@@ -42,12 +46,26 @@ export default function ParamAccordion({ capabilities, onParamClick, initialGrou
     }
     if (initialParam) {
       try {
-        const gname = applied ? initialGroup : (selectedGroup || (allGroups[0] && allGroups[0].name));
-        const g = allGroups.find(x => x.name === gname) || { params: [] };
-        const p = (g.params || []).find(p => String(p.name || '').toLowerCase() === String(initialParam).toLowerCase());
-        if (p) {
+        const ip = String(initialParam).toLowerCase();
+        // Find param across groups if needed
+        let g = null;
+        let p = null;
+        const preferredGroup = applied ? String(initialGroup) : (selectedGroup || (allGroups[0] && allGroups[0].name));
+        if (preferredGroup) {
+          g = allGroups.find(x => x.name === preferredGroup) || null;
+          p = (g && g.params || []).find(p => String(p.name || '').toLowerCase() === ip) || null;
+        }
+        if (!p) {
+          for (const gg of allGroups) {
+            const cand = (gg.params || []).find(pp => String(pp.name || '').toLowerCase() === ip);
+            if (cand) { g = gg; p = cand; break; }
+          }
+        }
+        if (g && p && g.name) {
+          setSelectedGroup(g.name);
           setEditingParam(p);
           setExpanded(true);
+          return;
         }
       } catch {}
     }

@@ -413,10 +413,12 @@ def get_return_mixer_capabilities(index: int) -> Dict[str, Any]:
             "sonic_focus": sec_meta.get("sonic_focus"),
         })
 
+    # Prefer actual return name for nicer title
+    rname = str((ret or {}).get("name", f"Return {chr(ord('A')+ri)}"))
     return {"ok": True, "data": {
         "entity_type": "return",
         "return_index": ri,
-        "device_name": f"Return {chr(ord('A')+ri)} Mixer",
+        "device_name": f"{rname} Mixer",
         "groups": groups,
         "ungrouped": [],
         "values": values,
