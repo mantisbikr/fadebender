@@ -3,7 +3,7 @@
  * Handles user input with validation and submission
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -17,11 +17,14 @@ import {
 } from '@mui/material';
 import { Send as SendIcon, Undo as UndoIcon, Clear as ClearIcon } from '@mui/icons-material';
 
-// Common DAW typo corrections (auto-correct on space/tab)
-const AUTOCORRECT_MAP = {
+// Common DAW typo corrections (defaults; merged with server-provided)
+const DEFAULT_AUTOCORRECT_MAP = {
   // Track references
   'trak': 'track',
   'tracj': 'track',
+  // Additional common typos
+  'trac': 'track',
+  'trck': 'track',
 
   // Volume terms
   'volum': 'volume',
@@ -61,7 +64,7 @@ const AUTOCORRECT_MAP = {
 };
 
 // Fuzzy match for typos (handle doubled chars, etc.)
-function findBestMatch(word) {
+function findBestMatch(word, AUTOCORRECT_MAP) {
   const lower = word.toLowerCase();
 
   // Don't autocorrect very short words (they're often valid)
@@ -126,11 +129,23 @@ function levenshteinDistance(a, b) {
   return matrix[b.length][a.length];
 }
 
-export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
+export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorrections }) {
   const [input, setInput] = useState('');
   const [lastCorrection, setLastCorrection] = useState(null); // {from, to, position}
   const [showUndo, setShowUndo] = useState(false);
   const textFieldRef = useRef(null);
+
+  // Merge defaults with server-provided corrections
+  const AUTOCORRECT_MAP = useMemo(() => {
+    const ext = (typoCorrections && typeof typoCorrections === 'object') ? typoCorrections : {};
+    const merged = { ...DEFAULT_AUTOCORRECT_MAP };
+    Object.entries(ext).forEach(([k, v]) => {
+      if (typeof k === 'string' && typeof v === 'string') {
+        merged[String(k).toLowerCase()] = String(v).toLowerCase();
+      }
+    });
+    return merged;
+  }, [typoCorrections]);
 
   useEffect(() => {
     if (draft && typeof draft.text === 'string') {
@@ -163,7 +178,7 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft }) {
     if (!lastWord) return { text, newPosition: cursorPosition, correction: null };
 
     // Use fuzzy matching to find best correction
-    const correction = findBestMatch(lastWord);
+    const correction = findBestMatch(lastWord, AUTOCORRECT_MAP);
     if (correction && correction !== lastWord.toLowerCase()) {
       // Replace the last word with correction
       const beforeWord = beforeCursor.substring(0, beforeCursor.lastIndexOf(lastWord));

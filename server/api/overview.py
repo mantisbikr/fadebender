@@ -502,6 +502,12 @@ async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
             results.append(result)
             continue
 
+        # Special queries for sends/connectivity and device lists
+        special = await _handle_special_queries(domain, index, track_name, param_name)
+        if special is not None:
+            results.append(special)
+            continue
+
         # Query mixer parameter from snapshot
         mixer_map = reg.get_mixer()
         entity_data = mixer_map.get(domain, {})
@@ -511,6 +517,67 @@ async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
             track_data = entity_data.get(0, {})
         else:
             track_data = entity_data.get(index, {})
+
+        # Special case: track/return/master name
+        if param_name == "name":
+            try:
+                if domain == "master":
+                    results.append({
+                        "track": "Master",
+                        "parameter": "name",
+                        "value": "Master",
+                        "display_value": "Master",
+                        "source": "overview",
+                    })
+                elif domain == "track":
+                    ov = request_op("get_overview", timeout=1.0) or {}
+                    data = data_or_raw(ov) or {}
+                    tracks = data.get("tracks") or []
+                    name = None
+                    for t in tracks:
+                        try:
+                            if int(t.get("index", -1)) == int(index):
+                                name = str(t.get("name", f"Track {index}"))
+                                break
+                        except Exception:
+                            continue
+                    if name is None:
+                        name = f"Track {index}"
+                    results.append({
+                        "track": f"Track {index}",
+                        "parameter": "name",
+                        "value": name,
+                        "display_value": name,
+                        "source": "overview",
+                    })
+                elif domain == "return":
+                    rs = request_op("get_return_tracks", timeout=1.0) or {}
+                    rdata = data_or_raw(rs) or {}
+                    returns = rdata.get("returns") or []
+                    name = None
+                    for r in returns:
+                        try:
+                            if int(r.get("index", -1)) == int(index):
+                                name = str(r.get("name", f"Return {chr(ord('A') + int(index))}"))
+                                break
+                        except Exception:
+                            continue
+                    if name is None:
+                        name = f"Return {chr(ord('A') + int(index))}"
+                    results.append({
+                        "track": f"Return {chr(ord('A') + int(index))}",
+                        "parameter": "name",
+                        "value": name,
+                        "display_value": name,
+                        "source": "overview",
+                    })
+            except Exception:
+                results.append({
+                    "track": track_name,
+                    "parameter": "name",
+                    "error": "name_lookup_failed",
+                })
+            continue
 
         param_data = track_data.get(param_name)
 
@@ -537,6 +604,251 @@ async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
         "answer": answer,
         "values": results,
     }
+
+
+async def _handle_special_queries(domain: str | None, index: int | None, track_name: str, param_name: str):
+    """Handle enhanced get_parameter queries that infer topology or lists.
+
+    Supports:
+      - "send A effects/chain/destination/connect/affect" for tracks
+      - "devices" list for tracks/returns
+      - "sources" for returns: which tracks are sending to this return
+    """
+    if not domain:
+        return None
+
+    import re
+    pn = (param_name or "").strip().lower()
+
+    # Normalize patterns
+    send_pat = re.match(r"send\s+([a-z])\s+(effects?|chain|destination|target|connect\w*|affect\w*)", pn)
+    devices_pat = (pn == "devices" or pn == "device list")
+    sources_pat = (pn in ("sources", "source tracks", "inputs"))
+    state_pat = (pn == "state")
+
+    # Helper to get return letter/index from A/B/C
+    def _letter_to_index(letter: str) -> int:
+        return ord(letter.upper()) - ord('A')
+
+    # Use shared LiveIndex from core deps
+    li = get_live_index()
+
+    # Track send connectivity: where does it go and what's on that return?
+    if domain == "track" and send_pat and isinstance(index, int):
+        letter = send_pat.group(1)
+        ri = _letter_to_index(letter)
+        devices = li.get_return_devices_cached(ri)
+        if not devices:
+            try:
+                resp = request_op("get_return_devices", timeout=1.0, return_index=int(ri)) or {}
+                devices = (data_or_raw(resp) or {}).get("devices") or []
+            except Exception:
+                devices = []
+        dev_names = [str(d.get("name", "")).strip() for d in devices]
+        return {
+            "track": f"Track {index}",
+            "parameter": f"send {letter.upper()} effects",
+            "value": dev_names,
+            "display_value": ", ".join([n for n in dev_names if n]) or "(no devices)",
+            "return_index": ri,
+            "source": "topology",
+        }
+
+    # Devices list for track/return
+    if devices_pat and isinstance(index, int):
+        if domain == "track":
+            devices = li.get_track_devices_cached(index)
+            if not devices:
+                try:
+                    resp = request_op("get_track_devices", timeout=1.0, track_index=int(index)) or {}
+                    devices = (data_or_raw(resp) or {}).get("devices") or []
+                except Exception:
+                    devices = []
+            dev_names = [str(d.get("name", "")).strip() for d in devices]
+            return {
+                "track": f"Track {index}",
+                "parameter": "devices",
+                "value": dev_names,
+                "display_value": ", ".join([n for n in dev_names if n]) or "(no devices)",
+                "source": "topology",
+            }
+        if domain == "return":
+            devices = li.get_return_devices_cached(index)
+            if not devices:
+                try:
+                    resp = request_op("get_return_devices", timeout=1.0, return_index=int(index)) or {}
+                    devices = (data_or_raw(resp) or {}).get("devices") or []
+                except Exception:
+                    devices = []
+            dev_names = [str(d.get("name", "")).strip() for d in devices]
+            return {
+                "track": f"Return {chr(ord('A') + int(index))}",
+                "parameter": "devices",
+                "value": dev_names,
+                "display_value": ", ".join([n for n in dev_names if n]) or "(no devices)",
+                "source": "topology",
+            }
+
+    # Which tracks send to this return (non-zero sends)
+    if sources_pat and domain == "return" and isinstance(index, int):
+        from server.core.deps import get_value_registry
+        reg = get_value_registry()
+        mixer_map = reg.get_mixer() if reg else {}
+        tracks_map = mixer_map.get("track", {})
+        letter = chr(ord('A') + int(index))
+        send_key = f"send {letter}"
+        sources = []
+        # First pass: use snapshot if available
+        for ti, fields in tracks_map.items():
+            try:
+                val = fields.get(send_key, {}).get("normalized")
+                if isinstance(val, (int, float)) and val and val > 0.001:
+                    sources.append(int(ti))
+            except Exception:
+                continue
+        # Fallback: query Live for each track's sends when snapshot has no data
+        if not sources:
+            try:
+                ov = request_op("get_overview", timeout=1.0) or {}
+                data = data_or_raw(ov) or {}
+                tracks = data.get("tracks") or []
+                for t in tracks:
+                    try:
+                        ti = int(t.get("index", 0))
+                        resp = request_op("get_track_sends", timeout=0.8, track_index=ti) or {}
+                        sdata = data_or_raw(resp) or {}
+                        sends = sdata.get("sends") or []
+                        send_idx = int(ord(letter) - ord('A'))
+                        send = next((s for s in sends if int(s.get("index", -1)) == send_idx), None)
+                        if send and isinstance(send.get("value"), (int, float)) and float(send.get("value")) > 0.001:
+                            sources.append(ti)
+                            # opportunistically update snapshot
+                            try:
+                                reg.update_mixer("track", ti, f"send {letter}", normalized_value=float(send.get("value")), source="live_fallback")
+                            except Exception:
+                                pass
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+        return {
+            "track": f"Return {letter}",
+            "parameter": "sources",
+            "value": [f"Track {i}" for i in sorted(set(sources))],
+            "display_value": ", ".join([f"Track {i}" for i in sorted(set(sources))]) or "(none)",
+            "source": "snapshot" if tracks_map else "live_fallback",
+        }
+
+    # Mixer state bundle (volume, pan, mute, solo) + routing summary (on-demand, no warm-up)
+    if state_pat and isinstance(index, int):
+        from typing import Tuple
+        # Reuse snapshot formatting
+        def _fmt(name: str, raw) -> str:
+            return _format_mixer_display(name, raw)
+
+        # Get mixer map
+        from server.core.deps import get_value_registry as _get_reg
+        reg = _get_reg()
+        mixer_map = reg.get_mixer() if reg else {}
+        ent = mixer_map.get(domain or "", {})
+        fields = ent.get(index, {}) if domain != "master" else (mixer_map.get("master", {}) or {})
+
+        def _val(name: str) -> Tuple[float | None, str]:
+            d = fields.get(name) or {}
+            n = d.get("normalized")
+            return n, _fmt(name, n)
+
+        out = {}
+        needed: list[str] = []
+        for key in ("volume", "pan", "mute", "solo"):
+            n, disp = _val(key)
+            if n is not None:
+                out[key] = {"value": n, "display_value": disp}
+            else:
+                needed.append(key)
+
+        # Human label
+        if domain == "track": label = f"Track {index}"
+        elif domain == "return": label = f"Return {chr(ord('A') + int(index))}"
+        else: label = "Master"
+
+        # If any fields missing, fetch from Live just-in-time (single inexpensive call per domain)
+        if needed:
+            try:
+                if domain == "track":
+                    from server.services.mixer_readers import read_track_status
+                    st = read_track_status(int(index)) or {}
+                    vol = st.get("volume"); pan = st.get("pan"); mute = st.get("mute"); solo = st.get("solo")
+                elif domain == "return":
+                    rs = request_op("get_return_tracks", timeout=1.0) or {}
+                    rdata = data_or_raw(rs) or {}
+                    r = next((r for r in (rdata.get("returns") or []) if int(r.get("index", -1)) == int(index)), {})
+                    mix = r.get("mixer") or {}
+                    vol = mix.get("volume"); pan = mix.get("pan"); mute = mix.get("mute"); solo = mix.get("solo")
+                else:  # master
+                    ov = request_op("get_overview", timeout=1.0) or {}
+                    data = data_or_raw(ov) or {}
+                    master = (data.get("master") or {}).get("mixer", {})
+                    vol = master.get("volume"); pan = master.get("pan"); mute = master.get("mute"); solo = master.get("solo")
+
+                vals = {"volume": vol, "pan": pan, "mute": mute, "solo": solo}
+                for k, v in vals.items():
+                    if v is None:
+                        continue
+                    try:
+                        reg.update_mixer("master" if domain == "master" else domain, int(index) if domain != "master" else 0, k, normalized_value=float(v), source="live_fallback")
+                    except Exception:
+                        pass
+
+                # Rebuild out after updating
+                for key in needed:
+                    n, disp = _val(key)
+                    if n is not None:
+                        out[key] = {"value": n, "display_value": disp}
+            except Exception:
+                pass
+
+        # Add routing info (queried on-demand, not cached)
+        routing = None
+        try:
+            if domain == "track":
+                rr = request_op("get_track_routing", timeout=1.0, track_index=int(index)) or {}
+                routing = data_or_raw(rr) or {}
+            elif domain == "return":
+                rr = request_op("get_return_routing", timeout=1.0, return_index=int(index)) or {}
+                routing = data_or_raw(rr) or {}
+            else:
+                routing = {"audio_to": {"type": "Master", "channel": "1/2"}}
+        except Exception:
+            routing = None
+
+        # Summarize
+        parts = []
+        if "volume" in out: parts.append(f"vol {out['volume']['display_value']}")
+        if "pan" in out: parts.append(f"pan {out['pan']['display_value']}")
+        if "mute" in out: parts.append(f"mute {out['mute']['display_value']}")
+        if "solo" in out: parts.append(f"solo {out['solo']['display_value']}")
+        try:
+            if routing:
+                # Prefer a short routing summary
+                mon = (routing.get("routing", {}) if isinstance(routing, dict) else {}).get("monitor_state") if "routing" in (routing or {}) else routing.get("monitor_state") if isinstance(routing, dict) else None
+                at = (routing.get("routing", {}) if isinstance(routing, dict) else {}).get("audio_to") if "routing" in (routing or {}) else routing.get("audio_to") if isinstance(routing, dict) else None
+                if at and isinstance(at, dict):
+                    parts.append(f"to {at.get('type','')} {at.get('channel','')}".strip())
+                if mon:
+                    parts.append(f"monitor {mon}")
+        except Exception:
+            pass
+
+        return {
+            "track": label,
+            "parameter": "state",
+            "value": {**out, **({"routing": routing} if routing else {})},
+            "display_value": ", ".join(parts),
+            "source": "snapshot",
+        }
+
+    return None
 
 
 def _parse_track_name(track_name: str) -> tuple[str | None, int | None]:

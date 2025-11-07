@@ -45,6 +45,7 @@
       ]
     },
     "typo_corrections": {
+      "waht": "what",
       "alin": "align",
       "bandpas": "bandpass",
       "dcay": "decay",
@@ -69,9 +70,11 @@
       "streo": "stereo",
       "strereo": "stereo",
       "tack": "track",
+      "rack": "track",
       "testtypo": "testcorrect",
       "trac": "track",
       "trck": "track",
+      "stae": "state",
       "vilme": "volume",
       "volme": "volume",
       "volumz": "volume"

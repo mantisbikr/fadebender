@@ -20,6 +20,7 @@ export function useDAWControl() {
   const [currentCapabilities, setCurrentCapabilities] = useState(null);
   const [capabilitiesDrawerOpen, setCapabilitiesDrawerOpen] = useState(false);
   const [capabilitiesDrawerPinned, setCapabilitiesDrawerPinned] = useState(false);
+  const [typoCorrections, setTypoCorrections] = useState({});
 
   // Load feature flags once
   useEffect(() => {
@@ -37,6 +38,17 @@ export function useDAWControl() {
           console.log('setFeatureFlags merging prev:', prev, 'with feats:', feats, '= result:', merged);
           return merged;
         });
+
+        // Hydrate client typo corrections from server config (single source of truth)
+        try {
+          const typos = (cfg && cfg.nlp && cfg.nlp.typo_corrections) ? cfg.nlp.typo_corrections : {};
+          if (typos && typeof typos === 'object') {
+            setTypoCorrections(typos);
+            try { textProcessor.setExternalCorrections(typos); } catch {}
+          }
+        } catch (e) {
+          console.warn('Failed to load typo corrections from config:', e);
+        }
       } catch (e) {
         console.error('Failed to load app config:', e);
       }
@@ -253,6 +265,83 @@ export function useDAWControl() {
       }
 
       const rawIntent = parsed?.raw_intent || null;
+
+      // Handle get_parameter queries robustly by calling /intent/query
+      if (rawIntent && rawIntent.intent === 'get_parameter' && Array.isArray(rawIntent.targets)) {
+        try {
+          const queryResp = await apiService.queryIntent(rawIntent);
+          if (queryResp && queryResp.ok) {
+            // Show conversational answer; attach structured values for UI
+            addMessage({ type: 'info', content: queryResp.answer || 'Here you go:', data: queryResp });
+
+            // Open context-appropriate capabilities drawer
+            if (featureFlags.sticky_capabilities_card) {
+              try {
+                const vals = Array.isArray(queryResp.values) ? queryResp.values : [];
+                const firstValid = vals.find(v => !v.error) || vals[0];
+                if (firstValid) {
+                  // Device param: prefer provided capabilities or fetch if missing
+                  if (typeof firstValid.device_index === 'number') {
+                    let caps = firstValid.capabilities || null;
+                    // Only return device capabilities are supported in API client
+                    // Derive return_index from track label like "Return A"
+                    if (!caps && typeof firstValid.track === 'string' && /return\s+[a-z]/i.test(firstValid.track)) {
+                      const m = firstValid.track.match(/return\s+([a-z])/i);
+                      if (m) {
+                        const ri = m[1].toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+                        try {
+                          const fetched = await apiService.getReturnDeviceCapabilities(ri, firstValid.device_index);
+                          if (fetched && fetched.ok) caps = fetched.data;
+                        } catch {}
+                      }
+                    }
+                    if (caps) {
+                      setCurrentCapabilities(caps);
+                      setCapabilitiesDrawerOpen(true);
+                    }
+                  } else {
+                    // Mixer param: open mixer capabilities for track/return/master
+                    const trackLabel = String(firstValid.track || '').trim();
+                    // Return context signaled by return_index from special queries
+                    if (typeof firstValid.return_index === 'number') {
+                      try {
+                        const caps = await apiService.getReturnMixerCapabilities(Number(firstValid.return_index));
+                        if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+                      } catch {}
+                      return;
+                    }
+                    if (/^track\s+\d+$/i.test(trackLabel)) {
+                      const tn = parseInt(trackLabel.replace(/\D+/g, ''), 10);
+                      try {
+                        const caps = await apiService.getTrackMixerCapabilities(tn - 1);
+                        if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+                      } catch {}
+                    } else if (/^return\s+[a-z]$/i.test(trackLabel)) {
+                      const letter = trackLabel.split(/\s+/)[1].toUpperCase();
+                      const ri = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+                      try {
+                        const caps = await apiService.getReturnMixerCapabilities(ri);
+                        if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+                      } catch {}
+                    } else if (!trackLabel || /^master$/i.test(trackLabel)) {
+                      try {
+                        const caps = await apiService.getMasterMixerCapabilities();
+                        if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+                      } catch {}
+                    }
+                  }
+                }
+              } catch {}
+            }
+          } else {
+            const reason = (queryResp && (queryResp.error || queryResp.reason)) || 'Query failed';
+            addMessage({ type: 'error', content: reason });
+          }
+        } catch (e) {
+          addMessage({ type: 'error', content: `Query error: ${e.message}` });
+        }
+        return;
+      }
 
       // If this looks like a help/conceptual query, route to /help and stop.
       if (rawIntent && (rawIntent.intent === 'question_response')) {
@@ -899,27 +988,28 @@ export function useDAWControl() {
     })();
   }, []);
 
-    return {
-      messages,
-      isProcessing,
-      systemStatus,
-      conversationContext,
-      modelPref,
-      setModelPref,
-      confirmExecute,
-      setConfirmExecute,
-      undoLast,
-      redoLast,
-      historyState,
-      processControlCommand,
-      processHelpQuery,
-      checkSystemHealth,
-      clearMessages,
-      currentCapabilities,
-      featureFlags,
-      capabilitiesDrawerOpen,
-      setCapabilitiesDrawerOpen,
-      capabilitiesDrawerPinned,
-      setCapabilitiesDrawerPinned
-    };
+  return {
+    messages,
+    isProcessing,
+    systemStatus,
+    conversationContext,
+    modelPref,
+    setModelPref,
+    confirmExecute,
+    setConfirmExecute,
+    undoLast,
+    redoLast,
+    historyState,
+    processControlCommand,
+    processHelpQuery,
+    checkSystemHealth,
+    clearMessages,
+    currentCapabilities,
+    featureFlags,
+    capabilitiesDrawerOpen,
+    setCapabilitiesDrawerOpen,
+    capabilitiesDrawerPinned,
+    setCapabilitiesDrawerPinned,
+    typoCorrections
+  };
 }

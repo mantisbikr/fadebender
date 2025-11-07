@@ -28,6 +28,13 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
   // Select first group by default
   const activeGroup = selectedGroup || (allGroups.length > 0 ? allGroups[0].name : null);
 
+  // Reset local UI state when capabilities context changes (prevent stale group/expanded state)
+  useEffect(() => {
+    setSelectedGroup(null);
+    setExpanded(false);
+    setEditingParam(null);
+  }, [capabilities && capabilities.device_index, capabilities && capabilities.entity_type]);
+
   // Close accordion when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -216,4 +223,3 @@ export default function ParamAccordion({ capabilities, onParamClick }) {
     </Box>
   );
 }
-

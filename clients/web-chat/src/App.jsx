@@ -61,7 +61,8 @@ function App() {
     capabilitiesDrawerOpen,
     setCapabilitiesDrawerOpen,
     capabilitiesDrawerPinned,
-    setCapabilitiesDrawerPinned
+    setCapabilitiesDrawerPinned,
+    typoCorrections
   } = useDAWControl();
 
   const theme = useMemo(
@@ -377,6 +378,7 @@ function App() {
                 onHelp={processHelpQuery}
                 disabled={isProcessing}
                 draft={draftInput}
+                typoCorrections={typoCorrections}
                 clearMessages={clearMessages}
               />
             </Box>

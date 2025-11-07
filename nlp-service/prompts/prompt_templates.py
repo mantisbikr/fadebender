@@ -149,6 +149,14 @@ EXAMPLES (including typos/variations):
 - "what are all track 1 send levels?" → {"intent": "get_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "send A"}, {"track": "Track 1", "plugin": null, "parameter": "send B"}, {"track": "Track 1", "plugin": null, "parameter": "send C"}]} (BATCH QUERY)
 - "get all return A reverb parameters" → {"intent": "get_parameter", "targets": [{"track": "Return A", "plugin": "reverb", "parameter": "*"}]} (WILDCARD for all params)
 
+# Topology and status queries
+- "what are return A devices" → {"intent": "get_parameter", "targets": [{"track": "Return A", "plugin": null, "parameter": "devices"}]}
+- "what are track 1 devices" → {"intent": "get_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "devices"}]}
+- "who sends to return A" → {"intent": "get_parameter", "targets": [{"track": "Return A", "plugin": null, "parameter": "sources"}]}
+- "which tracks send to return B" → {"intent": "get_parameter", "targets": [{"track": "Return B", "plugin": null, "parameter": "sources"}]}
+- "what does track 1 send A affect" → {"intent": "get_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "send A effects"}]}
+- "what is track 1 state" → {"intent": "get_parameter", "targets": [{"track": "Track 1", "plugin": null, "parameter": "state"}]}
+
 - "how do I control sends?" → {"intent": "question_response", "answer": "You can control sends by specifying the track and send letter...", "suggested_intents": ["set track 1 send A to -12 dB", "increase track 2 send B by 3 dB"]}
 - "boost vocals" → {"intent": "clarification_needed", "question": "Which track contains the vocals?", "context": {"action": "increase", "parameter": "volume"}}
 

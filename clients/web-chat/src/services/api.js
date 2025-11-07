@@ -13,6 +13,20 @@ class ApiService {
   getEventsURL() {
     return `${API_CONFIG.SERVER_BASE_URL}/events`;
   }
+  async queryIntent(intent) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(intent)
+    });
+    const contentType = response.headers.get('content-type') || '';
+    const body = contentType.includes('application/json') ? await response.json() : await response.text();
+    if (!response.ok) {
+      const detail = (body && body.detail) ? body.detail : (typeof body === 'string' ? body : `${response.status} ${response.statusText}`);
+      throw new Error(detail || 'Intent query failed');
+    }
+    return body;
+  }
   async getMasterStatus() {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/master/status`);
     if (!response.ok) throw new Error(`Master status failed: ${response.statusText}`);

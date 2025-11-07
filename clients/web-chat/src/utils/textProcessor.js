@@ -11,6 +11,8 @@ class TextProcessor {
       'track1': 'track 1', 'track2': 'track 2', 'track3': 'track 3',
       'trk1': 'track 1', 'trk2': 'track 2', 'trk3': 'track 3',
       'trak': 'track', 'tracj': 'track',
+      // Common shortened typos
+      'trac': 'track', 'trck': 'track',
 
       // Volume terms
       'volum': 'volume', 'vollume': 'volume', 'vol': 'volume',
@@ -36,6 +38,18 @@ class TextProcessor {
       'db': 'dB', 'decibel': 'dB', 'decibels': 'dB',
       'percent': '%', 'pct': '%', 'percnt': '%'
     };
+  }
+
+  // Allow augmenting corrections from server config (nlp.typo_corrections)
+  setExternalCorrections(map) {
+    if (!map || typeof map !== 'object') return;
+    const merged = { ...this.corrections };
+    Object.entries(map).forEach(([k, v]) => {
+      if (typeof k === 'string' && typeof v === 'string') {
+        merged[String(k).toLowerCase()] = String(v).toLowerCase();
+      }
+    });
+    this.corrections = merged;
   }
 
   correctTypos(text) {

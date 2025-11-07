@@ -105,6 +105,101 @@ def try_regex_parse(
     if result:
         return result, []
 
+    # Special: Topology questions about sends/connectivity
+    try:
+        import re as _re
+        # Pattern A: "what does/is track 1 send A affect/connect..."
+        m1 = _re.search(r"what\s+(?:does|is)\s+track\s+(\d+)\s+send\s+([a-c])\s+(?:affect|connect\w*|go\s+to|route|target|do)\b", q)
+        # Pattern B: "what is the effect on track 1 send A"
+        m2 = _re.search(r"what\s+is\s+the\s+effect\s+on\s+track\s+(\d+)\s+send\s+([a-c])\b", q)
+        m = m1 or m2
+        if m:
+            ti = int(m.group(1))
+            letter = m.group(2).upper()
+            intent = {
+                "intent": "get_parameter",
+                "targets": [
+                    {"track": f"Track {ti}", "plugin": None, "parameter": f"send {letter} effects"}
+                ],
+                "meta": {"parsed_by": "regex_topology"}
+            }
+            return intent, []
+    except Exception:
+        pass
+
+    # Pattern: device list queries
+    try:
+        import re as _re
+        # "what are return A devices" | "what are track 1 devices" | "device list"
+        m_ret = _re.search(r"what\s+are\s+return\s+([a-c])\s+devices\b", q)
+        m_trk = _re.search(r"what\s+are\s+track\s+(\d+)\s+devices\b", q)
+        if m_ret:
+            letter = m_ret.group(1).upper()
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Return {letter}", "plugin": None, "parameter": "devices"}],
+                "meta": {"parsed_by": "regex_devices"}
+            }
+            return intent, []
+        if m_trk:
+            ti = int(m_trk.group(1))
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Track {ti}", "plugin": None, "parameter": "devices"}],
+                "meta": {"parsed_by": "regex_devices"}
+            }
+            return intent, []
+    except Exception:
+        pass
+
+    # Pattern: sources for return
+    try:
+        import re as _re
+        m = _re.search(r"(who|which\s+tracks)\s+sends?\s+to\s+return\s+([a-c])\b", q)
+        if m:
+            letter = m.group(2).upper()
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Return {letter}", "plugin": None, "parameter": "sources"}],
+                "meta": {"parsed_by": "regex_sources"}
+            }
+            return intent, []
+    except Exception:
+        pass
+
+    # Pattern: mixer state bundle
+    try:
+        import re as _re
+        # "what is track 1 state" | "what is return A state" | "what is master state"
+        m_trk = _re.search(r"what\s+is\s+track\s+(\d+)\s+state\b", q)
+        m_ret = _re.search(r"what\s+is\s+return\s+([a-c])\s+state\b", q)
+        m_mas = _re.search(r"what\s+is\s+master\s+state\b", q)
+        if m_trk:
+            ti = int(m_trk.group(1))
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Track {ti}", "plugin": None, "parameter": "state"}],
+                "meta": {"parsed_by": "regex_state"}
+            }
+            return intent, []
+        if m_ret:
+            letter = m_ret.group(1).upper()
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Return {letter}", "plugin": None, "parameter": "state"}],
+                "meta": {"parsed_by": "regex_state"}
+            }
+            return intent, []
+        if m_mas:
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": "Master", "plugin": None, "parameter": "state"}],
+                "meta": {"parsed_by": "regex_state"}
+            }
+            return intent, []
+    except Exception:
+        pass
+
     # Questions about problems (treat as help-style queries)
     if any(phrase in q for phrase in [
         "too soft", "too quiet", "can't hear", "how to", "what does",
