@@ -244,29 +244,9 @@ def _open_capabilities_from_regex(q: str):
     if not qs.startswith("open "):
         return None
 
-    # Mixer scopes
-    m = _re.search(r"open\s+track\s+(\d+)(?:\s+(?:controls|mixer))?\b", qs)
-    if m:
-        ti = int(m.group(1))
-        return {
-            "intent": "open_capabilities",
-            "target": {"type": "mixer", "entity": "track", "track_index": ti},
-            "meta": {"parsed_by": "regex_open"}
-        }
-    m = _re.search(r"open\s+return\s+([a-c])(?:\s+(?:controls|mixer))?\b", qs)
-    if m:
-        letter = m.group(1).upper()
-        return {
-            "intent": "open_capabilities",
-            "target": {"type": "mixer", "entity": "return", "return_ref": letter},
-            "meta": {"parsed_by": "regex_open"}
-        }
-    m = _re.search(r"open\s+master(?:\s+(?:controls|mixer))?\b", qs)
-    if m:
-        return {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "master"}, "meta": {"parsed_by": "regex_open"}}
-
-    # Sends group (preselect)
-    m = _re.search(r"open\s+track\s+(\d+)\s+send\s+([a-c])(?:\s+controls)?\b", qs)
+    # PRIORITY: specific patterns before generic mixer opens
+    # Sends group (preselect) – must be checked before generic track mixer
+    m = _re.search(r"^\s*open\s+track\s+(\d+)\s+send\s+([a-c])(?:\s+controls)?\s*$", qs)
     if m:
         ti = int(m.group(1)); letter = m.group(2).upper()
         return {
@@ -276,36 +256,59 @@ def _open_capabilities_from_regex(q: str):
         }
 
     # Device on return by index
-    m = _re.search(r"open\s+return\s+([a-c])\s+device\s+(\d+)\b", qs)
+    m = _re.search(r"^\s*open\s+return\s+([a-c])\s+device\s+(\d+)(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
     if m:
-        letter = m.group(1).upper(); di = int(m.group(2))
+        letter = m.group(1).upper(); di = int(m.group(2)); ph = (m.group(3) or '').strip() or None
         return {
             "intent": "open_capabilities",
-            "target": {"type": "device", "scope": "return", "return_ref": letter, "device_index": di},
+            "target": {"type": "device", "scope": "return", "return_ref": letter, "device_index": di, **({"param_hint": ph} if ph else {})},
             "meta": {"parsed_by": "regex_open"}
         }
 
     # Device on return by name (+ optional ordinal)
-    m = _re.search(r"open\s+return\s+([a-c])\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?\b", qs)
+    m = _re.search(r"^\s*open\s+return\s+([a-c])\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
     if m:
-        letter = m.group(1).upper(); name = m.group(2).strip(); ords = m.group(3)
+        letter = m.group(1).upper(); name = m.group(2).strip(); ords = m.group(3); ph = (m.group(4) or '').strip() or None
         payload = {"type": "device", "scope": "return", "return_ref": letter, "device_name_hint": name}
         if ords:
             try: payload["device_ordinal_hint"] = int(ords)
             except Exception: pass
+        if ph:
+            payload["param_hint"] = ph
         return {"intent": "open_capabilities", "target": payload, "meta": {"parsed_by": "regex_open"}}
 
+    # Generic mixer scopes (checked after device/sends patterns to avoid premature matches)
+    m = _re.search(r"^\s*open\s+track\s+(\d+)(?:\s+(?:controls|mixer))?\s*$", qs)
+    if m:
+        ti = int(m.group(1))
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "track", "track_index": ti},
+            "meta": {"parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*open\s+return\s+([a-c])(?:\s+(?:controls|mixer))?\s*$", qs)
+    if m:
+        letter = m.group(1).upper()
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "return", "return_ref": letter},
+            "meta": {"parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*open\s+master(?:\s+(?:controls|mixer))?\s*$", qs)
+    if m:
+        return {"intent": "open_capabilities", "target": {"type": "mixer", "entity": "master"}, "meta": {"parsed_by": "regex_open"}}
+
     # Drawer actions
-    m = _re.search(r"open\s+controls\b", qs)
+    m = _re.search(r"^\s*open\s+controls\s*$", qs)
     if m:
         return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "open"}, "meta": {"parsed_by": "regex_open"}}
-    m = _re.search(r"close\s+controls\b", qs)
+    m = _re.search(r"^\s*close\s+controls\s*$", qs)
     if m:
         return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "close"}, "meta": {"parsed_by": "regex_open"}}
-    m = _re.search(r"pin\s+controls\b", qs)
+    m = _re.search(r"^\s*pin\s+controls\s*$", qs)
     if m:
         return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "pin"}, "meta": {"parsed_by": "regex_open"}}
-    m = _re.search(r"unpin\s+controls\b", qs)
+    m = _re.search(r"^\s*unpin\s+controls\s*$", qs)
     if m:
         return {"intent": "open_capabilities", "target": {"type": "drawer", "action": "unpin"}, "meta": {"parsed_by": "regex_open"}}
 

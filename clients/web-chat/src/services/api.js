@@ -13,6 +13,12 @@ class ApiService {
   getEventsURL() {
     return `${API_CONFIG.SERVER_BASE_URL}/events`;
   }
+  async getSnapshotDevices(domain, index) {
+    const q = new URLSearchParams({ domain, index: String(index) });
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/snapshot/devices?${q.toString()}`);
+    if (!response.ok) throw new Error(`Snapshot devices failed: ${response.statusText}`);
+    return response.json();
+  }
   async queryIntent(intent) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/query`, {
       method: 'POST',

@@ -383,17 +383,30 @@ export function useDAWControl() {
             if (typeof di !== 'number' && t.device_name_hint) {
               // Resolve by name
               try {
-                const devs = await apiService.getReturnDevices(ri);
-                const list = (devs && devs.data && Array.isArray(devs.data.devices)) ? devs.data.devices : [];
+                // Prefer enriched snapshot devices (includes device_type), fall back to raw devices
+                let list = [];
+                try {
+                  const snap = await apiService.getSnapshotDevices('return', ri);
+                  list = (snap && snap.data && Array.isArray(snap.data.devices)) ? snap.data.devices : [];
+                } catch {}
+                if (!list.length) {
+                  const devs = await apiService.getReturnDevices(ri);
+                  list = (devs && devs.data && Array.isArray(devs.data.devices)) ? devs.data.devices : [];
+                }
                 const name = String(t.device_name_hint).toLowerCase();
-                const matches = list.filter(d => String(d.name || '').toLowerCase().includes(name));
+                const matches = list.filter(d => {
+                  const dn = String(d.name || '').toLowerCase();
+                  const dt = String(d.device_type || '').toLowerCase();
+                  return dn.includes(name) || (dt && (dt === name || dt.includes(name)));
+                });
                 if (matches.length === 1) di = Number(matches[0].index);
                 if (matches.length > 1 && typeof t.device_ordinal_hint === 'number') {
                   const ord = Math.max(1, Number(t.device_ordinal_hint));
                   di = Number(matches[ord - 1]?.index);
                 }
                 if (typeof di !== 'number') {
-                  const suggestions = matches.slice(0, 6).map(d => ({ label: d.name, value: `open return ${String.fromCharCode('A'.charCodeAt(0)+ri)} ${d.name}` }));
+                  const letter = String.fromCharCode('A'.charCodeAt(0)+ri);
+                  const suggestions = matches.slice(0, 6).map(d => ({ label: `${d.name}${d.device_type ? ' • '+d.device_type : ''}`, value: `open return ${letter} ${d.name}` }));
                   addMessage({ type: 'question', content: 'Which device?', data: { suggested_intents: suggestions } });
                   return;
                 }
