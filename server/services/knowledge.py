@@ -17,7 +17,7 @@ def _read(path: pathlib.Path) -> str:
 def _sections(md: str) -> List[Tuple[str, str]]:
     # Split by headings and keep (title, body)
     out: List[Tuple[str, str]] = []
-    parts = re.split(r"^#+\\s+", md, flags=re.M)
+    parts = re.split(r"^#+\s+", md, flags=re.M)
     if not parts:
         return out
     # parts like [prefix, title1, body1, title2, body2, ...]
@@ -36,8 +36,8 @@ def search_knowledge(query: str, limit: int = 3) -> List[Tuple[str, str, str]]:
     include_refs = os.getenv("KNOWLEDGE_INCLUDE_REFERENCES", "").lower() in ("1", "true", "yes", "on")
     # Collect all .md files under knowledge/, optionally excluding knowledge/references
     for path in KNOW_DIR.rglob('*.md'):
-        # Skip references (unless explicitly enabled) and any hidden files
-        if (not include_refs and any(part == 'references' for part in path.parts)) or path.name.startswith('.'):  # type: ignore[attr-defined]
+        # Skip references (unless explicitly enabled), hidden files, and hidden directories
+        if (not include_refs and any(part == 'references' for part in path.parts)) or any(part.startswith('.') for part in path.parts):  # type: ignore[attr-defined]
             continue
         rel = str(path.relative_to(KNOW_DIR))
         text = _read(path)

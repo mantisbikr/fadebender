@@ -1026,16 +1026,17 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
 def handle_help(body: HelpBody) -> Dict[str, Any]:
     """Return grounded help snippets from local knowledge notes.
 
+    Uses Gemini 2.5 Flash Lite to generate concise, formatted responses.
+
     Response shape:
     { ok, answer, sources: [{source, title}] }
     """
+    from server.services.help_generator import generate_help_response
+
     matches = search_knowledge(body.query)
-    # Compose a short answer from top matches if any
-    snippets: list[str] = []
     sources: list[Dict[str, str]] = []
-    for src, title, body_text in matches:
+    for src, title, _ in matches:
         sources.append({"source": src, "title": title})
-        snippets.append(f"{title}:\n" + body_text)
 
     # Heuristic suggestions based on common phrases
     q = (body.query or "").lower()
@@ -1065,12 +1066,18 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
             "set track 2 send B to 15%",
         ])
         # If no snippets matched, produce a concise, grounded answer about sends
-        if not snippets:
+        if not matches:
             answer = (
-                "Sends control how much signal is sent to return tracks (A/B/…).\n"
-                "- Track sends: use intents like ‘set track 1 send A to -12 dB’ or ‘25%’.\n"
-                "- Return→Return sends: available only if enabled in Live Preferences; then use ‘set Return A send B to 20%’.\n"
-                "- Read sends: /return/sends?index=0 or /track/sends?index=1; formatted readbacks via /intent/read.\n"
-                "- Pre/Post: see Return routing via /return/routing (field ‘sends_mode’)."
+                "**Sends in Fadebender**\n\n"
+                "Sends control how much signal is sent to return tracks (A/B/…).\n\n"
+                "- **Track sends**: `set track 1 send A to -12 dB` or `25%`\n"
+                "- **Return→Return sends**: Available only if enabled in Live Preferences; use `set Return A send B to 20%`\n"
+                "- **Read sends**: `/return/sends?index=0` or `/track/sends?index=1`\n"
+                "- **Pre/Post**: See Return routing via `/return/routing` (field 'sends_mode')"
             )
             return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
+
+    # Generate LLM-powered response from knowledge snippets
+    answer = generate_help_response(body.query, matches, suggested)
+
+    return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}

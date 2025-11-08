@@ -1,0 +1,644 @@
+# Ableton Live 12 Manual (Structured Markdown)
+
+## 06_Arrangement_View
+- [06 (Mac).](06_Arrangement_View/06_(Mac)..md)
+- [06 (Mac)](06_Arrangement_View/06_(Mac).md)
+- [06 (Win) Cmd](06_Arrangement_View/06_(Win)_Cmd.md)
+- [06 (Win) Option](06_Arrangement_View/06_(Win)_Option.md)
+- [06 , 7 , 8 , 9 , and](06_Arrangement_View/06_,_7_,_8_,_9_,_and.md)
+- [06 , 7 , 8 , 9 , and 0 (Mac)](06_Arrangement_View/06_,_7_,_8_,_9_,_and_0_(Mac).md)
+- [06 , 7 , 8 , 9 , and 0 (Win) Cmd](06_Arrangement_View/06_,_7_,_8_,_9_,_and_0_(Win)_Cmd.md)
+- [06 11.2.2 Chop](06_Arrangement_View/06_11.2.2_Chop.md)
+- [06 Arrangement View](06_Arrangement_View/06_Arrangement_View.md)
+- [06 Cmd](06_Arrangement_View/06_Cmd.md)
+- [06 Mac](06_Arrangement_View/06_Mac.md)
+- [06 The Pan control has two different modes the default Stereo Pan Mode, and Split Stereo Pan](06_Arrangement_View/06_The_Pan_control_has_two_different_modes_the_default_Stereo_Pan_Mode,_and_Split_Stereo_Pan.md)
+- [06 The Results bar appears when searching or filtering. It includes the Add Label button which you](06_Arrangement_View/06_The_Results_bar_appears_when_searching_or_filtering._It_includes_the_Add_Label_button_which_you.md)
+- **6.10_Using_the_Editing_Grid**
+  - [6.10 Using the Editing Grid](06_Arrangement_View/6.10_Using_the_Editing_Grid/6.10_Using_the_Editing_Grid.md)
+- **6.11_Using_the_…Time_Commands**
+  - [6.11 Using the …Time Commands](06_Arrangement_View/6.11_Using_the_…Time_Commands/6.11_Using_the_…Time_Commands.md)
+- **6.12_Splitting_Clips**
+  - [6.12 Splitting Clips](06_Arrangement_View/6.12_Splitting_Clips/6.12_Splitting_Clips.md)
+- **6.13_Consolidating_Clips**
+  - [6.13 Consolidating Clips](06_Arrangement_View/6.13_Consolidating_Clips/6.13_Consolidating_Clips.md)
+- **6.14_Linked-Track_Editing**
+  - [6.14.1 Linking and Unlinking Tracks](06_Arrangement_View/6.14_Linked-Track_Editing/6.14.1_Linking_and_Unlinking_Tracks.md)
+  - [6.14.2 Editing Linked Tracks](06_Arrangement_View/6.14_Linked-Track_Editing/6.14.2_Editing_Linked_Tracks.md)
+  - [6.14 Linked-Track Editing](06_Arrangement_View/6.14_Linked-Track_Editing/6.14_Linked-Track_Editing.md)
+- **6.15_The_Mixer_in_Arrangement_View**
+  - [6.15 The Mixer in Arrangement View](06_Arrangement_View/6.15_The_Mixer_in_Arrangement_View/6.15_The_Mixer_in_Arrangement_View.md)
+- **6.1_Layout**
+  - [6.1 Layout](06_Arrangement_View/6.1_Layout/6.1_Layout.md)
+- **6.2_Navigation_and_Zooming**
+  - [6.2 Navigation and Zooming](06_Arrangement_View/6.2_Navigation_and_Zooming/6.2_Navigation_and_Zooming.md)
+- **6.3_Transport_and_Playback**
+  - [6.3 Transport and Playback](06_Arrangement_View/6.3_Transport_and_Playback/6.3_Transport_and_Playback.md)
+- **6.4_Launching_the_Arrangement_with_Locators**
+  - [6.4 Launching the Arrangement with Locators](06_Arrangement_View/6.4_Launching_the_Arrangement_with_Locators/6.4_Launching_the_Arrangement_with_Locators.md)
+- **6.5_Time_Signature_Changes**
+  - [6.5 Time Signature Changes](06_Arrangement_View/6.5_Time_Signature_Changes/6.5_Time_Signature_Changes.md)
+- **6.6_The_Arrangement_Loop**
+  - [6.6 The Arrangement Loop](06_Arrangement_View/6.6_The_Arrangement_Loop/6.6_The_Arrangement_Loop.md)
+- **6.7_Moving_and_Resizing_Clips**
+  - [6.7 Moving and Resizing Clips](06_Arrangement_View/6.7_Moving_and_Resizing_Clips/6.7_Moving_and_Resizing_Clips.md)
+- **6.8_Audio_Clip_Fades_and_Crossfades**
+  - [6.8 Audio Clip Fades and Crossfades](06_Arrangement_View/6.8_Audio_Clip_Fades_and_Crossfades/6.8_Audio_Clip_Fades_and_Crossfades.md)
+- **6.9_Selecting_Clips_and_Time**
+  - [6.9 Selecting Clips and Time](06_Arrangement_View/6.9_Selecting_Clips_and_Time/6.9_Selecting_Clips_and_Time.md)
+
+## 07_Session_View
+- [07 (Mac)](07_Session_View/07_(Mac).md)
+- [07 (Win) Option](07_Session_View/07_(Win)_Option.md)
+- [07 Below the MIDI Note Editor you will find Velocity and Chance Editor lanes and controls which](07_Session_View/07_Below_the_MIDI_Note_Editor_you_will_find_Velocity_and_Chance_Editor_lanes_and_controls_which.md)
+- [07 Session View](07_Session_View/07_Session_View.md)
+- [07 Set the Global Quantization chooser to one bar.](07_Session_View/07_Set_the_Global_Quantization_chooser_to_one_bar..md)
+- [07 The content pane displays the items in whatever label is selected in the browser, or the results of](07_Session_View/07_The_content_pane_displays_the_items_in_whatever_label_is_selected_in_the_browser,_or_the_results_of.md)
+- [07 buttons to the left of their names.](07_Session_View/07_buttons_to_the_left_of_their_names..md)
+- **7.1_Session_View_Clips**
+  - [7.1 Session View Clips](07_Session_View/7.1_Session_View_Clips/7.1_Session_View_Clips.md)
+- **7.2_Tracks_and_Scenes**
+  - [7.2.1 Editing Scene Tempo and Time Signature Values](07_Session_View/7.2_Tracks_and_Scenes/7.2.1_Editing_Scene_Tempo_and_Time_Signature_Values.md)
+  - [7.2.2 Scene View](07_Session_View/7.2_Tracks_and_Scenes/7.2.2_Scene_View.md)
+  - [7.2 Tracks and Scenes](07_Session_View/7.2_Tracks_and_Scenes/7.2_Tracks_and_Scenes.md)
+- **7.3_The_Track_Status_Fields**
+  - [7.3 The Track Status Fields](07_Session_View/7.3_The_Track_Status_Fields/7.3_The_Track_Status_Fields.md)
+- **7.4_Setting_Up_the_Session_View_Grid**
+  - [7.4.1 Select on Launch](07_Session_View/7.4_Setting_Up_the_Session_View_Grid/7.4.1_Select_on_Launch.md)
+  - [7.4.2 Removing Clip Stop Buttons](07_Session_View/7.4_Setting_Up_the_Session_View_Grid/7.4.2_Removing_Clip_Stop_Buttons.md)
+  - [7.4.3 Editing Scenes](07_Session_View/7.4_Setting_Up_the_Session_View_Grid/7.4.3_Editing_Scenes.md)
+  - [7.4 Setting Up the Session View Grid](07_Session_View/7.4_Setting_Up_the_Session_View_Grid/7.4_Setting_Up_the_Session_View_Grid.md)
+- **7.5_Recording_Sessions_into_the_Arrangement**
+  - [7.5 Recording Sessions into the Arrangement](07_Session_View/7.5_Recording_Sessions_into_the_Arrangement/7.5_Recording_Sessions_into_the_Arrangement.md)
+
+## 09_Audio_Clips,_Tempo,_and_Warping
+- [09 Audio Clips, Tempo, and Warping](09_Audio_Clips,_Tempo,_and_Warping/09_Audio_Clips,_Tempo,_and_Warping.md)
+- **9.1_Tempo**
+  - [9.1.1 Setting the Tempo](09_Audio_Clips,_Tempo,_and_Warping/9.1_Tempo/9.1.1_Setting_the_Tempo.md)
+  - [9.1.2 Tapping the Tempo](09_Audio_Clips,_Tempo,_and_Warping/9.1_Tempo/9.1.2_Tapping_the_Tempo.md)
+  - [9.1.3 Nudging the Tempo](09_Audio_Clips,_Tempo,_and_Warping/9.1_Tempo/9.1.3_Nudging_the_Tempo.md)
+  - [9.1.4 Clip Tempo Followers and Leaders](09_Audio_Clips,_Tempo,_and_Warping/9.1_Tempo/9.1.4_Clip_Tempo_Followers_and_Leaders.md)
+  - [9.1 Tempo](09_Audio_Clips,_Tempo,_and_Warping/9.1_Tempo/9.1_Tempo.md)
+- **9.2_Warping**
+  - [9.2.1 Warping Options in Settings](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.1_Warping_Options_in_Settings.md)
+  - [9.2.2 Importing Samples](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.2_Importing_Samples.md)
+  - [9.2.3.1 Transients and Pseudo-Warp Markers](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.3.1_Transients_and_Pseudo-Warp_Markers.md)
+  - [9.2.3 Warp Markers](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.3_Warp_Markers.md)
+  - [9.2.4.1 Even-Length Loops](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.4.1_Even-Length_Loops.md)
+  - [9.2.4.2 Odd-Length Loops](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.4.2_Odd-Length_Loops.md)
+  - [9.2.4.3 Uneven-Length Loops](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.4.3_Uneven-Length_Loops.md)
+  - [9.2.4.4 Multi-Clip Warping](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.4.4_Multi-Clip_Warping.md)
+  - [9.2.4 Warping Short Samples](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.4_Warping_Short_Samples.md)
+  - [9.2.5.1 Adjusting Auto-Warp Results](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.5.1_Adjusting_Auto-Warp_Results.md)
+  - [9.2.5 Auto-Warping Long Samples](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.5_Auto-Warping_Long_Samples.md)
+  - [9.2.6 Manipulating Grooves](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.6_Manipulating_Grooves.md)
+  - [9.2.7 Quantizing Audio](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2.7_Quantizing_Audio.md)
+  - [9.2 Warping](09_Audio_Clips,_Tempo,_and_Warping/9.2_Warping/9.2_Warping.md)
+- **9.3_Warp_Modes**
+  - [9.3.1 Beats Mode](09_Audio_Clips,_Tempo,_and_Warping/9.3_Warp_Modes/9.3.1_Beats_Mode.md)
+  - [9.3.2 Tones Mode](09_Audio_Clips,_Tempo,_and_Warping/9.3_Warp_Modes/9.3.2_Tones_Mode.md)
+  - [9.3.3 Texture Mode](09_Audio_Clips,_Tempo,_and_Warping/9.3_Warp_Modes/9.3.3_Texture_Mode.md)
+  - [9.3.4 Re-Pitch Mode](09_Audio_Clips,_Tempo,_and_Warping/9.3_Warp_Modes/9.3.4_Re-Pitch_Mode.md)
+  - [9.3.5 Complex and Complex Pro Mode](09_Audio_Clips,_Tempo,_and_Warping/9.3_Warp_Modes/9.3.5_Complex_and_Complex_Pro_Mode.md)
+  - [9.3 Warp Modes](09_Audio_Clips,_Tempo,_and_Warping/9.3_Warp_Modes/9.3_Warp_Modes.md)
+
+## 10_Editing_MIDI
+- **10.1_The_MIDI_Note_Editor_Layout**
+  - [10.1 The MIDI Note Editor Layout](10_Editing_MIDI/10.1_The_MIDI_Note_Editor_Layout/10.1_The_MIDI_Note_Editor_Layout.md)
+- **10.2_Zooming_and_Navigating_in_the_MIDI_Note**
+  - [10.2.1 Grid Snapping](10_Editing_MIDI/10.2_Zooming_and_Navigating_in_the_MIDI_Note/10.2.1_Grid_Snapping.md)
+  - [10.2.2 Playback Options](10_Editing_MIDI/10.2_Zooming_and_Navigating_in_the_MIDI_Note/10.2.2_Playback_Options.md)
+  - [10.2 Zooming and Navigating in the MIDI Note](10_Editing_MIDI/10.2_Zooming_and_Navigating_in_the_MIDI_Note/10.2_Zooming_and_Navigating_in_the_MIDI_Note.md)
+- **10.2_Zooming_and_Navigating_in_the_MIDI_Note_Editor**
+  - [10.2 Zooming and Navigating in the MIDI Note Editor](10_Editing_MIDI/10.2_Zooming_and_Navigating_in_the_MIDI_Note_Editor/10.2_Zooming_and_Navigating_in_the_MIDI_Note_Editor.md)
+- **10.3_Creating_a_MIDI_Clip**
+  - [10.3 Creating a MIDI Clip](10_Editing_MIDI/10.3_Creating_a_MIDI_Clip/10.3_Creating_a_MIDI_Clip.md)
+- **10.4_Adding_MIDI_Notes**
+  - [10.4.1 Draw Mode](10_Editing_MIDI/10.4_Adding_MIDI_Notes/10.4.1_Draw_Mode.md)
+  - [10.4.2 Previewing Notes](10_Editing_MIDI/10.4_Adding_MIDI_Notes/10.4.2_Previewing_Notes.md)
+  - [10.4 Adding MIDI Notes](10_Editing_MIDI/10.4_Adding_MIDI_Notes/10.4_Adding_MIDI_Notes.md)
+- **10.5_Editing_MIDI_Notes**
+  - [10.5.10 MIDI Tools](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.10_MIDI_Tools.md)
+  - [10.5.11 Quantizing Notes](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.11_Quantizing_Notes.md)
+  - [10.5.12.2 Note Off Velocity](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.12.2_Note_Off_Velocity.md)
+  - [10.5.12 Editing Velocities](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.12_Editing_Velocities.md)
+  - [10.5.13.1 Probability Groups](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.13.1_Probability_Groups.md)
+  - [10.5.13 Editing Probabilities](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.13_Editing_Probabilities.md)
+  - [10.5.1 Non-Destructive Editing](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.1_Non-Destructive_Editing.md)
+  - [10.5.2 Selecting Notes and Timespan](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.2_Selecting_Notes_and_Timespan.md)
+  - [10.5.3 Find and Select Notes](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.3_Find_and_Select_Notes.md)
+  - [10.5.4 Moving Notes](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.4_Moving_Notes.md)
+  - [10.5.5 Changing Note Length](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.5_Changing_Note_Length.md)
+  - [10.5.6 MIDI Note Stretch](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.6_MIDI_Note_Stretch.md)
+  - [10.5.7 Deactivating Notes](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.7_Deactivating_Notes.md)
+  - [10.5.8.1 Split](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.8.1_Split.md)
+  - [10.5.8.3 Join](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.8.3_Join.md)
+  - [10.5.8 Note Operations](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.8_Note_Operations.md)
+  - [10.5.9.1 Transpose](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.1_Transpose.md)
+  - [10.5.9.2 Fit to Scale](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.2_Fit_to_Scale.md)
+  - [10.5.9.3 Invert](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.3_Invert.md)
+  - [10.5.9.4 Intervals](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.4_Intervals.md)
+  - [10.5.9.5 Stretch](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.5_Stretch.md)
+  - [10.5.9.6 Note Duration](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.6_Note_Duration.md)
+  - [10.5.9.7 Humanize](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.7_Humanize.md)
+  - [10.5.9.8 Reverse](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.8_Reverse.md)
+  - [10.5.9.9 Legato](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9.9_Legato.md)
+  - [10.5.9 Pitch and Time Utilities](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5.9_Pitch_and_Time_Utilities.md)
+  - [10.5 Editing MIDI Notes](10_Editing_MIDI/10.5_Editing_MIDI_Notes/10.5_Editing_MIDI_Notes.md)
+- **10.6_Folding_and_Scales**
+  - [10.6 Folding and Scales](10_Editing_MIDI/10.6_Folding_and_Scales/10.6_Folding_and_Scales.md)
+- **10.7_Editing_MIDI_Clips**
+  - [10.7.1 Cropping MIDI Clips](10_Editing_MIDI/10.7_Editing_MIDI_Clips/10.7.1_Cropping_MIDI_Clips.md)
+  - [10.7.2 The …Time Commands in the MIDI Note Editor](10_Editing_MIDI/10.7_Editing_MIDI_Clips/10.7.2_The_…Time_Commands_in_the_MIDI_Note_Editor.md)
+  - [10.7.3 Looping](10_Editing_MIDI/10.7_Editing_MIDI_Clips/10.7.3_Looping.md)
+  - [10.7 Editing MIDI Clips](10_Editing_MIDI/10.7_Editing_MIDI_Clips/10.7_Editing_MIDI_Clips.md)
+- **10.8_Multi-Clip_Editing**
+  - [10.8.1 Focus Mode](10_Editing_MIDI/10.8_Multi-Clip_Editing/10.8.1_Focus_Mode.md)
+  - [10.8.2 Multi-Clip Editing in the Session View](10_Editing_MIDI/10.8_Multi-Clip_Editing/10.8.2_Multi-Clip_Editing_in_the_Session_View.md)
+  - [10.8.3 Multi-Clip Editing in the Arrangement View](10_Editing_MIDI/10.8_Multi-Clip_Editing/10.8.3_Multi-Clip_Editing_in_the_Arrangement_View.md)
+  - [10.8 Multi-Clip Editing](10_Editing_MIDI/10.8_Multi-Clip_Editing/10.8_Multi-Clip_Editing.md)
+- [10 24.3 Mixer and Device Clip Envelopes](10_Editing_MIDI/10_24.3_Mixer_and_Device_Clip_Envelopes.md)
+- [10 Editing MIDI](10_Editing_MIDI/10_Editing_MIDI.md)
+
+## 11_MIDI_Tools
+- **11.1_Using_MIDI_Tools**
+  - [11.1 Using MIDI Tools](11_MIDI_Tools/11.1_Using_MIDI_Tools/11.1_Using_MIDI_Tools.md)
+- **11.2_Transformation_Tools**
+  - [11.2.10 Strum](11_MIDI_Tools/11.2_Transformation_Tools/11.2.10_Strum.md)
+  - [11.2.11 Time Warp](11_MIDI_Tools/11.2_Transformation_Tools/11.2.11_Time_Warp.md)
+  - [11.2.12 Velocity Shaper](11_MIDI_Tools/11.2_Transformation_Tools/11.2.12_Velocity_Shaper.md)
+  - [11.2.1 Arpeggiate](11_MIDI_Tools/11.2_Transformation_Tools/11.2.1_Arpeggiate.md)
+  - [11.2.2 Chop](11_MIDI_Tools/11.2_Transformation_Tools/11.2.2_Chop.md)
+  - [11.2.3 Connect](11_MIDI_Tools/11.2_Transformation_Tools/11.2.3_Connect.md)
+  - [11.2.4 Glissando](11_MIDI_Tools/11.2_Transformation_Tools/11.2.4_Glissando.md)
+  - [11.2.5 LFO](11_MIDI_Tools/11.2_Transformation_Tools/11.2.5_LFO.md)
+  - [11.2.6 Ornament](11_MIDI_Tools/11.2_Transformation_Tools/11.2.6_Ornament.md)
+  - [11.2.7 Quantize](11_MIDI_Tools/11.2_Transformation_Tools/11.2.7_Quantize.md)
+  - [11.2.8 Recombine](11_MIDI_Tools/11.2_Transformation_Tools/11.2.8_Recombine.md)
+  - [11.2.9 Span](11_MIDI_Tools/11.2_Transformation_Tools/11.2.9_Span.md)
+  - [11.2 Transformation Tools](11_MIDI_Tools/11.2_Transformation_Tools/11.2_Transformation_Tools.md)
+- **11.3_Generative_Tools**
+  - [11.3.1 Rhythm](11_MIDI_Tools/11.3_Generative_Tools/11.3.1_Rhythm.md)
+  - [11.3.2 Seed](11_MIDI_Tools/11.3_Generative_Tools/11.3.2_Seed.md)
+  - [11.3.3 Shape](11_MIDI_Tools/11.3_Generative_Tools/11.3.3_Shape.md)
+  - [11.3.4 Stacks](11_MIDI_Tools/11.3_Generative_Tools/11.3.4_Stacks.md)
+  - [11.3.5 Euclidean](11_MIDI_Tools/11.3_Generative_Tools/11.3.5_Euclidean.md)
+  - [11.3 Generative Tools](11_MIDI_Tools/11.3_Generative_Tools/11.3_Generative_Tools.md)
+- [11 26.10.3 Filter Section](11_MIDI_Tools/11_26.10.3_Filter_Section.md)
+- [11 MIDI Tools](11_MIDI_Tools/11_MIDI_Tools.md)
+
+## 18_Mixing
+- **18.1_The_Live_Mixer**
+  - [18.1.1 Additional Mixer Features](18_Mixing/18.1_The_Live_Mixer/18.1.1_Additional_Mixer_Features.md)
+  - [18.1 The Live Mixer](18_Mixing/18.1_The_Live_Mixer/18.1_The_Live_Mixer.md)
+- **18.2_Audio_and_MIDI_Tracks**
+  - [18.2 Audio and MIDI Tracks](18_Mixing/18.2_Audio_and_MIDI_Tracks/18.2_Audio_and_MIDI_Tracks.md)
+- **18.3_Group_Tracks**
+  - [18.3 Group Tracks](18_Mixing/18.3_Group_Tracks/18.3_Group_Tracks.md)
+- **18.4_Return_Tracks_and_the_Main_track**
+  - [18.4 Return Tracks and the Main track](18_Mixing/18.4_Return_Tracks_and_the_Main_track/18.4_Return_Tracks_and_the_Main_track.md)
+- **18.5_Using_Live’s_Crossfader**
+  - [18.5 Using Live’s Crossfader](18_Mixing/18.5_Using_Live’s_Crossfader/18.5_Using_Live’s_Crossfader.md)
+- **18.6_Soloing_and_Cueing**
+  - [18.6 Soloing and Cueing](18_Mixing/18.6_Soloing_and_Cueing/18.6_Soloing_and_Cueing.md)
+- **18.7_Track_Delays**
+  - [18.7 Track Delays](18_Mixing/18.7_Track_Delays/18.7_Track_Delays.md)
+- **18.8_Keep_Monitoring_Latency_in_Recording_Track**
+  - [18.8 Keep Monitoring Latency in Recording Track](18_Mixing/18.8_Keep_Monitoring_Latency_in_Recording_Track/18.8_Keep_Monitoring_Latency_in_Recording_Track.md)
+- **18.8_Keep_Monitoring_Latency_in_Recording_Track_Toggles**
+  - [18.8 Keep Monitoring Latency in Recording Track Toggles](18_Mixing/18.8_Keep_Monitoring_Latency_in_Recording_Track_Toggles/18.8_Keep_Monitoring_Latency_in_Recording_Track_Toggles.md)
+- **18.9_Performance_Impact_Track_Indicators**
+  - [18.9 Performance Impact Track Indicators](18_Mixing/18.9_Performance_Impact_Track_Indicators/18.9_Performance_Impact_Track_Indicators.md)
+- [18 Mixing](18_Mixing/18_Mixing.md)
+
+## 26_Live_Audio_Effect_Reference
+- **26.10_Corpus**
+  - [26.10.1 Resonator Parameters](26_Live_Audio_Effect_Reference/26.10_Corpus/26.10.1_Resonator_Parameters.md)
+  - [26.10.2 LFO Section](26_Live_Audio_Effect_Reference/26.10_Corpus/26.10.2_LFO_Section.md)
+  - [26.10.3 Filter Section](26_Live_Audio_Effect_Reference/26.10_Corpus/26.10.3_Filter_Section.md)
+  - [26.10.4 Global Parameters](26_Live_Audio_Effect_Reference/26.10_Corpus/26.10.4_Global_Parameters.md)
+  - [26.10.5 Sidechain Parameters](26_Live_Audio_Effect_Reference/26.10_Corpus/26.10.5_Sidechain_Parameters.md)
+  - [26.10 Corpus](26_Live_Audio_Effect_Reference/26.10_Corpus/26.10_Corpus.md)
+- **26.11_Delay**
+  - [26.11.1.1 Glitch Effect](26_Live_Audio_Effect_Reference/26.11_Delay/26.11.1.1_Glitch_Effect.md)
+  - [26.11.1.2 Chorus Effect](26_Live_Audio_Effect_Reference/26.11_Delay/26.11.1.2_Chorus_Effect.md)
+  - [26.11.1 Delay Tips](26_Live_Audio_Effect_Reference/26.11_Delay/26.11.1_Delay_Tips.md)
+  - [26.11 Delay](26_Live_Audio_Effect_Reference/26.11_Delay/26.11_Delay.md)
+- **26.12_Drum_Buss**
+  - [26.12.0.1 Mid-High Frequency Shaping](26_Live_Audio_Effect_Reference/26.12_Drum_Buss/26.12.0.1_Mid-High_Frequency_Shaping.md)
+  - [26.12.0.2 Output](26_Live_Audio_Effect_Reference/26.12_Drum_Buss/26.12.0.2_Output.md)
+  - [26.12 Drum Buss](26_Live_Audio_Effect_Reference/26.12_Drum_Buss/26.12_Drum_Buss.md)
+- **26.13_Dynamic_Tube**
+  - [26.13 Dynamic Tube](26_Live_Audio_Effect_Reference/26.13_Dynamic_Tube/26.13_Dynamic_Tube.md)
+- **26.14_Echo**
+  - [26.14.1 Echo Tab](26_Live_Audio_Effect_Reference/26.14_Echo/26.14.1_Echo_Tab.md)
+  - [26.14.2 Modulation Tab](26_Live_Audio_Effect_Reference/26.14_Echo/26.14.2_Modulation_Tab.md)
+  - [26.14.3 Character Tab](26_Live_Audio_Effect_Reference/26.14_Echo/26.14.3_Character_Tab.md)
+  - [26.14.4 Global Controls](26_Live_Audio_Effect_Reference/26.14_Echo/26.14.4_Global_Controls.md)
+  - [26.14 Echo](26_Live_Audio_Effect_Reference/26.14_Echo/26.14_Echo.md)
+- **26.15_EQ_Eight**
+  - [26.15.0.1 Context Menu Options for EQ Eight](26_Live_Audio_Effect_Reference/26.15_EQ_Eight/26.15.0.1_Context_Menu_Options_for_EQ_Eight.md)
+  - [26.15 EQ Eight](26_Live_Audio_Effect_Reference/26.15_EQ_Eight/26.15_EQ_Eight.md)
+- **26.16_EQ_Three**
+  - [26.16 EQ Three](26_Live_Audio_Effect_Reference/26.16_EQ_Three/26.16_EQ_Three.md)
+- **26.17_Erosion**
+  - [26.17 Erosion](26_Live_Audio_Effect_Reference/26.17_Erosion/26.17_Erosion.md)
+- **26.18_External_Audio_Effect**
+  - [26.18 External Audio Effect](26_Live_Audio_Effect_Reference/26.18_External_Audio_Effect/26.18_External_Audio_Effect.md)
+- **26.19_Filter_Delay**
+  - [26.19 Filter Delay](26_Live_Audio_Effect_Reference/26.19_Filter_Delay/26.19_Filter_Delay.md)
+- **26.1_Amp**
+  - [26.1.1.1 Amps and Cabinets](26_Live_Audio_Effect_Reference/26.1_Amp/26.1.1.1_Amps_and_Cabinets.md)
+  - [26.1.1.2 Electricity](26_Live_Audio_Effect_Reference/26.1_Amp/26.1.1.2_Electricity.md)
+  - [26.1.1.3 More than guitars](26_Live_Audio_Effect_Reference/26.1_Amp/26.1.1.3_More_than_guitars.md)
+  - [26.1.1 Amp Tips](26_Live_Audio_Effect_Reference/26.1_Amp/26.1.1_Amp_Tips.md)
+  - [26.1 Amp](26_Live_Audio_Effect_Reference/26.1_Amp/26.1_Amp.md)
+- **26.20_Gate**
+  - [26.20 Gate](26_Live_Audio_Effect_Reference/26.20_Gate/26.20_Gate.md)
+- **26.21_Glue_Compressor**
+  - [26.21.1.1 Context Menu Options for Glue Compressor](26_Live_Audio_Effect_Reference/26.21_Glue_Compressor/26.21.1.1_Context_Menu_Options_for_Glue_Compressor.md)
+  - [26.21.1 Sidechain Parameters](26_Live_Audio_Effect_Reference/26.21_Glue_Compressor/26.21.1_Sidechain_Parameters.md)
+  - [26.21 Glue Compressor](26_Live_Audio_Effect_Reference/26.21_Glue_Compressor/26.21_Glue_Compressor.md)
+- **26.22_Grain_Delay**
+  - [26.22 Grain Delay](26_Live_Audio_Effect_Reference/26.22_Grain_Delay/26.22_Grain_Delay.md)
+- **26.23_Hybrid_Reverb**
+  - [26.23.1 Signal Flow](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.1_Signal_Flow.md)
+  - [26.23.2 Input Section](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.2_Input_Section.md)
+  - [26.23.3 Convolution Reverb Engine](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.3_Convolution_Reverb_Engine.md)
+  - [26.23.4.1 Dark Hall](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.4.1_Dark_Hall.md)
+  - [26.23.4.2 Quartz](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.4.2_Quartz.md)
+  - [26.23.4.3 Shimmer](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.4.3_Shimmer.md)
+  - [26.23.4.4 Tides](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.4.4_Tides.md)
+  - [26.23.4 Algorithmic Reverb Engine](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.4_Algorithmic_Reverb_Engine.md)
+  - [26.23.5 EQ Section](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.5_EQ_Section.md)
+  - [26.23.6 Output Section](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23.6_Output_Section.md)
+  - [26.23 Hybrid Reverb](26_Live_Audio_Effect_Reference/26.23_Hybrid_Reverb/26.23_Hybrid_Reverb.md)
+- **26.24_Limiter**
+  - [26.24 Limiter](26_Live_Audio_Effect_Reference/26.24_Limiter/26.24_Limiter.md)
+- **26.25_Looper**
+  - [26.25.1 Feedback Routing](26_Live_Audio_Effect_Reference/26.25_Looper/26.25.1_Feedback_Routing.md)
+  - [26.25 Looper](26_Live_Audio_Effect_Reference/26.25_Looper/26.25_Looper.md)
+- **26.26_Multiband_Dynamics**
+  - [26.26.1 Dynamics Processing Theory](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.1_Dynamics_Processing_Theory.md)
+  - [26.26.2 Interface and Controls](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.2_Interface_and_Controls.md)
+  - [26.26.3 Sidechain Parameters](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.3_Sidechain_Parameters.md)
+  - [26.26.4.1 Basic Multiband Compression](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.4.1_Basic_Multiband_Compression.md)
+  - [26.26.4.2 De-essing](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.4.2_De-essing.md)
+  - [26.26.4.3 Uncompression](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.4.3_Uncompression.md)
+  - [26.26.4 Multiband Dynamics Tips](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26.4_Multiband_Dynamics_Tips.md)
+  - [26.26 Multiband Dynamics](26_Live_Audio_Effect_Reference/26.26_Multiband_Dynamics/26.26_Multiband_Dynamics.md)
+- **26.27_Overdrive**
+  - [26.27 Overdrive](26_Live_Audio_Effect_Reference/26.27_Overdrive/26.27_Overdrive.md)
+- **26.28_Pedal**
+  - [26.28.1.1 Positioning Pedal in the Device Chain](26_Live_Audio_Effect_Reference/26.28_Pedal/26.28.1.1_Positioning_Pedal_in_the_Device_Chain.md)
+  - [26.28.1.3 Drum Group Fizzle](26_Live_Audio_Effect_Reference/26.28_Pedal/26.28.1.3_Drum_Group_Fizzle.md)
+  - [26.28.1.4 Broken Speaker](26_Live_Audio_Effect_Reference/26.28_Pedal/26.28.1.4_Broken_Speaker.md)
+  - [26.28.1.5 Sub Warmer](26_Live_Audio_Effect_Reference/26.28_Pedal/26.28.1.5_Sub_Warmer.md)
+  - [26.28.1 Pedal Tips](26_Live_Audio_Effect_Reference/26.28_Pedal/26.28.1_Pedal_Tips.md)
+  - [26.28 Pedal](26_Live_Audio_Effect_Reference/26.28_Pedal/26.28_Pedal.md)
+- **26.29_Phaser-Flanger**
+  - [26.29 Phaser-Flanger](26_Live_Audio_Effect_Reference/26.29_Phaser-Flanger/26.29_Phaser-Flanger.md)
+- **26.2_Auto_Filter**
+  - [26.2 Auto Filter](26_Live_Audio_Effect_Reference/26.2_Auto_Filter/26.2_Auto_Filter.md)
+- **26.30_Redux**
+  - [26.30.1 Downsampling](26_Live_Audio_Effect_Reference/26.30_Redux/26.30.1_Downsampling.md)
+  - [26.30.2 Bit Reduction](26_Live_Audio_Effect_Reference/26.30_Redux/26.30.2_Bit_Reduction.md)
+  - [26.30 Redux](26_Live_Audio_Effect_Reference/26.30_Redux/26.30_Redux.md)
+- **26.31_Resonators**
+  - [26.31 Resonators](26_Live_Audio_Effect_Reference/26.31_Resonators/26.31_Resonators.md)
+- **26.32_Reverb**
+  - [26.32.1 Input Filter](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32.1_Input_Filter.md)
+  - [26.32.2 Early Reflections](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32.2_Early_Reflections.md)
+  - [26.32.3 Diffusion Network](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32.3_Diffusion_Network.md)
+  - [26.32.4 Chorus](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32.4_Chorus.md)
+  - [26.32.5 Global Settings](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32.5_Global_Settings.md)
+  - [26.32.6 Output](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32.6_Output.md)
+  - [26.32 Reverb](26_Live_Audio_Effect_Reference/26.32_Reverb/26.32_Reverb.md)
+- **26.33_Roar**
+  - [26.33.1 Input Section](26_Live_Audio_Effect_Reference/26.33_Roar/26.33.1_Input_Section.md)
+  - [26.33.2 Gain Stage Section](26_Live_Audio_Effect_Reference/26.33_Roar/26.33.2_Gain_Stage_Section.md)
+  - [26.33.3 Modulation Section](26_Live_Audio_Effect_Reference/26.33_Roar/26.33.3_Modulation_Section.md)
+  - [26.33.4 Feedback Section](26_Live_Audio_Effect_Reference/26.33_Roar/26.33.4_Feedback_Section.md)
+  - [26.33.5 Global Section](26_Live_Audio_Effect_Reference/26.33_Roar/26.33.5_Global_Section.md)
+  - [26.33 Roar](26_Live_Audio_Effect_Reference/26.33_Roar/26.33_Roar.md)
+- **26.34_Saturator**
+  - [26.34.0.1 Saturator’s Waveshaper Controls](26_Live_Audio_Effect_Reference/26.34_Saturator/26.34.0.1_Saturator’s_Waveshaper_Controls.md)
+  - [26.34.0.2 Context Menu Options for Saturator](26_Live_Audio_Effect_Reference/26.34_Saturator/26.34.0.2_Context_Menu_Options_for_Saturator.md)
+  - [26.34 Saturator](26_Live_Audio_Effect_Reference/26.34_Saturator/26.34_Saturator.md)
+- **26.35_Shifter**
+  - [26.35.1 Tuning and Delay Section](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.1_Tuning_and_Delay_Section.md)
+  - [26.35.2 LFO Section](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.2_LFO_Section.md)
+  - [26.35.3 Envelope Follower Section](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.3_Envelope_Follower_Section.md)
+  - [26.35.4 Shifter Mode Section](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.4_Shifter_Mode_Section.md)
+  - [26.35.5 Sidechain Parameters](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.5_Sidechain_Parameters.md)
+  - [26.35.6.1 Pitch-shifted Drum Layers](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.6.1_Pitch-shifted_Drum_Layers.md)
+  - [26.35.6.2 Phasing Effects](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.6.2_Phasing_Effects.md)
+  - [26.35.6.3 Tremolo Effects](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.6.3_Tremolo_Effects.md)
+  - [26.35.6 Shifter Tips](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35.6_Shifter_Tips.md)
+  - [26.35 Shifter](26_Live_Audio_Effect_Reference/26.35_Shifter/26.35_Shifter.md)
+- **26.36_Spectral_Resonator**
+  - [26.36.1 Spectral Resonator Tips](26_Live_Audio_Effect_Reference/26.36_Spectral_Resonator/26.36.1_Spectral_Resonator_Tips.md)
+  - [26.36 Spectral Resonator](26_Live_Audio_Effect_Reference/26.36_Spectral_Resonator/26.36_Spectral_Resonator.md)
+- **26.37_Spectral_Time**
+  - [26.37.1 Freezer Section](26_Live_Audio_Effect_Reference/26.37_Spectral_Time/26.37.1_Freezer_Section.md)
+  - [26.37.2 Delay Section](26_Live_Audio_Effect_Reference/26.37_Spectral_Time/26.37.2_Delay_Section.md)
+  - [26.37.3 Resolution Section](26_Live_Audio_Effect_Reference/26.37_Spectral_Time/26.37.3_Resolution_Section.md)
+  - [26.37.4 Global Controls](26_Live_Audio_Effect_Reference/26.37_Spectral_Time/26.37.4_Global_Controls.md)
+  - [26.37 Spectral Time](26_Live_Audio_Effect_Reference/26.37_Spectral_Time/26.37_Spectral_Time.md)
+- **26.38_Spectrum**
+  - [26.38 Spectrum](26_Live_Audio_Effect_Reference/26.38_Spectrum/26.38_Spectrum.md)
+- **26.39_Tuner**
+  - [26.39.1 View Switches](26_Live_Audio_Effect_Reference/26.39_Tuner/26.39.1_View_Switches.md)
+  - [26.39.2 Classic View](26_Live_Audio_Effect_Reference/26.39_Tuner/26.39.2_Classic_View.md)
+  - [26.39.3 Histogram View](26_Live_Audio_Effect_Reference/26.39_Tuner/26.39.3_Histogram_View.md)
+  - [26.39.4 Note Spellings](26_Live_Audio_Effect_Reference/26.39_Tuner/26.39.4_Note_Spellings.md)
+  - [26.39.5 Reference Slider](26_Live_Audio_Effect_Reference/26.39_Tuner/26.39.5_Reference_Slider.md)
+  - [26.39 Tuner](26_Live_Audio_Effect_Reference/26.39_Tuner/26.39_Tuner.md)
+- **26.3_Auto_Pan**
+  - [26.3 Auto Pan](26_Live_Audio_Effect_Reference/26.3_Auto_Pan/26.3_Auto_Pan.md)
+- **26.40_Utility**
+  - [26.40 Utility](26_Live_Audio_Effect_Reference/26.40_Utility/26.40_Utility.md)
+- **26.41_Vinyl_Distortion**
+  - [26.41 Vinyl Distortion](26_Live_Audio_Effect_Reference/26.41_Vinyl_Distortion/26.41_Vinyl_Distortion.md)
+- **26.42_Vocoder**
+  - [26.42.1.1 Singing Synthesizer](26_Live_Audio_Effect_Reference/26.42_Vocoder/26.42.1.1_Singing_Synthesizer.md)
+  - [26.42.1.2 Formant Shifter](26_Live_Audio_Effect_Reference/26.42_Vocoder/26.42.1.2_Formant_Shifter.md)
+  - [26.42.1 Vocoder Tips](26_Live_Audio_Effect_Reference/26.42_Vocoder/26.42.1_Vocoder_Tips.md)
+  - [26.42 Vocoder](26_Live_Audio_Effect_Reference/26.42_Vocoder/26.42_Vocoder.md)
+- **26.4_Auto_Shift**
+  - [26.4.1.1 MIDI Input](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.1.1_MIDI_Input.md)
+  - [26.4.1 Input Section](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.1_Input_Section.md)
+  - [26.4.2 Quantizer Tab](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.2_Quantizer_Tab.md)
+  - [26.4.3 MIDI Tab](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.3_MIDI_Tab.md)
+  - [26.4.4 LFO Tab](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.4_LFO_Tab.md)
+  - [26.4.5 Pitch Section](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.5_Pitch_Section.md)
+  - [26.4.6 Vibrato Section](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4.6_Vibrato_Section.md)
+  - [26.4 Auto Shift](26_Live_Audio_Effect_Reference/26.4_Auto_Shift/26.4_Auto_Shift.md)
+- **26.5_Beat_Repeat**
+  - [26.5 Beat Repeat](26_Live_Audio_Effect_Reference/26.5_Beat_Repeat/26.5_Beat_Repeat.md)
+- **26.6_Cabinet**
+  - [26.6.1.1 Amps and Cabinets](26_Live_Audio_Effect_Reference/26.6_Cabinet/26.6.1.1_Amps_and_Cabinets.md)
+  - [26.6.1 Cabinet Tips](26_Live_Audio_Effect_Reference/26.6_Cabinet/26.6.1_Cabinet_Tips.md)
+  - [26.6 Cabinet](26_Live_Audio_Effect_Reference/26.6_Cabinet/26.6_Cabinet.md)
+- **26.7_Channel_EQ**
+  - [26.7.1 Channel EQ Tips](26_Live_Audio_Effect_Reference/26.7_Channel_EQ/26.7.1_Channel_EQ_Tips.md)
+  - [26.7 Channel EQ](26_Live_Audio_Effect_Reference/26.7_Channel_EQ/26.7_Channel_EQ.md)
+- **26.8_Chorus-Ensemble**
+  - [26.8.1 Chorus-Ensemble Tips](26_Live_Audio_Effect_Reference/26.8_Chorus-Ensemble/26.8.1_Chorus-Ensemble_Tips.md)
+  - [26.8 Chorus-Ensemble](26_Live_Audio_Effect_Reference/26.8_Chorus-Ensemble/26.8_Chorus-Ensemble.md)
+- **26.9_Compressor**
+  - [26.9.1 Sidechain Parameters](26_Live_Audio_Effect_Reference/26.9_Compressor/26.9.1_Sidechain_Parameters.md)
+  - [26.9.2.1 Mixing a Voiceover](26_Live_Audio_Effect_Reference/26.9_Compressor/26.9.2.1_Mixing_a_Voiceover.md)
+  - [26.9.2.2 Sidechaining in Dance Music](26_Live_Audio_Effect_Reference/26.9_Compressor/26.9.2.2_Sidechaining_in_Dance_Music.md)
+  - [26.9.2 Compressor Tips](26_Live_Audio_Effect_Reference/26.9_Compressor/26.9.2_Compressor_Tips.md)
+  - [26.9 Compressor](26_Live_Audio_Effect_Reference/26.9_Compressor/26.9_Compressor.md)
+- [26 2.3.7 Plug-Ins](26_Live_Audio_Effect_Reference/26_2.3.7_Plug-Ins.md)
+- [26 Live Audio Effect Reference](26_Live_Audio_Effect_Reference/26_Live_Audio_Effect_Reference.md)
+
+## 27_Live_MIDI_Effect_Reference
+- **27.1_Arpeggiator**
+  - [27.1 Arpeggiator](27_Live_MIDI_Effect_Reference/27.1_Arpeggiator/27.1_Arpeggiator.md)
+- **27.2_CC_Control**
+  - [27.2 CC Control](27_Live_MIDI_Effect_Reference/27.2_CC_Control/27.2_CC_Control.md)
+- **27.3_Chord**
+  - [27.3 Chord](27_Live_MIDI_Effect_Reference/27.3_Chord/27.3_Chord.md)
+- **27.4_Note_Length**
+  - [27.4 Note Length](27_Live_MIDI_Effect_Reference/27.4_Note_Length/27.4_Note_Length.md)
+- **27.5_Pitch**
+  - [27.5 Pitch](27_Live_MIDI_Effect_Reference/27.5_Pitch/27.5_Pitch.md)
+- **27.6_Random**
+  - [27.6 Random](27_Live_MIDI_Effect_Reference/27.6_Random/27.6_Random.md)
+- **27.7_Scale**
+  - [27.7 Scale](27_Live_MIDI_Effect_Reference/27.7_Scale/27.7_Scale.md)
+- **27.8_Velocity**
+  - [27.8 Velocity](27_Live_MIDI_Effect_Reference/27.8_Velocity/27.8_Velocity.md)
+- [27 3. Live Concepts](27_Live_MIDI_Effect_Reference/27_3._Live_Concepts.md)
+- [27 Live MIDI Effect Reference](27_Live_MIDI_Effect_Reference/27_Live_MIDI_Effect_Reference.md)
+
+## 28_Live_Instrument_Reference
+- **28.10_Sampler**
+  - [28.10.10 The MIDI Tab](28_Live_Instrument_Reference/28.10_Sampler/28.10.10_The_MIDI_Tab.md)
+  - [28.10.11 Importing Third-Party Multisamples](28_Live_Instrument_Reference/28.10_Sampler/28.10.11_Importing_Third-Party_Multisamples.md)
+  - [28.10.1 Getting Started with Sampler](28_Live_Instrument_Reference/28.10_Sampler/28.10.1_Getting_Started_with_Sampler.md)
+  - [28.10.2 Multisampling](28_Live_Instrument_Reference/28.10_Sampler/28.10.2_Multisampling.md)
+  - [28.10.3 Title Bar Options](28_Live_Instrument_Reference/28.10_Sampler/28.10.3_Title_Bar_Options.md)
+  - [28.10.4 Sampler’s Tabs](28_Live_Instrument_Reference/28.10_Sampler/28.10.4_Sampler’s_Tabs.md)
+  - [28.10.5.1 Round Robin Sample Playback](28_Live_Instrument_Reference/28.10_Sampler/28.10.5.1_Round_Robin_Sample_Playback.md)
+  - [28.10.5.2 The Sample Layer List](28_Live_Instrument_Reference/28.10_Sampler/28.10.5.2_The_Sample_Layer_List.md)
+  - [28.10.5.3 Key Zones](28_Live_Instrument_Reference/28.10_Sampler/28.10.5.3_Key_Zones.md)
+  - [28.10.5.4 Velocity Zones](28_Live_Instrument_Reference/28.10_Sampler/28.10.5.4_Velocity_Zones.md)
+  - [28.10.5.5 Sample Select Zones](28_Live_Instrument_Reference/28.10_Sampler/28.10.5.5_Sample_Select_Zones.md)
+  - [28.10.5 The Zone Tab](28_Live_Instrument_Reference/28.10_Sampler/28.10.5_The_Zone_Tab.md)
+  - [28.10.6.1 Sample Playback](28_Live_Instrument_Reference/28.10_Sampler/28.10.6.1_Sample_Playback.md)
+  - [28.10.6 The Sample Tab](28_Live_Instrument_Reference/28.10_Sampler/28.10.6_The_Sample_Tab.md)
+  - [28.10.7.1 The Modulation Oscillator (Osc)](28_Live_Instrument_Reference/28.10_Sampler/28.10.7.1_The_Modulation_Oscillator_(Osc).md)
+  - [28.10.7.2 The Pitch Envelope](28_Live_Instrument_Reference/28.10_Sampler/28.10.7.2_The_Pitch_Envelope.md)
+  - [28.10.7 The PitchOsc Tab](28_Live_Instrument_Reference/28.10_Sampler/28.10.7_The_PitchOsc_Tab.md)
+  - [28.10.8.1 The Filter](28_Live_Instrument_Reference/28.10_Sampler/28.10.8.1_The_Filter.md)
+  - [28.10.8.2 The Volume Envelope and Global Controls](28_Live_Instrument_Reference/28.10_Sampler/28.10.8.2_The_Volume_Envelope_and_Global_Controls.md)
+  - [28.10.8 The FilterGlobal Tab](28_Live_Instrument_Reference/28.10_Sampler/28.10.8_The_FilterGlobal_Tab.md)
+  - [28.10.9.1 The Auxiliary Envelope](28_Live_Instrument_Reference/28.10_Sampler/28.10.9.1_The_Auxiliary_Envelope.md)
+  - [28.10.9.2 LFOs 1, 2 and 3](28_Live_Instrument_Reference/28.10_Sampler/28.10.9.2_LFOs_1,_2_and_3.md)
+  - [28.10.9 The Modulation Tab](28_Live_Instrument_Reference/28.10_Sampler/28.10.9_The_Modulation_Tab.md)
+  - [28.10 Sampler](28_Live_Instrument_Reference/28.10_Sampler/28.10_Sampler.md)
+- **28.11_Simpler**
+  - [28.11.1.1 Classic Playback Mode](28_Live_Instrument_Reference/28.11_Simpler/28.11.1.1_Classic_Playback_Mode.md)
+  - [28.11.1.3 Slicing Playback Mode](28_Live_Instrument_Reference/28.11_Simpler/28.11.1.3_Slicing_Playback_Mode.md)
+  - [28.11.1 Playback Modes](28_Live_Instrument_Reference/28.11_Simpler/28.11.1_Playback_Modes.md)
+  - [28.11.2 Warp Controls](28_Live_Instrument_Reference/28.11_Simpler/28.11.2_Warp_Controls.md)
+  - [28.11.3 Filter](28_Live_Instrument_Reference/28.11_Simpler/28.11.3_Filter.md)
+  - [28.11.4 Envelopes](28_Live_Instrument_Reference/28.11_Simpler/28.11.4_Envelopes.md)
+  - [28.11.5 LFO](28_Live_Instrument_Reference/28.11_Simpler/28.11.5_LFO.md)
+  - [28.11.6 Global Parameters](28_Live_Instrument_Reference/28.11_Simpler/28.11.6_Global_Parameters.md)
+  - [28.11.7 Context Menu Options for Simpler](28_Live_Instrument_Reference/28.11_Simpler/28.11.7_Context_Menu_Options_for_Simpler.md)
+  - [28.11.8 Strategies for Saving CPU Power](28_Live_Instrument_Reference/28.11_Simpler/28.11.8_Strategies_for_Saving_CPU_Power.md)
+  - [28.11 Simpler](28_Live_Instrument_Reference/28.11_Simpler/28.11_Simpler.md)
+- **28.12_Tension**
+  - [28.12.1 Architecture and Interface](28_Live_Instrument_Reference/28.12_Tension/28.12.1_Architecture_and_Interface.md)
+  - [28.12.2.1 The Exciter Section](28_Live_Instrument_Reference/28.12_Tension/28.12.2.1_The_Exciter_Section.md)
+  - [28.12.2.2 Exciter Types](28_Live_Instrument_Reference/28.12_Tension/28.12.2.2_Exciter_Types.md)
+  - [28.12.2.3 Exciter Parameters](28_Live_Instrument_Reference/28.12_Tension/28.12.2.3_Exciter_Parameters.md)
+  - [28.12.2.4 The Damper Section](28_Live_Instrument_Reference/28.12_Tension/28.12.2.4_The_Damper_Section.md)
+  - [28.12.2.5 The Termination Section](28_Live_Instrument_Reference/28.12_Tension/28.12.2.5_The_Termination_Section.md)
+  - [28.12.2.6 The Pickup Section](28_Live_Instrument_Reference/28.12_Tension/28.12.2.6_The_Pickup_Section.md)
+  - [28.12.2 String Tab](28_Live_Instrument_Reference/28.12_Tension/28.12.2_String_Tab.md)
+  - [28.12.3 FilterGlobal Tab](28_Live_Instrument_Reference/28.12_Tension/28.12.3_FilterGlobal_Tab.md)
+  - [28.12.4 Sound Design Tips](28_Live_Instrument_Reference/28.12_Tension/28.12.4_Sound_Design_Tips.md)
+  - [28.12 Tension](28_Live_Instrument_Reference/28.12_Tension/28.12_Tension.md)
+- **28.13_Wavetable**
+  - [28.13.1 Wavetable Synthesis](28_Live_Instrument_Reference/28.13_Wavetable/28.13.1_Wavetable_Synthesis.md)
+  - [28.13.2 Oscillators](28_Live_Instrument_Reference/28.13_Wavetable/28.13.2_Oscillators.md)
+  - [28.13.3 Sub Oscillator](28_Live_Instrument_Reference/28.13_Wavetable/28.13.3_Sub_Oscillator.md)
+  - [28.13.4 Filters](28_Live_Instrument_Reference/28.13_Wavetable/28.13.4_Filters.md)
+  - [28.13.5 Matrix Tab](28_Live_Instrument_Reference/28.13_Wavetable/28.13.5_Matrix_Tab.md)
+  - [28.13.6.1 LFOs](28_Live_Instrument_Reference/28.13_Wavetable/28.13.6.1_LFOs.md)
+  - [28.13.6 Mod Sources Tab](28_Live_Instrument_Reference/28.13_Wavetable/28.13.6_Mod_Sources_Tab.md)
+  - [28.13.7 MIDI Tab](28_Live_Instrument_Reference/28.13_Wavetable/28.13.7_MIDI_Tab.md)
+  - [28.13.8 Global and Unison Controls](28_Live_Instrument_Reference/28.13_Wavetable/28.13.8_Global_and_Unison_Controls.md)
+  - [28.13.9 Hi-Quality Mode](28_Live_Instrument_Reference/28.13_Wavetable/28.13.9_Hi-Quality_Mode.md)
+  - [28.13 Wavetable](28_Live_Instrument_Reference/28.13_Wavetable/28.13_Wavetable.md)
+- **28.1_Analog**
+  - [28.1.1 Architecture and Interface](28_Live_Instrument_Reference/28.1_Analog/28.1.1_Architecture_and_Interface.md)
+  - [28.1.2 Oscillators](28_Live_Instrument_Reference/28.1_Analog/28.1.2_Oscillators.md)
+  - [28.1.3 Noise Generator](28_Live_Instrument_Reference/28.1_Analog/28.1.3_Noise_Generator.md)
+  - [28.1.4 Filters](28_Live_Instrument_Reference/28.1_Analog/28.1.4_Filters.md)
+  - [28.1.5 Amplifiers](28_Live_Instrument_Reference/28.1_Analog/28.1.5_Amplifiers.md)
+  - [28.1.6 Envelopes](28_Live_Instrument_Reference/28.1_Analog/28.1.6_Envelopes.md)
+  - [28.1.7 LFOs](28_Live_Instrument_Reference/28.1_Analog/28.1.7_LFOs.md)
+  - [28.1.8 Global Parameters](28_Live_Instrument_Reference/28.1_Analog/28.1.8_Global_Parameters.md)
+  - [28.1.9 MPE Sources](28_Live_Instrument_Reference/28.1_Analog/28.1.9_MPE_Sources.md)
+  - [28.1 Analog](28_Live_Instrument_Reference/28.1_Analog/28.1_Analog.md)
+- **28.2_Collision**
+  - [28.2.1 Architecture and Interface](28_Live_Instrument_Reference/28.2_Collision/28.2.1_Architecture_and_Interface.md)
+  - [28.2.2 Mallet Section](28_Live_Instrument_Reference/28.2_Collision/28.2.2_Mallet_Section.md)
+  - [28.2.3 Noise Section](28_Live_Instrument_Reference/28.2_Collision/28.2.3_Noise_Section.md)
+  - [28.2.4.2 Mixer Section](28_Live_Instrument_Reference/28.2_Collision/28.2.4.2_Mixer_Section.md)
+  - [28.2.4 Resonator Tabs](28_Live_Instrument_Reference/28.2_Collision/28.2.4_Resonator_Tabs.md)
+  - [28.2.5 LFO Tab](28_Live_Instrument_Reference/28.2_Collision/28.2.5_LFO_Tab.md)
+  - [28.2.6.1 The Global Section](28_Live_Instrument_Reference/28.2_Collision/28.2.6.1_The_Global_Section.md)
+  - [28.2.6 MIDIMPE Tab](28_Live_Instrument_Reference/28.2_Collision/28.2.6_MIDIMPE_Tab.md)
+  - [28.2.7 Sound Design Tips](28_Live_Instrument_Reference/28.2_Collision/28.2.7_Sound_Design_Tips.md)
+  - [28.2 Collision](28_Live_Instrument_Reference/28.2_Collision/28.2_Collision.md)
+- **28.3_Drift**
+  - [28.3.1 Subtractive Synthesis](28_Live_Instrument_Reference/28.3_Drift/28.3.1_Subtractive_Synthesis.md)
+  - [28.3.2.1 Oscillator 1](28_Live_Instrument_Reference/28.3_Drift/28.3.2.1_Oscillator_1.md)
+  - [28.3.2.3 Pitch Mod](28_Live_Instrument_Reference/28.3_Drift/28.3.2.3_Pitch_Mod.md)
+  - [28.3.2.4 Waveform Display](28_Live_Instrument_Reference/28.3_Drift/28.3.2.4_Waveform_Display.md)
+  - [28.3.2.5 Oscillator Mixer](28_Live_Instrument_Reference/28.3_Drift/28.3.2.5_Oscillator_Mixer.md)
+  - [28.3.2 Oscillator Section](28_Live_Instrument_Reference/28.3_Drift/28.3.2_Oscillator_Section.md)
+  - [28.3.3 Filter Section](28_Live_Instrument_Reference/28.3_Drift/28.3.3_Filter_Section.md)
+  - [28.3.4.1 Envelope 1](28_Live_Instrument_Reference/28.3_Drift/28.3.4.1_Envelope_1.md)
+  - [28.3.4.2 Envelope 2](28_Live_Instrument_Reference/28.3_Drift/28.3.4.2_Envelope_2.md)
+  - [28.3.4 Envelopes Section](28_Live_Instrument_Reference/28.3_Drift/28.3.4_Envelopes_Section.md)
+  - [28.3.5 LFO Section](28_Live_Instrument_Reference/28.3_Drift/28.3.5_LFO_Section.md)
+  - [28.3.6 Mod Section](28_Live_Instrument_Reference/28.3_Drift/28.3.6_Mod_Section.md)
+  - [28.3.7 Global Section](28_Live_Instrument_Reference/28.3_Drift/28.3.7_Global_Section.md)
+  - [28.3 Drift](28_Live_Instrument_Reference/28.3_Drift/28.3_Drift.md)
+- **28.4_Drum_Sampler**
+  - [28.4.1 Sample Controls Section](28_Live_Instrument_Reference/28.4_Drum_Sampler/28.4.1_Sample_Controls_Section.md)
+  - [28.4.2 Playback Effects Section](28_Live_Instrument_Reference/28.4_Drum_Sampler/28.4.2_Playback_Effects_Section.md)
+  - [28.4.3 Filter Section](28_Live_Instrument_Reference/28.4_Drum_Sampler/28.4.3_Filter_Section.md)
+  - [28.4.4 Global Section](28_Live_Instrument_Reference/28.4_Drum_Sampler/28.4.4_Global_Section.md)
+  - [28.4.5 Context Menu Options for Drum Sampler](28_Live_Instrument_Reference/28.4_Drum_Sampler/28.4.5_Context_Menu_Options_for_Drum_Sampler.md)
+  - [28.4 Drum Sampler](28_Live_Instrument_Reference/28.4_Drum_Sampler/28.4_Drum_Sampler.md)
+- **28.5_Electric**
+  - [28.5.1 Architecture and Interface](28_Live_Instrument_Reference/28.5_Electric/28.5.1_Architecture_and_Interface.md)
+  - [28.5.2 Hammer Section](28_Live_Instrument_Reference/28.5_Electric/28.5.2_Hammer_Section.md)
+  - [28.5.3 Fork Section](28_Live_Instrument_Reference/28.5_Electric/28.5.3_Fork_Section.md)
+  - [28.5.4.1 Pickup Parameters](28_Live_Instrument_Reference/28.5_Electric/28.5.4.1_Pickup_Parameters.md)
+  - [28.5.4.2 Damper Parameters](28_Live_Instrument_Reference/28.5_Electric/28.5.4.2_Damper_Parameters.md)
+  - [28.5.4 DamperPickup Section](28_Live_Instrument_Reference/28.5_Electric/28.5.4_DamperPickup_Section.md)
+  - [28.5.5 Global Section](28_Live_Instrument_Reference/28.5_Electric/28.5.5_Global_Section.md)
+  - [28.5 Electric](28_Live_Instrument_Reference/28.5_Electric/28.5_Electric.md)
+- **28.6_External_Instrument**
+  - [28.6 External Instrument](28_Live_Instrument_Reference/28.6_External_Instrument/28.6_External_Instrument.md)
+- **28.7_Impulse**
+  - [28.7.1 Sample Slots](28_Live_Instrument_Reference/28.7_Impulse/28.7.1_Sample_Slots.md)
+  - [28.7.2 Start, Transpose and Stretch](28_Live_Instrument_Reference/28.7_Impulse/28.7.2_Start,_Transpose_and_Stretch.md)
+  - [28.7.3 Filter](28_Live_Instrument_Reference/28.7_Impulse/28.7.3_Filter.md)
+  - [28.7.4 Saturator and Envelope](28_Live_Instrument_Reference/28.7_Impulse/28.7.4_Saturator_and_Envelope.md)
+  - [28.7.5 Pan and Volume](28_Live_Instrument_Reference/28.7_Impulse/28.7.5_Pan_and_Volume.md)
+  - [28.7.6 Global Controls](28_Live_Instrument_Reference/28.7_Impulse/28.7.6_Global_Controls.md)
+  - [28.7.7 Individual Outputs](28_Live_Instrument_Reference/28.7_Impulse/28.7.7_Individual_Outputs.md)
+  - [28.7 Impulse](28_Live_Instrument_Reference/28.7_Impulse/28.7_Impulse.md)
+- **28.8_Meld**
+  - [28.8.10 Mix Section](28_Live_Instrument_Reference/28.8_Meld/28.8.10_Mix_Section.md)
+  - [28.8.11 Global Controls](28_Live_Instrument_Reference/28.8_Meld/28.8.11_Global_Controls.md)
+  - [28.8.1 General Overview](28_Live_Instrument_Reference/28.8_Meld/28.8.1_General_Overview.md)
+  - [28.8.2 Oscillators](28_Live_Instrument_Reference/28.8_Meld/28.8.2_Oscillators.md)
+  - [28.8.3 Oscillator Macros](28_Live_Instrument_Reference/28.8_Meld/28.8.3_Oscillator_Macros.md)
+  - [28.8.4 Envelopes Tab](28_Live_Instrument_Reference/28.8_Meld/28.8.4_Envelopes_Tab.md)
+  - [28.8.5 LFOs Tab](28_Live_Instrument_Reference/28.8_Meld/28.8.5_LFOs_Tab.md)
+  - [28.8.6 Matrix Tab](28_Live_Instrument_Reference/28.8_Meld/28.8.6_Matrix_Tab.md)
+  - [28.8.7 MIDI and MPE Tabs](28_Live_Instrument_Reference/28.8_Meld/28.8.7_MIDI_and_MPE_Tabs.md)
+  - [28.8.8 Settings Tab](28_Live_Instrument_Reference/28.8_Meld/28.8.8_Settings_Tab.md)
+  - [28.8.9 Filters](28_Live_Instrument_Reference/28.8_Meld/28.8.9_Filters.md)
+  - [28.8 Meld](28_Live_Instrument_Reference/28.8_Meld/28.8_Meld.md)
+- **28.9_Operator**
+  - [28.9.10.1 Global Shell and Display](28_Live_Instrument_Reference/28.9_Operator/28.9.10.1_Global_Shell_and_Display.md)
+  - [28.9.10.2 Modulation Targets](28_Live_Instrument_Reference/28.9_Operator/28.9.10.2_Modulation_Targets.md)
+  - [28.9.10.3 Pitch Shell and Display](28_Live_Instrument_Reference/28.9_Operator/28.9.10.3_Pitch_Shell_and_Display.md)
+  - [28.9.10.4 Filter Shell and Display](28_Live_Instrument_Reference/28.9_Operator/28.9.10.4_Filter_Shell_and_Display.md)
+  - [28.9.10.5 LFO Shell and Display](28_Live_Instrument_Reference/28.9_Operator/28.9.10.5_LFO_Shell_and_Display.md)
+  - [28.9.10.6 Oscillators A-D Shell and Display](28_Live_Instrument_Reference/28.9_Operator/28.9.10.6_Oscillators_A-D_Shell_and_Display.md)
+  - [28.9.10.7 Envelope Display](28_Live_Instrument_Reference/28.9_Operator/28.9.10.7_Envelope_Display.md)
+  - [28.9.10.8 Context Menu Options for Operator](28_Live_Instrument_Reference/28.9_Operator/28.9.10.8_Context_Menu_Options_for_Operator.md)
+  - [28.9.10 The Complete Parameter List](28_Live_Instrument_Reference/28.9_Operator/28.9.10_The_Complete_Parameter_List.md)
+  - [28.9.1 General Overview](28_Live_Instrument_Reference/28.9_Operator/28.9.1_General_Overview.md)
+  - [28.9.2.1 Built-in Waveforms](28_Live_Instrument_Reference/28.9_Operator/28.9.2.1_Built-in_Waveforms.md)
+  - [28.9.2.2 User Waveforms](28_Live_Instrument_Reference/28.9_Operator/28.9.2.2_User_Waveforms.md)
+  - [28.9.2.3 More Oscillator Parameters](28_Live_Instrument_Reference/28.9_Operator/28.9.2.3_More_Oscillator_Parameters.md)
+  - [28.9.2.4 Aliasing](28_Live_Instrument_Reference/28.9_Operator/28.9.2.4_Aliasing.md)
+  - [28.9.2 Oscillator Section](28_Live_Instrument_Reference/28.9_Operator/28.9.2_Oscillator_Section.md)
+  - [28.9.3 LFO Section](28_Live_Instrument_Reference/28.9_Operator/28.9.3_LFO_Section.md)
+  - [28.9.4 Envelopes](28_Live_Instrument_Reference/28.9_Operator/28.9.4_Envelopes.md)
+  - [28.9.5 Filter Section](28_Live_Instrument_Reference/28.9_Operator/28.9.5_Filter_Section.md)
+  - [28.9.6 Global Controls](28_Live_Instrument_Reference/28.9_Operator/28.9.6_Global_Controls.md)
+  - [28.9.7 Glide and Spread](28_Live_Instrument_Reference/28.9_Operator/28.9.7_Glide_and_Spread.md)
+  - [28.9.8 Strategies for Saving CPU Power](28_Live_Instrument_Reference/28.9_Operator/28.9.8_Strategies_for_Saving_CPU_Power.md)
+  - [28.9.9 Finally…](28_Live_Instrument_Reference/28.9_Operator/28.9.9_Finally….md)
+  - [28.9 Operator](28_Live_Instrument_Reference/28.9_Operator/28.9_Operator.md)
+- [28 Live Instrument Reference](28_Live_Instrument_Reference/28_Live_Instrument_Reference.md)
+- [28 Tempo Settings and Metronome - In this section, you will find controls for activating Link, setting your](28_Live_Instrument_Reference/28_Tempo_Settings_and_Metronome_-_In_this_section,_you_will_find_controls_for_activating_Link,_setting_your.md)
+
+## 39_Live_Keyboard_Shortcuts
+- **39.10_Clip_View_Editor_View_Modes**
+  - [39.10 Clip View Editor View Modes](39_Live_Keyboard_Shortcuts/39.10_Clip_View_Editor_View_Modes/39.10_Clip_View_Editor_View_Modes.md)
+- **39.11_Clip_View_Sample_Editor**
+  - [39.11 Clip View Sample Editor](39_Live_Keyboard_Shortcuts/39.11_Clip_View_Sample_Editor/39.11_Clip_View_Sample_Editor.md)
+- **39.12_Clip_View_MIDI_Note_Editor**
+  - [39.12 Clip View MIDI Note Editor](39_Live_Keyboard_Shortcuts/39.12_Clip_View_MIDI_Note_Editor/39.12_Clip_View_MIDI_Note_Editor.md)
+- **39.13_Grid_Snapping_and_Drawing**
+  - [39.13 Grid Snapping and Drawing](39_Live_Keyboard_Shortcuts/39.13_Grid_Snapping_and_Drawing/39.13_Grid_Snapping_and_Drawing.md)
+- **39.14_Global_Quantization**
+  - [39.14 Global Quantization](39_Live_Keyboard_Shortcuts/39.14_Global_Quantization/39.14_Global_Quantization.md)
+- **39.15_Session_View**
+  - [39.15 Session View](39_Live_Keyboard_Shortcuts/39.15_Session_View/39.15_Session_View.md)
+- **39.16_Arrangement_View**
+  - [39.16 Arrangement View](39_Live_Keyboard_Shortcuts/39.16_Arrangement_View/39.16_Arrangement_View.md)
+- **39.17_Comping**
+  - [39.17 Comping](39_Live_Keyboard_Shortcuts/39.17_Comping/39.17_Comping.md)
+- **39.18_Commands_for_Tracks**
+  - [39.18 Commands for Tracks](39_Live_Keyboard_Shortcuts/39.18_Commands_for_Tracks/39.18_Commands_for_Tracks.md)
+- **39.19_Transport**
+  - [39.19 Transport](39_Live_Keyboard_Shortcuts/39.19_Transport/39.19_Transport.md)
+- **39.1_Showing_and_Hiding_Views**
+  - [39.1 Showing and Hiding Views](39_Live_Keyboard_Shortcuts/39.1_Showing_and_Hiding_Views/39.1_Showing_and_Hiding_Views.md)
+- **39.20_Audio_Engine**
+  - [39.20 Audio Engine](39_Live_Keyboard_Shortcuts/39.20_Audio_Engine/39.20_Audio_Engine.md)
+- **39.21_Browser**
+  - [39.21 Browser](39_Live_Keyboard_Shortcuts/39.21_Browser/39.21_Browser.md)
+- **39.22_Similar_Sample_Swapping**
+  - [39.22 Similar Sample Swapping](39_Live_Keyboard_Shortcuts/39.22_Similar_Sample_Swapping/39.22_Similar_Sample_Swapping.md)
+- **39.23_KeyMIDI_Map_Mode_and_the_Computer**
+  - [39.23 KeyMIDI Map Mode and the Computer](39_Live_Keyboard_Shortcuts/39.23_KeyMIDI_Map_Mode_and_the_Computer/39.23_KeyMIDI_Map_Mode_and_the_Computer.md)
+- **39.24_Momentary_Latching_Shortcuts**
+  - [39.24 Momentary Latching Shortcuts](39_Live_Keyboard_Shortcuts/39.24_Momentary_Latching_Shortcuts/39.24_Momentary_Latching_Shortcuts.md)
+- **39.25_General_Keyboard_Navigation_and**
+  - [39.25.1 Using Tab for Navigation](39_Live_Keyboard_Shortcuts/39.25_General_Keyboard_Navigation_and/39.25.1_Using_Tab_for_Navigation.md)
+  - [39.25.2 Navigating Between Controls in the Settings Menu](39_Live_Keyboard_Shortcuts/39.25_General_Keyboard_Navigation_and/39.25.2_Navigating_Between_Controls_in_the_Settings_Menu.md)
+  - [39.25 General Keyboard Navigation and](39_Live_Keyboard_Shortcuts/39.25_General_Keyboard_Navigation_and/39.25_General_Keyboard_Navigation_and.md)
+- **39.25_General_Keyboard_Navigation_and_Workflow**
+  - [39.25 General Keyboard Navigation and Workflow](39_Live_Keyboard_Shortcuts/39.25_General_Keyboard_Navigation_and_Workflow/39.25_General_Keyboard_Navigation_and_Workflow.md)
+- **39.26_Accessing_Menus**
+  - [39.26 Accessing Menus](39_Live_Keyboard_Shortcuts/39.26_Accessing_Menus/39.26_Accessing_Menus.md)
+- **39.27_Using_Live’s_Context_Menu**
+  - [39.27 Using Live’s Context Menu](39_Live_Keyboard_Shortcuts/39.27_Using_Live’s_Context_Menu/39.27_Using_Live’s_Context_Menu.md)
+- **39.2_Keyboard_Focus_and_Navigation**
+  - [39.2 Keyboard Focus and Navigation](39_Live_Keyboard_Shortcuts/39.2_Keyboard_Focus_and_Navigation/39.2_Keyboard_Focus_and_Navigation.md)
+- **39.3_Working_with_Sets_and_the_Program**
+  - [39.3 Working with Sets and the Program](39_Live_Keyboard_Shortcuts/39.3_Working_with_Sets_and_the_Program/39.3_Working_with_Sets_and_the_Program.md)
+- **39.4_Working_with_Devices_and_Plug-Ins**
+  - [39.4 Working with Devices and Plug-Ins](39_Live_Keyboard_Shortcuts/39.4_Working_with_Devices_and_Plug-Ins/39.4_Working_with_Devices_and_Plug-Ins.md)
+- **39.5_Editing**
+  - [39.5 Editing](39_Live_Keyboard_Shortcuts/39.5_Editing/39.5_Editing.md)
+- **39.6_Adjusting_Values**
+  - [39.6 Adjusting Values](39_Live_Keyboard_Shortcuts/39.6_Adjusting_Values/39.6_Adjusting_Values.md)
+- **39.7_Commands_for_Breakpoint_Envelopes**
+  - [39.7 Commands for Breakpoint Envelopes](39_Live_Keyboard_Shortcuts/39.7_Commands_for_Breakpoint_Envelopes/39.7_Commands_for_Breakpoint_Envelopes.md)
+- **39.8_Loop_Brace_and_StartEnd_Markers**
+  - [39.8 Loop Brace and StartEnd Markers](39_Live_Keyboard_Shortcuts/39.8_Loop_Brace_and_StartEnd_Markers/39.8_Loop_Brace_and_StartEnd_Markers.md)
+- **39.9_Zooming,_Display_and_Selections**
+  - [39.9 Zooming, Display and Selections](39_Live_Keyboard_Shortcuts/39.9_Zooming,_Display_and_Selections/39.9_Zooming,_Display_and_Selections.md)
+- [39 An Audio Clip’s Properties as Displayed in the Clip View.](39_Live_Keyboard_Shortcuts/39_An_Audio_Clip’s_Properties_as_Displayed_in_the_Clip_View..md)
+- [39 Live Keyboard Shortcuts](39_Live_Keyboard_Shortcuts/39_Live_Keyboard_Shortcuts.md)

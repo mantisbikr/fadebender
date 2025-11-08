@@ -1,0 +1,382 @@
+---
+id: 28
+title: "Live Instrument Reference"
+chapter: 28
+---
+# 28 Live Instrument Reference
+
+28. Live Instrument Reference
+
+28.1 Analog
+
+28.1.1 Architecture and Interface
+28.1.2 Oscillators
+28.1.3 Noise Generator
+28.1.4 Filters
+28.1.5 Amplifiers
+28.1.6 Envelopes
+28.1.7 LFOs
+28.1.8 Global Parameters
+28.1.9 MPE Sources
+
+28.2 Collision
+
+28.2.1 Architecture and Interface
+28.2.2 Mallet Section
+28.2.3 Noise Section
+28.2.4 Resonator Tabs
+28.2.5 LFO Tab
+28.2.6 MIDI/MPE Tab
+28.2.7 Sound Design Tips
+
+28.3 Drift
+
+28.3.1 Subtractive Synthesis
+28.3.2 Oscillator Section
+28.3.3 Filter Section
+28.3.4 Envelopes Section
+28.3.5 LFO Section
+28.3.6 Mod Section
+28.3.7 Global Section
+
+28.4 Drum Sampler
+
+28.4.1 Sample Controls Section
+28.4.2 Playback Effects Section
+28.4.3 Filter Section
+28.4.4 Global Section
+28.4.5 Context Menu Options for Drum Sampler
+
+28.5 Electric
+
+28.5.1 Architecture and Interface
+28.5.2 Hammer Section
+28.5.3 Fork Section
+28.5.4 Damper/Pickup Section
+28.5.5 Global Section
+
+28.6 External Instrument
+28.7 Impulse
+
+28.7.1 Sample Slots
+28.7.2 Start, Transpose and Stretch
+28.7.3 Filter
+28.7.4 Saturator and Envelope
+28.7.5 Pan and Volume
+28.7.6 Global Controls
+
+28.7.7 Individual Outputs
+
+28.8 Meld
+
+28.8.1 General Overview
+28.8.2 Oscillators
+28.8.3 Oscillator Macros
+28.8.4 Envelopes Tab
+28.8.5 LFOs Tab
+28.8.6 Matrix Tab
+28.8.7 MIDI and MPE Tabs
+28.8.8 Settings Tab
+28.8.9 Filters
+28.8.10 Mix Section
+28.8.11 Global Controls
+
+28.9 Operator
+
+28.9.1 General Overview
+28.9.2 Oscillator Section
+28.9.3 LFO Section
+28.9.4 Envelopes
+28.9.5 Filter Section
+28.9.6 Global Controls
+28.9.7 Glide and Spread
+28.9.8 Strategies for Saving CPU Power
+28.9.9 Finally…
+28.9.10 The Complete Parameter List
+
+28.10 Sampler
+
+28.10.1 Getting Started with Sampler
+28.10.2 Multisampling
+28.10.3 Title Bar Options
+28.10.4 Sampler’s Tabs
+28.10.5 The Zone Tab
+28.10.6 The Sample Tab
+28.10.7 The Pitch/Osc Tab
+28.10.8 The Filter/Global Tab
+28.10.9 The Modulation Tab
+28.10.10 The MIDI Tab
+28.10.11 Importing Third-Party Multisamples
+
+28.11 Simpler
+
+28.11.1 Playback Modes
+28.11.2 Warp Controls
+28.11.3 Filter
+28.11.4 Envelopes
+28.11.5 LFO
+28.11.6 Global Parameters
+28.11.7 Context Menu Options for Simpler
+28.11.8 Strategies for Saving CPU Power
+
+28.12 Tension
+
+28.12.1 Architecture and Interface
+
+28.12.2 String Tab
+28.12.3 Filter/Global Tab
+28.12.4 Sound Design Tips
+
+28.13 Wavetable
+
+28.13.1 Wavetable Synthesis
+28.13.2 Oscillators
+28.13.3 Sub Oscillator
+28.13.4 Filters
+28.13.5 Matrix Tab
+28.13.6 Mod Sources Tab
+28.13.7 MIDI Tab
+28.13.8 Global and Unison Controls
+28.13.9 Hi-Quality Mode
+
+29. Max for Live
+
+29.1 Setting Up Max for Live
+29.2 Using Max for Live Devices
+29.3 Editing Max for Live Devices
+29.4 Building Max for Live MIDI Tools
+29.5 Max Dependencies
+29.6 Learning Max Programming
+
+30. Max for Live Devices
+30.1 Max for Live Instruments
+
+30.1.1 DS Clang
+30.1.2 DS Clap
+30.1.3 DS Cymbal
+30.1.4 DS FM
+30.1.5 DS HH
+30.1.6 DS Kick
+30.1.7 DS Sampler
+30.1.8 DS Snare
+30.1.9 DS Tom
+
+30.2 Max for Live Audio Effects
+
+30.2.1 Align Delay
+30.2.2 Envelope Follower
+30.2.3 LFO
+30.2.4 Shaper
+
+30.3 Max for Live MIDI Effects
+30.3.1 Envelope MIDI
+30.3.2 Expression Control
+30.3.3 Expression Control Legacy
+30.3.4 MIDI Monitor
+30.3.5 MPE Control
+30.3.6 Note Echo
+30.3.7 Shaper MIDI
+
+30.4 Max for Live MIDI Tools
+
+31. MIDI and Key Remote Control
+
+31.1 MIDI Remote Control
+
+31.1.1 Natively Supported Control Surfaces
+31.1.2 Manual Control Surface Setup
+31.1.3 Takeover Mode
+31.2 The Mapping Browser
+
+31.2.1 Assigning MIDI Remote Control
+31.2.2 Mapping to MIDI Notes
+31.2.3 Mapping to Absolute MIDI Controllers
+31.2.4 Mapping to Relative MIDI Controllers
+31.2.5 Computer Keyboard Remote Control
+
+32. Using Push 1
+
+32.1 Setup
+32.2 Browsing and Loading Sounds
+32.3 Playing and Programming Beats
+
+32.3.1 Loop Selector
+32.3.2 16 Velocities Mode
+32.3.3 64-Pad Mode
+32.3.4 Loading Individual Drums
+32.3.5 Step Sequencing Beats
+32.3.6 Real-time Recording
+32.3.7 Fixed Length Recording
+32.4 Additional Recording Options
+32.4.1 Recording with Repeat
+32.4.2 Quantizing
+
+32.5 Playing Melodies and Harmonies
+
+32.5.1 Playing in Other Keys
+
+32.6 Step Sequencing Melodies and Harmonies
+
+32.6.1 Adjusting the Loop Length
+32.7 Melodic Sequencer + 32 Notes
+
+32.7.1 32 Notes
+32.7.2 Sequencer
+
+32.8 Navigating in Note Mode
+32.9 Controlling Live’s Instruments and Effects
+32.10 Mixing with Push 1
+32.11 Recording Automation
+32.12 Step Sequencing Automation
+
+32.12.1 Note-Specific Parameters
+32.12.2 Per-Step Automation
+32.13 Controlling Live’s Session View
+
+32.13.1 Session Overview
+32.14 Setting User Preferences
+32.15 Push 1 Control Reference
+
+33. Using Push 2
+
+33.1 Setup
+33.2 Browsing and Loading Sounds
+33.3 Playing and Programming Beats
+
+33.3.1 Loop Selector
+33.3.2 16 Velocities Mode
+33.3.3 64-Pad Mode
+33.3.4 Loading Individual Drums
+33.3.5 Step Sequencing Beats
+33.3.6 Real-time Recording
+33.3.7 Fixed Length Recording
+33.4 Additional Recording Options
+33.4.1 Recording with Repeat
+33.4.2 Quantizing
+33.4.3 Arrangement Recording
+33.5 Playing Melodies and Harmonies
+
+33.5.1 Playing in Other Keys
+
+33.6 Step Sequencing Melodies and Harmonies
+
+33.6.1 Adjusting the Loop Length
+33.7 Melodic Sequencer + 32 Notes
+
+33.7.1 32 Notes
+33.7.2 Sequencer
+
+33.8 Working with Samples
+
+33.8.1 Classic Playback Mode
+33.8.2 One-Shot Mode
+33.8.3 Slicing Mode
+
+33.9 Navigating in Note Mode
+33.10 Working With Instruments and Effects
+
+33.10.1 Adding, Deleting, and Reordering Devices
+33.10.2 Working with Racks
+33.11 Track Control And Mixing
+
+33.11.1 Rack and Group Track Mixing
+
+33.12 Recording Automation
+33.13 Step Sequencing Automation
+33.14 Clip Mode
+
+33.14.1 Using MIDI Tracks in Clip Mode
+33.14.2 Real-Time Playing Layouts
+33.14.3 Sequencing Layouts
+33.14.4 Note-Specific Parameters
+33.15 Controlling Live’s Session View
+
+33.15.1 Session Overview
+
+33.16 Setup Menu
+33.17 Push 2 Control Reference
+
+34. Synchronizing with Link, Tempo Follower, and MIDI
+
+34.1 Synchronizing via Link
+34.1.1 Setting up Link
+34.1.2 Using Link
+
+34.2 Synchronizing via Tempo Follower
+34.2.1 Setting Up Tempo Follower
+
+34.3 Synchronizing via MIDI
+
+34.3.1 Synchronizing External MIDI Devices to Live
+34.3.2 Synchronizing Live to External MIDI Devices
+34.3.3 Sync Delay
+
+35. Computer Audio Resources and Strategies
+
+35.1 Managing the CPU Load
+35.1.1 The CPU Load Meter
+35.1.2 CPU Load from Multichannel Audio
+35.1.3 CPU Load from Tracks and Devices
+35.1.4 Track Freeze
+
+35.2 Managing the Disk Load
+
+36. Audio Fact Sheet
+
+36.1 Testing and Methodology
+36.2 Neutral Operations
+
+36.2.1 Undithered Rendering
+36.2.2 Matching sample rate/no transposition
+36.2.3 Unstretched Beats/Tones/Texture/Re-Pitch Warping
+36.2.4 Summing at Single Mix Points
+36.2.5 Recording external signals (bit depth >/= A/D converter)
+36.2.6 Recording internal sources at 32 bit
+36.2.7 Freeze, Flatten
+36.2.8 Bypassed Effects
+36.2.9 Routing
+36.2.10 Splitting Clips
+36.3 Non-Neutral Operations
+
+36.3.1 Playback in Complex and Complex Pro Mode
+36.3.2 Sample rate conversion/transposition
+36.3.3 Volume Automation
+36.3.4 Dithering
+36.3.5 Recording external signals (bit depth < A/D converter)
+36.3.6 Recording internal sources below 32 bit
+36.3.7 Consolidate
+36.3.8 Clip Fades
+36.3.9 Panning
+36.3.10 Grooves
+
+36.4 Tips for Achieving Optimal Sound Quality in Live
+36.5 Conclusion
+
+37. MIDI Fact Sheet
+
+37.1 Ideal MIDI Behavior
+37.2 MIDI Timing Problems
+37.3 Live’s MIDI Solutions
+37.4 Variables Outside of Live’s Control
+37.5 Tips for Achieving Optimal MIDI Performance
+37.6 Summary and Conclusions
+
+38. Accessibility and Keyboard Navigation
+38.1 Menu and Keyboard Navigation Settings
+
+38.1.1 Using Tab for Navigation
+38.1.2 Settings Menu
+38.1.3 Options Menu
+38.1.4 Speak Help Text
+
+38.2 Audio Setup
+38.3 Connecting MIDI Devices
+38.4 Navigating in Live
+
+38.4.1 Navigate Menu
+
+38.5 Editing Automation and Modulation Envelopes
+
+38.5.1 Navigating Between Breakpoints
+38.5.2 Selecting and Editing Breakpoints
+38.5.3 Switching Between Automation Envelopes in Arrangement View
