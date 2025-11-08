@@ -1,0 +1,108 @@
+{
+  "signature": "<sha1-structure-signature>",
+  "device_name": "<Device Name>",
+  "device_type": "<device-type>",
+  "created_at": 0,
+  "updated_at": 0,
+  "analysis_status": "pending",
+  "tags": [],
+  "sources": {
+    "preset_count": 0,
+    "fit_run_id": 0,
+    "migration": ""
+  },
+  "device_description": "",
+  "grouping": {
+    "masters": [
+      "<Master Param Name>"
+    ],
+    "dependents": {
+      "<Dependent Param Name>": "<Master Param Name>"
+    },
+    "dependent_master_values": {
+      "<Dependent Param Name>": 1.0
+    },
+    "skip_auto_enable": [
+      "<Master Param To Skip>"
+    ],
+    "apply_order": ["masters", "quantized", "dependents", "continuous"],
+    "requires_for_effect": {
+      "<Param Requiring Conditions>": {
+        "description": "<Why this is required>",
+        "all_of": [
+          "<Other Param On>",
+          { "param": "<Other Param>", "value": 0.0 }
+        ],
+        "any_of": [
+          "<Alt Param A On>",
+          "<Alt Param B On>"
+        ]
+      }
+    }
+  },
+  "params_meta": [
+    {
+      "name": "Device On",
+      "index": 0,
+      "control_type": "binary",
+      "min": 0.0,
+      "max": 1.0,
+      "labels": ["Off", "On"],
+      "audio_knowledge": {
+        "audio_function": "Master bypass switch for entire device",
+        "sonic_effect": {
+          "decreasing": "Bypasses processing; dry signal only",
+          "increasing": "Enables processing; effect active"
+        }
+      }
+    },
+    {
+      "name": "Time",
+      "index": 1,
+      "control_type": "continuous",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 1.0,
+      "min_display": 1.0,
+      "max_display": 5000.0,
+      "fit": {
+        "type": "spline",
+        "r2": 1.0,
+        "points": [
+          { "x": 0.0, "y": 1.0 },
+          { "x": 1.0, "y": 5000.0 }
+        ]
+      },
+      "audio_knowledge": {
+        "audio_function": "Delay time in milliseconds",
+        "use_cases": ["Short: doubling", "Long: atmospheric"]
+      }
+    },
+    {
+      "name": "Mode",
+      "index": 2,
+      "control_type": "quantized",
+      "labels": ["Repitch", "Fade", "Jump"],
+      "label_map": { "0": "Repitch", "1": "Fade", "2": "Jump" }
+    }
+  ],
+  "sections": {
+    "Device": {
+      "technical_name": "Device",
+      "description": "Device on/off control",
+      "sonic_focus": "Enable or disable the entire effect",
+      "technical_notes": [],
+      "parameters": ["Device On"]
+    },
+    "Timing": {
+      "technical_name": "Timing",
+      "description": "Core time controls",
+      "sonic_focus": "Timing and sync",
+      "technical_notes": ["Sync switches toggle beat divisions vs ms"],
+      "parameters": ["Time", "Mode"]
+    }
+  },
+  "param_names": ["Device On", "Time", "Mode"],
+  "param_count": 3
+}
+
