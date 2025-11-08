@@ -23,9 +23,14 @@ export function useDAWControl() {
   const [drawerInit, setDrawerInit] = useState({ group: null, param: null });
   const [typoCorrections, setTypoCorrections] = useState({});
 
-  // Load feature flags once
+  // Load feature flags with retry logic
   useEffect(() => {
-    (async () => {
+    let retryCount = 0;
+    const maxRetries = 5;
+    const baseDelay = 1000; // 1 second
+    let timeoutId = null;
+
+    const loadConfig = async () => {
       try {
         console.log('Loading app config...');
         const cfg = await apiService.getAppConfig();
@@ -52,8 +57,27 @@ export function useDAWControl() {
         }
       } catch (e) {
         console.error('Failed to load app config:', e);
+
+        // Retry with exponential backoff if under max retries
+        if (retryCount < maxRetries) {
+          retryCount++;
+          const delay = baseDelay * Math.pow(2, retryCount - 1); // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+          console.log(`Retrying config load in ${delay}ms (attempt ${retryCount}/${maxRetries})...`);
+          timeoutId = setTimeout(loadConfig, delay);
+        } else {
+          console.error('Max retries reached for config load. Feature flags may be incomplete.');
+        }
       }
-    })();
+    };
+
+    loadConfig();
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   // Load snapshot for inline suggestions (best-effort)

@@ -84,10 +84,22 @@ export default function SingleDeviceParamEditor({ editor }) {
   // Initial toggle state
   const initialToggleOn = useMemo(() => {
     if (computedType !== 'toggle') return false;
+
+    // For binary params with labels, check if currentValue matches the "on" label (index 1)
+    if (param.labels && param.labels.length === 2) {
+      const currentStr = String(currentValue || '').toLowerCase();
+      const onLabel = String(param.labels[1] || '').toLowerCase();
+      const offLabel = String(param.labels[0] || '').toLowerCase();
+
+      if (currentStr === onLabel) return true;
+      if (currentStr === offLabel) return false;
+    }
+
+    // Fallback: try numeric conversion
     const num = Number(currentValue);
     if (Number.isFinite(num)) return num >= 0.5;
     return false;
-  }, [computedType, currentValue, loading]);
+  }, [computedType, currentValue, loading, param]);
 
   const [toggleOn, setToggleOn] = useState(initialToggleOn);
   useEffect(() => { setToggleOn(initialToggleOn); }, [initialToggleOn]);
