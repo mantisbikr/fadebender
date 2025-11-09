@@ -1740,12 +1740,23 @@ def _check_requires_for_effect(mapping, params, target_param_name):
 - `scripts/fix_sc_mix_fit.py` - Compressor S/C Mix linear fit
 - **Note**: Use generic `calibrate_parameter.py` for new devices
 
+**NEW - Generic Curve Fitting:**
+
+- `scripts/fit_device_curves.py` - **RECOMMENDED** - Generic curve fitting from preset data
+  - Fits linear, exponential, logarithmic, and power curves
+  - Auto-selects best fit by R² value
+  - Works for any device signature
+  - Updates Firestore with fitted parameters
+  - Usage: `python3 fit_device_curves.py --signature <SIG> [--database dev-display-value]`
+
 **Existing - Parameter Fitting:**
 
-- `scripts/fit_params_from_presets.py` - Auto-fit all continuous params
+- `scripts/fit_params_from_presets.py` - Auto-fit all continuous params (device-specific)
+- `scripts/fit_compressor_curves.py` - Legacy Compressor-specific curve fitting
 - `scripts/export_signature_digest.py` - Export mapping for analysis
 - `scripts/import_mapping_analysis.py` - Import corrected mapping
 - `scripts/backup_firestore_mapping.py` - Backup device mapping
+- **Note**: Use generic `fit_device_curves.py` for new devices
 
 ### Key Make Targets
 ```bash
