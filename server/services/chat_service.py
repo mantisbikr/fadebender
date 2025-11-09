@@ -208,6 +208,64 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
     canonical, errors = map_llm_to_canonical(intent)
 
     # Step 3: Execute canonical intent
+    # Special-case: transport domain is handled directly (not via CanonicalIntent)
+    if canonical and canonical.get("domain") == "transport" and body.confirm:
+        action = str(canonical.get("action", ""))
+        value = canonical.get("value")
+        # Combined time signature (num/den)
+        if action == "time_sig_both":
+            num = None; den = None
+            if isinstance(value, dict):
+                num = value.get("num"); den = value.get("den")
+            elif isinstance(value, str) and "/" in value:
+                try:
+                    parts = value.split("/"); num = float(parts[0]); den = float(parts[1])
+                except Exception:
+                    pass
+            ok_all = True
+            if num is not None:
+                r1 = udp_request({"op": "set_transport", "action": "time_sig_num", "value": float(num)}, timeout=1.0)
+                ok_all = ok_all and bool(r1 and r1.get("ok", True))
+            if den is not None:
+                r2 = udp_request({"op": "set_transport", "action": "time_sig_den", "value": float(den)}, timeout=1.0)
+                ok_all = ok_all and bool(r2 and r2.get("ok", True))
+            try:
+                schedule_emit({"event": "transport_changed", "action": "time_signature"})
+            except Exception:
+                pass
+            return {"ok": ok_all, "intent": intent, "canonical": canonical, "summary": f"Transport: time_signature {num}/{den}"}
+
+        # Combined loop region (enable loop then set start/length)
+        if action == "loop_region" and isinstance(value, dict):
+            start = value.get("start"); length = value.get("length")
+            ok_all = True
+            _ = udp_request({"op": "set_transport", "action": "loop_on", "value": 1.0}, timeout=1.0)
+            if start is not None:
+                r1 = udp_request({"op": "set_transport", "action": "loop_start", "value": float(start)}, timeout=1.0)
+                ok_all = ok_all and bool(r1 and r1.get("ok", True))
+            if length is not None:
+                r2 = udp_request({"op": "set_transport", "action": "loop_length", "value": float(length)}, timeout=1.0)
+                ok_all = ok_all and bool(r2 and r2.get("ok", True))
+            try:
+                schedule_emit({"event": "transport_changed", "action": "loop_region"})
+            except Exception:
+                pass
+            return {"ok": ok_all, "intent": intent, "canonical": canonical, "summary": f"Transport: loop_region start={start} length={length}"}
+
+        # Simple transport action passthrough
+        msg = {"op": "set_transport", "action": action}
+        if value is not None:
+            try:
+                msg["value"] = float(value)
+            except Exception:
+                pass
+        resp = udp_request(msg, timeout=1.0)
+        try:
+            schedule_emit({"event": "transport_changed", "action": action})
+        except Exception:
+            pass
+        return {"ok": bool(resp and resp.get("ok", True)), "intent": intent, "canonical": canonical, "summary": f"Transport: {action}{(' ' + str(value)) if value is not None else ''}", "resp": resp}
+
     if canonical and body.confirm:
         try:
             from server.api.intents import execute_intent as exec_canonical
@@ -291,6 +349,59 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
         op = intent.get("operation") or {}
         action = str(op.get("action", ""))
         value = op.get("value")
+
+        # Combined time signature change: set numerator then denominator
+        if action == "time_sig_both":
+            num = None; den = None
+            if isinstance(value, dict):
+                num = value.get("num"); den = value.get("den")
+            elif isinstance(value, str) and "/" in value:
+                try:
+                    parts = value.split("/"); num = float(parts[0]); den = float(parts[1])
+                except Exception:
+                    pass
+            summary = f"Transport: time_signature {num}/{den}"
+            if not body.confirm:
+                return {"ok": True, "preview": [{"op": "set_transport", "action": "time_sig_num", "value": num}, {"op": "set_transport", "action": "time_sig_den", "value": den}], "intent": intent, "summary": summary}
+            ok_all = True
+            if num is not None:
+                r1 = udp_request({"op": "set_transport", "action": "time_sig_num", "value": float(num)}, timeout=1.0)
+                ok_all = ok_all and bool(r1 and r1.get("ok", True))
+            if den is not None:
+                r2 = udp_request({"op": "set_transport", "action": "time_sig_den", "value": float(den)}, timeout=1.0)
+                ok_all = ok_all and bool(r2 and r2.get("ok", True))
+            try:
+                schedule_emit({"event": "transport_changed", "action": "time_signature"})
+            except Exception:
+                pass
+            return {"ok": ok_all, "intent": intent, "summary": summary}
+
+        # Combined loop region: enable loop, set start and length
+        if action == "loop_region" and isinstance(value, dict):
+            start = value.get("start"); length = value.get("length")
+            summary = f"Transport: loop_region start={start} length={length}"
+            if not body.confirm:
+                preview = []
+                preview.append({"op": "set_transport", "action": "loop_on", "value": 1.0})
+                if start is not None:
+                    preview.append({"op": "set_transport", "action": "loop_start", "value": float(start)})
+                if length is not None:
+                    preview.append({"op": "set_transport", "action": "loop_length", "value": float(length)})
+                return {"ok": True, "preview": preview, "intent": intent, "summary": summary}
+            ok_all = True
+            _ = udp_request({"op": "set_transport", "action": "loop_on", "value": 1.0}, timeout=1.0)
+            if start is not None:
+                r1 = udp_request({"op": "set_transport", "action": "loop_start", "value": float(start)}, timeout=1.0)
+                ok_all = ok_all and bool(r1 and r1.get("ok", True))
+            if length is not None:
+                r2 = udp_request({"op": "set_transport", "action": "loop_length", "value": float(length)}, timeout=1.0)
+                ok_all = ok_all and bool(r2 and r2.get("ok", True))
+            try:
+                schedule_emit({"event": "transport_changed", "action": "loop_region"})
+            except Exception:
+                pass
+            return {"ok": ok_all, "intent": intent, "summary": summary}
+
         msg = {"op": "set_transport", "action": action}
         if value is not None:
             try:

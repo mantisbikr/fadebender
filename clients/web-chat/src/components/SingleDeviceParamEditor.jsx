@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider, CircularProgress } from '@mui/material';
 import { apiService } from '../services/api.js';
 
@@ -7,6 +7,8 @@ export default function SingleDeviceParamEditor({ editor }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentValue, setCurrentValue] = useState(current_values?.[param.name]?.display_value ?? param.current_value);
+  const pollingRef = useRef(null);
+  const mountedRef = useRef(true);
 
   console.log('[SingleDeviceParamEditor] Component mounted/updated:', {
     param_name: param?.name,
@@ -24,13 +26,16 @@ export default function SingleDeviceParamEditor({ editor }) {
     return 'continuous';
   }, [param]);
 
-  // Fetch fresh value when parameter changes
+  // Fetch fresh value when parameter changes and start polling while editor is open
   useEffect(() => {
+    mountedRef.current = true;
     console.log('[SingleDeviceParamEditor] useEffect triggered for param:', param?.name);
 
     const fetchCurrentValue = async () => {
       try {
-        setLoading(true);
+        if (!mountedRef.current) return;
+        if (busy) return; // avoid clobbering local value during commits
+        setLoading((prev) => prev && true); // keep spinner only on first fetch
         const requestBody = {
           domain: 'device',
           return_index: return_index,
@@ -38,23 +43,13 @@ export default function SingleDeviceParamEditor({ editor }) {
           param_ref: param.name
         };
 
-        console.log('[SingleDeviceParamEditor] Fetching current value with:', requestBody);
-
         const response = await apiService.readIntent(requestBody);
-
-        console.log('[SingleDeviceParamEditor] Fetch response:', {
-          ok: response?.ok,
-          normalized_value: response?.normalized_value,
-          value: response?.value
-        });
 
         if (response && response.ok) {
           const newValue = response.display_value ?? response.normalized_value ?? response.value;
-          console.log('[SingleDeviceParamEditor] Setting new value:', newValue);
           setCurrentValue(newValue);
         }
       } catch (error) {
-        console.warn('[SingleDeviceParamEditor] Failed to fetch device current value:', error);
         // Fall back to current_values from capabilities
         const currentVal = current_values?.[param.name];
         if (currentVal && currentVal.display_value !== null && currentVal.display_value !== undefined) {
@@ -63,12 +58,28 @@ export default function SingleDeviceParamEditor({ editor }) {
           setCurrentValue(param.current_value);
         }
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     };
 
+    // initial fetch
     fetchCurrentValue();
-  }, [return_index, device_index, param.name, current_values]);
+
+    // start polling for live updates while open
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(() => {
+      fetchCurrentValue();
+    }, 600);
+
+    // cleanup
+    return () => {
+      mountedRef.current = false;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [return_index, device_index, param.name, current_values, busy]);
 
   const initialValue = useMemo(() => {
     if (!param) return 0;
@@ -84,10 +95,22 @@ export default function SingleDeviceParamEditor({ editor }) {
   // Initial toggle state
   const initialToggleOn = useMemo(() => {
     if (computedType !== 'toggle') return false;
+
+    // For binary params with labels, check if currentValue matches the "on" label (index 1)
+    if (param.labels && param.labels.length === 2) {
+      const currentStr = String(currentValue || '').toLowerCase();
+      const onLabel = String(param.labels[1] || '').toLowerCase();
+      const offLabel = String(param.labels[0] || '').toLowerCase();
+
+      if (currentStr === onLabel) return true;
+      if (currentStr === offLabel) return false;
+    }
+
+    // Fallback: try numeric conversion
     const num = Number(currentValue);
     if (Number.isFinite(num)) return num >= 0.5;
     return false;
-  }, [computedType, currentValue, loading]);
+  }, [computedType, currentValue, loading, param]);
 
   const [toggleOn, setToggleOn] = useState(initialToggleOn);
   useEffect(() => { setToggleOn(initialToggleOn); }, [initialToggleOn]);
@@ -103,6 +126,17 @@ export default function SingleDeviceParamEditor({ editor }) {
         param_ref: param.name,
         value: Number(val)
       };
+      // Hint the server when value is a display percentage to avoid clamping to 1.0
+      try {
+        const unitStr = String(param.unit || '').toLowerCase();
+        const hasPercentUnit = unitStr.includes('%') || unitStr.includes('percent');
+        const md = Number(param.min_display);
+        const Mx = Number(param.max_display);
+        const looksLikePercentRange = Number.isFinite(md) && Number.isFinite(Mx) && md >= 0 && Mx <= 100;
+        if (hasPercentUnit || looksLikePercentRange) {
+          payload.unit = '%';
+        }
+      } catch {}
       await apiService.executeCanonicalIntent(payload);
     } finally { setBusy(false); }
   };
@@ -133,36 +167,82 @@ export default function SingleDeviceParamEditor({ editor }) {
   }
 
   if (computedType === 'quantized' && Array.isArray(param.labels) && param.labels.length) {
-    // For quantized params, currentValue now contains the label string directly from backend (e.g., "Fade")
-    // Backend's read_intent now looks up the label from Firestore label_map
-    let currentLabel = String(currentValue || '');
+    // Derive a reliable label from numeric or string value
+    const deriveLabel = (val) => {
+      const asNum = Number(val);
+      if (Number.isFinite(asNum) && param.label_map) {
+        const k = String(Math.round(asNum));
+        if (k in param.label_map) return String(param.label_map[k]);
+      }
+      // Fallback: numeric index into labels array
+      if (Number.isFinite(asNum) && Array.isArray(param.labels) && param.labels.length) {
+        const idx = Math.max(0, Math.min(param.labels.length - 1, Math.round(asNum)));
+        if (param.labels[idx] !== undefined) return String(param.labels[idx]);
+      }
+      const asStr = String(val || '');
+      // If label_map is label->value and current value is label string key
+      if (param.label_map && (asStr in param.label_map)) return asStr;
+      if (param.labels.includes(asStr)) return asStr;
+      // try reverse lookup: if currentValue equals any label_map value
+      if (param.label_map) {
+        const hit = Object.values(param.label_map).find(v => String(v) === asStr);
+        if (hit) return String(hit);
+      }
+      return String(param.labels[0] || '');
+    };
 
-    // Fallback to first label if nothing matches
-    if (!currentLabel || !param.labels.includes(currentLabel)) {
-      currentLabel = String(param.labels[0] || '');
-    }
+    const currentLabel = deriveLabel(currentValue);
 
     return (
       <Box>
-        <Typography variant="body2" sx={{ mb: 0.5 }}>{title || param.name}</Typography>
-        <Select size="small" value={currentLabel} disabled={busy} onChange={async (e) => {
-          const selectedLabel = e.target.value;
-          // Find the normalized value (key) for this label in label_map
-          if (param.label_map) {
-            const normalizedValueKey = Object.keys(param.label_map).find(key => param.label_map[key] === selectedLabel);
-            if (normalizedValueKey !== undefined) {
-              await commit(Number(normalizedValueKey));
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          {title || param.name} — <span style={{ color: 'var(--mui-palette-text-secondary)' }}>{currentLabel}</span>
+        </Typography>
+        <Select
+          size="small"
+          value={currentLabel}
+          disabled={busy}
+          renderValue={(val) => String(val || currentLabel)}
+          onChange={async (e) => {
+            const selectedLabel = e.target.value;
+            // Optimistically update local value for snappy UI
+            setCurrentValue(selectedLabel);
+            // Find the normalized value (key) for this label in label_map
+            if (param.label_map) {
+              // Case A: number->label (preferred)
+              const normalizedValueKey = Object.keys(param.label_map).find(key => String(param.label_map[key]) === String(selectedLabel));
+              if (normalizedValueKey !== undefined) {
+                await commit(Number(normalizedValueKey));
+                return;
+              }
+              // Case B: label->value (legacy)
+              if (selectedLabel in param.label_map) {
+                const v = Number(param.label_map[selectedLabel]);
+                if (Number.isFinite(v)) { await commit(v); return; }
+              }
+            } else {
+              // Fallback: commit by index in labels
+              const idx = param.labels.findIndex(l => String(l) === String(selectedLabel));
+              if (idx >= 0) await commit(idx);
             }
-          }
-        }}>
+          }}
+        >
           {param.labels.map((lab) => (<MenuItem key={String(lab)} value={String(lab)}>{String(lab)}</MenuItem>))}
         </Select>
       </Box>
     );
   }
 
-  const minD = Number(param.min_display ?? param.min ?? 0);
-  const maxD = Number(param.max_display ?? param.max ?? 1);
+  // Determine effective slider domain
+  const unitStr = String(param.unit || '').toLowerCase();
+  const isPercentDisplay = unitStr.includes('%') || unitStr.includes('percent') || /%/.test(String(currentValue || ''));
+  let minD = Number(param.min_display ?? param.min ?? 0);
+  let maxD = Number(param.max_display ?? param.max ?? 1);
+  if (isPercentDisplay) {
+    // Use 0..100 domain for percent-like parameters regardless of normalized min/max
+    minD = 0;
+    maxD = 100;
+  }
   const formatNum = (n) => {
     const x = Number(n);
     if (!isFinite(x)) return String(n);
@@ -170,7 +250,7 @@ export default function SingleDeviceParamEditor({ editor }) {
     return (r % 1 === 0) ? String(r) : String(r).replace(/\.?0+$/, '');
   };
 
-  const displayUnit = param.unit && param.unit !== 'display_value' ? param.unit : '';
+  const displayUnit = (param.unit && param.unit !== 'display_value') ? param.unit : (isPercentDisplay ? '%' : '');
 
   return (
     <Box>
@@ -180,7 +260,7 @@ export default function SingleDeviceParamEditor({ editor }) {
         value={Number(value)}
         min={isFinite(minD) ? minD : 0}
         max={isFinite(maxD) ? maxD : 1}
-        step={(isFinite(maxD - minD) && (maxD - minD) > 0) ? (maxD - minD) / 100 : 0.01}
+        step={(isFinite(maxD - minD) && (maxD - minD) > 0) ? (isPercentDisplay ? 1 : (maxD - minD) / 100) : 0.01}
         disabled={busy}
         onChange={(_, v) => setValue(Number(v))}
         onChangeCommitted={(_, v) => commit(Number(v))}

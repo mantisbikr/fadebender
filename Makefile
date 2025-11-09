@@ -1,7 +1,7 @@
 # Fadebender Makefile
 # Quick commands to run services
 
-.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps backup-firestore cleanup-backups all clean
+.PHONY: help venv install-nlp run-nlp run-controller run-bridge run-server run-server-dev run-chat run-server-chat run-all3 stop-nlp stop-server stop-chat stop-all status restart-all udp-stub run-udp-bridge stop-udp returns-status verify-vertex index-knowledge undo redo accept install-remote outline launch-live live-dev dev-returns dev-live migrate-local-maps list-local-maps backup-firestore cleanup-backups all clean
 
 help:
 	@echo "Fadebender Dev Commands:"
@@ -10,6 +10,7 @@ help:
 	@echo "  make run-nlp         - run NLP FastAPI service (on :8000)"
 	@echo "  make run-controller  - run Master Controller (Node/TS)"
 	@echo "  make run-server      - run Backend Server (on :8722)"
+	@echo "  make run-server-dev  - run Server (excludes scripts/ from reload)"
 	@echo "  make run-chat        - run Web Chat UI (on :3000)"
 	@echo "  make run-server-chat - run Backend Server and Chat together"
 	@echo "  make run-all3        - run NLP + Server + Chat (parallel)"
@@ -59,6 +60,10 @@ run-server:
 run-server-noreload:
 		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) (no-reload)"
 		FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --host 127.0.0.1 --port $${SERVER_PORT-8722}
+
+run-server-dev:
+		@echo "FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) (reload enabled, excluding scripts/)"
+		@set -a && [ -f .env ] && . ./.env && set +a && FB_LOCAL_MAP_DIR=$(LOCAL_MAP_DIR) . nlp-service/.venv/bin/activate && PYTHONPATH=$$PWD python -m uvicorn server.app:app --reload --reload-exclude 'scripts/*' --host 127.0.0.1 --port $${SERVER_PORT-8722}
 
 # ---- Web Chat UI ----
 run-chat:

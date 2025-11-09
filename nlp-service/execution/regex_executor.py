@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from typing import Dict, Any, List, Set
 
-from parsers import apply_typo_corrections, parse_mixer_command, parse_device_command
+from parsers import (
+    apply_typo_corrections,
+    parse_mixer_command,
+    parse_device_command,
+    parse_transport_command,
+)
 from execution.response_builder import build_question_response
 
 
@@ -97,6 +102,11 @@ def try_regex_parse(
 
     # Try mixer commands first (most common: volume, pan, solo, mute, sends)
     result = parse_mixer_command(q, query, error_msg, model_preference)
+    if result:
+        return result, []
+
+    # Try transport commands (play/stop/record/metronome/tempo/position/nudge/time signature/loop)
+    result = parse_transport_command(q, query, error_msg, model_preference)
     if result:
         return result, []
 

@@ -90,6 +90,16 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     if kind == "relative_change":
         print(f"[DEBUG] Processing relative_change: targets={targets}, op={op}")
 
+    # Pass-through for transport intents (handled by chat_service and API directly)
+    if kind == "transport":
+        op = (llm_intent or {}).get("operation") or {}
+        action = op.get("action")
+        value = op.get("value")
+        if not action:
+            errors.append("missing_transport_action")
+            return None, errors
+        return {"domain": "transport", "action": str(action), "value": value}, []
+
     # Only map control intents here; questions/clarifications bubble up to caller
     if kind not in ("set_parameter", "relative_change"):
         errors.append(f"non_control_intent:{kind}")
@@ -491,45 +501,8 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             pass
         return None
 
-    # Mixer controls: volume, pan, mute, solo
-    if parameter in ("volume", "pan", "mute", "solo"):
-        amount = _to_float(value)
-        print(f"[DEBUG] Mixer parameter {parameter}: amount={amount}, value={value}, unit={unit}")
-        if amount is None:
-            print(f"[DEBUG] Failed to convert value to float: {value}")
-            errors.append("invalid_value_amount")
-            return None, errors
-        intent = {
-            "domain": domain,
-            "action": "set",
-            "field": parameter,
-            "value": amount,
-            "unit": unit,
-            **target_fields
-        }
-        print(f"[DEBUG] Returning mixer intent: {intent}")
-        return intent, []
-
-    # Master cue control (mixer): only valid on master
-    if parameter == "cue":
-        if domain != "master":
-            errors.append("unsupported_parameter_for_domain:cue")
-            return None, errors
-        amount = _to_float(value)
-        if amount is None:
-            errors.append("invalid_value_amount")
-            return None, errors
-        intent = {
-            "domain": "master",
-            "action": "set",
-            "field": "cue",
-            "value": amount,
-            "unit": unit,
-        }
-        return intent, []
-
     # Device parameters: if plugin is specified OR device_ordinal is present
-    # Check this BEFORE send detection to avoid false matches
+    # Check this FIRST, before mixer controls, to avoid routing device parameters to mixer
     if plugin or device_ordinal is not None:
         # For relative changes on device parameters, we need to fetch current value first
         if op_type == "relative":
@@ -732,6 +705,44 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             intent["device_index"] = int(device_ordinal) - 1
         else:
             intent["device_index"] = 0
+        return intent, []
+
+    # Mixer controls: volume, pan, mute, solo (only if NOT a device parameter)
+    # Check this AFTER device parameters to avoid routing device params with mixer-like names
+    if parameter in ("volume", "pan", "mute", "solo"):
+        amount = _to_float(value)
+        print(f"[DEBUG] Mixer parameter {parameter}: amount={amount}, value={value}, unit={unit}")
+        if amount is None:
+            print(f"[DEBUG] Failed to convert value to float: {value}")
+            errors.append("invalid_value_amount")
+            return None, errors
+        intent = {
+            "domain": domain,
+            "action": "set",
+            "field": parameter,
+            "value": amount,
+            "unit": unit,
+            **target_fields
+        }
+        print(f"[DEBUG] Returning mixer intent: {intent}")
+        return intent, []
+
+    # Master cue control (mixer): only valid on master
+    if parameter == "cue":
+        if domain != "master":
+            errors.append("unsupported_parameter_for_domain:cue")
+            return None, errors
+        amount = _to_float(value)
+        if amount is None:
+            errors.append("invalid_value_amount")
+            return None, errors
+        intent = {
+            "domain": "master",
+            "action": "set",
+            "field": "cue",
+            "value": amount,
+            "unit": unit,
+        }
         return intent, []
 
     # Send controls: "send A", "send B", etc.

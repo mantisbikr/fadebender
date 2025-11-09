@@ -26,6 +26,44 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
     d = intent.domain
     field = (intent.field or "").strip().lower()
 
+    # Transport domain (direct pass-through)
+    if d == "transport":
+        from server.services.ableton_client import request_op as _req
+        action = getattr(intent, "action", "")
+        value = getattr(intent, "value", None)
+        # Combined time signature
+        if action == "time_sig_both" and isinstance(value, dict):
+            num = value.get("num"); den = value.get("den")
+            ok_all = True
+            if num is not None:
+                r1 = _req("set_transport", timeout=1.0, action="time_sig_num", value=float(num))
+                ok_all = ok_all and bool(r1 and r1.get("ok", True))
+            if den is not None:
+                r2 = _req("set_transport", timeout=1.0, action="time_sig_den", value=float(den))
+                ok_all = ok_all and bool(r2 and r2.get("ok", True))
+            return {"ok": ok_all, "summary": f"Transport: time_signature {num}/{den}"}
+        # Combined loop region
+        if action == "loop_region" and isinstance(value, dict):
+            start = value.get("start"); length = value.get("length")
+            ok_all = True
+            _ = _req("set_transport", timeout=1.0, action="loop_on", value=1.0)
+            if start is not None:
+                r1 = _req("set_transport", timeout=1.0, action="loop_start", value=float(start))
+                ok_all = ok_all and bool(r1 and r1.get("ok", True))
+            if length is not None:
+                r2 = _req("set_transport", timeout=1.0, action="loop_length", value=float(length))
+                ok_all = ok_all and bool(r2 and r2.get("ok", True))
+            return {"ok": ok_all, "summary": f"Transport: loop_region start={start} length={length}"}
+        # Simple action
+        params: Dict[str, Any] = {"action": str(action)}
+        if value is not None:
+            try:
+                params["value"] = float(value)
+            except Exception:
+                pass
+        r = _req("set_transport", timeout=1.0, **params)
+        return {"ok": bool(r and r.get("ok", True)), "summary": f"Transport: {action}{(' ' + str(value)) if value is not None else ''}", "resp": r}
+
     # Routing
     if d == "track" and field == "routing" and intent.track_index is not None:
         from server.services.intents.routing_service import set_track_routing
@@ -92,4 +130,3 @@ async def query_intent(intent: QueryIntent) -> Dict[str, Any]:
             return response.json()
         except httpx.HTTPError as e:
             raise HTTPException(500, f"Failed to query snapshot: {str(e)}")
-

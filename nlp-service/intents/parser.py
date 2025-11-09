@@ -250,6 +250,64 @@ def fallback_parse(text: str) -> Dict[str, Any]:
             "meta": {"utterance": t, "fallback": True}
         }
 
+    # Time signature
+    # Set explicit numerator/denominator
+    m = re.search(r"\bset\s+(time\s*signature|meter)\s+numerator\s*(to\s*)?(\d+)\b", s)
+    if m:
+        num = int(m.group(3))
+        return {"intent": "transport", "targets": [], "operation": {"action": "time_sig_num", "value": num}, "meta": {"utterance": t, "fallback": True}}
+    m = re.search(r"\bset\s+(time\s*signature|meter)\s+denominator\s*(to\s*)?(\d+)\b", s)
+    if m:
+        den = int(m.group(3))
+        return {"intent": "transport", "targets": [], "operation": {"action": "time_sig_den", "value": den}, "meta": {"utterance": t, "fallback": True}}
+    # Set both (best-effort: will set numerator; UI may follow up for denominator)
+    m = re.search(r"\b(time\s*signature|meter)\s*(to\s*)?(\d+)\s*/\s*(\d+)\b", s)
+    if m:
+        num = int(m.group(3)); den = int(m.group(4))
+        return {"intent": "transport", "targets": [], "operation": {"action": "time_sig_num", "value": num}, "meta": {"utterance": t, "also_den": den, "fallback": True}}
+
+    # Playhead position and nudge
+    m = re.search(r"\b(set|move|go\s*to|locate)\s*(playhead|position)?\s*(to\s*)?(\d+(?:\.\d+)?)\s*(beats?)?\b", s)
+    if m:
+        pos = float(m.group(4))
+        return {"intent": "transport", "targets": [], "operation": {"action": "position", "value": pos}, "meta": {"utterance": t, "fallback": True}}
+    # Go to bar N (approximate: assume 4/4 → beats = (bar-1)*4)
+    m = re.search(r"\b(go\s*to|move\s*to|locate)\s*bar\s*(\d+)\b", s)
+    if m:
+        bar = int(m.group(2)); beats = max(0, (bar - 1) * 4)
+        return {"intent": "transport", "targets": [], "operation": {"action": "position", "value": float(beats)}, "meta": {"utterance": t, "assumed_numerator": 4, "fallback": True}}
+    # Nudge forward/back by X [beats|bars]
+    m = re.search(r"\b(nudge|move)\s*(forward|back|backward)?\s*(by\s*)?(\d+(?:\.\d+)?)\s*(bars?|beats?)?\b", s)
+    if m:
+        direction = (m.group(2) or '').lower(); amt = float(m.group(4)); unit = (m.group(5) or 'beats').lower()
+        beats = amt * (4.0 if unit.startswith('bar') else 1.0)
+        if direction in ('back', 'backward'):
+            beats = -beats
+        return {"intent": "transport", "targets": [], "operation": {"action": "nudge", "value": beats}, "meta": {"utterance": t, "fallback": True}}
+
+    # Loop controls
+    # Loop on/off/toggle
+    m = re.search(r"\b(loop)\s*(on|off|toggle)\b", s)
+    if m:
+        mode = m.group(2).lower()
+        if mode == 'toggle':
+            return {"intent": "transport", "targets": [], "operation": {"action": "loop"}, "meta": {"utterance": t, "fallback": True}}
+        val = 1.0 if mode == 'on' else 0.0
+        return {"intent": "transport", "targets": [], "operation": {"action": "loop_on", "value": val}, "meta": {"utterance": t, "fallback": True}}
+    if re.search(r"\b(enable\s+loop)\b", s):
+        return {"intent": "transport", "targets": [], "operation": {"action": "loop_on", "value": 1.0}, "meta": {"utterance": t, "fallback": True}}
+    if re.search(r"\b(disable\s+loop)\b", s):
+        return {"intent": "transport", "targets": [], "operation": {"action": "loop_on", "value": 0.0}, "meta": {"utterance": t, "fallback": True}}
+    # Loop start/length
+    m = re.search(r"\b(set|change)\s+loop\s+start\s*(to\s*)?(\d+(?:\.\d+)?)\b", s)
+    if m:
+        val = float(m.group(3));
+        return {"intent": "transport", "targets": [], "operation": {"action": "loop_start", "value": val}, "meta": {"utterance": t, "fallback": True}}
+    m = re.search(r"\b(set|change)\s+loop\s+length\s*(to\s*)?(\d+(?:\.\d+)?)\b", s)
+    if m:
+        val = float(m.group(3));
+        return {"intent": "transport", "targets": [], "operation": {"action": "loop_length", "value": val}, "meta": {"utterance": t, "fallback": True}}
+
     # 1) Explicit: set track N volume to X dB
     m = re.search(r"set\s+track\s+(\d+)\s+volume\s+to\s+(-?\d+\.?\d*)\s*d?b\b", s)
     if m:
