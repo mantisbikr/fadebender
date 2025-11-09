@@ -578,7 +578,218 @@ For each continuous parameter, determine the best fit:
 #### **Log Fit**: `y = a*ln(x) + b`
 **Rarely needed** - most "logarithmic" params are better fit with exponential or piecewise
 
-### 3.2 Run Fitting Script
+### 4.2 Using the Generic Calibration Tool (RECOMMENDED)
+
+**NEW**: Use `scripts/calibrate_parameter.py` for efficient, standardized calibration.
+
+This tool provides a unified interface for all calibration workflows and supports multiple calibration modes.
+
+#### Tool Overview
+
+The generic calibration tool (`calibrate_parameter.py`) works for ANY device parameter and supports:
+- **Auto mode**: Automatic sweep calibration with configurable sampling
+- **Formula mode**: Mathematical formula-based generation (e.g., `1/(1-x)`)
+- **Linear mode**: Direct application of linear coefficients
+- **Manual mode**: Interactive point capture for manual calibration
+- **Apply mode**: Apply saved calibration points to Firestore
+
+#### Prerequisites
+
+```bash
+# Set server to dev mode (prevents restarts during calibration)
+make run-server-dev
+
+# Ensure Firestore database is set correctly
+export FIRESTORE_DATABASE_ID=dev-display-value
+```
+
+#### Usage Examples
+
+**1. Automatic Sweep Calibration** (Most Common)
+
+Use for parameters where you need to sample across the full range:
+
+```bash
+python3 scripts/calibrate_parameter.py \
+  --device 9e906e0ab3f18c4688107553744914f9ef6b9ee7 \
+  --param "Attack" \
+  --return-index 2 \
+  --device-index 0 \
+  --mode auto \
+  --num-points 50
+```
+
+What this does:
+- Automatically finds parameter by name
+- Sweeps normalized values from 0.0 to 1.0
+- Captures display values from Live at each point
+- Creates point-based fit with linear interpolation
+- Saves to `/tmp/fadebender_calibrations/<device>_<param>.json`
+- Applies fit to Firestore
+
+**2. Formula-Based Calibration** (For Known Relationships)
+
+Use when parameter follows a mathematical formula (e.g., Ratio = 1/(1-x)):
+
+```bash
+python3 scripts/calibrate_parameter.py \
+  --device 9e906e0ab3f18c4688107553744914f9ef6b9ee7 \
+  --param "Ratio" \
+  --return-index 2 \
+  --device-index 0 \
+  --mode formula \
+  --formula "1/(1-x)"
+```
+
+What this does:
+- Generates 186 densely-sampled points using the formula
+- Dense sampling in 0.90-0.99 range (where curve is steepest)
+- Creates point-based fit with perfect accuracy
+- Includes formula documentation in Firestore
+
+**3. Linear Fit Application** (For Simple Relationships)
+
+Use for percentage/gain parameters with linear relationships:
+
+```bash
+python3 scripts/calibrate_parameter.py \
+  --device 9e906e0ab3f18c4688107553744914f9ef6b9ee7 \
+  --param "S/C Mix" \
+  --return-index 2 \
+  --device-index 0 \
+  --mode linear \
+  --a 100.0 \
+  --b 0.0
+```
+
+What this does:
+- Applies linear fit: display = 100.0 * norm + 0.0
+- No sampling needed (coefficients provided)
+- Immediate application to Firestore
+
+**4. Manual Point Capture** (For Interactive Calibration)
+
+Use when you need to manually verify specific values:
+
+```bash
+# 1. Set parameter to desired display value in Live
+# 2. Capture the point:
+python3 scripts/calibrate_parameter.py \
+  --device 9e906e0ab3f18c4688107553744914f9ef6b9ee7 \
+  --param "Threshold" \
+  --return-index 2 \
+  --device-index 0 \
+  --mode manual \
+  --add -18.0
+
+# Repeat for multiple points, then apply:
+python3 scripts/calibrate_parameter.py \
+  --device 9e906e0ab3f18c4688107553744914f9ef6b9ee7 \
+  --param "Threshold" \
+  --return-index 2 \
+  --device-index 0 \
+  --mode apply
+```
+
+What this does:
+- Reads current normalized value from Live
+- Associates it with specified display value
+- Saves to calibration file
+- Apply mode creates point-based fit from all saved points
+
+#### For Track Devices
+
+Use `--track-index` instead of `--return-index`:
+
+```bash
+python3 scripts/calibrate_parameter.py \
+  --device <DEVICE_SIG> \
+  --param "Frequency" \
+  --track-index 0 \
+  --device-index 1 \
+  --mode auto
+```
+
+#### Calibration Workflow
+
+**Recommended workflow for new device:**
+
+```bash
+# 1. Start with auto calibration for all continuous parameters
+for param in "Attack" "Release" "Threshold" "Ratio" "Gain"; do
+  python3 scripts/calibrate_parameter.py \
+    --device <SIG> \
+    --param "$param" \
+    --return-index 2 \
+    --mode auto \
+    --num-points 50
+done
+
+# 2. Check accuracy, refine as needed:
+# - If accuracy < 97%, use formula mode (if known formula)
+# - If no formula, increase num-points to 100
+# - For non-monotonic curves, use manual mode
+
+# 3. For known relationships (percentages, etc.), use linear mode
+python3 scripts/calibrate_parameter.py \
+  --device <SIG> \
+  --param "Dry/Wet" \
+  --return-index 2 \
+  --mode linear \
+  --a 100.0 \
+  --b 0.0
+```
+
+#### Output and Verification
+
+The tool provides detailed output:
+
+```
+Found 'S/C Gain' at index 21
+
+Automatic calibration: S/C Gain
+Sampling 50 points...
+
+        Norm         Display
+------------------------------
+    0.000000          -70.00
+    0.020408          -62.00
+    ...
+    1.000000           24.00
+
+Points saved to: /tmp/fadebender_calibrations/9e906e0a_S/C_Gain.json
+
+Applying fit to Firestore...
+✅ Fit applied successfully
+```
+
+#### Calibration Data Storage
+
+- Points saved to: `/tmp/fadebender_calibrations/<device_sig>_<param_name>.json`
+- Format: `[{"norm": 0.0, "display": -70.0}, ...]`
+- Can be loaded for reapplication or analysis
+
+#### Tips for Best Results
+
+1. **Use `run-server-dev`**: Prevents server restarts during calibration
+   ```bash
+   make run-server-dev
+   ```
+
+2. **Start with auto mode**: Works for 90% of parameters
+
+3. **Use formula mode for known relationships**:
+   - Ratio: `1/(1-x)`
+   - Exponential decay: `a*exp(b*x)`
+   - Percentages: Use linear mode instead
+
+4. **Verify accuracy**: After auto calibration, test at boundaries and midpoints
+
+5. **Save calibration points**: Useful for documentation and reapplication
+
+6. **Parameter name matching**: Tool auto-finds parameter by name (case-insensitive, fuzzy matching)
+
+### 4.3 Manual Fitting Script (Advanced)
 
 Create fitting script (use `/tmp/refit_<param>.py` pattern):
 
@@ -1503,6 +1714,16 @@ def _check_requires_for_effect(mapping, params, target_param_name):
 
 ### Key Scripts
 
+**NEW - Generic Calibration Tool:**
+
+- `scripts/calibrate_parameter.py` - **RECOMMENDED** - Generic parameter calibration tool for any device
+  - Auto mode: Automatic sweep calibration
+  - Formula mode: Mathematical formula-based generation
+  - Linear mode: Direct coefficient application
+  - Manual mode: Interactive point capture
+  - Works for return tracks and regular tracks
+  - Saves calibration data to `/tmp/fadebender_calibrations/`
+
 **NEW - Device Structure:**
 
 - `scripts/initialize_device_structure.py` - **NEW** - Convert learn_device output to complete Reverb-style format (sections, grouping, params_meta)
@@ -1511,6 +1732,13 @@ def _check_requires_for_effect(mapping, params, target_param_name):
 
 - `scripts/apply_audio_knowledge.py` - **NEW** - Apply curated audio knowledge from JSON to Firestore
 - `scripts/update_audio_knowledge.py` - Experimental LLM-assisted research tool
+
+**Device-Specific Calibration (Legacy):**
+
+- `scripts/calibrate_sc_gain_auto.py` - Compressor S/C Gain calibration
+- `scripts/calibrate_ratio_formula.py` - Compressor Ratio formula-based calibration
+- `scripts/fix_sc_mix_fit.py` - Compressor S/C Mix linear fit
+- **Note**: Use generic `calibrate_parameter.py` for new devices
 
 **Existing - Parameter Fitting:**
 
