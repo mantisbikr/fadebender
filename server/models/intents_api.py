@@ -11,7 +11,8 @@ Domain = Literal["track", "return", "master", "device", "transport"]
 
 class CanonicalIntent(BaseModel):
     domain: Domain = Field(..., description="Scope: track|return|master|device|transport")
-    action: Literal["set"] = "set"
+    # Allow transport-specific actions to pass through
+    action: str = "set"
 
     # Targets (one of):
     track_index: Optional[int] = None
@@ -71,4 +72,3 @@ class QueryIntent(BaseModel):
     """Intent for get_parameter queries"""
     intent: Literal["get_parameter"] = "get_parameter"
     targets: list[QueryTarget]
-

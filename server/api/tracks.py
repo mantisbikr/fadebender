@@ -204,7 +204,40 @@ def get_track_device_capabilities(index: int, device: int) -> Dict[str, Any]:
 
             idx = int(mp.get("index", 0))
             lp = live_by_index.get(idx, {})
-            label_map = mp.get("label_map") or {}
+            label_map_raw = mp.get("label_map") or {}
+            # Normalize labels and label_map for UI
+            labels_ui = mp.get("labels")
+            label_map_ui = None
+            try:
+                if isinstance(label_map_raw, dict) and label_map_raw:
+                    def _is_num_key(k: object) -> bool:
+                        try:
+                            float(str(k))
+                            return True
+                        except Exception:
+                            return False
+                    if any(_is_num_key(k) for k in label_map_raw.keys()):
+                        # number -> label mapping; use values for labels
+                        labels_ui = labels_ui or [str(v) for v in label_map_raw.values()]
+                        # preserve as string keys for client lookup
+                        label_map_ui = {str(k): str(v) for k, v in label_map_raw.items()}
+                    else:
+                        # label -> value mapping; invert to number -> label for UI
+                        inv: Dict[str, str] = {}
+                        for lab, val in label_map_raw.items():
+                            try:
+                                inv[str(int(round(float(val))))] = str(lab)
+                            except Exception:
+                                # fallback: use raw string
+                                try:
+                                    inv[str(val)] = str(lab)
+                                except Exception:
+                                    pass
+                        if inv:
+                            label_map_ui = inv
+                            labels_ui = labels_ui or [str(v) for v in inv.values()]
+            except Exception:
+                pass
             # Do not infer control_type for devices; require Firestore to provide it
             control_type = mp.get("control_type")
             # dependency (master) info
@@ -221,8 +254,8 @@ def get_track_device_capabilities(index: int, device: int) -> Dict[str, Any]:
                 "index": idx,
                 "name": pname,
                 "unit": mp.get("unit"),
-                "labels": mp.get("labels") or (list(label_map.keys()) if isinstance(label_map, dict) else None),
-                "label_map": label_map if isinstance(label_map, dict) else None,
+                "labels": labels_ui,
+                "label_map": label_map_ui,
                 "role": mp.get("role"),
                 "tooltip": tooltip,
                 "min_display": mp.get("min_display"),

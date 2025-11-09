@@ -36,6 +36,10 @@ class Fadebender(ControlSurface):
                 from . import lom_ops  # type: ignore
 
                 set_live_accessor(lambda: self.song())
+                try:
+                    lom_ops.set_scheduler(self.schedule_message)
+                except Exception:
+                    pass
                 t = threading.Thread(target=start_udp_server, name="FadebenderUDP", daemon=True)
                 t.start()
                 try:

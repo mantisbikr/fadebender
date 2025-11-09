@@ -77,6 +77,60 @@ def alias_param_name_if_needed(name: Optional[str]) -> Optional[str]:
     return name
 
 
+def _is_percent_like_param(name: Optional[str]) -> bool:
+    try:
+        n = str(name or '').lower()
+        # Common percent-style parameter names
+        keys = ['mix', 'dry/wet', 'dry wet', 'wet/dry', 'wet dry', 'dry', 'wet', 'blend']
+        return any(k in n for k in keys)
+    except Exception:
+        return False
+
+
+def _fit_is_valid(fit: Optional[dict]) -> bool:
+    try:
+        if not isinstance(fit, dict) or not fit:
+            return False
+        ftype = str(fit.get("type", "")).strip().lower()
+        if ftype in ("linear", "log", "logarithmic", "exp", "exponential", "power"):
+            coeffs = fit.get("coeffs", {}) or {}
+            # Ensure all coeffs are real numbers
+            for k, v in coeffs.items():
+                try:
+                    vv = float(v)
+                    if vv != vv:  # NaN
+                        return False
+                except Exception:
+                    return False
+            return True
+        if ftype == "piecewise":
+            pts = fit.get("points", []) or []
+            if not pts or not isinstance(pts, list):
+                return False
+            # Accept if at least one point is numeric
+            for p in pts:
+                try:
+                    float(p.get("db")); float(p.get("normalized"))
+                    return True
+                except Exception:
+                    continue
+            return False
+        if ftype == "point_based":
+            pts = fit.get("points", {}) or {}
+            if not isinstance(pts, dict) or not pts:
+                return False
+            for _k, p in pts.items():
+                try:
+                    float(p.get("display")); float(p.get("norm"))
+                    return True
+                except Exception:
+                    continue
+            return False
+        return False
+    except Exception:
+        return False
+
+
 def normalize_param_with_firestore(
     param_ref: Optional[str],
     device_name: Optional[str] = None,
@@ -126,14 +180,22 @@ def resolve_param(params: List[dict], param_index: Optional[int], param_ref: Opt
         pref = pref_raw.lower()
         pref_norm = _norm_key(pref_raw)
         names = [str(p.get("name", "")) for p in params]
+
+        # Step 1: Try exact match first (case-insensitive)
+        exact_match = [p for p in params if str(p.get("name", "")).lower() == pref]
+        if exact_match:
+            return exact_match[0]
+
+        # Step 2: Try normalized exact match
+        pairs = [(p, _norm_key(str(p.get("name", "")))) for p in params]
+        exact_norm = [p for (p, nk) in pairs if nk == pref_norm]
+        if len(exact_norm) == 1:
+            return exact_norm[0]
+
+        # Step 3: Try substring match (only if no exact match found)
         cand = [p for p in params if pref in str(p.get("name", "")).lower()]
         if len(cand) == 0 and pref_norm:
-            pairs = [(p, _norm_key(str(p.get("name", "")))) for p in params]
-            exact = [p for (p, nk) in pairs if nk == pref_norm]
-            if exact:
-                cand = exact
-            else:
-                cand = [p for (p, nk) in pairs if pref_norm in nk]
+            cand = [p for (p, nk) in pairs if pref_norm in nk]
         if len(cand) == 1:
             return cand[0]
         if len(cand) == 0:
@@ -248,18 +310,101 @@ def invert_fit_to_value(fit: dict, target_y: float, vmin: float, vmax: float) ->
     ftype = fit.get("type")
     coeffs = fit.get("coeffs", {})
     if ftype == "linear":
+        # y = a*x + b  =>  x = (y - b) / a
         a = float(coeffs.get("a", 1.0)); b = float(coeffs.get("b", 0.0))
         x = t(a, b, target_y)
-    elif ftype == "log":
-        a = float(coeffs.get("a", 1.0)); b = float(coeffs.get("b", 0.0))
-        x = math.exp((target_y - b) / a) if a != 0 else vmin
-    elif ftype == "exp":
-        a = float(coeffs.get("a", 1.0)); b = float(coeffs.get("b", 1.0))
-        if target_y <= 0:
-            x = vmin
+    elif ftype in ("log", "logarithmic"):
+        # y = a * log(b*x + 1) + c  =>  x = (exp((y - c) / a) - 1) / b
+        a = float(coeffs.get("a", 1.0))
+        b = float(coeffs.get("b", 1.0))
+        c = float(coeffs.get("c", 0.0))
+        if a != 0 and b != 0:
+            x = (math.exp((target_y - c) / a) - 1.0) / b
         else:
-            x = math.log(target_y / a) / b if (a != 0 and b != 0) else vmin
+            x = vmin
+    elif ftype in ("exp", "exponential"):
+        # y = a * exp(b*x) + c  =>  x = ln((y - c) / a) / b
+        a = float(coeffs.get("a", 1.0))
+        b = float(coeffs.get("b", 1.0))
+        c = float(coeffs.get("c", 0.0))
+        if a != 0 and b != 0 and (target_y - c) > 0:
+            x = math.log((target_y - c) / a) / b
+        else:
+            x = vmin
+    elif ftype == "power":
+        # y = a * x^b + c  =>  x = ((y - c) / a)^(1/b)
+        a = float(coeffs.get("a", 1.0))
+        b = float(coeffs.get("b", 1.0))
+        c = float(coeffs.get("c", 0.0))
+        if a != 0 and b != 0 and (target_y - c) / a > 0:
+            x = math.pow((target_y - c) / a, 1.0 / b)
+        else:
+            x = vmin
+    elif ftype == "piecewise":
+        # Handle track volume format: [{"db": -70.0, "normalized": 0.0}, ...]
+        points_list = fit.get("points", [])
+        # Convert to sorted list of (display, norm) tuples
+        pts = []
+        for p in points_list:
+            if isinstance(p, dict) and "db" in p and "normalized" in p:
+                pts.append((float(p["db"]), float(p["normalized"])))
+        pts = sorted(pts)  # Sort by display value (db)
+
+        if not pts:
+            return vmin
+
+        # Linear interpolation between points
+        lo = None; hi = None
+        for y, x in pts:
+            if y <= target_y:
+                lo = (y, x)
+            if y >= target_y and hi is None:
+                hi = (y, x)
+
+        if lo and hi and hi[0] != lo[0]:
+            y1, x1 = lo; y2, x2 = hi
+            tfrac = (target_y - y1) / (y2 - y1)
+            x = x1 + tfrac * (x2 - x1)
+        elif lo:
+            x = lo[1]
+        elif hi:
+            x = hi[1]
+        else:
+            x = vmin
+    elif ftype == "point_based":
+        # Handle Firestore dict format: {"p0": {"norm": 0.0, "display": 1.0}, ...}
+        points_dict = fit.get("points", {})
+        # Convert dict to sorted list of (display, norm) tuples
+        pts = []
+        for key in sorted(points_dict.keys()):
+            p = points_dict[key]
+            if isinstance(p, dict) and "norm" in p and "display" in p:
+                pts.append((float(p["display"]), float(p["norm"])))
+        pts = sorted(pts)  # Sort by display value
+
+        if not pts:
+            return vmin
+
+        # Linear interpolation between points
+        lo = None; hi = None
+        for y, x in pts:
+            if y <= target_y:
+                lo = (y, x)
+            if y >= target_y and hi is None:
+                hi = (y, x)
+
+        if lo and hi and hi[0] != lo[0]:
+            y1, x1 = lo; y2, x2 = hi
+            tfrac = (target_y - y1) / (y2 - y1)
+            x = x1 + tfrac * (x2 - x1)
+        elif lo:
+            x = lo[1]
+        elif hi:
+            x = hi[1]
+        else:
+            x = vmin
     else:
+        # Legacy format: list of dicts with "x" and "y" fields
         pts = fit.get("points") or []
         pts = sorted([
             (float(p.get("y")), float(p.get("x")))
@@ -533,11 +678,16 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
             elif lnorm in {"off", "disable", "disabled", "false", "0", "no"}:
                 x = vmin
         elif ty is not None:
-            if pm and isinstance(pm.get("fit"), dict):
-                pm_unit = (pm.get("unit") or "").strip().lower()
+            # Prefer valid fit; fallback to percent mapping for percent-unit params
+            pm_unit = (pm.get("unit") or "").strip().lower() if pm else None
+            fit = pm.get("fit") if pm else None
+            if pm and _fit_is_valid(fit):
                 input_unit = unit_lc or detect_display_unit(target_display) or pm_unit
                 ty_aligned = convert_unit_value(float(ty), input_unit, pm_unit)
-                x = invert_fit_to_value(pm.get("fit") or {}, float(ty_aligned), vmin, vmax)
+                x = invert_fit_to_value(fit or {}, float(ty_aligned), vmin, vmax)
+            elif pm_unit in ("percent", "%"):
+                x = vmin + (vmax - vmin) * (float(ty) / 100.0)
+                ty = None
             else:
                 if intent.dry_run:
                     pv = {"note": "approx_preview_no_fit", "target_display": target_display, "value_range": [vmin, vmax]}
@@ -586,8 +736,17 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
                 except Exception:
                     pass
 
-    if not used_display and (normalize_unit(intent.unit) or "") in ("percent", "%"):
-        x = vmin + (vmax - vmin) * max(0.0, min(100.0, x)) / 100.0
+    # Generic percent fallback when target was given as 0..100 and param is percent-like
+    if not used_display:
+        try:
+            val_num = float(intent.value) if intent.value is not None else None
+        except Exception:
+            val_num = None
+        if (normalize_unit(intent.unit) or "") in ("percent", "%") and val_num is not None:
+            x = vmin + (vmax - vmin) * max(0.0, min(100.0, val_num)) / 100.0
+        elif val_num is not None and vmin <= 0.0 <= vmax <= 1.000001 and 1.0 < val_num <= 100.0 and _is_percent_like_param(sel.get("name")):
+            # Treat as percent for mix-like params even without explicit unit
+            x = vmin + (vmax - vmin) * (val_num / 100.0)
 
     prereq_changes: List[dict] = []
     try:
@@ -840,11 +999,16 @@ def set_track_device_param(intent: CanonicalIntent, debug: bool = False) -> Dict
             elif lnorm in {"off", "disable", "disabled", "false", "0", "no"}:
                 x = vmin
         elif ty is not None:
-            if pm and isinstance(pm.get("fit"), dict):
-                pm_unit = (pm.get("unit") or "").strip().lower()
+            # Prefer valid fit; fallback to percent mapping for percent-unit params
+            pm_unit = (pm.get("unit") or "").strip().lower() if pm else None
+            fit = pm.get("fit") if pm else None
+            if pm and _fit_is_valid(fit):
                 input_unit = unit_lc or detect_display_unit(target_display) or pm_unit
                 ty_aligned = convert_unit_value(float(ty), input_unit, pm_unit)
-                x = invert_fit_to_value(pm.get("fit") or {}, float(ty_aligned), vmin, vmax)
+                x = invert_fit_to_value(fit or {}, float(ty_aligned), vmin, vmax)
+            elif pm_unit in ("percent", "%"):
+                x = vmin + (vmax - vmin) * (float(ty) / 100.0)
+                ty = None
             else:
                 if intent.dry_run:
                     pv = {"note": "approx_preview_no_fit", "target_display": target_display, "value_range": [vmin, vmax]}
@@ -895,8 +1059,17 @@ def set_track_device_param(intent: CanonicalIntent, debug: bool = False) -> Dict
                 except Exception:
                     pass
 
-    if not used_display and (normalize_unit(intent.unit) or "") in ("percent", "%"):
-        x = vmin + (vmax - vmin) * max(0.0, min(100.0, x)) / 100.0
+    # Generic percent fallback when target was given as 0..100 and param is percent-like
+    if not used_display:
+        try:
+            val_num = float(intent.value) if intent.value is not None else None
+        except Exception:
+            val_num = None
+        if (normalize_unit(intent.unit) or "") in ("percent", "%") and val_num is not None:
+            x = vmin + (vmax - vmin) * max(0.0, min(100.0, val_num)) / 100.0
+        elif val_num is not None and vmin <= 0.0 <= vmax <= 1.000001 and 1.0 < val_num <= 100.0 and _is_percent_like_param(sel.get("name")):
+            # Treat as percent for mix-like params even without explicit unit
+            x = vmin + (vmax - vmin) * (val_num / 100.0)
 
     preview = {"op": "set_device_param", "track_index": ti, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(max(vmin, min(vmax, x)) if intent.clamp else x)}
     if intent.dry_run:
@@ -920,4 +1093,3 @@ def set_track_device_param(intent: CanonicalIntent, debug: bool = False) -> Dict
     except Exception:
         pass
     return resp
-

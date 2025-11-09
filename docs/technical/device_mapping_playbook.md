@@ -474,7 +474,85 @@ POST /op/return/device/param {"return_index": 0, "device_index": 0, "param_index
 
 ## Phase 4: Fit Continuous Parameters (2 hours)
 
-### 3.1 Choose Fit Type
+### 4.0 Querying Preset Data from Firestore
+
+**CRITICAL**: Preset documents use `structure_signature` NOT `device_signature` to link to devices.
+
+#### Firestore Preset Document Structure
+
+```json
+{
+  "preset_name": "Acoustic Kick Compressor",
+  "structure_signature": "9e906e0ab3f18c4688107553744914f9ef6b9ee7",  // Links to device_mappings
+  "parameter_values": {
+    "Attack": 0.123,
+    "Release": 0.456,
+    "Threshold": 0.789,
+    // ... normalized values (0.0 to 1.0) for all parameters
+  },
+  "parameter_display_values": {
+    "Attack": 5.2,      // ms
+    "Release": 120.5,   // ms
+    "Threshold": -18.0, // dB
+    // ... display values matching what Live shows in UI
+  }
+}
+```
+
+#### Querying Presets in Python
+
+```python
+import os
+os.environ["FIRESTORE_DATABASE_ID"] = "dev-display-value"
+
+from google.cloud import firestore
+
+DEVICE_SIG = "9e906e0ab3f18c4688107553744914f9ef6b9ee7"  # Your device signature
+
+client = firestore.Client(database="dev-display-value")
+
+# Query presets using structure_signature (NOT device_signature!)
+presets = client.collection("presets").where("structure_signature", "==", DEVICE_SIG).stream()
+
+for preset_doc in presets:
+    preset = preset_doc.to_dict()
+
+    # Extract data for curve fitting
+    param_values = preset.get("parameter_values", {})        # Normalized (0-1)
+    param_display_values = preset.get("parameter_display_values", {})  # Display values
+
+    # Collect (normalized, display) pairs for each parameter
+    for param_name, norm_val in param_values.items():
+        display_val = param_display_values.get(param_name)
+        if display_val is not None:
+            # Add to your fitting data: (norm_val, display_val)
+            print(f"{param_name}: {norm_val} -> {display_val}")
+```
+
+#### Common Mistakes
+
+❌ **WRONG**: Querying by `device_signature`
+```python
+presets.where("device_signature", "==", SIG)  # Returns empty!
+```
+
+✅ **CORRECT**: Querying by `structure_signature`
+```python
+presets.where("structure_signature", "==", SIG)  # Returns all presets
+```
+
+❌ **WRONG**: Looking for `parameters` field
+```python
+params = preset.get("parameters", [])  # Empty list!
+```
+
+✅ **CORRECT**: Using `parameter_values` and `parameter_display_values`
+```python
+norm_vals = preset.get("parameter_values", {})
+disp_vals = preset.get("parameter_display_values", {})
+```
+
+### 4.1 Choose Fit Type
 
 For each continuous parameter, determine the best fit:
 

@@ -90,6 +90,16 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     if kind == "relative_change":
         print(f"[DEBUG] Processing relative_change: targets={targets}, op={op}")
 
+    # Pass-through for transport intents (handled by chat_service and API directly)
+    if kind == "transport":
+        op = (llm_intent or {}).get("operation") or {}
+        action = op.get("action")
+        value = op.get("value")
+        if not action:
+            errors.append("missing_transport_action")
+            return None, errors
+        return {"domain": "transport", "action": str(action), "value": value}, []
+
     # Only map control intents here; questions/clarifications bubble up to caller
     if kind not in ("set_parameter", "relative_change"):
         errors.append(f"non_control_intent:{kind}")

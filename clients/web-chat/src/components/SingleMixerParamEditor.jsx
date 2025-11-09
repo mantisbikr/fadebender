@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Typography, Switch, FormControlLabel, Select, MenuItem, Slider, CircularProgress } from '@mui/material';
 import { apiService } from '../services/api.js';
 
@@ -8,6 +8,8 @@ export default function SingleMixerParamEditor({ editor }) {
   const [loading, setLoading] = useState(true);
   const [currentValue, setCurrentValue] = useState(param?.current_value);
   const [currentDisplay, setCurrentDisplay] = useState(param?.current_display);
+  const pollingRef = useRef(null);
+  const mountedRef = useRef(true);
 
   console.log('[SingleMixerParamEditor] Component mounted/updated:', {
     param_name: param?.name,
@@ -27,14 +29,17 @@ export default function SingleMixerParamEditor({ editor }) {
     return 'continuous';
   }, [param]);
 
-  // Fetch fresh value when parameter changes
+  // Fetch fresh value when parameter changes and start polling
   useEffect(() => {
+    mountedRef.current = true;
     console.log('[SingleMixerParamEditor] useEffect triggered for param:', param?.name);
 
     const fetchCurrentValue = async () => {
       let readBody = null;
       try {
-        setLoading(true);
+        if (!mountedRef.current) return;
+        if (busy) return; // avoid clobbering during commits
+        if (loading) setLoading(true);
         readBody = { domain: entity_type, field: param.name };
 
         if (entity_type === 'track') {
@@ -48,41 +53,41 @@ export default function SingleMixerParamEditor({ editor }) {
           readBody.send_ref = send_ref;
         }
 
-        console.log('[SingleMixerParamEditor] Fetching current value with:', readBody);
-
         const response = await apiService.readIntent(readBody);
-
-        console.log('[SingleMixerParamEditor] Fetch response:', {
-          ok: response?.ok,
-          normalized_value: response?.normalized_value,
-          value: response?.value,
-          display_value: response?.display_value
-        });
 
         if (response && response.ok) {
           const newValue = response.normalized_value ?? response.value;
           const newDisplay = response.display_value ?? response.value;
-          console.log('[SingleMixerParamEditor] Setting new values:', { newValue, newDisplay });
           setCurrentValue(newValue);
           setCurrentDisplay(newDisplay);
         }
       } catch (error) {
-        console.error('[SingleMixerParamEditor] Failed to fetch current value:', {
-          error: error,
-          errorMessage: error?.message,
-          errorString: String(error),
-          requestBody: readBody
-        });
         // Fall back to param values
         setCurrentValue(param.current_value);
         setCurrentDisplay(param.current_display);
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     };
 
+    // initial fetch
     fetchCurrentValue();
-  }, [entity_type, index_ref, param.name, send_ref]);
+
+    // start polling for live changes
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(() => {
+      fetchCurrentValue();
+    }, 600);
+
+    // cleanup
+    return () => {
+      mountedRef.current = false;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [entity_type, index_ref, param.name, send_ref, busy]);
 
   // Parse pan display value
   const parsePanDisplay = (s, fallbackNorm, minD, maxD) => {
@@ -200,11 +205,57 @@ export default function SingleMixerParamEditor({ editor }) {
   }
 
   if (computedType === 'quantized' && Array.isArray(param.labels) && param.labels.length) {
-    const current = String(param.current_label || '');
+    const deriveLabel = () => {
+      const asStr = String(currentDisplay || '');
+      if (param.label_map && (asStr in param.label_map)) return asStr; // label->value
+      if (param.labels.includes(asStr)) return asStr;
+      const asNum = Number(currentValue);
+      if (Number.isFinite(asNum) && param.label_map) {
+        const k = String(Math.round(asNum));
+        if (k in param.label_map) return String(param.label_map[k]);
+      }
+      // Fallback: numeric index into labels array
+      if (Number.isFinite(Number(currentValue)) && Array.isArray(param.labels) && param.labels.length) {
+        const idx = Math.max(0, Math.min(param.labels.length - 1, Math.round(Number(currentValue))));
+        if (param.labels[idx] !== undefined) return String(param.labels[idx]);
+      }
+      return String(param.labels[0] || '');
+    };
+    const currentLabel = deriveLabel();
+
     return (
       <Box>
-        <Typography variant="body2" sx={{ mb: 0.5 }}>{title || param.name}</Typography>
-        <Select size="small" value={current} disabled={busy}>
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          {title || param.name} — <span style={{ color: 'var(--mui-palette-text-secondary)' }}>{currentLabel}</span>
+        </Typography>
+        <Select
+          size="small"
+          value={currentLabel}
+          disabled={busy}
+          renderValue={(val) => String(val || currentLabel)}
+          onChange={async (e) => {
+            const selectedLabel = e.target.value;
+            // Optimistic display update
+            setCurrentDisplay(selectedLabel);
+            // Map label to numeric value if possible
+            let commitVal = null;
+            if (param.label_map) {
+              // Case A: number->label
+              const key = Object.keys(param.label_map).find(k => String(param.label_map[k]) === String(selectedLabel));
+              if (key !== undefined) commitVal = Number(key);
+              // Case B: label->value
+              if (commitVal === null && (selectedLabel in param.label_map)) {
+                const v = Number(param.label_map[selectedLabel]);
+                if (Number.isFinite(v)) commitVal = v;
+              }
+            }
+            if (commitVal === null) {
+              const idx = param.labels.findIndex(l => String(l) === String(selectedLabel));
+              if (idx >= 0) commitVal = idx;
+            }
+            if (commitVal !== null) await commit(commitVal);
+          }}
+        >
           {param.labels.map((lab) => (<MenuItem key={String(lab)} value={String(lab)}>{String(lab)}</MenuItem>))}
         </Select>
       </Box>

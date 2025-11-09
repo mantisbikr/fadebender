@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Dict, Any, Callable, List, Tuple, Optional
 import os
 import time
+import threading
 
 
 _STATE: Dict[str, Any] = {
@@ -55,6 +56,7 @@ _STATE: Dict[str, Any] = {
 }
 
 _NOTIFIER: Optional[Callable[[Dict[str, Any]], None]] = None
+_SCHEDULER: Optional[Callable[..., None]] = None  # ControlSurface.schedule_message
 _LISTENERS: List[Tuple[Any, Callable[[], None]]] = []
 _LAST_MASTER_VALUES: Dict[str, float] = {}  # Cache to prevent duplicate master events
 _LAST_TRANSPORT_VALUES: Dict[str, Any] = {}  # Cache to prevent duplicate transport events
@@ -63,6 +65,41 @@ _LAST_TRANSPORT_VALUES: Dict[str, Any] = {}  # Cache to prevent duplicate transp
 def set_notifier(fn: Callable[[Dict[str, Any]], None]) -> None:
     global _NOTIFIER
     _NOTIFIER = fn
+
+
+def set_scheduler(scheduler: Callable[..., None]) -> None:
+    """Inject ControlSurface.schedule_message to run LOM writes on Live's main thread."""
+    global _SCHEDULER
+    _SCHEDULER = scheduler
+
+
+def _run_on_main(fn: Callable[[], Any]) -> Any:
+    """Run a function on Live's main thread via schedule_message, waiting up to 1s.
+
+    If no scheduler is available, execute immediately.
+    """
+    if _SCHEDULER is None:
+        return fn()
+    done = threading.Event()
+    out: Dict[str, Any] = {}
+
+    def _wrapped(_ignored=None):  # schedule_message passes arg
+        try:
+            out["value"] = fn()
+        except Exception as e:
+            out["error"] = e
+        finally:
+            try:
+                done.set()
+            except Exception:
+                pass
+
+    try:
+        _SCHEDULER(0, _wrapped, None)
+        done.wait(1.0)
+    except Exception:
+        return fn()
+    return out.get("value")
 
 
 def _emit(payload: Dict[str, Any]) -> None:
@@ -1035,6 +1072,15 @@ def get_transport(live) -> Dict[str, Any]:
                 "is_recording": bool(getattr(song, "session_record", False) or getattr(song, "record_mode", False)),
                 "metronome": bool(getattr(song, "metronome", False)),
                 "tempo": float(getattr(song, "tempo", 120.0)),
+                # Additional transport context
+                "time_signature_numerator": int(getattr(song, "signature_numerator", 4)),
+                "time_signature_denominator": int(getattr(song, "signature_denominator", 4)),
+                # Ableton Live exposes current_song_time as a float (beats). We surface it directly.
+                "current_song_time": float(getattr(song, "current_song_time", 0.0)),
+                # Loop state
+                "loop_on": bool(getattr(song, "loop", False)),
+                "loop_start": float(getattr(song, "loop_start", 0.0)),
+                "loop_length": float(getattr(song, "loop_length", 0.0)),
             }
     except Exception:
         pass
@@ -1084,13 +1130,130 @@ def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]
                     ok = True
                 except Exception:
                     ok = False
+            elif a in ("loop", "loop_on"):
+                # Toggle or set loop state
+                def _do_set_loop():
+                    cur = bool(getattr(song, 'loop', False))
+                    if value is None:
+                        setattr(song, 'loop', not cur)
+                    else:
+                        setattr(song, 'loop', bool(float(value) > 0.5))
+                try:
+                    _run_on_main(_do_set_loop)
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a == "loop_start" and value is not None:
+                def _do_set_ls():
+                    # Ensure loop is enabled before adjusting region
+                    try:
+                        setattr(song, 'loop', True)
+                    except Exception:
+                        pass
+                    lv = float(value)
+                    if lv < 0.0:
+                        lv = 0.0
+                    setattr(song, 'loop_start', lv)
+                try:
+                    _run_on_main(_do_set_ls)
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a == "loop_length" and value is not None:
+                def _do_set_ll():
+                    # Ensure loop is enabled before adjusting region
+                    try:
+                        setattr(song, 'loop', True)
+                    except Exception:
+                        pass
+                    lv = max(0.0, float(value))
+                    setattr(song, 'loop_length', float(lv))
+                try:
+                    _run_on_main(_do_set_ll)
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a in ("time_sig_num", "time_signature_numerator") and value is not None:
+                # Change time signature numerator on Live's main thread
+                def _do_set_num():
+                    nv = int(float(value))
+                    nv = 1 if nv < 1 else (32 if nv > 32 else nv)
+                    if hasattr(song, "signature_numerator"):
+                        song.signature_numerator = nv
+                try:
+                    _run_on_main(_do_set_num)
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a in ("time_sig_den", "time_signature_denominator") and value is not None:
+                # Change time signature denominator on Live's main thread
+                def _do_set_den():
+                    dv = int(float(value))
+                    allowed = [1, 2, 4, 8, 16, 32]
+                    if dv not in allowed:
+                        dv = min(allowed, key=lambda x: abs(x - dv))
+                    if hasattr(song, "signature_denominator"):
+                        song.signature_denominator = dv
+                try:
+                    _run_on_main(_do_set_den)
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a in ("position", "locate") and value is not None:
+                # Set absolute playhead position (in beats) via current_song_time
+                try:
+                    song.current_song_time = float(value)
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a == "nudge" and value is not None:
+                # Relative move of playhead (in beats); positive or negative
+                try:
+                    cur = float(getattr(song, "current_song_time", 0.0))
+                    song.current_song_time = float(cur + float(value))
+                    ok = True
+                except Exception:
+                    ok = False
+            elif a == "loop_region" and isinstance(value, dict):
+                def _do_set_region():
+                    try:
+                        setattr(song, 'loop', True)
+                    except Exception:
+                        pass
+                    start = float(value.get('start', getattr(song, 'loop_start', 0.0)))
+                    length = float(value.get('length', getattr(song, 'loop_length', 4.0)))
+                    if start < 0.0:
+                        start = 0.0
+                    if length < 0.0:
+                        length = 0.0
+                    setattr(song, 'loop_start', start)
+                    setattr(song, 'loop_length', length)
+                try:
+                    _run_on_main(_do_set_region)
+                    ok = True
+                except Exception:
+                    ok = False
             state = get_transport(live)
             return {"ok": ok, "state": state}
     except Exception:
         ok = False
     # Stub fallback
     a = str(action or "").lower()
-    tr = _STATE.setdefault("transport", {"is_playing": False, "is_recording": False, "metronome": False, "tempo": 120.0})
+    tr = _STATE.setdefault(
+        "transport",
+        {
+            "is_playing": False,
+            "is_recording": False,
+            "metronome": False,
+            "tempo": 120.0,
+            "time_signature_numerator": 4,
+            "time_signature_denominator": 4,
+            "current_song_time": 0.0,
+            "loop_on": False,
+            "loop_start": 0.0,
+            "loop_length": 8.0,
+        },
+    )
     if a == "play":
         tr["is_playing"] = True
         ok = True
@@ -1106,6 +1269,66 @@ def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]
     elif a == "tempo" and value is not None:
         try:
             tr["tempo"] = float(value)
+            ok = True
+        except Exception:
+            ok = False
+    elif a in ("loop", "loop_on"):
+        try:
+            if value is None:
+                tr["loop_on"] = not bool(tr.get("loop_on", False))
+            else:
+                tr["loop_on"] = bool(float(value) > 0.5)
+            ok = True
+        except Exception:
+            ok = False
+    elif a == "loop_start" and value is not None:
+        try:
+            tr["loop_start"] = float(value)
+            ok = True
+        except Exception:
+            ok = False
+    elif a == "loop_length" and value is not None:
+        try:
+            tr["loop_length"] = max(0.0, float(value))
+            ok = True
+        except Exception:
+            ok = False
+    elif a in ("time_sig_num", "time_signature_numerator") and value is not None:
+        try:
+            nv = int(float(value)); nv = 1 if nv < 1 else (32 if nv > 32 else nv)
+            tr["time_signature_numerator"] = nv
+            ok = True
+        except Exception:
+            ok = False
+    elif a in ("time_sig_den", "time_signature_denominator") and value is not None:
+        try:
+            dv = int(float(value))
+            allowed = [1, 2, 4, 8, 16, 32]
+            if dv not in allowed:
+                dv = min(allowed, key=lambda x: abs(x - dv))
+            tr["time_signature_denominator"] = dv
+            ok = True
+        except Exception:
+            ok = False
+    elif a in ("position", "locate") and value is not None:
+        try:
+            tr["current_song_time"] = float(value)
+            ok = True
+        except Exception:
+            ok = False
+    elif a == "nudge" and value is not None:
+        try:
+            tr["current_song_time"] = float(tr.get("current_song_time", 0.0)) + float(value)
+            ok = True
+        except Exception:
+            ok = False
+    elif a == "loop_region" and isinstance(value, dict):
+        try:
+            tr["loop_on"] = True
+            if "start" in value:
+                tr["loop_start"] = float(value.get("start", tr.get("loop_start", 0.0)))
+            if "length" in value:
+                tr["loop_length"] = max(0.0, float(value.get("length", tr.get("loop_length", 4.0))))
             ok = True
         except Exception:
             ok = False
