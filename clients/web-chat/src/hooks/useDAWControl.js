@@ -80,6 +80,33 @@ export function useDAWControl() {
     };
   }, []);
 
+  // Global event listener to open capabilities from anywhere (e.g., Sidebar list clicks)
+  useEffect(() => {
+    const handler = async (evt) => {
+      try {
+        const detail = evt?.detail || {};
+        const ent = String(detail.entity || '').toLowerCase();
+        if (ent === 'track' && typeof detail.index === 'number') {
+          const idx1 = Number(detail.index);
+          try {
+            const caps = await apiService.getTrackMixerCapabilities(idx1 - 1);
+            if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+          } catch {}
+        } else if (ent === 'return' && typeof detail.index === 'number') {
+          const ri = Number(detail.index);
+          try {
+            const caps = await apiService.getReturnMixerCapabilities(ri);
+            if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); }
+          } catch {}
+        } else if (ent === 'master') {
+          try { const caps = await apiService.getMasterMixerCapabilities(); if (caps && caps.ok) { setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true); } } catch {}
+        }
+      } catch {}
+    };
+    window.addEventListener('fb:open-capabilities', handler);
+    return () => window.removeEventListener('fb:open-capabilities', handler);
+  }, [apiService]);
+
   // Load snapshot for inline suggestions (best-effort)
   useEffect(() => {
     (async () => {

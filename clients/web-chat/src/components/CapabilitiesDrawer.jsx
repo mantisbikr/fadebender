@@ -3,9 +3,11 @@
  * Right-anchored drawer showing capabilities for current track/return/device
  */
 
-import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Tooltip } from '@mui/material';
+import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Tooltip, Chip } from '@mui/material';
 import { Close as CloseIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon } from '@mui/icons-material';
 import ParamAccordion from './ParamAccordion.jsx';
+import { useEffect, useState } from 'react';
+import { apiService } from '../services/api.js';
 
 export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned = false, onPinnedChange, ignoreCloseSelectors = [], initialGroup = null, initialParam = null }) {
   if (!capabilities) {
@@ -15,6 +17,45 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
   // Determine what type of entity this is based on available fields
   const hasEntityType = typeof capabilities?.entity_type === 'string';
   const hasDeviceIndex = typeof capabilities?.device_index === 'number';
+
+  // Type badge: AUDIO/MIDI/RETURN when applicable
+  const [typeBadge, setTypeBadge] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Return contexts: mixer or device on return
+        if (capabilities?.entity_type === 'return' || typeof capabilities?.return_index === 'number') {
+          if (!cancelled) setTypeBadge('RETURN');
+          return;
+        }
+        // Track mixer
+        if (capabilities?.entity_type === 'track' && typeof capabilities?.track_index === 'number') {
+          const ov = await apiService.getProjectOutline();
+          const list = (ov && ov.data && Array.isArray(ov.data.tracks)) ? ov.data.tracks : [];
+          const idx1 = Number(capabilities.track_index) + 1;
+          const match = list.find(t => Number(t.index) === idx1);
+          const ttype = match && match.type ? String(match.type).toUpperCase() : null;
+          if (!cancelled) setTypeBadge(ttype);
+          return;
+        }
+        // Device on track
+        if (typeof capabilities?.device_index === 'number' && typeof capabilities?.track_index === 'number') {
+          const ov = await apiService.getProjectOutline();
+          const list = (ov && ov.data && Array.isArray(ov.data.tracks)) ? ov.data.tracks : [];
+          const idx1 = Number(capabilities.track_index) + 1;
+          const match = list.find(t => Number(t.index) === idx1);
+          const ttype = match && match.type ? String(match.type).toUpperCase() : null;
+          if (!cancelled) setTypeBadge(ttype);
+          return;
+        }
+        if (!cancelled) setTypeBadge(null);
+      } catch {
+        if (!cancelled) setTypeBadge(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [capabilities && capabilities.entity_type, capabilities && capabilities.track_index, capabilities && capabilities.return_index, capabilities && capabilities.device_index]);
 
   // Build context-sensitive title
   let title = 'Controls';
@@ -84,9 +125,14 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
         <Box sx={{ p: 2 }}>
           {/* Header with title, pin and close buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6" fontWeight="bold" color="primary">
-              {title}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" fontWeight="bold" color="primary">
+                {title}
+              </Typography>
+              {typeBadge && (
+                <Chip size="small" label={typeBadge} sx={{ height: 20 }} />
+              )}
+            </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Tooltip title={pinned ? 'Unpin' : 'Pin'}>
                 <IconButton size="small" onClick={() => onPinnedChange?.(!pinned)}>

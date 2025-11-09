@@ -38,6 +38,7 @@ def _resolve_by_name(devs: List[Dict[str, Any]], name_hint: str) -> List[int]:
     toks = alias_map.get(nhl) or alias_map.get(nhn)
     if toks:
         res = []
+        fallback_lookups: list[Tuple[int, str]] = []
         for d in devs:
             nn = str(d.get("nname", ""))
             nm = str(d.get("name", "")).lower()
@@ -45,15 +46,33 @@ def _resolve_by_name(devs: List[Dict[str, Any]], name_hint: str) -> List[int]:
             if any(t in nn or t in nm for t in toks):
                 res.append(int(d["index"]))
                 continue
-            # NEW: Check cached device_type (enriched by LiveIndex/snapshot)
+            # Check cached device_type (enriched by LiveIndex/snapshot)
             device_type = d.get("device_type")
             if device_type:
                 device_type_lower = str(device_type).lower()
-                # Check if hint matches device_type or if device_type matches any alias token
                 if device_type_lower == nhl or device_type_lower in toks:
                     res.append(int(d["index"]))
+                    continue
+            # Defer expensive store lookup to a second pass
+            fallback_lookups.append((int(d["index"]), str(d.get("name", ""))))
         if res:
             return res
+        # Last resort: resolve by device_type from store per device name
+        try:
+            from server.core.deps import get_store
+            store = get_store()
+            if store and store.enabled:
+                for di, name in fallback_lookups:
+                    try:
+                        dtype = store.get_device_type_by_name(name)
+                        if dtype and str(dtype).lower() in toks:
+                            res.append(di)
+                    except Exception:
+                        continue
+                if res:
+                    return res
+        except Exception:
+            pass
     return cont
 
 

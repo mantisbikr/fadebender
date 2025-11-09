@@ -135,6 +135,20 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
   const [showUndo, setShowUndo] = useState(false);
   const textFieldRef = useRef(null);
 
+  const focusInput = () => {
+    try {
+      const root = textFieldRef.current;
+      if (!root) return;
+      const inputEl = root.querySelector('input');
+      if (inputEl) {
+        inputEl.focus();
+        // place cursor at end
+        const val = inputEl.value || '';
+        inputEl.setSelectionRange(val.length, val.length);
+      }
+    } catch {}
+  };
+
   // Merge defaults with server-provided corrections
   const AUTOCORRECT_MAP = useMemo(() => {
     const ext = (typoCorrections && typeof typoCorrections === 'object') ? typoCorrections : {};
@@ -167,6 +181,8 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
     // Unified handler - the backend will determine if it's a command or help query
     onSubmit(input.trim());
     setInput('');
+    // Return cursor focus to input immediately
+    setTimeout(() => focusInput(), 0);
   };
 
   const applyAutocorrect = (text, cursorPosition) => {
@@ -241,6 +257,13 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
       }
     }
   };
+
+  // After processing completes, ensure the input regains focus
+  useEffect(() => {
+    if (!disabled) {
+      focusInput();
+    }
+  }, [disabled]);
 
   return (
     <Paper elevation={2} sx={{ borderTop: 1, borderColor: 'divider' }}>

@@ -218,6 +218,54 @@ def try_regex_parse(
     except Exception:
         pass
 
+    # Project-level counts and lists: audio/MIDI/returns
+    try:
+        import re as _re
+        s = q.lower()
+        # Counts
+        if _re.search(r"\bhow\s+many\s+audio\s+tracks\b|\baudio\s+tracks?\s+count\b|\bnumber\s+of\s+audio\s+tracks\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "audio_tracks_count"}], "meta": {"parsed_by": "regex_project_counts"}}, []
+        if _re.search(r"\bhow\s+many\s+midi\s+tracks\b|\bmidi\s+tracks?\s+count\b|\bnumber\s+of\s+midi\s+tracks\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "midi_tracks_count"}], "meta": {"parsed_by": "regex_project_counts"}}, []
+        if _re.search(r"\bhow\s+many\s+return\s+tracks\b|\breturns?\s+count\b|\bnumber\s+of\s+returns?\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "return_tracks_count"}], "meta": {"parsed_by": "regex_project_counts"}}, []
+        if _re.search(r"\bhow\s+many\s+tracks\b|\bnumber\s+of\s+tracks\b|\btrack\s+count\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "tracks_count"}], "meta": {"parsed_by": "regex_project_counts"}}, []
+        # Lists
+        if _re.search(r"\blist\s+(the\s+)?audio\s+tracks\b|\baudio\s+tracks\s+list\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "audio_tracks_list"}], "meta": {"parsed_by": "regex_project_lists"}}, []
+        if _re.search(r"\blist\s+(the\s+)?midi\s+tracks\b|\bmidi\s+tracks\s+list\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "midi_tracks_list"}], "meta": {"parsed_by": "regex_project_lists"}}, []
+        if _re.search(r"\blist\s+(the\s+)?returns?\b|\blist\s+return\s+tracks\b|\breturns?\s+list\b", s):
+            return {"intent": "get_parameter", "targets": [{"track": None, "plugin": None, "parameter": "return_tracks_list"}], "meta": {"parsed_by": "regex_project_lists"}}, []
+    except Exception:
+        pass
+
+    # Pattern: device parameter by ordinal on return/track
+    try:
+        import re as _re
+        # Examples: "what is return A device 1 feedback", "what is track 2 device 3 decay"
+        m_ret = _re.search(r"what\s+is\s+return\s+([a-c])\s+device\s+(\d+)\s+([a-z0-9][a-z0-9 /%\.-]+)\??$", q)
+        m_trk = _re.search(r"what\s+is\s+track\s+(\d+)\s+device\s+(\d+)\s+([a-z0-9][a-z0-9 /%\.-]+)\??$", q)
+        if m_ret:
+            letter = m_ret.group(1).upper(); di = int(m_ret.group(2)); pname = m_ret.group(3).strip()
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Return {letter}", "plugin": "device", "parameter": pname, "device_ordinal": di}],
+                "meta": {"parsed_by": "regex_device_query_ordinal"}
+            }
+            return intent, []
+        if m_trk:
+            ti = int(m_trk.group(1)); di = int(m_trk.group(2)); pname = m_trk.group(3).strip()
+            intent = {
+                "intent": "get_parameter",
+                "targets": [{"track": f"Track {ti}", "plugin": "device", "parameter": pname, "device_ordinal": di}],
+                "meta": {"parsed_by": "regex_device_query_ordinal"}
+            }
+            return intent, []
+    except Exception:
+        pass
+
     # Pattern: returns summary (track sends)
     try:
         import re as _re

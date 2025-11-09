@@ -328,15 +328,34 @@ def get_overview(live) -> dict:
     tracks = []
     try:
         for idx, tr in enumerate(getattr(live, "tracks", []), start=1):
-            cls_name = getattr(tr, "__class__", type(tr)).__name__.lower()
-            if "return" in cls_name:
-                ttype = "return"
-            elif "midi" in cls_name:
+            # Robust type detection across Live versions
+            ttype = "track"
+            try:
+                has_midi = bool(getattr(tr, "has_midi_input", False))
+            except Exception:
+                has_midi = False
+            try:
+                has_audio = bool(getattr(tr, "has_audio_input", False))
+            except Exception:
+                has_audio = True  # default to audio when unknown
+
+            if has_midi and not has_audio:
                 ttype = "midi"
-            elif "audio" in cls_name:
+            elif has_audio and not has_midi:
                 ttype = "audio"
             else:
-                ttype = "track"
+                # Fallback: inspect class name hints if properties are inconclusive
+                try:
+                    cls_name = getattr(tr, "__class__", type(tr)).__name__.lower()
+                except Exception:
+                    cls_name = ""
+                if "midi" in cls_name:
+                    ttype = "midi"
+                elif "audio" in cls_name:
+                    ttype = "audio"
+                else:
+                    ttype = "audio"  # default bias to audio
+
             tname = str(getattr(tr, "name", f"Track {idx}"))
             tracks.append({"index": idx, "name": tname, "type": ttype})
     except Exception:

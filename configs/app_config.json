@@ -28,7 +28,8 @@
       "l offset",
       "pan",
       "r offset",
-      "scale"
+      "scale",
+      "S/C Mix"
     ],
     "relative_change_verbs": {
       "decrease": [
