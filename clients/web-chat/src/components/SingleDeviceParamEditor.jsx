@@ -29,7 +29,12 @@ export default function SingleDeviceParamEditor({ editor }) {
   // Fetch fresh value when parameter changes and start polling while editor is open
   useEffect(() => {
     mountedRef.current = true;
-    console.log('[SingleDeviceParamEditor] useEffect triggered for param:', param?.name);
+    console.log('[SingleDeviceParamEditor] useEffect triggered for param:', param?.name, {
+      return_index,
+      device_index,
+      param_name: param.name,
+      busy
+    });
 
     const fetchCurrentValue = async () => {
       try {
@@ -66,10 +71,11 @@ export default function SingleDeviceParamEditor({ editor }) {
     fetchCurrentValue();
 
     // start polling for live updates while open
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(() => {
-      fetchCurrentValue();
-    }, 600);
+    // TEMPORARILY DISABLED FOR DEBUGGING
+    // if (pollingRef.current) clearInterval(pollingRef.current);
+    // pollingRef.current = setInterval(() => {
+    //   fetchCurrentValue();
+    // }, 600);
 
     // cleanup
     return () => {
@@ -79,7 +85,7 @@ export default function SingleDeviceParamEditor({ editor }) {
         pollingRef.current = null;
       }
     };
-  }, [return_index, device_index, param.name, current_values, busy]);
+  }, [return_index, device_index, param.name]);
 
   const initialValue = useMemo(() => {
     if (!param) return 0;
@@ -127,16 +133,45 @@ export default function SingleDeviceParamEditor({ editor }) {
         value: Number(val)
       };
       // Hint the server when value is a display percentage to avoid clamping to 1.0
-      try {
-        const unitStr = String(param.unit || '').toLowerCase();
-        const hasPercentUnit = unitStr.includes('%') || unitStr.includes('percent');
-        const md = Number(param.min_display);
-        const Mx = Number(param.max_display);
-        const looksLikePercentRange = Number.isFinite(md) && Number.isFinite(Mx) && md >= 0 && Mx <= 100;
-        if (hasPercentUnit || looksLikePercentRange) {
-          payload.unit = '%';
-        }
-      } catch {}
+      // But NOT for binary/toggle parameters!
+      if (computedType !== 'toggle') {
+        try {
+          const unitStr = String(param.unit || '').toLowerCase();
+          const hasPercentUnit = unitStr.includes('%') || unitStr.includes('percent');
+          const md = Number(param.min_display);
+          const Mx = Number(param.max_display);
+          const looksLikePercentRange = Number.isFinite(md) && Number.isFinite(Mx) && md >= 0 && Mx <= 100;
+          if (hasPercentUnit || looksLikePercentRange) {
+            payload.unit = '%';
+          }
+        } catch {}
+      }
+      console.log('[SingleDeviceParamEditor] Committing:', {
+        param_name: param.name,
+        input_val: val,
+        payload
+      });
+      await apiService.executeCanonicalIntent(payload);
+    } finally { setBusy(false); }
+  };
+
+  // Commit with display string (for quantized params) - matches what chat does
+  const commitDisplay = async (displayValue) => {
+    setBusy(true);
+    try {
+      const payload = {
+        domain: 'device',
+        action: 'set',
+        return_index: return_index,
+        device_index: device_index,
+        param_ref: param.name,
+        display: String(displayValue)  // Send display string, let backend do label_map lookup
+      };
+      console.log('[SingleDeviceParamEditor] Committing display value:', {
+        param_name: param.name,
+        display: displayValue,
+        payload
+      });
       await apiService.executeCanonicalIntent(payload);
     } finally { setBusy(false); }
   };
@@ -192,6 +227,14 @@ export default function SingleDeviceParamEditor({ editor }) {
     };
 
     const currentLabel = deriveLabel(currentValue);
+    console.log('[SingleDeviceParamEditor] Quantized param state:', {
+      param_name: param.name,
+      currentValue,
+      currentLabel,
+      labels: param.labels,
+      label_map: param.label_map,
+      labels_includes_currentLabel: param.labels.includes(currentLabel)
+    });
 
     return (
       <Box>
@@ -205,26 +248,14 @@ export default function SingleDeviceParamEditor({ editor }) {
           renderValue={(val) => String(val || currentLabel)}
           onChange={async (e) => {
             const selectedLabel = e.target.value;
+            console.log('[SingleDeviceParamEditor] Dropdown changed:', {
+              param_name: param.name,
+              selectedLabel
+            });
             // Optimistically update local value for snappy UI
             setCurrentValue(selectedLabel);
-            // Find the normalized value (key) for this label in label_map
-            if (param.label_map) {
-              // Case A: number->label (preferred)
-              const normalizedValueKey = Object.keys(param.label_map).find(key => String(param.label_map[key]) === String(selectedLabel));
-              if (normalizedValueKey !== undefined) {
-                await commit(Number(normalizedValueKey));
-                return;
-              }
-              // Case B: label->value (legacy)
-              if (selectedLabel in param.label_map) {
-                const v = Number(param.label_map[selectedLabel]);
-                if (Number.isFinite(v)) { await commit(v); return; }
-              }
-            } else {
-              // Fallback: commit by index in labels
-              const idx = param.labels.findIndex(l => String(l) === String(selectedLabel));
-              if (idx >= 0) await commit(idx);
-            }
+            // Send display string to backend - let it do label_map lookup (same as chat does)
+            await commitDisplay(selectedLabel);
           }}
         >
           {param.labels.map((lab) => (<MenuItem key={String(lab)} value={String(lab)}>{String(lab)}</MenuItem>))}
