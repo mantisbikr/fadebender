@@ -118,11 +118,12 @@ class DeviceResolver:
                     di = matches[0]
                 name = next((str(d["name"]) for d in devs if int(d["index"]) == di), str(device_name_hint))
                 return di, name, notes
-        # Generic ordinal among all devices
-        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 1 and device_ordinal_hint <= len(devs):
-            di = int(devs[device_ordinal_hint - 1]["index"])
-            name = str(devs[device_ordinal_hint - 1]["name"])
-            return di, name, notes
+        # When ordinal is specified without device name, treat it as device index (not position)
+        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 0:
+            # Find device with matching index
+            matching_dev = next((d for d in devs if int(d["index"]) == device_ordinal_hint), None)
+            if matching_dev:
+                return int(matching_dev["index"]), str(matching_dev["name"]), notes
         # Default to first device when available
         if devs:
             return int(devs[0]["index"]), str(devs[0]["name"]), notes
@@ -166,10 +167,12 @@ class DeviceResolver:
                     di = matches[0]
                 name = next((str(d["name"]) for d in devs if int(d["index"]) == di), str(device_name_hint))
                 return di, name, notes
-        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 1 and device_ordinal_hint <= len(devs):
-            di = int(devs[device_ordinal_hint - 1]["index"])
-            name = str(devs[device_ordinal_hint - 1]["name"])
-            return di, name, notes
+        # When ordinal is specified without device name, treat it as device index (not position)
+        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 0:
+            # Find device with matching index
+            matching_dev = next((d for d in devs if int(d["index"]) == device_ordinal_hint), None)
+            if matching_dev:
+                return int(matching_dev["index"]), str(matching_dev["name"]), notes
         if devs:
             return int(devs[0]["index"]), str(devs[0]["name"]), notes
         return 0, "Device 0", notes
