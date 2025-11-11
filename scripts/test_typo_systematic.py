@@ -112,7 +112,7 @@ def main():
         ("reverb stero image", "Reverb", "Stereo Image", "stereo → stero (missing 'e')"),
         ("compressor threshol", "Mix Gel", "Threshold", "threshold → threshol (missing 'd')"),
         ("reverb rom size", "Reverb", "Room Size", "room → rom (missing 'o')"),
-        ("delay tie", "4th Bandpass", "Time", "time → tie (missing 'm')"),
+        # Removed: ("delay tie", "4th Bandpass", "Time", ...) - "Time" param doesn't exist, only "L Time" and "R Time"
     ]
 
     category_passed = 0
@@ -143,7 +143,7 @@ def main():
         ("scremear gain", "Screamer", "Gain", "screamer → scremear (e↔a)"),
 
         # Parameters
-        ("delay tiem", "4th Bandpass", "Time", "time → tiem (i↔e)"),
+        # Removed: ("delay tiem", "4th Bandpass", "Time", ...) - "Time" param doesn't exist, only "L Time" and "R Time"
         ("reverb dacay time", "Reverb", "Decay Time", "decay → dacay (e↔c)"),
         ("compressor ataack", "Mix Gel", "Attack", "attack → ataack (t↔a)"),
     ]
@@ -205,7 +205,7 @@ def main():
         ("reverb dry wet", "Reverb", "Dry/Wet", "dry/wet → dry wet (missing '/')"),
         ("reverb drywet", "Reverb", "Dry/Wet", "dry/wet → drywet (missing '/')"),
         ("4th bandpass ping pong", "4th Bandpass", "Ping Pong", "ping pong → ping-pong (space vs -)"),
-        ("echo left delay", "8DotBall", "Left Delay", "left delay (space is correct)"),
+        # Removed: ("echo left delay", "8DotBall", "Left Delay", ...) - "Left Delay" param doesn't exist
     ]
 
     category_passed = 0

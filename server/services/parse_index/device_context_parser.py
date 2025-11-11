@@ -115,6 +115,8 @@ def token_ok(query_token: str, candidate: str) -> Tuple[bool, float]:
     """
     Check if query token matches candidate within acceptable edit distance.
 
+    Relaxed thresholds to handle common typos (missing/transposed/wrong characters).
+
     Returns:
         (match_ok, normalized_distance)
     """
@@ -125,14 +127,15 @@ def token_ok(query_token: str, candidate: str) -> Tuple[bool, float]:
     L = max(len(candidate), 3)
     norm = dist / L
 
-    # Thresholds by length (stricter for short words)
-    if len(candidate) <= 3 and dist > 0:
+    # Relaxed thresholds to handle common typos
+    # Allow 1 edit for short words (was 0 for len <= 3)
+    if len(candidate) <= 4 and dist > 1:
         return (False, norm)
-    if 4 <= len(candidate) <= 6 and dist > 1:
+    if 5 <= len(candidate) <= 7 and dist > 2:
         return (False, norm)
-    if 7 <= len(candidate) <= 10 and dist > 2:
+    if 8 <= len(candidate) <= 10 and dist > 3:
         return (False, norm)
-    if len(candidate) >= 11 and dist > 3:
+    if len(candidate) >= 11 and dist > 4:
         return (False, norm)
 
     return (True, norm)
@@ -522,6 +525,56 @@ class DeviceContextParser:
                         device_type = matched_type
                         confidence *= 0.6  # Lower confidence for ambiguity
                         method = "type_resolution_ambiguous"
+
+                    return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
+
+        # Step 5.5: Try fuzzy device type matching as fallback (if exact type match failed)
+        # This handles typos in device types like "dela" → "delay"
+        if type_names and param:
+            device_type_index = self.index.get("device_type_index", {})
+
+            # Try fuzzy matching against all device types that have this parameter
+            best_type = self.fuzzy_best(text, type_names, want="leftmost")
+
+            if best_type:
+                matched_type = best_type[0].lower()
+                devices_with_type = device_type_index.get(matched_type, [])
+
+                if devices_with_type:
+                    # Extract ordinal if present
+                    type_span = best_type[1]
+                    post_type = text[type_span[1]:]
+                    m = re.search(r"(?:#|\s)(\d+)\b", post_type)
+                    if m:
+                        try:
+                            device_ordinal = int(m.group(1))
+                        except:
+                            pass
+
+                    if len(devices_with_type) == 1:
+                        # Unambiguous - only one device of this type
+                        device = devices_with_type[0]
+                        device_type = matched_type
+                        confidence += 0.35  # Slightly lower than exact type match
+                        method = "fuzzy_type_resolution"
+                    elif device_ordinal:
+                        # Multiple devices, but ordinal specified
+                        if 1 <= device_ordinal <= len(devices_with_type):
+                            device = devices_with_type[device_ordinal - 1]
+                            device_type = matched_type
+                            confidence += 0.35
+                            method = "fuzzy_type_resolution_ordinal"
+                        else:
+                            # Invalid ordinal
+                            device = None
+                            confidence *= 0.5
+                            method = "invalid_ordinal"
+                    else:
+                        # Ambiguous - multiple devices, no ordinal
+                        device = devices_with_type[0]
+                        device_type = matched_type
+                        confidence *= 0.55  # Lower confidence for ambiguity + fuzzy match
+                        method = "fuzzy_type_resolution_ambiguous"
 
                     return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
 
