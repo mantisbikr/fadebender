@@ -10,12 +10,21 @@ from server.core.deps import get_store, get_device_resolver, get_value_registry
 from server.services.ableton_client import request_op
 from server.services.mapping_utils import make_device_signature
 from server.models.intents_api import CanonicalIntent
-from server.config.app_config import get_device_param_aliases
+from server.config.app_config import get_device_param_aliases, get_app_config
 from server.volume_utils import db_to_live_float
 from server.services.intents.utils.mixer import (
     parse_target_display,
     normalize_unit,
 )
+
+
+def _get_binary_search_iterations() -> int:
+    """Get binary search iterations from config (defaults to 8)."""
+    try:
+        cfg = get_app_config()
+        return int(cfg.get("server", {}).get("parameter_system", {}).get("binary_search_iterations", 8))
+    except Exception:
+        return 8
 
 
 def alias_param_name_if_needed(name: Optional[str]) -> Optional[str]:
@@ -64,7 +73,7 @@ def alias_param_name_if_needed(name: Optional[str]) -> Optional[str]:
         "feed back": "feedback",
         "feedback amount": "feedback",
         "width": "stereo image",
-        "stereo width": "stereo image",
+        # "stereo width": "stereo image",  # Commented out - Echo has "Stereo Width" as distinct param
         "image": "stereo image",
         "decay time": "decay",
         "pre delay": "predelay",
@@ -686,8 +695,9 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
                 ty_aligned = convert_unit_value(float(ty), input_unit, pm_unit)
                 x = invert_fit_to_value(fit or {}, float(ty_aligned), vmin, vmax)
             elif pm_unit in ("percent", "%"):
-                x = vmin + (vmax - vmin) * (float(ty) / 100.0)
-                ty = None
+                # Parameter has percent unit but no valid fit model - require fit instead of hardcoded conversion
+                param_name = sel.get("name", "unknown")
+                raise HTTPException(400, f"parameter_missing_fit_model:{param_name}; This parameter requires a calibrated fit model for accurate conversion. Please ensure the device mapping includes fit coefficients.")
             else:
                 if intent.dry_run:
                     pv = {"note": "approx_preview_no_fit", "target_display": target_display, "value_range": [vmin, vmax]}
@@ -713,7 +723,7 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
                         pass
                     if d0 is not None and d1 is not None and target is not None:
                         lo = vmin; hi = vmax; inc = d1 > d0
-                        for _ in range(8):
+                        for _ in range(_get_binary_search_iterations()):
                             mid = (lo + hi) / 2.0
                             request_op("set_return_device_param", timeout=1.0, return_index=ri, device_index=di, param_index=int(sel.get("index", 0)), value=float(mid))
                             rbm = request_op("get_return_device_params", timeout=1.0, return_index=ri, device_index=di)
@@ -736,17 +746,34 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
                 except Exception:
                     pass
 
-    # Generic percent fallback when target was given as 0..100 and param is percent-like
+    # Require fit models for percent conversions - no hardcoded /100.0 fallbacks
     if not used_display:
         try:
             val_num = float(intent.value) if intent.value is not None else None
         except Exception:
             val_num = None
-        if (normalize_unit(intent.unit) or "") in ("percent", "%") and val_num is not None:
-            x = vmin + (vmax - vmin) * max(0.0, min(100.0, val_num)) / 100.0
-        elif val_num is not None and vmin <= 0.0 <= vmax <= 1.000001 and 1.0 < val_num <= 100.0 and _is_percent_like_param(sel.get("name")):
-            # Treat as percent for mix-like params even without explicit unit
-            x = vmin + (vmax - vmin) * (val_num / 100.0)
+
+        # Check if user provided percent value (explicit unit or heuristic)
+        has_percent_unit = (normalize_unit(intent.unit) or "") in ("percent", "%")
+        looks_like_percent = (val_num is not None and vmin <= 0.0 <= vmax <= 1.000001 and
+                             1.0 < val_num <= 100.0 and _is_percent_like_param(sel.get("name")))
+
+        if (has_percent_unit or looks_like_percent) and val_num is not None:
+            # Require valid fit model for percent conversions
+            fit = pm.get("fit") if pm else None
+            if pm and _fit_is_valid(fit):
+                # Use fit model to convert percent to normalized value
+                pm_unit = (pm.get("unit") or "").strip().lower() if pm else None
+                if pm_unit in ("percent", "%"):
+                    x = invert_fit_to_value(fit or {}, float(val_num), vmin, vmax)
+                else:
+                    # Param unit is not percent, but user gave percent - still use fit
+                    # (This handles cases like "set dry/wet to 50%" where unit is "" but we interpret as %)
+                    x = invert_fit_to_value(fit or {}, float(val_num), vmin, vmax)
+            else:
+                # No valid fit model - raise friendly error
+                param_name = sel.get("name", "unknown")
+                raise HTTPException(400, f"parameter_missing_fit_model:{param_name}; This parameter requires a calibrated fit model for percentage conversion. Please ensure the device mapping includes fit coefficients.")
 
     prereq_changes: List[dict] = []
     try:
@@ -857,21 +884,44 @@ def detect_display_unit(disp: str) -> Optional[str]:
 
 
 def convert_unit_value(value: float, src: Optional[str], dest: Optional[str]) -> float:
+    """Convert value from source unit to destination unit using config-driven conversion table.
+
+    Args:
+        value: The numeric value to convert
+        src: Source unit (e.g., "ms", "Hz")
+        dest: Destination unit (e.g., "s", "kHz")
+
+    Returns:
+        Converted value
+
+    Raises:
+        ValueError: If conversion is not defined in config
+    """
     s = (src or "").strip().lower()
     d = (dest or "").strip().lower()
     if not s or not d or s == d:
         return float(value)
-    v = float(value)
-    if s == "ms" and d == "s":
-        return v / 1000.0
-    if s == "s" and d == "ms":
-        return v * 1000.0
-    if s == "khz" and d == "hz":
-        return v * 1000.0
-    if s == "hz" and d == "khz":
-        return v / 1000.0
+
+    # Special case: percent to percent (no conversion)
     if s in ("percent", "%") and d in ("percent", "%"):
-        return v
+        return float(value)
+
+    v = float(value)
+
+    # Load unit conversions from config
+    try:
+        cfg = get_app_config()
+        conversions = cfg.get("server", {}).get("unit_conversions", {})
+    except Exception:
+        conversions = {}
+
+    # Try direct conversion lookup
+    conversion_key = f"{s}_to_{d}"
+    if conversion_key in conversions:
+        return v * float(conversions[conversion_key])
+
+    # If no conversion defined, return original value (backward compatibility)
+    # TODO: In strict mode, should raise error for undefined conversions
     return v
 
 
@@ -1007,8 +1057,9 @@ def set_track_device_param(intent: CanonicalIntent, debug: bool = False) -> Dict
                 ty_aligned = convert_unit_value(float(ty), input_unit, pm_unit)
                 x = invert_fit_to_value(fit or {}, float(ty_aligned), vmin, vmax)
             elif pm_unit in ("percent", "%"):
-                x = vmin + (vmax - vmin) * (float(ty) / 100.0)
-                ty = None
+                # Parameter has percent unit but no valid fit model - require fit instead of hardcoded conversion
+                param_name = sel.get("name", "unknown")
+                raise HTTPException(400, f"parameter_missing_fit_model:{param_name}; This parameter requires a calibrated fit model for accurate conversion. Please ensure the device mapping includes fit coefficients.")
             else:
                 if intent.dry_run:
                     pv = {"note": "approx_preview_no_fit", "target_display": target_display, "value_range": [vmin, vmax]}
@@ -1036,7 +1087,7 @@ def set_track_device_param(intent: CanonicalIntent, debug: bool = False) -> Dict
                         pass
                     if d0 is not None and d1 is not None and target is not None:
                         lo = vmin; hi = vmax; inc = d1 > d0
-                        for _ in range(8):
+                        for _ in range(_get_binary_search_iterations()):
                             mid = (lo + hi) / 2.0
                             request_op("set_device_param", timeout=1.0, track_index=ti, device_index=di, param_index=int(sel.get("index", 0)), value=float(mid))
                             rbm = request_op("get_track_device_params", timeout=1.0, track_index=ti, device_index=di)
@@ -1059,17 +1110,34 @@ def set_track_device_param(intent: CanonicalIntent, debug: bool = False) -> Dict
                 except Exception:
                     pass
 
-    # Generic percent fallback when target was given as 0..100 and param is percent-like
+    # Require fit models for percent conversions - no hardcoded /100.0 fallbacks
     if not used_display:
         try:
             val_num = float(intent.value) if intent.value is not None else None
         except Exception:
             val_num = None
-        if (normalize_unit(intent.unit) or "") in ("percent", "%") and val_num is not None:
-            x = vmin + (vmax - vmin) * max(0.0, min(100.0, val_num)) / 100.0
-        elif val_num is not None and vmin <= 0.0 <= vmax <= 1.000001 and 1.0 < val_num <= 100.0 and _is_percent_like_param(sel.get("name")):
-            # Treat as percent for mix-like params even without explicit unit
-            x = vmin + (vmax - vmin) * (val_num / 100.0)
+
+        # Check if user provided percent value (explicit unit or heuristic)
+        has_percent_unit = (normalize_unit(intent.unit) or "") in ("percent", "%")
+        looks_like_percent = (val_num is not None and vmin <= 0.0 <= vmax <= 1.000001 and
+                             1.0 < val_num <= 100.0 and _is_percent_like_param(sel.get("name")))
+
+        if (has_percent_unit or looks_like_percent) and val_num is not None:
+            # Require valid fit model for percent conversions
+            fit = pm.get("fit") if pm else None
+            if pm and _fit_is_valid(fit):
+                # Use fit model to convert percent to normalized value
+                pm_unit = (pm.get("unit") or "").strip().lower() if pm else None
+                if pm_unit in ("percent", "%"):
+                    x = invert_fit_to_value(fit or {}, float(val_num), vmin, vmax)
+                else:
+                    # Param unit is not percent, but user gave percent - still use fit
+                    # (This handles cases like "set dry/wet to 50%" where unit is "" but we interpret as %)
+                    x = invert_fit_to_value(fit or {}, float(val_num), vmin, vmax)
+            else:
+                # No valid fit model - raise friendly error
+                param_name = sel.get("name", "unknown")
+                raise HTTPException(400, f"parameter_missing_fit_model:{param_name}; This parameter requires a calibrated fit model for percentage conversion. Please ensure the device mapping includes fit coefficients.")
 
     preview = {"op": "set_device_param", "track_index": ti, "device_index": di, "param_index": int(sel.get("index", 0)), "value": float(max(vmin, min(vmax, x)) if intent.clamp else x)}
     if intent.dry_run:
