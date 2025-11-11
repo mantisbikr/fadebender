@@ -296,20 +296,36 @@ class ParseIndexBuilder:
         ]
 
     def _get_typo_map(self) -> Dict[str, str]:
-        """Get typo correction map.
-
-        Could be extended with learned typos from history.
+        """Get typo correction map from Firestore nlp_config collection.
 
         Returns:
             Dict mapping typo to correct spelling
         """
+        if not self.store.enabled or not self.store._client:
+            # Fallback to minimal typo map if Firestore not available
+            return {
+                "feedbakc": "feedback",
+                "streo": "stereo",
+                "volum": "volume",
+                "volumz": "volume",
+            }
+
+        try:
+            doc = self.store._client.collection("nlp_config").document("typo_corrections").get()
+            if doc.exists:
+                data = doc.to_dict()
+                corrections = data.get("corrections", {})
+                print(f"  Loaded {len(corrections)} typo corrections from nlp_config")
+                return corrections
+        except Exception as e:
+            print(f"  Warning: Could not load typo corrections: {e}")
+
+        # Return minimal fallback
         return {
             "feedbakc": "feedback",
             "streo": "stereo",
             "volum": "volume",
             "volumz": "volume",
-            "compresser": "compressor",
-            "decai": "decay",
         }
 
 

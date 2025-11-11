@@ -36,6 +36,51 @@ def normalize_text(s: str) -> str:
     return s
 
 
+def generate_phrase_space_variations(text: str) -> List[str]:
+    """Generate space-normalized variations of a SHORT phrase (1-5 words).
+
+    This is used during fuzzy matching to handle space typos at the token level.
+    For example, when matching "mixgel" against "Mix Gel" or "8 dot ball" against "8DotBall".
+
+    Strategy:
+    - Original text
+    - Remove spaces (join all words)
+    - Add spaces before digits and capital letters
+
+    Examples:
+        "mixgel" → ["mixgel", "mix gel"]
+        "mix gel" → ["mix gel", "mixgel"]
+        "8dotball" → ["8dotball", "8 dot ball"]
+        "8 dot ball" → ["8 dot ball", "8dotball"]
+        "roomsize" → ["roomsize", "room size"]
+
+    Args:
+        text: A short phrase (typically from sliding window during fuzzy matching)
+
+    Returns:
+        List of space-normalized variations
+    """
+    variations = [text]
+
+    # Variation 1: Remove all spaces (if present)
+    if " " in text:
+        no_space = text.replace(" ", "")
+        if no_space not in variations:
+            variations.append(no_space)
+
+    # Variation 2: Add spaces before digits and capital letters
+    # "8dotball" → "8 dot ball", "mixgel" → "mix gel", "roomsize" → "room size"
+    spaced = re.sub(r'(\d)([a-z])', r'\1 \2', text)  # digit followed by letter
+    spaced = re.sub(r'([a-z])([A-Z])', r'\1 \2', spaced)  # lowercase followed by uppercase
+
+    # Also try adding space before uppercase letters in the middle
+    # "MixGel" → "Mix Gel"
+    if spaced != text and spaced not in variations:
+        variations.append(spaced)
+
+    return variations
+
+
 # ------------------ Fuzzy Matching ------------------
 
 def damerau_levenshtein(a: str, b: str) -> int:
@@ -96,7 +141,7 @@ def token_ok(query_token: str, candidate: str) -> Tuple[bool, float]:
 def phrase_score(query_phrase: str, candidate_phrase: str) -> float:
     """
     Calculate fuzzy match score between query and candidate phrases.
-    Handles space/hyphen variations.
+    Handles space/hyphen variations and space-normalized matching.
 
     Returns:
         Score (0.0 = perfect match, higher = worse match)
@@ -108,6 +153,17 @@ def phrase_score(query_phrase: str, candidate_phrase: str) -> float:
     if not ctoks:
         return 1.0
 
+    # Special case: if token counts mismatch, try space-normalized comparison
+    # e.g., query="mixgel" (1 token) vs candidate="mix gel" (2 tokens)
+    if len(qtoks) != len(ctoks):
+        # Try comparing with spaces removed
+        q_nospace = query_phrase.replace(" ", "").replace("-", "")
+        c_nospace = candidate_phrase.replace(" ", "").replace("-", "")
+        ok, sc = token_ok(q_nospace, c_nospace)
+        if ok:
+            return sc
+
+    # Token-by-token comparison (original logic)
     scores = []
     for i, c in enumerate(ctoks):
         q = qtoks[i] if i < len(qtoks) else ""
@@ -229,7 +285,7 @@ class DeviceContextParser:
         limit_region: Optional[Tuple[int, int]] = None
     ) -> Optional[Tuple[str, Tuple[int, int], float]]:
         """
-        Find best fuzzy match in text using sliding window.
+        Find best fuzzy match in text using sliding window with space normalization.
 
         Args:
             text: Text to search in
@@ -254,7 +310,20 @@ class DeviceContextParser:
                 for L in range(1, min(5, len(words) - i) + 1):
                     span_words = words[i:i + L]
                     span_text = " ".join(span_words)
-                    sc = phrase_score(span_text, cand)
+
+                    # Try space-normalized variations of the span
+                    # This handles typos like "mixgel" vs "mix gel" or "8 dot ball" vs "8dotball"
+                    span_variations = generate_phrase_space_variations(span_text)
+
+                    # Try matching each variation
+                    best_variation_score = None
+                    for span_var in span_variations:
+                        sc = phrase_score(span_var, cand)
+                        if best_variation_score is None or sc < best_variation_score:
+                            best_variation_score = sc
+
+                    # Use the best score from all variations
+                    sc = best_variation_score
 
                     # Accept if score is good enough (< 0.34 = ~66% match quality)
                     if sc <= 0.34:
@@ -280,9 +349,9 @@ class DeviceContextParser:
 
         return best
 
-    def parse_device_param(self, text: str) -> DeviceParamMatch:
+    def _parse_device_param_internal(self, text: str) -> DeviceParamMatch:
         """
-        Parse device and parameter using dynamic device-type resolution.
+        Internal method: Parse device and parameter using dynamic device-type resolution.
 
         Algorithm:
         1. Parse parameter name (exact/fuzzy)
@@ -292,14 +361,11 @@ class DeviceContextParser:
         5. Handle ordinals and ambiguity
 
         Args:
-            text: Input text (e.g., "set delay feedback to 50%")
+            text: Input text (already normalized, e.g., "set delay feedback to 50%")
 
         Returns:
             DeviceParamMatch with parsed device, param, and confidence
         """
-        # Normalize and apply typo corrections
-        text = normalize_text(text)
-        text = self.apply_typo_map(text)
 
         device = None
         device_type = None
@@ -492,3 +558,30 @@ class DeviceContextParser:
 
         # Step 8: No device match and not a mixer param - return param only
         return DeviceParamMatch(None, None, None, param, confidence * 0.5, method + "_no_device")
+
+    def parse_device_param(self, text: str) -> DeviceParamMatch:
+        """
+        Parse device and parameter with typo correction.
+
+        Space normalization is now handled at the token level during fuzzy matching,
+        so we no longer need sentence-level fallback variations.
+
+        Strategy:
+        1. Normalize text and apply typo map
+        2. Parse using fuzzy matching (which includes space normalization at token level)
+
+        Args:
+            text: Input text (e.g., "set mixgel feedback to 50%")
+
+        Returns:
+            DeviceParamMatch with parsed device, param, and confidence
+        """
+        # Step 1: Normalize and apply typo corrections
+        normalized_text = normalize_text(text)
+        normalized_text = self.apply_typo_map(normalized_text)
+
+        # Step 2: Parse using internal method
+        # Space normalization happens automatically during fuzzy matching
+        result = self._parse_device_param_internal(normalized_text)
+
+        return result
