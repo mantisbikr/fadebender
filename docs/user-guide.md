@@ -21,6 +21,8 @@ Capabilities Drawer
 - Device drawer: shows grouped device parameters with inline editors
 - Mixer drawer: shows mixer parameters for tracks/returns/master (volume, pan, mute, solo, sends)
 - Pin to keep it visible; unpin to auto‑close when switching context
+ - Type badge: shows AUDIO / MIDI on track contexts and RETURN on return contexts
+ - Sidebar clicks no longer auto‑open the drawer; use list chips (see below) or explicit commands like `open track 1 controls`
 
 Core Mixer Commands (examples)
 - Absolute:
@@ -53,14 +55,30 @@ Get Parameter: Values and Topology
   - `what are return A devices` → ordered list of devices on Return A
   - `what are track 1 devices` → ordered list of devices on the track
   - `who sends to return A` / `which tracks send to return A` → tracks with non‑zero sends to A
-  - `what does track 1 send A affect` → lists devices on the destination return
+- `what does track 1 send A affect` → lists devices on the destination return
 - Drawer behavior: these queries open the relevant mixer/device drawer when possible
+
+Project Overview Queries (counts and lists)
+- Counts:
+  - `how many audio tracks`
+  - `how many midi tracks`
+  - `how many return tracks`
+  - `track count`
+- Lists (response includes clickable chips to open controls):
+  - `list audio tracks`
+  - `list midi tracks`
+  - `list returns`
+  - Click a “Track N (Name)” or “Return A (Name)” chip to open its capabilities drawer
 
 Transport
 - Reads:
   - `what is the tempo?`
   - `is the click on?`
 - Actions (if enabled in your build): play/stop/record/click toggles via the transport bar
+ - UI polish:
+   - Playhead and loop fields display up to 2 decimal places
+   - Compact widths for tempo, time signature, playhead, loop start/length
+   - After sending an intent, keyboard focus returns to the chat input automatically
 
 Undo/Redo
 - The header provides Undo/Redo for recent mixer/device adjustments
@@ -71,6 +89,10 @@ Troubleshooting
   - The system fetches information on‑demand; re‑ask the query after performing any mixer action if needed
 - Autocorrect didn’t trigger:
   - Add typos to `configs/app_config.json -> nlp.typo_corrections`; the client merges these at load
+ - Audio/MIDI type not showing in outline or badges:
+   - Track type comes from the Ableton Remote outline. After updating the Remote, restart Live or toggle the Control Surface in Live’s Preferences to reload the script.
+   - Verify with: `curl -s http://127.0.0.1:8722/project/outline | jq '.data.tracks'`
+   - Expect each track: `{ index, name, type: "audio"|"midi" }`
 
 Configuration Tips
 - `configs/app_config.json`:
@@ -81,6 +103,7 @@ Configuration Tips
 Known Limitations
 - Device discovery and parameter names depend on Ableton’s current set and mappings
 - Some routing fields may be unavailable depending on track type (MIDI vs audio)
+ - Additive percentage adjustments are not yet working (e.g., relative +% on some parameters) and need follow‑up
 
 Appendix: Handy Examples
 - `set track 1 send A to -12 dB`
@@ -91,5 +114,8 @@ Appendix: Handy Examples
 - `what is return A state`
 
 Change Log (high‑level)
-- 2025‑11: Added topology queries (devices, sources, send‑to effects) and state bundles; improved drawer behavior and typo handling
-
+- 2025‑11:
+  - Transport/UI: 2‑decimal playhead/loop, compact fields, auto‑refocus chat input
+  - Capabilities: type badges (AUDIO/MIDI/RETURN); Sidebar no longer auto‑opens drawer
+  - NLP/Queries: “how many/list audio/midi/returns” with clickable chips to open controls
+  - Outline: more robust track type detection in the Ableton Remote (may require Live restart)

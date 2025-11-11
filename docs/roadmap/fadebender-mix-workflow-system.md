@@ -1,10 +1,13 @@
 # Fadebender Mix Workflow System
-**Project Planning, Task Tracking, Change Logging, Device Snapshots, and Bidirectional Sync**
+**Project Planning, Task Tracking, Change Logging, Device Snapshots, Navigation, Roles, and Bidirectional Sync**
 
 This document defines the internal architecture for Fadebender’s workflow layer:
 - DAW-aware tasks + priorities
 - Real-time parameter change logging
 - Device preset snapshotting + reversible deletion/restore
+- Two-way locator & marker navigation system
+- Focus Mode with loop length and dimming
+- Track Roles / Semantic Layer (multi-role tagging)
 - Full bidirectional sync between Fadebender and Ableton Live
 
 All features are implemented **single-user-first**, but the schema is **multi-user ready**.
@@ -30,7 +33,7 @@ All features are implemented **single-user-first**, but the schema is **multi-us
 /deviceTombstones/{tombstoneId}
 ```
 
-### Common Fields (included in all docs)
+### Common Fields
 ```json
 {
   "workspaceId": "default",
@@ -44,19 +47,11 @@ All features are implemented **single-user-first**, but the schema is **multi-us
 }
 ```
 
-This ensures **no schema refactor** when multi-user support is added later.
-
 ---
 
-## 2. TASK SYSTEM (PROJECT PLANNING)
+## 2. TASK SYSTEM
 
-### Purpose
-Enable users to **prioritize and track decisions** directly tied to:
-- Tracks
-- Returns
-- Master
-- Devices
-- Timeline positions (markers)
+Tasks represent **mix decisions** tied to musical context.
 
 ### Task Document
 ```json
@@ -65,176 +60,216 @@ Enable users to **prioritize and track decisions** directly tied to:
   "status": "todo",
   "priority": "high",
   "refs": [
-    {"type":"track","id":"track-vox"},
-    {"type":"device","id":"dev-deesser"},
-    {"type":"marker","id":"chorus1","timecode":"57.3.0"}
+    {"type": "track", "id": "track-vox"},
+    {"type": "device", "id": "dev-deesser"},
+    {"type": "marker", "id": "chorus1"}
   ],
   "labels": ["vocals","harshness"]
 }
 ```
 
-### UI Features
-- **Task Panel** on each Track/Return/Master/Device view.
-- **Global Task Drawer** with filters (status, priority, context).
-- **Focus Mode**: if user chooses a task, surface **only** controls related to its refs.
-
-### NLP Examples
-| User Query | Action |
-|---|---|
-| “What are my high priority items?” | Filter: `priority=high`, `status in todo/doing` |
-| “Add a task: fix the reverb tail on Return B.” | Create task, infer `return-b` reference |
-| “Mark shorten predelay task as done.” | Update nearest matched task |
+### UI
+- Task panel in Track / Return / Device view
+- Global task overview drawer
+- NLP-driven “Add / Show / Complete task”
 
 ---
 
 ## 3. PARAMETER CHANGE LOGGING
-
-Capture changes whether they happen in **Fadebender** or **Ableton Live UI**.
 
 ### Param Event (atomic)
 ```json
 {
   "txnId": "txn_ABC",
   "source": "fb-ui | nlp | automation | live-ui",
-  "scope": {
-    "trackId": "track-vox",
-    "deviceId": "dev-deesser",
-    "paramId": "amount"
-  },
-  "value": {
-    "from": {"norm":0.32,"display":"-3.1 dB"},
-    "to": {"norm":0.41,"display":"-1.7 dB"}
-  }
+  "scope": {"trackId": "track-vox","deviceId": "dev-deesser","paramId": "amount"},
+  "value": {"from": {"norm":0.32}, "to": {"norm":0.41}}
 }
 ```
 
-### Edit Group (drag smoothing)
-Group multiple fast param changes:
-```json
-{
-  "groupId": "grp_123",
-  "from": "12 ms",
-  "to": "25 ms",
-  "eventCount": 9
-}
-```
+### Edit Group
+Groups UI drag changes into single logical movement.
 
-### Transactions
-```json
-{
-  "txnId": "txn_ABC",
-  "trigger": "reduce vocal harshness",
-  "source": "nlp"
-}
-```
+### Transaction
+Represents a semantic intent (e.g., “reduce vocal harshness”).
 
 ### Revert
-- **Revert group** = restore param to `from`
-- **Revert txn** = revert all included groups in order
+- Revert group
+- Revert entire transaction
 
 ---
 
-## 4. DEVICE SNAPSHOTS (CAPSULES) & DELETION RESTORE
+## 4. DEVICE SNAPSHOTS (CAPSULES) & RESTORE
 
-### When a preset is loaded:
+### Capsule (preset loaded)
 ```json
 {
   "capsuleId": "cap_9f",
   "trackId": "t1",
   "slotIndex": 2,
-  "device": {"kind":"Reverb","version":"12.0.15"},
   "preset": {"name":"Large Hall","hash":"sha256:..."},
-  "params": [...full param dump...],
-  "chainPath": []
+  "params": [...]
 }
 ```
 
-### When tweaked:
+### Delta (tweaks)
 ```json
 {
-  "capsuleDeltaId": "cd_...",
   "capsuleId": "cap_9f",
   "diff": [{"paramId":"decay","from":"5.2s","to":"4.1s"}]
 }
 ```
 
-### When deleted:
+### Tombstone (device removed)
 ```json
 {
   "tombstoneId": "ts_...",
   "capsuleId": "cap_9f",
-  "trackId": "t1",
-  "slotIndex": 2,
   "restorable": true
 }
 ```
 
-### Restore options:
-- Restore **as originally loaded**
-- Restore **with tweaks applied**
-- Restore **entire chain** (if rack)
+### Restore Options
+- As Loaded
+- As Tweaked
+- Full Chain (for racks)
 
 ---
 
-## 5. BIDIRECTIONAL SYNC WITH ABLETON LIVE
+## 5. LIVE SYNC & ECHO SUPPRESSION
 
-### Live Adapter emits:
-```
-deviceAdded
-deviceRemoved
-deviceMoved
-paramChanged
-presetLoaded
-```
+- Fadebender sends commands with `txnId`
+- Live adapter echoes back param/device events
+- Fadebender ignores events with recently-sent `txnId`
 
-### Fadebender sends:
-```
-setParam(liveDeviceId, liveParamId, norm, txnId)
-insertDevice(...)
-removeDevice(liveDeviceId)
-moveDevice(...)
-```
-
-### Echo Suppression
-Ignore incoming events that match recent `txnId` (2s TTL).
-
-### Reconciliation Loop (every 1–2s)
-1. Pull Live inventory
-2. Compare with local mirror
-3. Detect adds/removes/moves/param changes
-4. Log or update model
-
-### Conflict Rule
-**Last writer wins**, unless change occurs within 750ms guard window → treat as **live-ui override**.
+### Reconciliation Loop
+- Periodically compare Live state vs database
+- Resolve differences using **last writer wins** except **recent Live change → user override**
 
 ---
 
-## 6. UI SUMMARY
+## 6. MARKERS, LOCATORS & NAVIGATION
 
-| Location | Display | Actions |
-|---|---|---|
-| Track / Return / Device panel | Tasks + changes + presets | Add Task, Jump to Context, Focus Mode |
-| Task Drawer | All tasks, filters, NLP actions | Mark Done, Show Context |
-| Change Log View | Param change groups & transactions | Revert group/txn |
-| Deleted Devices Drawer | Tombstones | Restore As Loaded / As Tweaked |
+Fadebender mirrors Ableton Locators and adds its own Markers.
+
+### Marker Document
+```json
+{
+  "markerId": "marker_fb_sibilance_check",
+  "source": "fadebender | live",
+  "name": "Chorus 1",
+  "timecode": "57.3.0",
+  "barsFromHere": 8,
+  "private": false,
+  "links": {"taskId": null, "snapshotId": null}
+}
+```
+
+### Two-Way Sync (You Selected **A**)
+- If `source:"fadebender"` and `private:false` → create/update Live Locator
+- Live locator edits sync back into Fadebender
 
 ---
 
-## 7. IMPLEMENTATION ORDER
+## 7. FOCUS MODE (LOOP + DIM + SOLO)
 
-1) Task storage + UI panels  
-2) NLP → Task CRUD & filtering  
-3) Parameter event + grouping  
-4) Device capsules + tombstones  
-5) Live adapter + echo suppression  
-6) Focus Mode + Daily Summary
+When focusing on a task, track group, or marker:
+- Loop ±X bars around playhead (`barsFromHere` default = 4)
+- Dim all **non‑scope** tracks (e.g., −6 dB)
+- Optionally solo scope tracks
+
+### Focus Profile
+```json
+{
+  "loop": {"bars": 8},
+  "mix": {"dimOthersDb": 6, "soloReferenced": false},
+  "scope": {"trackIds": ["t1","t2"]}
+}
+```
 
 ---
 
-## RESULT
+## 8. AUDIT POINTS (NO AUDIO INGEST REQUIRED)
 
-Fadebender becomes the **workflow brain** of the mix:
-- Remembers *why* changes were made
-- Helps users *finish* mixes
-- Enables undo/restore safety
-- Supports natural language-driven workflow
+Fadebender does **not** listen to audio.  
+Instead, we use a **Probe Rack** with metering devices whose **GR parameters are readable**.
+
+### Probe Rack (Invisible, Bypassed)
+- Limiter → Gain Reduction
+- Compressor → Gain Reduction
+- Multiband Dynamics → Per‑band GR
+
+### Example Triggers
+| Condition | Auto-Marker |
+|---|---|
+| Limiter GR > 3 dB for ≥ 300ms | “Limiter working hard here” |
+| Vocal Comp GR > 6 dB sustained | “Over‑compression risk” |
+| Silence (GR ≈ max) ≥ 2s | “Potential dead zone” |
+| Hi‑band GR high vs mid/low | “Potential harshness hotspot” |
+
+Auto-markers are written into Fadebender, and if `private:false`, also into Live.
+
+---
+
+## 9. CAPABILITY CARD BACK/FORWARD HISTORY
+
+Each view push stored in:
+```ts
+type ViewRef = {type:'track'|'device'|'task'|'navigator', id?:string}
+```
+
+Buttons: **← Back** and **→ Forward**  
+Keyboard: `⌘[` / `⌘]`
+
+---
+
+## 10. TRACK ROLES / SEMANTIC LAYER (MULTI‑ROLE TAGGING)
+
+Tracks can have **multiple roles**, allowing Fadebender to understand mix structure.
+
+```json
+{
+  "roles": ["lead-vocal","airy","emotional-focus"],
+  "notes": "Main vocal body; watch sibilance."
+}
+```
+
+### Role Groups
+- Vocals, Guitars, Drums, Keys/Synths, Bass, FX, Buses
+- Creative descriptors allowed
+
+### NLP Examples
+- “Label Track 3 as **Lead Vocal + Airy**”
+- “Show only **drums**”
+- “Focus on **vocals and bass** for 8 bars, dim others 9 dB”
+
+---
+
+## 11. ROLE PICKER UI (CONFIGURABLE)
+
+Users may switch:
+- **Grouped View** (structured by family)
+- **Flat View** (single tag cloud)
+
+Persisted per-project:
+```json
+{
+  "ui": {"rolePicker": {"view": "grouped | flat"}}
+}
+```
+
+---
+
+## 12. IMPLEMENTATION ROADMAP
+
+1) Task System & UI  
+2) Device Capsules + Restore  
+3) Locator Sync + Marker Navigation  
+4) Focus Mode w/ Loop + Dim  
+5) Probe Rack + Audit Points  
+6) Track Roles + Role Picker Modes  
+7) Mix Progress Heatmap (future)
+
+---
+
+# End of Document

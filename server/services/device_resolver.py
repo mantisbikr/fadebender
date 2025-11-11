@@ -38,6 +38,7 @@ def _resolve_by_name(devs: List[Dict[str, Any]], name_hint: str) -> List[int]:
     toks = alias_map.get(nhl) or alias_map.get(nhn)
     if toks:
         res = []
+        fallback_lookups: list[Tuple[int, str]] = []
         for d in devs:
             nn = str(d.get("nname", ""))
             nm = str(d.get("name", "")).lower()
@@ -45,15 +46,33 @@ def _resolve_by_name(devs: List[Dict[str, Any]], name_hint: str) -> List[int]:
             if any(t in nn or t in nm for t in toks):
                 res.append(int(d["index"]))
                 continue
-            # NEW: Check cached device_type (enriched by LiveIndex/snapshot)
+            # Check cached device_type (enriched by LiveIndex/snapshot)
             device_type = d.get("device_type")
             if device_type:
                 device_type_lower = str(device_type).lower()
-                # Check if hint matches device_type or if device_type matches any alias token
                 if device_type_lower == nhl or device_type_lower in toks:
                     res.append(int(d["index"]))
+                    continue
+            # Defer expensive store lookup to a second pass
+            fallback_lookups.append((int(d["index"]), str(d.get("name", ""))))
         if res:
             return res
+        # Last resort: resolve by device_type from store per device name
+        try:
+            from server.core.deps import get_store
+            store = get_store()
+            if store and store.enabled:
+                for di, name in fallback_lookups:
+                    try:
+                        dtype = store.get_device_type_by_name(name)
+                        if dtype and str(dtype).lower() in toks:
+                            res.append(di)
+                    except Exception:
+                        continue
+                if res:
+                    return res
+        except Exception:
+            pass
     return cont
 
 
@@ -99,11 +118,12 @@ class DeviceResolver:
                     di = matches[0]
                 name = next((str(d["name"]) for d in devs if int(d["index"]) == di), str(device_name_hint))
                 return di, name, notes
-        # Generic ordinal among all devices
-        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 1 and device_ordinal_hint <= len(devs):
-            di = int(devs[device_ordinal_hint - 1]["index"])
-            name = str(devs[device_ordinal_hint - 1]["name"])
-            return di, name, notes
+        # When ordinal is specified without device name, treat it as device index (not position)
+        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 0:
+            # Find device with matching index
+            matching_dev = next((d for d in devs if int(d["index"]) == device_ordinal_hint), None)
+            if matching_dev:
+                return int(matching_dev["index"]), str(matching_dev["name"]), notes
         # Default to first device when available
         if devs:
             return int(devs[0]["index"]), str(devs[0]["name"]), notes
@@ -147,10 +167,12 @@ class DeviceResolver:
                     di = matches[0]
                 name = next((str(d["name"]) for d in devs if int(d["index"]) == di), str(device_name_hint))
                 return di, name, notes
-        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 1 and device_ordinal_hint <= len(devs):
-            di = int(devs[device_ordinal_hint - 1]["index"])
-            name = str(devs[device_ordinal_hint - 1]["name"])
-            return di, name, notes
+        # When ordinal is specified without device name, treat it as device index (not position)
+        if isinstance(device_ordinal_hint, int) and device_ordinal_hint >= 0:
+            # Find device with matching index
+            matching_dev = next((d for d in devs if int(d["index"]) == device_ordinal_hint), None)
+            if matching_dev:
+                return int(matching_dev["index"]), str(matching_dev["name"]), notes
         if devs:
             return int(devs[0]["index"]), str(devs[0]["name"]), notes
         return 0, "Device 0", notes

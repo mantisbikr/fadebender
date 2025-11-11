@@ -30,7 +30,21 @@ export default function TransportBar() {
   const pollIdRef = useRef(null);
   const esRef = useRef(null);
   const refresh = async () => {
-    try { const r = await apiService.getTransport(); setState((r && r.data) || state); } catch {}
+    try {
+      const r = await apiService.getTransport();
+      const d = (r && r.data) || state;
+      const round2 = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0;
+      };
+      setState({
+        ...d,
+        // Clamp overly precise numbers to 2 decimals for readability
+        current_song_time: round2(d.current_song_time),
+        loop_start: round2(d.loop_start),
+        loop_length: round2(d.loop_length),
+      });
+    } catch {}
   };
   useEffect(() => {
     // Initial read
@@ -127,7 +141,7 @@ export default function TransportBar() {
             onClose={() => setEditingTS((p) => ({ ...p, den: false }))}
             onChange={(e) => { const v = Number(e.target.value); setState((prev) => ({ ...prev, time_signature_denominator: v })); setAction('time_sig_den', v); }}
             sx={{
-              '& .MuiSelect-select': { py: 0.2, fontSize: '0.8rem', minWidth: '5ch', textAlign: 'center' },
+              '& .MuiSelect-select': { py: 0.2, fontSize: '0.8rem', minWidth: '4ch', textAlign: 'center' },
               height: '26px'
             }}
           >
@@ -151,8 +165,8 @@ export default function TransportBar() {
             type="number"
             value={state.current_song_time}
             onChange={(e) => setState((prev) => ({ ...prev, current_song_time: Number(e.target.value || 0) }))}
-            onBlur={() => setAction('position', Number(state.current_song_time))}
-            inputProps={{ step: 1, style: { fontSize: '0.8rem', width: '8ch' } }}
+            onBlur={() => setAction('position', Math.round(Number(state.current_song_time) * 100) / 100)}
+            inputProps={{ step: 1, style: { fontSize: '0.8rem', width: '6ch' } }}
             sx={{ '& .MuiInputBase-root': { height: '26px' }, '& .MuiInputBase-input': { py: 0.5, textAlign: 'center' } }}
           />
         </Tooltip>
@@ -176,8 +190,8 @@ export default function TransportBar() {
             type="number"
             value={state.loop_start}
             onChange={(e) => setState((prev) => ({ ...prev, loop_start: Number(e.target.value || 0) }))}
-            onBlur={() => setAction('loop_start', Number(state.loop_start))}
-            inputProps={{ step: 1, style: { fontSize: '0.8rem', width: '7ch' } }}
+            onBlur={() => setAction('loop_start', Math.round(Number(state.loop_start) * 100) / 100)}
+            inputProps={{ step: 1, style: { fontSize: '0.8rem', width: '6ch' } }}
             sx={{ '& .MuiInputBase-root': { height: '26px' }, '& .MuiInputBase-input': { py: 0.5, textAlign: 'center' } }}
           />
         </Tooltip>
@@ -187,8 +201,8 @@ export default function TransportBar() {
             type="number"
             value={state.loop_length}
             onChange={(e) => setState((prev) => ({ ...prev, loop_length: Number(e.target.value || 0) }))}
-            onBlur={() => setAction('loop_length', Number(state.loop_length))}
-            inputProps={{ step: 1, min: 0, style: { fontSize: '0.8rem', width: '7ch' } }}
+            onBlur={() => setAction('loop_length', Math.round(Number(state.loop_length) * 100) / 100)}
+            inputProps={{ step: 1, min: 0, style: { fontSize: '0.8rem', width: '5.5ch' } }}
             sx={{ '& .MuiInputBase-root': { height: '26px' }, '& .MuiInputBase-input': { py: 0.5, textAlign: 'center' } }}
           />
         </Tooltip>

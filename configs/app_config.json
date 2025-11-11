@@ -28,7 +28,8 @@
       "l offset",
       "pan",
       "r offset",
-      "scale"
+      "scale",
+      "S/C Mix"
     ],
     "relative_change_verbs": {
       "decrease": [
@@ -262,6 +263,16 @@
       "reverb": 0,
       "room": 0,
       "verb": 0
+    },
+    "unit_conversions": {
+      "ms_to_s": 0.001,
+      "s_to_ms": 1000.0,
+      "hz_to_khz": 0.001,
+      "khz_to_hz": 1000.0
+    },
+    "parameter_system": {
+      "binary_search_iterations": 8,
+      "always_use_fit_models": true
     }
   },
   "ui": {

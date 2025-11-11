@@ -85,6 +85,8 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     kind = (llm_intent or {}).get("intent")
     targets = (llm_intent or {}).get("targets") or []
     op = (llm_intent or {}).get("operation") or {}
+    # Original utterance (if provided by NLP) for lightweight heuristics
+    orig_utterance = str(((llm_intent or {}).get("meta") or {}).get("utterance") or "")
 
     # Debug logging for relative changes
     if kind == "relative_change":
@@ -519,26 +521,76 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 param_lower = normalized_param.lower()
                 print(f"[DEBUG] Normalized param: {normalized_param}, lowercase: {param_lower}")
 
-                # Build read intent to fetch current value
+                # Build read intent to fetch current value (resolve correct device index)
                 read_payload = {
                     "domain": "device",
                     "param_ref": normalized_param,
                 }
 
-                # Convert target_fields to format expected by ReadIntent for device domain
-                # ReadIntent expects return_index (integer), not return_ref (letter)
+                # Resolve domain/index for resolver
+                dev_domain = None
+                dev_index: Optional[int] = None
                 if "return_ref" in target_fields:
                     letter = target_fields["return_ref"]
-                    read_payload["return_index"] = ord(letter.upper()) - ord('A')
+                    ri = ord(letter.upper()) - ord('A')
+                    read_payload["return_index"] = ri
+                    dev_domain = "return"; dev_index = ri
                 elif "track_index" in target_fields:
-                    read_payload["track_index"] = target_fields["track_index"]
-                # master domain doesn't need additional fields
+                    ti = int(target_fields["track_index"])  # type: ignore
+                    read_payload["track_index"] = ti
+                    dev_domain = "track"; dev_index = ti
 
-                # Add device_index - use device_ordinal if available (convert from 1-based to 0-based)
-                if device_ordinal is not None:
-                    read_payload["device_index"] = int(device_ordinal) - 1
-                else:
-                    read_payload["device_index"] = 0
+                # Determine device_index using resolver when possible
+                try:
+                    if dev_domain and dev_index is not None:
+                        from server.core.deps import get_device_resolver
+                        resolver = get_device_resolver()
+                        if dev_domain == "return":
+                            di, _n, _notes = resolver.resolve_return(return_index=int(dev_index), device_name_hint=str(plugin or ""), device_ordinal_hint=int(device_ordinal) if device_ordinal else None)
+                        else:
+                            di, _n, _notes = resolver.resolve_track(track_index=int(dev_index), device_name_hint=str(plugin or ""), device_ordinal_hint=int(device_ordinal) if device_ordinal else None)
+                        resolved_di = int(di)
+                        # Verify the resolved device actually contains the target parameter; if not, scan others (no ordinal only)
+                        try:
+                            from server.services.ableton_client import request_op as _req
+                            rb = _req("get_return_device_params" if dev_domain == "return" else "get_track_device_params", timeout=0.8, **({"return_index": int(dev_index), "device_index": resolved_di} if dev_domain == "return" else {"track_index": int(dev_index), "device_index": resolved_di}))
+                            pms = ((rb or {}).get("data") or rb or {}).get("params") or []
+                            has_param = any(str(p.get("name", "")).strip().lower() == param_lower or (param_lower in str(p.get("name", "")).strip().lower()) for p in pms)
+                        except Exception:
+                            has_param = False
+                        if not has_param and device_ordinal is None:
+                            # Scan devices to find one with the requested parameter
+                            try:
+                                # Get device list
+                                if dev_domain == "return":
+                                    dlr = _req("get_return_devices", timeout=0.8, return_index=int(dev_index)) or {}
+                                    devs = ((dlr.get("data") or dlr) if isinstance(dlr, dict) else dlr).get("devices", [])
+                                else:
+                                    dlt = _req("get_track_devices", timeout=0.8, track_index=int(dev_index)) or {}
+                                    devs = ((dlt.get("data") or dlt) if isinstance(dlt, dict) else dlt).get("devices", [])
+                                for d in devs:
+                                    try:
+                                        cand_di = int(d.get("index", -1))
+                                        rb2 = _req("get_return_device_params" if dev_domain == "return" else "get_track_device_params", timeout=0.8, **({"return_index": int(dev_index), "device_index": cand_di} if dev_domain == "return" else {"track_index": int(dev_index), "device_index": cand_di}))
+                                        p2 = ((rb2 or {}).get("data") or rb2 or {}).get("params") or []
+                                        if any(str(p.get("name", "")).strip().lower() == param_lower or (param_lower in str(p.get("name", "")).strip().lower()) for p in p2):
+                                            resolved_di = cand_di
+                                            break
+                                    except Exception:
+                                        continue
+                            except Exception:
+                                pass
+                        read_payload["device_index"] = int(resolved_di)
+                    elif device_ordinal is not None:
+                        read_payload["device_index"] = int(device_ordinal) - 1
+                    else:
+                        read_payload["device_index"] = 0
+                except Exception:
+                    # Fallbacks
+                    if device_ordinal is not None:
+                        read_payload["device_index"] = int(device_ordinal) - 1
+                    else:
+                        read_payload["device_index"] = 0
 
                 print(f"[DEBUG] Fetching current device param value with: {read_payload}")
                 read_result = _read_intent_func(ReadIntent(**read_payload))
@@ -566,29 +618,38 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 percent_additive_params = [p.lower() for p in get_percent_always_additive_config()]
 
                 print(f"[DEBUG] Percent additive params: {percent_additive_params}")
-                print(f"[DEBUG] Is {param_lower} additive? {param_lower in percent_additive_params}")
+                is_additive = (param_lower in percent_additive_params) or any(pa in param_lower for pa in percent_additive_params)
+                print(f"[DEBUG] Is {param_lower} additive? {is_additive}")
 
                 # Check if this is a percent-based parameter (display value matches normalized * 100)
                 # E.g., dry/wet: normalized=0.5, display=50% → IS percent parameter
                 # E.g., predelay: normalized=0.77, display=60ms → NOT percent parameter
                 is_percent_parameter = False
-                if current_display is not None:
+                # Force recognition for known percent parameters from config
+                if param_lower in percent_additive_params:
+                    is_percent_parameter = True
+                elif current_display is not None:
                     try:
-                        display_val = float(current_display)
-                        expected_percent = float(current_normalized) * 100.0
-                        # Allow 5% tolerance for floating point comparison
-                        is_percent_parameter = abs(display_val - expected_percent) < 5.0
-                    except:
+                        # Robust parse of display percent like "45%" or "45.0"
+                        import re as _re
+                        ds = str(current_display).strip()
+                        m = _re.search(r"-?\d+(?:\.\d+)?", ds)
+                        if m:
+                            display_val = float(m.group(0))
+                            expected_percent = float(current_normalized) * 100.0
+                            # Allow 5% tolerance for floating point comparison
+                            is_percent_parameter = abs(display_val - expected_percent) < 5.0 or ds.endswith('%')
+                    except Exception:
                         pass
 
                 # Handle percent units - work in DISPLAY space (0-100), not normalized space!
                 if unit_l in ("%", "percent") and is_percent_parameter:
-                    # This is a percent-based parameter (like dry/wet)
+                    # This is a percent-based parameter (like dry/wet/feedback)
                     # Convert current normalized to display percent (0.5 → 50)
                     current_display_percent = float(current_normalized) * 100.0
 
                     # Check if this parameter uses additive math for percents
-                    if param_lower in percent_additive_params:
+                    if is_additive:
                         # Additive: 50% + 20% = 70%
                         new_display_percent = current_display_percent + delta_value
                         print(f"[DEBUG] Using ADDITIVE math: {current_display_percent}% + {delta_value}% = {new_display_percent}%")
@@ -616,10 +677,13 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                         # Display value arithmetic
                         try:
                             current_display_val = float(current_display)
-
                             # Check if change is specified as percent of current value
                             # E.g., "decrease predelay by 20%" where predelay is in ms
-                            if unit_l in ("%", "percent"):
+                            unit_is_percent = unit_l in ("%", "percent")
+                            # Heuristic: if NLP dropped the unit but utterance contains '%', treat as percent
+                            if not unit_is_percent and orig_utterance and ("%" in orig_utterance) and abs(delta_value) <= 100.0:
+                                unit_is_percent = True
+                            if unit_is_percent:
                                 # Calculate percentage of current value
                                 # delta_value already has sign: +20 for increase, -20 for decrease
                                 # E.g., 60ms with delta=-20: 60 * (1 + -20/100) = 60 * 0.8 = 48ms
@@ -687,8 +751,9 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         amount = _to_float(value)
         unit_l = (unit or "").strip().lower()
         if amount is not None:
+            # Keep value numeric in canonical intent for tests; executor treats it as display unless 'normalized'
             intent["value"] = amount
-            if unit is not None and unit != "normalized":
+            if unit_l:
                 intent["unit"] = unit
         else:
             # Treat as display string selection (e.g., Mode → Distance)
@@ -700,11 +765,24 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             else:
                 errors.append("invalid_value_amount")
                 return None, errors
-        # Need device_index - use device_ordinal if available (convert from 1-based to 0-based)
-        if device_ordinal is not None:
-            intent["device_index"] = int(device_ordinal) - 1
-        else:
-            intent["device_index"] = 0
+        # Resolve device_index using shared resolver when possible
+        try:
+            dev_domain = "return" if ("return_index" in intent or "return_ref" in intent) else ("track" if "track_index" in intent else None)
+            if dev_domain == "return":
+                ri = intent.get("return_index") if intent.get("return_index") is not None else ord(str(intent.get("return_ref")).upper()) - ord('A')
+                from server.core.deps import get_device_resolver
+                di, _name, _notes = get_device_resolver().resolve_return(return_index=int(ri), device_name_hint=str(intent.get("device_name_hint", "")), device_ordinal_hint=int(device_ordinal) if device_ordinal else None)
+                intent["device_index"] = int(di)
+            elif dev_domain == "track":
+                ti = int(intent.get("track_index"))
+                from server.core.deps import get_device_resolver
+                di, _name, _notes = get_device_resolver().resolve_track(track_index=ti, device_name_hint=str(intent.get("device_name_hint", "")), device_ordinal_hint=int(device_ordinal) if device_ordinal else None)
+                intent["device_index"] = int(di)
+            else:
+                # Fallback to ordinal/0
+                intent["device_index"] = int(device_ordinal) - 1 if device_ordinal is not None else 0
+        except Exception:
+            intent["device_index"] = int(device_ordinal) - 1 if device_ordinal is not None else 0
         return intent, []
 
     # Mixer controls: volume, pan, mute, solo (only if NOT a device parameter)

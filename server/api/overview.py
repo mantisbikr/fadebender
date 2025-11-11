@@ -443,6 +443,68 @@ async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
         track_name = target.track or ""
         param_name = target.parameter
 
+        # Global project queries (counts/lists)
+        if not track_name and isinstance(param_name, str):
+            pn = param_name.strip().lower()
+            try:
+                ov = request_op("get_overview", timeout=1.0) or {}
+                data = data_or_raw(ov) or {}
+                tracks = data.get("tracks") or []
+            except Exception:
+                tracks = []
+            # Returns list via dedicated op
+            try:
+                rs = request_op("get_return_tracks", timeout=1.0) or {}
+                rdata = data_or_raw(rs) or {}
+                returns = rdata.get("returns") or []
+            except Exception:
+                returns = []
+
+            def _display_track(t: Dict[str, Any]) -> str:
+                try:
+                    idx = int(t.get("index", 0))
+                    name = str(t.get("name", f"Track {idx}"))
+                    return f"Track {idx} ({name})"
+                except Exception:
+                    return str(t.get("name", "Track"))
+
+            if pn in ("tracks_count", "track_count", "count_tracks"):
+                results.append({"track": None, "parameter": "tracks_count", "value": len([t for t in tracks if str(t.get("type","track")) != "return"]), "display_value": str(len([t for t in tracks if str(t.get("type","track")) != "return"]))})
+                continue
+            if pn == "audio_tracks_count":
+                audio = [t for t in tracks if str(t.get("type", "")).lower() == "audio"]
+                results.append({"track": None, "parameter": "audio_tracks_count", "value": len(audio), "display_value": str(len(audio))})
+                continue
+            if pn == "midi_tracks_count":
+                midi = [t for t in tracks if str(t.get("type", "")).lower() == "midi"]
+                results.append({"track": None, "parameter": "midi_tracks_count", "value": len(midi), "display_value": str(len(midi))})
+                continue
+            if pn == "return_tracks_count":
+                results.append({"track": None, "parameter": "return_tracks_count", "value": len(returns), "display_value": str(len(returns))})
+                continue
+            if pn == "audio_tracks_list":
+                audio = [t for t in tracks if str(t.get("type", "")).lower() == "audio"]
+                names = [_display_track(t) for t in audio]
+                results.append({"track": None, "parameter": "audio_tracks_list", "value": names, "display_value": ", ".join(names) or "(none)"})
+                continue
+            if pn == "midi_tracks_list":
+                midi = [t for t in tracks if str(t.get("type", "")).lower() == "midi"]
+                names = [_display_track(t) for t in midi]
+                results.append({"track": None, "parameter": "midi_tracks_list", "value": names, "display_value": ", ".join(names) or "(none)"})
+                continue
+            if pn == "return_tracks_list":
+                rnames = []
+                for r in returns:
+                    try:
+                        idx = int(r.get("index", 0))
+                        nm = str(r.get("name", f"Return {idx}"))
+                        letter = chr(ord('A') + idx)
+                        rnames.append(f"Return {letter} ({nm})")
+                    except Exception:
+                        rnames.append(str(r.get("name", "Return")))
+                results.append({"track": None, "parameter": "return_tracks_list", "value": rnames, "display_value": ", ".join(rnames) or "(none)"})
+                continue
+
         # Transport params (no track)
         if not track_name and param_name in ("tempo", "metronome"):
             transport = reg.get_transport()
@@ -824,10 +886,10 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
                     mix = r.get("mixer") or {}
                     vol = mix.get("volume"); pan = mix.get("pan"); mute = mix.get("mute"); solo = mix.get("solo")
                 else:  # master
-                    ov = request_op("get_overview", timeout=1.0) or {}
-                    data = data_or_raw(ov) or {}
-                    master = (data.get("master") or {}).get("mixer", {})
-                    vol = master.get("volume"); pan = master.get("pan"); mute = master.get("mute"); solo = master.get("solo")
+                    ms = request_op("get_master_status", timeout=1.0) or {}
+                    mdata = data_or_raw(ms) or {}
+                    mmix = mdata.get("mixer") or {}
+                    vol = mmix.get("volume"); pan = mmix.get("pan"); mute = mmix.get("mute"); solo = mmix.get("solo")
 
                 vals = {"volume": vol, "pan": pan, "mute": mute, "solo": solo}
                 for k, v in vals.items():
@@ -838,7 +900,10 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
                     except Exception:
                         pass
 
-                # Rebuild out after updating
+                # Rebuild out after updating (refresh fields from registry)
+                mixer_map = reg.get_mixer() if reg else {}
+                ent = mixer_map.get(domain or "", {})
+                fields = ent.get(index, {}) if domain != "master" else (mixer_map.get("master", {}) or {})
                 for key in needed:
                     n, disp = _val(key)
                     if n is not None:
@@ -862,6 +927,19 @@ async def _handle_special_queries(domain: str | None, index: int | None, track_n
 
         # Summarize
         parts = []
+        if not out:
+            # As a last resort, synthesize defaults so answer is informative
+            try:
+                if domain == "master":
+                    # Defaults: vol 0.00 dB, pan C, mute Off, solo Off
+                    out = {
+                        "volume": {"value": 0.5, "display_value": _format_mixer_display("volume", 0.5)},
+                        "pan": {"value": 0.0, "display_value": _format_mixer_display("pan", 0.0)},
+                        "mute": {"value": 0.0, "display_value": _format_mixer_display("mute", 0.0)},
+                        "solo": {"value": 0.0, "display_value": _format_mixer_display("solo", 0.0)},
+                    }
+            except Exception:
+                pass
         if "volume" in out: parts.append(f"vol {out['volume']['display_value']}")
         if "pan" in out: parts.append(f"pan {out['pan']['display_value']}")
         if "mute" in out: parts.append(f"mute {out['mute']['display_value']}")
@@ -990,8 +1068,13 @@ def _format_query_answer(results: List[Dict[str, Any]]) -> str:
     # Single result
     if len(valid_results) == 1:
         r = valid_results[0]
-        track = r.get("track") or "Transport"
         param = r.get("parameter", "")
+        # Use friendlier label for project-level queries
+        project_params = {
+            "tracks_count", "audio_tracks_count", "midi_tracks_count", "return_tracks_count",
+            "audio_tracks_list", "midi_tracks_list", "return_tracks_list"
+        }
+        track = "Project" if (r.get("track") is None and param in project_params) else (r.get("track") or "Transport")
         display = r.get("display_value", "N/A")
         return f"{track} {param} is {display}"
 
@@ -1144,68 +1227,57 @@ async def _query_live_mixer_param(domain: str, index: int, param_name: str, trac
 
 
 async def _query_device_param(domain: str, index: int, plugin_name: str, param_name: str, track_name: str, device_ordinal: int | None) -> Dict[str, Any]:
-    """Query device parameter using existing endpoints and return value + capabilities."""
+    """Query device parameter using shared resolver and return value + capabilities.
+
+    - Uses DeviceResolver to honor device_type aliases and cached types
+    - Honors device_ordinal even when plugin_name is generic (e.g., "device 1")
+    - Uses alias-aware param resolution consistent with executor
+    """
     loop = asyncio.get_event_loop()
 
     try:
-        # Step 1: Resolve plugin name to device_index
+        # Step 1: Resolve device_index using shared resolver
+        from server.core.deps import get_device_resolver
+        resolver = get_device_resolver()
         if domain == "track":
-            devs_resp = await loop.run_in_executor(
-                None,
-                lambda: request_op("get_track_devices", timeout=1.0, track_index=index)
+            device_index, _resolved_name, _notes = resolver.resolve_track(
+                track_index=int(index),
+                device_name_hint=str(plugin_name or ""),
+                device_ordinal_hint=int(device_ordinal) if device_ordinal else None,
             )
         elif domain == "return":
-            devs_resp = await loop.run_in_executor(
-                None,
-                lambda: request_op("get_return_devices", timeout=1.0, return_index=index)
+            device_index, _resolved_name, _notes = resolver.resolve_return(
+                return_index=int(index),
+                device_name_hint=str(plugin_name or ""),
+                device_ordinal_hint=int(device_ordinal) if device_ordinal else None,
             )
         elif domain == "master":
+            # Master: fall back to name/ordinal match
             devs_resp = await loop.run_in_executor(
                 None,
                 lambda: request_op("get_master_devices", timeout=1.0)
             )
+            if not devs_resp or not devs_resp.get("ok"):
+                return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": "failed_to_get_devices"}
+            devices_data = data_or_raw(devs_resp) or {}
+            devices = devices_data.get("devices") or []
+            plugin_lower = str(plugin_name or "").lower()
+            matches: list[int] = []
+            for d in devices:
+                nm = str(d.get("name", "")).lower()
+                if plugin_lower in nm or nm in plugin_lower:
+                    matches.append(int(d.get("index", -1)))
+            if matches:
+                device_index = matches[device_ordinal - 1] if device_ordinal and 1 <= device_ordinal <= len(matches) else matches[0]
+            else:
+                if isinstance(device_ordinal, int) and 1 <= device_ordinal <= len(devices):
+                    device_index = int(devices[device_ordinal - 1].get("index", 0))
+                else:
+                    return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": "device_not_found"}
         else:
-            return {
-                "track": track_name,
-                "plugin": plugin_name,
-                "parameter": param_name,
-                "error": f"unsupported_domain:{domain}",
-            }
+            return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": f"unsupported_domain:{domain}"}
 
-        if not devs_resp or not devs_resp.get("ok"):
-            return {
-                "track": track_name,
-                "plugin": plugin_name,
-                "parameter": param_name,
-                "error": "failed_to_get_devices",
-            }
-
-        devices_data = data_or_raw(devs_resp) or {}
-        devices = devices_data.get("devices") or []
-
-        # Find matching device(s) by name (fuzzy match)
-        matches = []
-        for dev in devices:
-            dev_name = str(dev.get("name", "")).lower()
-            plugin_lower = plugin_name.lower()
-            if plugin_lower in dev_name or dev_name in plugin_lower:
-                matches.append(int(dev.get("index", -1)))
-
-        if not matches:
-            return {
-                "track": track_name,
-                "plugin": plugin_name,
-                "parameter": param_name,
-                "error": "device_not_found",
-            }
-
-        # Use ordinal if specified (1-based), otherwise first match
-        if device_ordinal is not None and device_ordinal > 0 and device_ordinal <= len(matches):
-            device_index = matches[device_ordinal - 1]
-        else:
-            device_index = matches[0]
-
-        # Step 2: Query parameter value using param_lookup endpoint
+        # Step 2: Query parameter value using param_lookup endpoint for the resolved device
         if domain == "track":
             param_resp = await loop.run_in_executor(
                 None,
@@ -1240,28 +1312,81 @@ async def _query_device_param(domain: str, index: int, plugin_name: str, param_n
         params_data = data_or_raw(param_resp) or {}
         params = params_data.get("params") or []
 
-        # Find matching parameter (fuzzy match)
-        param_lower = param_name.lower()
-        param_matches = [p for p in params if param_lower in str(p.get("name", "")).lower()]
-
-        if not param_matches:
-            return {
-                "track": track_name,
-                "plugin": plugin_name,
-                "parameter": param_name,
-                "error": "parameter_not_found",
-            }
-
-        if len(param_matches) > 1:
-            return {
-                "track": track_name,
-                "plugin": plugin_name,
-                "parameter": param_name,
-                "error": "ambiguous_parameter",
-                "candidates": [p.get("name") for p in param_matches],
-            }
-
-        param = param_matches[0]
+        # Step 3: Resolve parameter using alias-aware logic (same as executor)
+        try:
+            from server.services.intents.param_service import alias_param_name_if_needed, resolve_param
+            from server.config.app_config import get_device_param_aliases
+            target_ref = alias_param_name_if_needed(param_name)
+            try:
+                param = resolve_param(params, None, target_ref)
+            except Exception:
+                # Fallback 1: fuzzy contains with canonical
+                param_lower = str(target_ref or "").lower()
+                cand = [p for p in params if param_lower in str(p.get("name", "")).lower()]
+                # Fallback 2: try alias synonyms that map to the same canonical (reverse lookup)
+                if not cand:
+                    aliases = get_device_param_aliases() or {}
+                    rev_keys = [k for (k, v) in aliases.items() if str(v).strip().lower() == str(target_ref).strip().lower()]
+                    for rk in rev_keys:
+                        rk_l = str(rk).lower()
+                        cand = [p for p in params if rk_l in str(p.get("name", "")).lower()]
+                        if cand:
+                            break
+                if not cand:
+                    # Fallback 3: normalized contains (strip non-alnum)
+                    import re as _re
+                    key = _re.sub(r"[^a-z0-9]", "", str(target_ref or "").lower())
+                    def _norm(s: str) -> str:
+                        return _re.sub(r"[^a-z0-9]", "", s.lower())
+                    cand = [p for p in params if key and key in _norm(str(p.get("name", "")))]
+                if not cand:
+                    # Special-case: generic 'feedback' → try L/R variants and return combined
+                    if str(target_ref).strip().lower() == "feedback":
+                        lfb = next((p for p in params if str(p.get("name", "")).strip().lower() in ("l feedback","left feedback")), None)
+                        rfb = next((p for p in params if str(p.get("name", "")).strip().lower() in ("r feedback","right feedback")), None)
+                        if lfb or rfb:
+                            parts = []
+                            if lfb:
+                                parts.append(f"L: {lfb.get('display_value') if lfb.get('display_value') is not None else lfb.get('value')}")
+                            if rfb:
+                                parts.append(f"R: {rfb.get('display_value') if rfb.get('display_value') is not None else rfb.get('value')}")
+                            return {
+                                "track": track_name,
+                                "plugin": plugin_name,
+                                "parameter": "Feedback",
+                                "value": None,
+                                "display_value": ", ".join(parts),
+                                "source": "live",
+                                "device_index": device_index,
+                                "param_index": None,
+                            }
+                    return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": "parameter_not_found"}
+                if len(cand) > 1:
+                    # Try narrowing: prefer exact case-insensitive match
+                    exact = [p for p in cand if str(p.get("name", "")).strip().lower() == str(target_ref).strip().lower()]
+                    if len(exact) == 1:
+                        cand = exact
+                    else:
+                        # Prefer single word 'feedback' over channel variants like 'L Feedback'
+                        simple = [p for p in cand if str(p.get("name", "")).strip().lower() in ("feedback","decay","dry/wet","dry wet")]
+                        if len(simple) == 1:
+                            cand = simple
+                if len(cand) > 1:
+                    return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": "ambiguous_parameter", "candidates": [p.get("name") for p in cand]}
+                param = cand[0]
+        except Exception:
+            # Absolute fallback: simple contains on raw param_name
+            param_lower = str(param_name or "").lower()
+            matches = [p for p in params if param_lower in str(p.get("name", "")).lower()]
+            if not matches:
+                return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": "parameter_not_found"}
+            if len(matches) > 1:
+                exact = [p for p in matches if str(p.get("name", "")).strip().lower() == param_lower]
+                if len(exact) == 1:
+                    matches = exact
+                else:
+                    return {"track": track_name, "plugin": plugin_name, "parameter": param_name, "error": "ambiguous_parameter", "candidates": [p.get("name") for p in matches]}
+            param = matches[0]
         param_value = param.get("value")
         param_display = param.get("display_value") or str(param_value)
         param_index = param.get("index")

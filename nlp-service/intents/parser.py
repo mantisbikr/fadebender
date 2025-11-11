@@ -561,3 +561,22 @@ class DAWIntentParser:
         except Exception as e:
             print(f"AI parsing error: {e}")
             return fallback_parse(text)
+    # Project queries: counts/lists of audio/midi/return tracks
+    import re as _re
+    # Counts
+    if _re.search(r"\bhow\s+many\s+audio\s+tracks\b|\b(audio\s+track|audio\s+tracks)\s+count\b|\bnumber\s+of\s+audio\s+tracks\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "audio_tracks_count"}], "meta": {"utterance": t, "fallback": True}}
+    if _re.search(r"\bhow\s+many\s+midi\s+tracks\b|\b(midi\s+track|midi\s+tracks)\s+count\b|\bnumber\s+of\s+midi\s+tracks\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "midi_tracks_count"}], "meta": {"utterance": t, "fallback": True}}
+    if _re.search(r"\bhow\s+many\s+return\s+tracks\b|\b(returns?|return\s+tracks?)\s+count\b|\bnumber\s+of\s+returns?\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "return_tracks_count"}], "meta": {"utterance": t, "fallback": True}}
+    if _re.search(r"\bhow\s+many\s+tracks\b|\bnumber\s+of\s+tracks\b|\btrack\s+count\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "tracks_count"}], "meta": {"utterance": t, "fallback": True}}
+
+    # Lists
+    if _re.search(r"\blist\s+the\s+audio\s+tracks\b|\blist\s+audio\s+tracks\b|\baudio\s+tracks\s+list\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "audio_tracks_list"}], "meta": {"utterance": t, "fallback": True}}
+    if _re.search(r"\blist\s+the\s+midi\s+tracks\b|\blist\s+midi\s+tracks\b|\bmidi\s+tracks\s+list\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "midi_tracks_list"}], "meta": {"utterance": t, "fallback": True}}
+    if _re.search(r"\blist\s+the\s+returns?\b|\blist\s+return\s+tracks\b|\breturns?\s+list\b", s):
+        return {"intent": "get_parameter", "targets": [{"track": None, "parameter": "return_tracks_list"}], "meta": {"utterance": t, "fallback": True}}

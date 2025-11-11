@@ -72,6 +72,55 @@ export default function ChatMessage({ message, onSuggestedIntent, showCapabiliti
     );
   };
 
+  const renderListChips = (data) => {
+    try {
+      const results = Array.isArray(data?.values) ? data.values : [];
+      if (results.length === 0) return null;
+      // Collect any list-type parameters (audio/midi/returns)
+      const listParams = new Set(['audio_tracks_list', 'midi_tracks_list', 'return_tracks_list']);
+      const lists = results.filter(r => listParams.has(String(r?.parameter || '').toLowerCase()) && Array.isArray(r?.value));
+      if (lists.length === 0) return null;
+      const items = lists.flatMap(r => r.value.map(v => ({ param: r.parameter, label: String(v) })));
+      if (items.length === 0) return null;
+      const onOpen = (label, param) => {
+        try {
+          const isReturn = /return\s+([a-z])/i.exec(label);
+          const isTrack = /track\s+(\d+)/i.exec(label);
+          if (isReturn) {
+            const letter = isReturn[1].toUpperCase();
+            const ev = new CustomEvent('fb:open-capabilities', { detail: { entity: 'return', index: (letter.charCodeAt(0) - 'A'.charCodeAt(0)) } });
+            window.dispatchEvent(ev);
+          } else if (isTrack) {
+            const idx = parseInt(isTrack[1], 10);
+            const ev = new CustomEvent('fb:open-capabilities', { detail: { entity: 'track', index: idx } });
+            window.dispatchEvent(ev);
+          }
+        } catch {}
+      };
+      return (
+        <Box sx={{ mt: 1.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Tap a track to open controls:
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {items.map((it, i) => (
+              <Chip
+                key={`${it.param}-${i}`}
+                label={it.label}
+                onClick={() => onOpen(it.label, it.param)}
+                variant="outlined"
+                size="small"
+                sx={{ cursor: 'pointer' }}
+              />
+            ))}
+          </Box>
+        </Box>
+      );
+    } catch {
+      return null;
+    }
+  };
+
   const getMessageProps = () => {
     switch (message.type) {
       case 'user':
@@ -258,6 +307,7 @@ export default function ChatMessage({ message, onSuggestedIntent, showCapabiliti
         return (
           <Box>
             {renderHelpResponse(message.data)}
+            {renderListChips(message.data)}
             {message.data.param_editor && (
               <Box sx={{ mt: 2 }}>
                 <SingleParamEditor editor={message.data.param_editor} onSuggestedIntent={onSuggestedIntent} />

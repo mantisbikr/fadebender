@@ -1187,7 +1187,10 @@ export function Sidebar({ messages, onReplay, open, onClose, variant = 'permanen
                     <Box key={t.index} id={`track-item-${t.index}`} component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
                       <ListItem
                         selected={selectedIndex === t.index}
-                        onClick={() => { setSelectedIndex(t.index); refreshTrack(t.index); }}
+                        onClick={() => {
+                          setSelectedIndex(t.index);
+                          refreshTrack(t.index);
+                        }}
                         sx={{
                           cursor: 'pointer',
                           py: 0.5,

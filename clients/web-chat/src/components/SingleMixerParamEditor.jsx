@@ -74,10 +74,11 @@ export default function SingleMixerParamEditor({ editor }) {
     fetchCurrentValue();
 
     // start polling for live changes
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(() => {
-      fetchCurrentValue();
-    }, 600);
+    // TEMPORARILY DISABLED FOR DEBUGGING
+    // if (pollingRef.current) clearInterval(pollingRef.current);
+    // pollingRef.current = setInterval(() => {
+    //   fetchCurrentValue();
+    // }, 600);
 
     // cleanup
     return () => {
