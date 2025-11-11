@@ -93,14 +93,14 @@ def main():
     print("=" * 80)
     print()
 
-    # Reverb tests (NO semantic aliases - just exact/fuzzy matching)
+    # Reverb tests (using actual Firestore parameter names)
     tests = [
-        ("Exact device + exact param", "reverb decay", "Reverb", "Decay"),
-        ("Device + param with typo", "reverb decai", "Reverb", "Decay"),
+        ("Exact device + exact param", "reverb decay time", "Reverb", "Decay Time"),
+        ("Device + partial param", "reverb decay", "Reverb", "Decay Time"),
         ("Exact param: stereo image", "reverb stereo image", "Reverb", "Stereo Image"),
         ("Exact param: dry/wet", "reverb dry wet", "Reverb", "Dry/Wet"),
         ("Exact param: predelay", "reverb predelay", "Reverb", "Predelay"),
-        ("Multiple words param", "reverb low cut", "Reverb", "Low Cut"),
+        ("Exact param: room size", "reverb room size", "Reverb", "Room Size"),
     ]
 
     for test_name, text, exp_dev, exp_param in tests:

@@ -282,10 +282,17 @@ class DeviceContextParser:
 
     def parse_device_param(self, text: str) -> DeviceParamMatch:
         """
-        Parse device and parameter from text using device-context-aware matching.
+        Parse device and parameter using dynamic device-type resolution.
+
+        Algorithm:
+        1. Parse parameter name (exact/fuzzy)
+        2. Look up which device types have this parameter
+        3. Find device type word in text (e.g., "delay", "reverb")
+        4. Resolve to actual device name from snapshot
+        5. Handle ordinals and ambiguity
 
         Args:
-            text: Input text (e.g., "set reverb decay to 5 seconds")
+            text: Input text (e.g., "set delay feedback to 50%")
 
         Returns:
             DeviceParamMatch with parsed device, param, and confidence
@@ -295,31 +302,20 @@ class DeviceContextParser:
         text = self.apply_typo_map(text)
 
         device = None
-        device_span = None
+        device_type = None
+        device_ordinal = None
         param = None
-        param_span = None
         confidence = 0.0
         method = "none"
 
-        # Try exact device match first
-        if self.DEVICE_RE:
-            dev_m = self.DEVICE_RE.search(text)
-            if dev_m:
-                device = self.device_canonical.get(dev_m.group(0).lower(), dev_m.group(0))
-                device_span = dev_m.span()
-                confidence += 0.5
-                method = "exact"
-
-        # Try exact parameter match (search after device if found)
-        start_idx = 0 if not device_span else device_span[1]
+        # Step 1: Try exact parameter match
         if self.ALL_PARAM_RE:
-            prm_m = self.ALL_PARAM_RE.search(text[start_idx:])
+            prm_m = self.ALL_PARAM_RE.search(text)
             if prm_m:
                 param = self.param_canonical.get(prm_m.group(0).lower(), prm_m.group(0))
-                param_span = (start_idx + prm_m.start(), start_idx + prm_m.end())
+                param_span = prm_m.span()
                 confidence += 0.5
-                if method == "exact":
-                    method = "exact"
+                method = "exact"
             else:
                 # Try fuzzy parameter match
                 vocab = set()
@@ -329,42 +325,150 @@ class DeviceContextParser:
                     for vs in spec.get("aliases", {}).values():
                         vocab.update(vs)
 
-                best = self.fuzzy_best(text, list(vocab), want="rightmost", limit_region=(start_idx, len(text)))
+                best = self.fuzzy_best(text, list(vocab), want="rightmost")
                 if best:
                     param = self.param_canonical.get(best[0].lower(), best[0])
                     param_span = best[1]
                     confidence += 0.35
-                    method = "fuzzy_param" if method == "exact" else "fuzzy_param"
+                    method = "fuzzy_param"
+        else:
+            return DeviceParamMatch(None, None, None, None, 0.0, "no_params")
 
-        # If no device found, try fuzzy device match
-        if not device:
-            best_dev = self.fuzzy_best(text, self.device_vocab, want="leftmost")
-            if best_dev:
-                device = self.device_canonical.get(best_dev[0].lower(), best_dev[0])
-                device_span = best_dev[1]
-                confidence += 0.35
-                method = "fuzzy_both" if "fuzzy" in method else "fuzzy_device"
+        # If no parameter found, return early
+        if not param:
+            return DeviceParamMatch(None, None, None, None, 0.0, "no_param_match")
 
-                # If still no param, try fuzzy param after device
-                if not param:
-                    start_idx = device_span[1] if device_span else 0
-                    vocab = set()
-                    for spec in self.index["params_by_device"].values():
-                        vocab.update(spec.get("params", []))
-                        for vs in spec.get("aliases", {}).values():
-                            vocab.update(vs)
-                    vocab.update(self.index.get("mixer_params", []))
+        # Step 2: Look up which device types have this parameter
+        param_to_types = self.index.get("param_to_device_types", {})
+        candidate_types = param_to_types.get(param, [])
 
-                    best_prm = self.fuzzy_best(text, list(vocab), want="rightmost", limit_region=(start_idx, len(text)))
-                    if best_prm:
-                        param = self.param_canonical.get(best_prm[0].lower(), best_prm[0])
-                        param_span = best_prm[1]
-                        confidence += 0.35
-                        method = "fuzzy_both"
+        if not candidate_types:
+            # Parameter not found in any device - return with low confidence
+            return DeviceParamMatch(None, None, None, param, confidence * 0.5, method + "_no_device_types")
 
-        # Extract device ordinal if present (e.g., "reverb 2", "delay #3")
-        device_ordinal = None
-        if device and device_span:
+        # Step 4: Try exact device name match first
+        if self.DEVICE_RE:
+            dev_m = self.DEVICE_RE.search(text)
+            if dev_m:
+                device = self.device_canonical.get(dev_m.group(0).lower(), dev_m.group(0))
+                device_span = dev_m.span()
+                device_type = self.device_types.get(device, "unknown")
+
+                # Extract ordinal if present
+                post_device = text[device_span[1]:]
+                m = re.search(r"(?:#|\s)(\d+)\b", post_device)
+                if m:
+                    try:
+                        device_ordinal = int(m.group(1))
+                    except:
+                        pass
+
+                # Device name found - verify param belongs to this device
+                device_spec = self.index["params_by_device"].get(device, {})
+                device_param_list = device_spec.get("params", [])
+
+                if param in device_param_list:
+                    # Parameter belongs to this device - perfect match
+                    confidence += 0.5
+                    method = "exact" if method == "exact" else "exact_device"
+                    return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
+                else:
+                    # Parameter doesn't belong to this device - search device's params for match
+                    # Try exact match in device's params first
+                    if self.PARAM_RE.get(device):
+                        param_re = self.PARAM_RE[device]
+                        start_idx = device_span[1]
+                        prm_m = param_re.search(text[start_idx:])
+                        if prm_m:
+                            param = self.param_canonical.get(prm_m.group(0).lower(), prm_m.group(0))
+                            confidence = 1.0  # Reset confidence for exact match
+                            method = "exact"
+                            return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
+
+                    # Try fuzzy match in device's params
+                    device_param_vocab = list(device_param_list)
+                    for pname, alist in device_spec.get("aliases", {}).items():
+                        device_param_vocab.extend(alist)
+
+                    if device_param_vocab:
+                        start_idx = device_span[1]
+                        best_prm = self.fuzzy_best(text, device_param_vocab, want="rightmost", limit_region=(start_idx, len(text)))
+                        if best_prm:
+                            param = self.param_canonical.get(best_prm[0].lower(), best_prm[0])
+                            confidence += 0.35
+                            method = "exact_device_fuzzy_param"
+                            return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
+
+                    # Device found but no matching param - return what we have
+                    confidence += 0.3
+                    method = "device_only"
+                    return DeviceParamMatch(device, device_type, device_ordinal, param, confidence * 0.6, method)
+
+        # Step 5: Try device type resolution (e.g., "delay" → "4th Bandpass")
+        # Build regex for device types that have this parameter
+        type_names = candidate_types
+        type_pattern = build_alt(type_names) if type_names else None
+
+        if type_pattern:
+            type_re = re.compile(type_pattern)
+            type_m = type_re.search(text)
+
+            if type_m:
+                # Found device type in text
+                matched_type = type_m.group(0).lower()
+                device_type_index = self.index.get("device_type_index", {})
+
+                # Find devices in snapshot with this type
+                devices_with_type = device_type_index.get(matched_type, [])
+
+                if devices_with_type:
+                    # Extract ordinal if present (e.g., "delay 2")
+                    post_type = text[type_m.end():]
+                    m = re.search(r"(?:#|\s)(\d+)\b", post_type)
+                    if m:
+                        try:
+                            device_ordinal = int(m.group(1))
+                        except:
+                            pass
+
+                    if len(devices_with_type) == 1:
+                        # Unambiguous - only one device of this type
+                        device = devices_with_type[0]
+                        device_type = matched_type
+                        confidence += 0.4
+                        method = "type_resolution" if method == "exact" else "fuzzy_type_resolution"
+                    elif device_ordinal:
+                        # Multiple devices, but ordinal specified
+                        if 1 <= device_ordinal <= len(devices_with_type):
+                            device = devices_with_type[device_ordinal - 1]
+                            device_type = matched_type
+                            confidence += 0.4
+                            method = "type_resolution_ordinal"
+                        else:
+                            # Invalid ordinal
+                            device = None
+                            confidence *= 0.5
+                            method = "invalid_ordinal"
+                    else:
+                        # Ambiguous - multiple devices, no ordinal
+                        # Return first device but mark as ambiguous
+                        device = devices_with_type[0]
+                        device_type = matched_type
+                        confidence *= 0.6  # Lower confidence for ambiguity
+                        method = "type_resolution_ambiguous"
+
+                    return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
+
+        # Step 6: Try fuzzy device name match as fallback
+        best_dev = self.fuzzy_best(text, self.device_vocab, want="leftmost")
+        if best_dev:
+            device = self.device_canonical.get(best_dev[0].lower(), best_dev[0])
+            device_type = self.device_types.get(device, "unknown")
+            confidence += 0.3
+            method = "fuzzy_device_fallback"
+
+            # Extract ordinal
+            device_span = best_dev[1]
             post_device = text[device_span[1]:]
             m = re.search(r"(?:#|\s)(\d+)\b", post_device)
             if m:
@@ -373,17 +477,18 @@ class DeviceContextParser:
                 except:
                     pass
 
-        # Get device type
-        device_type = self.device_types.get(device, "unknown") if device else None
+            return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
 
-        # Clamp confidence to [0.0, 1.0]
-        confidence = max(0.0, min(1.0, confidence))
+        # Step 7: No device match - check if it's a mixer parameter
+        if param.lower() in [p.lower() for p in self.mixer_params]:
+            return DeviceParamMatch(
+                device="mixer",
+                device_type="mixer",
+                device_ordinal=None,
+                param=param,
+                confidence=confidence,
+                method=method
+            )
 
-        return DeviceParamMatch(
-            device=device,
-            device_type=device_type,
-            device_ordinal=device_ordinal,
-            param=param,
-            confidence=confidence,
-            method=method
-        )
+        # Step 8: No device match and not a mixer param - return param only
+        return DeviceParamMatch(None, None, None, param, confidence * 0.5, method + "_no_device")

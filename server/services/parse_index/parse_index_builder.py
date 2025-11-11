@@ -118,11 +118,31 @@ class ParseIndexBuilder:
         # Build typo map (could be extended with learning/history)
         typo_map = self._get_typo_map()
 
+        # Build device_type_index (device_type → [device_names])
+        device_type_index = {}
+        for dev_name, spec in params_by_device.items():
+            dev_type = spec.get("device_type", "unknown")
+            if dev_type not in device_type_index:
+                device_type_index[dev_type] = []
+            device_type_index[dev_type].append(dev_name)
+
+        # Build param_to_device_types index (param_name → [device_types])
+        param_to_device_types = {}
+        for dev_name, spec in params_by_device.items():
+            dev_type = spec.get("device_type", "unknown")
+            for param_name in spec.get("params", []):
+                if param_name not in param_to_device_types:
+                    param_to_device_types[param_name] = []
+                if dev_type not in param_to_device_types[param_name]:
+                    param_to_device_types[param_name].append(dev_type)
+
         # Assemble final index
         parse_index = {
             "version": f"pi-{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}Z",
             "devices_in_set": devices_in_set,
             "params_by_device": params_by_device,
+            "device_type_index": device_type_index,
+            "param_to_device_types": param_to_device_types,
             "mixer_params": mixer_params,
             "typo_map": typo_map,
         }
