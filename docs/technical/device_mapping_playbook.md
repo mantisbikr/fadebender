@@ -1492,6 +1492,305 @@ python3 scripts/add_preset_details.py \
 
 ---
 
+## Phase 11: Hero Parameters & ChatGPT-Assisted Enrichment (45-60 min)
+
+**NEW**: Use AI-assisted analysis to identify hero parameters and enrich presets with sonic descriptors.
+
+### 11.1 Why Hero Parameters?
+
+**The Problem**: Most audio devices have 30-100+ parameters, but only 6-8 are frequently adjusted by audio engineers.
+
+**The Solution**: Mark the most impactful parameters as "hero" parameters to:
+- Expose them prominently in UI
+- Prioritize fit model calibration efforts
+- Guide users to the most musically useful controls
+
+**Hero Parameter Criteria**:
+- Most significant sonic impact (80/20 rule)
+- Most commonly adjusted in production workflows
+- Representative of device's core functionality
+
+### 11.2 Export Device for ChatGPT Analysis
+
+Use the export script to prepare device data for ChatGPT analysis:
+
+```bash
+python3 scripts/export_device_for_chatgpt.py <device_signature> \
+  --output-dir ~/Desktop/device_exports \
+  --database dev-display-value
+```
+
+**What this creates**:
+1. `<device>_device_mapping.json` - Complete parameter structure
+2. `<device>_presets.json` - All presets with parameter values
+3. `<device>_chatgpt_prompt.txt` - Analysis instructions for ChatGPT
+
+**Files contain**:
+- Device metadata (name, type, categories)
+- All parameters (name, control_type, min/max, fit info)
+- Sections and grouping information
+- All presets with normalized and display values
+
+### 11.3 ChatGPT Analysis Process
+
+**Copy the prompt and JSON files to ChatGPT** (or Claude) and request:
+
+#### Task 1: Identify Hero Parameters (6-8 parameters)
+
+Based on audio engineering principles, identify parameters that:
+- Have the most significant sonic impact
+- Are most commonly adjusted by audio engineers
+- Represent the "80/20" rule
+
+**Example output format** (`<device>_hero_parameters.json`):
+```json
+{
+  "hero_parameters": [
+    {
+      "name": "L Time",
+      "rationale": "Controls rhythmic timing (left channel)",
+      "use_cases": ["tempo-synced repeats", "slapback"]
+    },
+    {
+      "name": "Feedback",
+      "rationale": "Controls number of repeats",
+      "use_cases": ["ambient", "dub"]
+    },
+    {
+      "name": "HP Freq",
+      "rationale": "Shapes tonal brightness (high-pass)",
+      "use_cases": ["dark tape", "bright clean"]
+    }
+  ]
+}
+```
+
+#### Task 2: Analyze Each Preset
+
+For each preset, provide sonic descriptors:
+
+**Example output format** (`<device>_presets_tagged.json`):
+```json
+{
+  "Analog Echo": {
+    "key": "echo_analog_echo",
+    "character": "medium / long / wide / warm",
+    "intent_tags": ["tempo_sync", "warm", "clarity"],
+    "coarse_roles": ["rhythmic/repeats", "pads/ambient"],
+    "hero_defaults": {
+      "L Time": "375ms",
+      "Feedback": "40%",
+      "HP Freq": "200Hz",
+      "Stereo Width": "100%"
+    }
+  },
+  "Ping Pong Delay": {
+    "key": "echo_ping_pong_delay",
+    "character": "short / rhythmic / ultra / bright",
+    "intent_tags": ["pingpong", "bright", "motion", "rhythmic"],
+    "coarse_roles": ["rhythmic/repeats", "groove/slapback"],
+    "hero_defaults": {
+      "L Time": "150ms",
+      "R Time": "300ms",
+      "Feedback": "30%",
+      "Stereo Width": "200%"
+    }
+  }
+}
+```
+
+**Character Format** (4-part descriptor):
+- Part 1: Main characteristic (size, length, intensity)
+- Part 2: Secondary characteristic
+- Part 3: Spatial quality (wide, narrow, normal, ultra)
+- Part 4: Tonal quality (warm, neutral, bright, airy, dark)
+
+**Intent Tags**: 3-5 tags describing sonic intent
+- Common tags: `tempo_sync`, `pingpong`, `warm`, `bright`, `clarity`, `wide`, `cinematic`, `motion`, `rhythmic`
+
+**Coarse Roles**: Musical contexts where preset shines
+- Common roles: `rhythmic/repeats`, `groove/slapback`, `pads/ambient`, `cinematic/fx`
+
+### 11.4 Save ChatGPT Output
+
+Save ChatGPT's responses as JSON files:
+
+```bash
+# Create output directory
+mkdir -p ~/Desktop/preset_feature_analysis
+
+# Save hero parameters
+# Copy ChatGPT's hero parameters JSON to:
+~/Desktop/preset_feature_analysis/<device>_hero_parameters.json
+
+# Save preset tags
+# Copy ChatGPT's preset tags JSON to:
+~/Desktop/preset_feature_analysis/<device>_presets_tagged.json
+```
+
+**Verify JSON validity**:
+```bash
+# Check hero parameters file
+python3 -m json.tool ~/Desktop/preset_feature_analysis/<device>_hero_parameters.json
+
+# Check presets tagged file
+python3 -m json.tool ~/Desktop/preset_feature_analysis/<device>_presets_tagged.json
+```
+
+### 11.5 Update Firestore with Hero Parameters and Tags
+
+Use the update script to apply ChatGPT's analysis to Firestore:
+
+```bash
+# Dry run first (see what would be updated)
+python3 scripts/update_hero_parameters.py \
+  --database dev-display-value \
+  --device Echo \
+  --dry-run
+
+# Apply updates
+python3 scripts/update_hero_parameters.py \
+  --database dev-display-value \
+  --device Echo
+```
+
+**What this updates**:
+
+1. **Device Mapping** (`device_mappings/<signature>`):
+   - Marks hero parameters with `hero: true` in `params_meta`
+   - All other parameters get `hero: false`
+
+2. **Presets** (`presets/<preset_id>`):
+   - Adds `character` field (e.g., "medium / long / wide / warm")
+   - Adds `intent_tags` array (e.g., ["tempo_sync", "warm", "clarity"])
+   - Adds `coarse_roles` array (e.g., ["rhythmic/repeats", "pads/ambient"])
+
+**Script output**:
+```
+================================================================================
+HERO PARAMETER UPDATE
+================================================================================
+Database: dev-display-value
+Mode: LIVE UPDATE
+
+[Device: Echo]
+================================================================================
+  Device: Echo
+  Total parameters: 48
+  Hero parameters to mark: 8
+  ✓ Marked 8 parameters as hero
+  ✓ Hero parameters: L Time, R Time, Feedback...
+
+  [Presets for Echo]
+  ------------------------------------------------------------------------------
+  Total presets in database: 42
+  Total presets in analysis: 42
+  ✓ Updated 42 presets with character/tags/roles
+
+================================================================================
+UPDATE COMPLETE
+All hero parameters and preset tags have been updated
+================================================================================
+```
+
+### 11.6 Configure Multiple Devices
+
+To update all devices at once, edit `scripts/update_hero_parameters.py`:
+
+```python
+DEVICES = {
+    'Echo': {
+        'signature': '9bd78001e088fcbde50e2ead80ef01e393f3d0ba',
+        'hero_params_file': '/Users/sunils/Desktop/preset_feature_analysis/echo_hero_parameters.json',
+        'presets_tagged_file': '/Users/sunils/Desktop/preset_feature_analysis/echo_presets_tagged.json',
+    },
+    'Reverb': {
+        'signature': '64ccfc236b79371d0b45e913f81bf0f3a55c6db9',
+        'hero_params_file': '/Users/sunils/Desktop/preset_feature_analysis/reverb_hero_parameters.json',
+        'presets_tagged_file': '/Users/sunils/Desktop/preset_feature_analysis/reverb_presets_tagged.json',
+    },
+    # Add more devices...
+}
+```
+
+Then run without `--device` flag to update all:
+```bash
+python3 scripts/update_hero_parameters.py --database dev-display-value
+```
+
+### 11.7 Verify Hero Parameters in WebUI
+
+After updating, verify the changes:
+
+**In Device Controls**:
+- Hero parameters should appear first
+- Non-hero parameters should be secondary/hidden
+- Hero badge/indicator should be visible
+
+**In Preset Browser**:
+- Character descriptors should be displayed
+- Intent tags should enable filtering
+- Coarse roles should enable categorization
+
+**Test Queries**:
+```bash
+# Get device mapping with hero flags
+curl "http://127.0.0.1:8722/return/device/params?index=0&device=0" | jq '.data.params[] | select(.hero == true)'
+
+# Get preset with tags
+curl "http://127.0.0.1:8722/presets/<device_signature>" | jq '.[] | {name, character, intent_tags, coarse_roles}'
+```
+
+### 11.8 Benefits of This Approach
+
+**For Developers**:
+- Prioritize calibration efforts on hero parameters only
+- Focus testing on parameters that matter most
+- Reduce UI complexity by highlighting key controls
+
+**For Users**:
+- Discover most useful parameters immediately
+- Find presets by sonic character or use case
+- Learn device workflow faster
+
+**For Audio Engineering Quality**:
+- Expert audio engineering knowledge embedded in presets
+- Consistent sonic vocabulary across devices
+- Searchable by musical context (roles) and intent
+
+### 11.9 Example: Echo Hero Parameters
+
+Based on Echo analysis:
+
+**Hero Parameters** (8 total):
+1. **L Time** - Controls rhythmic timing (left channel)
+2. **R Time** - Controls rhythmic timing (right channel)
+3. **Feedback** - Controls number of repeats
+4. **HP Freq** - Shapes tonal brightness (high-pass)
+5. **LP Freq** - Shapes tonal brightness (low-pass)
+6. **Mod Freq** - Adds motion/modulation
+7. **Wobble Amt** - Tape character
+8. **Dry Wet** - Blend
+
+**Example Preset Tags**:
+- **8 Dot Ball**: "short / rhythmic / wide / bright" - ["rhythmic", "bright", "clarity"]
+- **Ambient Space**: "long / evolving / ultra / warm" - ["ambient", "warm", "cinematic"]
+- **Tape Slap**: "short / vintage / normal / warm" - ["slapback", "warm", "vintage"]
+
+### 11.10 Time Budget
+
+- Export device: 5 min
+- ChatGPT analysis: 15-20 min (depends on device complexity and preset count)
+- Save and verify JSON: 5 min
+- Update Firestore: 5 min
+- Verify in WebUI: 10-15 min
+
+**Total: 45-60 min per device**
+
+**Tip**: Can batch multiple devices for ChatGPT analysis to save time.
+
+---
+
 ## Common Pitfalls & Solutions
 
 ### Pitfall 0: Using Manual Parameter Names Without Reconciliation (CRITICAL)
@@ -1628,7 +1927,7 @@ def _check_requires_for_effect(mapping, params, target_param_name):
 
 ---
 
-## Time Budget (8-10 hours total)
+## Time Budget (9-11 hours total)
 
 0. **Knowledge Base Reconciliation** (15 min) - IF manual documentation available
    - Get actual param names from Live
