@@ -269,11 +269,8 @@ export default function SingleDeviceParamEditor({ editor }) {
   const isPercentDisplay = unitStr.includes('%') || unitStr.includes('percent') || /%/.test(String(currentValue || ''));
   let minD = Number(param.min_display ?? param.min ?? 0);
   let maxD = Number(param.max_display ?? param.max ?? 1);
-  if (isPercentDisplay) {
-    // Use 0..100 domain for percent-like parameters regardless of normalized min/max
-    minD = 0;
-    maxD = 100;
-  }
+  // Respect the actual min/max from the parameter metadata
+  // (removed hardcoded 0-100 override for percent parameters to support ranges like 0-200%)
   const formatNum = (n) => {
     const x = Number(n);
     if (!isFinite(x)) return String(n);
@@ -294,7 +291,9 @@ export default function SingleDeviceParamEditor({ editor }) {
         step={(isFinite(maxD - minD) && (maxD - minD) > 0) ? (isPercentDisplay ? 1 : (maxD - minD) / 100) : 0.01}
         disabled={busy}
         onChange={(_, v) => setValue(Number(v))}
-        onChangeCommitted={(_, v) => commit(Number(v))}
+        onChangeCommitted={(_, v) => {
+          commit(Number(v));
+        }}
         valueLabelDisplay="auto"
         valueLabelFormat={(x) => `${formatNum(x)}${displayUnit ? ' ' + displayUnit : ''}`}
       />

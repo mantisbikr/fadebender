@@ -76,7 +76,7 @@ export default function ParamAccordion({ capabilities, onParamClick, initialGrou
     setSelectedGroup(null);
     setExpanded(false);
     setEditingParam(null);
-  }, [capabilities && capabilities.device_index, capabilities && capabilities.entity_type]);
+  }, [capabilities?.device_index, capabilities?.entity_type]);
 
   // Close accordion when clicking outside
   useEffect(() => {

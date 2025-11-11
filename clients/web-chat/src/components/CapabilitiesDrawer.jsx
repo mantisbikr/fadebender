@@ -55,7 +55,7 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
       }
     })();
     return () => { cancelled = true; };
-  }, [capabilities && capabilities.entity_type, capabilities && capabilities.track_index, capabilities && capabilities.return_index, capabilities && capabilities.device_index]);
+  }, [capabilities?.entity_type, capabilities?.track_index, capabilities?.return_index, capabilities?.device_index]);
 
   // Build context-sensitive title
   let title = 'Controls';

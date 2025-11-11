@@ -358,10 +358,11 @@ def parse_return_device_param(q: str, query: str, error_msg: str, model_preferen
 
 
 def parse_return_device_label(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
-    """Parse: set return A align delay mode to Distance"""
+    """Parse: set return A reverb size smoothing to None (or mode to Distance, etc.)"""
     try:
         dev_pat = _get_device_pattern()
-        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        # Accept any multi-word parameter name (not just hardcoded list)
+        m = re.search(rf"\bset\s+return\s+([a-d])\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?([a-z][a-z0-9 /-]+?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
         if m:
             return_ref = m.group(1).upper()
             device_raw = m.group(2) or ''
@@ -542,10 +543,11 @@ def parse_track_device_numeric_arbitrary(q: str, query: str, error_msg: str, mod
 
 
 def parse_track_device_label(q: str, query: str, error_msg: str, model_preference: str | None) -> Dict[str, Any] | None:
-    """Parse: set track 1 reverb mode to Distance"""
+    """Parse: set track 1 reverb size smoothing to None (or mode to Distance, etc.)"""
     try:
         dev_pat = _get_device_pattern()
-        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?(mode|quality|type|algorithm|alg|distunit|units?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
+        # Accept any multi-word parameter name (not just hardcoded list)
+        m = re.search(rf"\bset\s+track\s+(\d+)\s+(?:(?:the\s+)?({dev_pat})(?:\s+(\d+))?\s+)?([a-z][a-z0-9 /-]+?)\s+(?:to|at|=)\s*([a-zA-Z]+)\b", q)
         if m:
             track_num = int(m.group(1))
             device_raw = m.group(2) or ''
