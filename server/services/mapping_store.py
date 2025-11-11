@@ -14,15 +14,20 @@ class MappingStore:
 
             # Read database configuration from environment
             project_id = os.getenv("FIRESTORE_PROJECT_ID")
-            database_id = os.getenv("FIRESTORE_DATABASE_ID", "(default)")
-
+            database_id = os.getenv("FIRESTORE_DATABASE_ID")
 
             # Initialize client with database parameter
-            if project_id and database_id and database_id != "(default)":
-                self._client = firestore.Client(project=project_id, database=database_id)
+            if database_id:
+                # Database ID explicitly specified
+                if project_id:
+                    self._client = firestore.Client(project=project_id, database=database_id)
+                else:
+                    self._client = firestore.Client(database=database_id)
             elif project_id:
+                # Only project specified, use default database
                 self._client = firestore.Client(project=project_id)
             else:
+                # Use all defaults
                 self._client = firestore.Client()
 
             self._enabled = True
