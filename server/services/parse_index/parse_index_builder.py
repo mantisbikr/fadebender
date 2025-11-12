@@ -272,6 +272,18 @@ class ParseIndexBuilder:
                 param_aliases.add(param_name.replace(" ", "-"))
                 param_aliases.add(param_name.replace(" ", ""))
 
+            # Add special character normalization (/, <, >, &)
+            # User requirement: "dry wet" should match "Dry/Wet", "s c" should match "S/C"
+            # Strategy: Replace special chars with spaces to create matchable aliases
+            special_chars = ['/', '<', '>', '&']
+            for char in special_chars:
+                if char in param_name:
+                    # Create alias with special char replaced by space
+                    normalized = param_name.replace(char, " ")
+                    param_aliases.add(normalized)
+                    # Also create version with no space (for tight matching)
+                    param_aliases.add(normalized.replace(" ", ""))
+
             if param_aliases:
                 aliases[param_name] = sorted(list(param_aliases))
 

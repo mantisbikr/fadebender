@@ -280,6 +280,41 @@ class DeviceContextParser:
         corrected = " ".join(self.typo_map.get(tok, tok) for tok in tokens)
         return corrected
 
+    def get_canonical_param(self, param_text: str, device_name: Optional[str] = None) -> str:
+        """Get canonical parameter name, optionally scoped to a specific device.
+
+        This handles the case where multiple devices have different canonical forms
+        for the same normalized parameter (e.g., "Dry/Wet" vs "Dry Wet").
+
+        Args:
+            param_text: The parameter text to canonicalize (e.g., "dry wet")
+            device_name: Optional device name to scope the lookup
+
+        Returns:
+            Canonical parameter name for the device, or the input if not found
+        """
+        param_lower = param_text.lower()
+
+        # If device is specified, look up canonical form within that device's parameters
+        if device_name and device_name in self.index["params_by_device"]:
+            device_spec = self.index["params_by_device"][device_name]
+
+            # Check direct parameters
+            for param in device_spec.get("params", []):
+                if param.lower() == param_lower:
+                    return param
+
+            # Check aliases
+            for canonical, aliases in device_spec.get("aliases", {}).items():
+                if canonical.lower() == param_lower:
+                    return canonical
+                for alias in aliases:
+                    if alias.lower() == param_lower:
+                        return canonical
+
+        # Fall back to global param_canonical
+        return self.param_canonical.get(param_lower, param_text)
+
     def fuzzy_best(
         self,
         text: str,
@@ -449,7 +484,8 @@ class DeviceContextParser:
                         start_idx = device_span[1]
                         prm_m = param_re.search(text[start_idx:])
                         if prm_m:
-                            param = self.param_canonical.get(prm_m.group(0).lower(), prm_m.group(0))
+                            # Use device-scoped canonical lookup
+                            param = self.get_canonical_param(prm_m.group(0), device)
                             confidence = 1.0  # Reset confidence for exact match
                             method = "exact"
                             return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
@@ -463,7 +499,8 @@ class DeviceContextParser:
                         start_idx = device_span[1]
                         best_prm = self.fuzzy_best(text, device_param_vocab, want="rightmost", limit_region=(start_idx, len(text)))
                         if best_prm:
-                            param = self.param_canonical.get(best_prm[0].lower(), best_prm[0])
+                            # Use device-scoped canonical lookup
+                            param = self.get_canonical_param(best_prm[0], device)
                             confidence += 0.35
                             method = "exact_device_fuzzy_param"
                             return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
@@ -595,6 +632,31 @@ class DeviceContextParser:
                     device_ordinal = int(m.group(1))
                 except:
                     pass
+
+            # Device-scoped fuzzy parameter matching
+            # Now that we've identified the device, try to match parameter within device's params
+            device_spec = self.index["params_by_device"].get(device)
+            if device_spec:
+                device_param_list = device_spec.get("params", [])
+
+                # Build vocabulary with device's params and aliases
+                device_param_vocab = list(device_param_list)
+                for pname, alist in device_spec.get("aliases", {}).items():
+                    device_param_vocab.extend(alist)
+
+                if device_param_vocab:
+                    # Try fuzzy match in device's params (search after device name)
+                    start_idx = device_span[1]
+                    best_prm = self.fuzzy_best(text, device_param_vocab, want="rightmost", limit_region=(start_idx, len(text)))
+                    if best_prm:
+                        # Use device-scoped canonical lookup
+                        param = self.get_canonical_param(best_prm[0], device)
+                        confidence += 0.35
+                        method = "fuzzy_device_fuzzy_param"
+                        return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
+
+            # No fuzzy param match - use device-scoped canonical lookup to handle collisions (e.g., "Dry/Wet" vs "Dry Wet")
+            param = self.get_canonical_param(param, device)
 
             return DeviceParamMatch(device, device_type, device_ordinal, param, confidence, method)
 
