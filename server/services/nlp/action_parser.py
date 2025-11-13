@@ -71,7 +71,8 @@ def parse_absolute_change(text: str) -> Optional[ActionMatch]:
         "change track 2 pan to 50%"
     """
     # Pattern: (set|change|adjust|make) ... to VALUE [UNIT]
-    pattern = r"\b(set|change|adjust|make)\s+.+?\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|milliseconds?|s|sec|seconds?|hz|khz|degrees?|deg|°))?\b"
+    # Note: No trailing \b because % is not a word character
+    pattern = r"\b(set|change|adjust|make)\s+.+?\s+(?:to|at)\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|milliseconds?|s|sec|seconds?|hz|khz|degrees?|deg|°))?"
 
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
@@ -102,7 +103,8 @@ def parse_relative_change(text: str) -> Optional[ActionMatch]:
         "raise track 2 send A by 5 dB"
     """
     # Pattern: (increase|decrease|raise|lower) ... by VALUE [UNIT]
-    pattern = r"\b(increase|decrease|raise|lower)\s+.+?\s+by\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|milliseconds?|s|sec|seconds?|hz|khz|degrees?|deg|°))?\b"
+    # Note: No trailing \b because % is not a word character
+    pattern = r"\b(increase|decrease|raise|lower)\s+.+?\s+by\s+(-?\d+(?:\.\d+)?)(?:\s*(db|dB|%|percent|ms|milliseconds?|s|sec|seconds?|hz|khz|degrees?|deg|°))?"
 
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
