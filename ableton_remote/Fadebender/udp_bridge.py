@@ -59,6 +59,10 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_overview(live_ctx)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "get_scenes":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_scenes(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
             elif op == "get_track_status":
                 ti = int(msg.get("track_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
@@ -142,6 +146,19 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_return_devices(live_ctx, return_index)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "delete_return_device":
+                return_index = int(msg.get("return_index", 0))
+                device_index = int(msg.get("device_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.delete_return_device(live_ctx, return_index, device_index)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "reorder_return_device":
+                return_index = int(msg.get("return_index", 0))
+                old_index = int(msg.get("old_index", 0))
+                new_index = int(msg.get("new_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.reorder_return_device(live_ctx, return_index, old_index, new_index)
+                resp = {"ok": bool(ok), "op": op}
             elif op == "get_return_device_params":
                 return_index = int(msg.get("return_index", 0))
                 device_index = int(msg.get("device_index", 0))
@@ -161,6 +178,19 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_track_devices(live_ctx, track_index)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "delete_track_device":
+                track_index = int(msg.get("track_index", 0))
+                device_index = int(msg.get("device_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.delete_track_device(live_ctx, track_index, device_index)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "reorder_track_device":
+                track_index = int(msg.get("track_index", 0))
+                old_index = int(msg.get("old_index", 0))
+                new_index = int(msg.get("new_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.reorder_track_device(live_ctx, track_index, old_index, new_index)
+                resp = {"ok": bool(ok), "op": op}
             elif op == "get_track_device_params":
                 track_index = int(msg.get("track_index", 0))
                 device_index = int(msg.get("device_index", 0))
@@ -175,6 +205,13 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_device_param(live_ctx, track_index, device_index, param_index, value)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "create_clip":
+                track_index = int(msg.get("track_index", 0))
+                scene_index = int(msg.get("scene_index", 0))
+                length = float(msg.get("length_beats", 1.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.create_clip(live_ctx, track_index, scene_index, length)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "get_master_devices":
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_master_devices(live_ctx)
@@ -191,6 +228,21 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_master_device_param(live_ctx, device_index, param_index, value)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "capture_and_insert_scene":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.capture_and_insert_scene(live_ctx)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "fire_scene":
+                scene_index = int(msg.get("scene_index", 0))
+                select = bool(msg.get("select", True))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.fire_scene(live_ctx, scene_index, select)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "stop_scene":
+                scene_index = int(msg.get("scene_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.stop_scene(live_ctx, scene_index)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "get_return_routing":
                 return_index = int(msg.get("return_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
@@ -240,6 +292,29 @@ def start_udp_server():  # pragma: no cover
                 value = float(msg.get("value", 0.0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_master_mixer(live_ctx, field, value)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "set_view":
+                mode = str(msg.get("mode", "")).strip()
+                data_out = lom_ops.set_view_mode(_LIVE_ACCESSOR() if _LIVE_ACCESSOR else None, mode)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "set_track_name":
+                track_index = int(msg.get("track_index", 0))
+                name = str(msg.get("name", "")).strip()
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_track_name(live_ctx, track_index, name)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "set_scene_name":
+                scene_index = int(msg.get("scene_index", 0))
+                name = str(msg.get("name", "")).strip()
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_scene_name(live_ctx, scene_index, name)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "set_clip_name":
+                track_index = int(msg.get("track_index", 0))
+                scene_index = int(msg.get("scene_index", 0))
+                name = str(msg.get("name", "")).strip()
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_clip_name(live_ctx, track_index, scene_index, name)
                 resp = {"ok": bool(ok), "op": op}
             else:
                 resp = {"ok": False, "error": f"unknown op: {op}", "echo": msg}

@@ -38,6 +38,8 @@ class Fadebender(ControlSurface):
                 set_live_accessor(lambda: self.song())
                 try:
                     lom_ops.set_scheduler(self.schedule_message)
+                    # Provide Application.view for view switching
+                    lom_ops.set_app_view_getter(lambda: self.application().view)
                 except Exception:
                     pass
                 t = threading.Thread(target=start_udp_server, name="FadebenderUDP", daemon=True)

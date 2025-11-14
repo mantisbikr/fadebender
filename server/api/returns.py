@@ -64,6 +64,46 @@ def get_return_routing(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+# --------- Device Delete/Reorder (UDP thin wrappers) ---------
+
+class ReturnDeviceDeleteBody(BaseModel):
+    return_index: int
+    device_index: int
+
+
+@router.post("/return/device/delete")
+def delete_return_device(body: ReturnDeviceDeleteBody) -> Dict[str, Any]:
+    resp = request_op(
+        "delete_return_device",
+        timeout=1.0,
+        return_index=int(body.return_index),
+        device_index=int(body.device_index),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class ReturnDeviceReorderBody(BaseModel):
+    return_index: int
+    old_index: int
+    new_index: int
+
+
+@router.post("/return/device/reorder")
+def reorder_return_device(body: ReturnDeviceReorderBody) -> Dict[str, Any]:
+    resp = request_op(
+        "reorder_return_device",
+        timeout=1.2,
+        return_index=int(body.return_index),
+        old_index=int(body.old_index),
+        new_index=int(body.new_index),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 class BypassBody(BaseModel):
     return_index: int
     device_index: int

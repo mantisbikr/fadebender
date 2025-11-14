@@ -15,11 +15,21 @@ import threading
 _STATE: Dict[str, Any] = {
     "tracks": [
         {"index": 1, "name": "Track 1", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0],
+         "devices": [
+             {"index": 0, "name": "Utility"},
+             {"index": 1, "name": "EQ Eight"},
+         ],
          "routing": {"monitor_state": "auto", "audio_from": {"type": "Ext. In", "channel": "1"}, "audio_to": {"type": "Master", "channel": "1/2"}}},
-        {"index": 2, "name": "Track 2", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0]},
+        {"index": 2, "name": "Track 2", "type": "audio", "mixer": {"volume": 0.5, "pan": 0.0}, "mute": False, "solo": False, "sends": [0.0, 0.0],
+         "devices": [
+             {"index": 0, "name": "Compressor"}
+         ]},
     ],
     "selected_track": 1,
     "scenes": 1,
+    "scene_names": {1: "Scene 1"},
+    # Session clip names by (track, scene)
+    "clips": {},
     "returns": [
         {
             "index": 0,
@@ -60,6 +70,7 @@ _SCHEDULER: Optional[Callable[..., None]] = None  # ControlSurface.schedule_mess
 _LISTENERS: List[Tuple[Any, Callable[[], None]]] = []
 _LAST_MASTER_VALUES: Dict[str, float] = {}  # Cache to prevent duplicate master events
 _LAST_TRANSPORT_VALUES: Dict[str, Any] = {}  # Cache to prevent duplicate transport events
+_APP_VIEW_GETTER: Optional[Callable[[], Any]] = None  # Application.view accessor
 
 
 def set_notifier(fn: Callable[[Dict[str, Any]], None]) -> None:
@@ -71,6 +82,12 @@ def set_scheduler(scheduler: Callable[..., None]) -> None:
     """Inject ControlSurface.schedule_message to run LOM writes on Live's main thread."""
     global _SCHEDULER
     _SCHEDULER = scheduler
+
+
+def set_app_view_getter(getter: Callable[[], Any]) -> None:
+    """Inject Application.view getter (for view switching)."""
+    global _APP_VIEW_GETTER
+    _APP_VIEW_GETTER = getter
 
 
 def _run_on_main(fn: Callable[[], Any]) -> Any:
@@ -381,6 +398,33 @@ def get_overview(live) -> dict:
         scenes = _STATE["scenes"]
 
     return {"tracks": tracks, "selected_track": sel_idx, "scenes": scenes}
+
+
+def get_scenes(live) -> Dict[str, Any]:
+    """List scenes with names.
+
+    Returns: { scenes: [ { index: 1-based, name: str } ] }
+    """
+    try:
+        if live is not None:
+            scenes = getattr(live, 'scenes', []) or []
+            out = []
+            for i, sc in enumerate(scenes, start=1):
+                try:
+                    nm = str(getattr(sc, 'name', f'Scene {i}'))
+                except Exception:
+                    nm = f"Scene {i}"
+                out.append({"index": i, "name": nm})
+            return {"scenes": out}
+    except Exception:
+        pass
+    # Stub
+    total = int(_STATE.get("scenes", 0) or 0)
+    names = _STATE.get("scene_names", {}) or {}
+    out = []
+    for i in range(1, total + 1):
+        out.append({"index": i, "name": str(names.get(i, f"Scene {i}"))})
+    return {"scenes": out}
 
 
 def get_track_status(live, track_index: int) -> dict:
@@ -1679,5 +1723,463 @@ def set_return_routing(live, return_index: int, **kwargs) -> bool:
                 rr.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
             if kwargs.get("sends_mode"):
                 rr["sends_mode"] = str(kwargs.get("sends_mode")).lower()
+            return True
+    return False
+
+# ---------------- Renaming & Device Order Ops ----------------
+
+def set_track_name(live, track_index: int, name: str) -> bool:
+    """Rename a track by index (1-based)."""
+    try:
+        idx = int(track_index)
+        if live is not None and 1 <= idx <= len(getattr(live, 'tracks', [])):
+            song = live
+            try:
+                if hasattr(song, 'begin_undo_step'):
+                    song.begin_undo_step()
+                tr = song.tracks[idx - 1]
+                tr.name = str(name)
+                _emit({"event": "track_renamed", "track": idx, "name": str(name)})
+                return True
+            finally:
+                try:
+                    if hasattr(song, 'end_undo_step'):
+                        song.end_undo_step()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # Stub fallback
+    for t in _STATE.get("tracks", []):
+        if t["index"] == int(track_index):
+            t["name"] = str(name)
+            _emit({"event": "track_renamed", "track": int(track_index), "name": str(name)})
+            return True
+    return False
+
+
+def set_scene_name(live, scene_index: int, name: str) -> bool:
+    """Rename a scene by index (1-based)."""
+    try:
+        si = int(scene_index)
+        if live is not None:
+            scenes = getattr(live, 'scenes', []) or []
+            if 1 <= si <= len(scenes):
+                song = live
+                try:
+                    if hasattr(song, 'begin_undo_step'):
+                        song.begin_undo_step()
+                    sc = scenes[si - 1]
+                    sc.name = str(name)
+                    _emit({"event": "scene_renamed", "scene": si, "name": str(name)})
+                    return True
+                finally:
+                    try:
+                        if hasattr(song, 'end_undo_step'):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    # Stub
+    _STATE.setdefault("scene_names", {})[int(scene_index)] = str(name)
+    _emit({"event": "scene_renamed", "scene": int(scene_index), "name": str(name)})
+    return True
+
+
+def set_clip_name(live, track_index: int, scene_index: int, name: str) -> bool:
+    """Rename a Session clip at [track, scene] (1-based indices).
+
+    If the slot has no clip, returns False.
+    """
+    try:
+        ti = int(track_index)
+        si = int(scene_index)
+        if live is not None:
+            tracks = getattr(live, 'tracks', []) or []
+            if 1 <= ti <= len(tracks):
+                tr = tracks[ti - 1]
+                slots = getattr(tr, 'clip_slots', []) or []
+                if 1 <= si <= len(slots):
+                    slot = slots[si - 1]
+                    clip = getattr(slot, 'clip', None)
+                    if clip is None:
+                        return False
+                    song = live
+                    try:
+                        if hasattr(song, 'begin_undo_step'):
+                            song.begin_undo_step()
+                        clip.name = str(name)
+                        _emit({"event": "clip_renamed", "track": ti, "scene": si, "name": str(name)})
+                        return True
+                    finally:
+                        try:
+                            if hasattr(song, 'end_undo_step'):
+                                song.end_undo_step()
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+    # Stub
+    key = (int(track_index), int(scene_index))
+    _STATE.setdefault("clips", {})[key] = str(name)
+    _emit({"event": "clip_renamed", "track": int(track_index), "scene": int(scene_index), "name": str(name)})
+    return True
+
+
+def delete_track_device(live, track_index: int, device_index: int) -> bool:
+    """Remove a device from a track by index (0-based device index)."""
+    try:
+        ti = int(track_index)
+        di = int(device_index)
+        if live is not None:
+            tracks = getattr(live, 'tracks', []) or []
+            if 1 <= ti <= len(tracks):
+                tr = tracks[ti - 1]
+                if hasattr(tr, 'delete_device'):
+                    song = live
+                    try:
+                        if hasattr(song, 'begin_undo_step'):
+                            song.begin_undo_step()
+                        tr.delete_device(di)
+                        _emit({"event": "track_device_deleted", "track": ti, "device_index": di})
+                        return True
+                    finally:
+                        try:
+                            if hasattr(song, 'end_undo_step'):
+                                song.end_undo_step()
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+    # Stub
+    for t in _STATE.get("tracks", []):
+        if t["index"] == int(track_index):
+            devs = t.setdefault("devices", [])
+            if 0 <= int(device_index) < len(devs):
+                devs.pop(int(device_index))
+                for i, d in enumerate(devs):
+                    d["index"] = i
+                _emit({"event": "track_device_deleted", "track": int(track_index), "device_index": int(device_index)})
+                return True
+            return False
+    return False
+
+
+def reorder_track_device(live, track_index: int, old_index: int, new_index: int) -> bool:
+    """Reorder a device within a track from old_index to new_index (0-based).
+
+    Tries multiple API spellings for compatibility across Live versions.
+    """
+    try:
+        ti = int(track_index)
+        oi = int(old_index)
+        ni = int(new_index)
+        if live is not None:
+            tracks = getattr(live, 'tracks', []) or []
+            if 1 <= ti <= len(tracks):
+                tr = tracks[ti - 1]
+                song = live
+                try:
+                    if hasattr(song, 'begin_undo_step'):
+                        song.begin_undo_step()
+                    ok = False
+                    try:
+                        if hasattr(tr, 'reorder_device'):
+                            try:
+                                tr.reorder_device(oi, ni)
+                                ok = True
+                            except Exception:
+                                devs = list(getattr(tr, 'devices', []) or [])
+                                if 0 <= oi < len(devs):
+                                    tr.reorder_device(devs[oi], ni)
+                                    ok = True
+                    except Exception:
+                        ok = False
+                    if not ok and hasattr(tr, 'reorder_devices'):
+                        try:
+                            tr.reorder_devices(oi, ni)
+                            ok = True
+                        except Exception:
+                            pass
+                    if ok:
+                        _emit({"event": "track_device_reordered", "track": ti, "from": oi, "to": ni})
+                        return True
+                finally:
+                    try:
+                        if hasattr(song, 'end_undo_step'):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    # Stub
+    for t in _STATE.get("tracks", []):
+        if t["index"] == int(track_index):
+            devs = t.setdefault("devices", [])
+            if not (0 <= int(old_index) < len(devs) and 0 <= int(new_index) <= len(devs)):
+                return False
+            item = devs.pop(int(old_index))
+            devs.insert(int(new_index), item)
+            for i, d in enumerate(devs):
+                d["index"] = i
+            _emit({"event": "track_device_reordered", "track": int(track_index), "from": int(old_index), "to": int(new_index)})
+            return True
+    return False
+
+
+def create_clip(live, track_index: int, scene_index: int, length_beats: float) -> Dict[str, Any]:
+    """Create an empty MIDI clip in the given clip slot (Session view).
+
+    Returns { ok: bool, error?: str }
+    """
+    try:
+        ti = int(track_index)
+        si = int(scene_index)
+        length = max(0.25, float(length_beats))
+        if live is not None:
+            tracks = getattr(live, 'tracks', []) or []
+            if not (1 <= ti <= len(tracks)):
+                return {"ok": False, "error": "track_out_of_range"}
+            tr = tracks[ti - 1]
+            # Only MIDI tracks support create_clip
+            try:
+                is_midi = bool(getattr(tr, 'has_midi_input', False)) and not bool(getattr(tr, 'has_audio_input', False))
+            except Exception:
+                is_midi = False
+            if not is_midi:
+                return {"ok": False, "error": "track_not_midi"}
+            slots = getattr(tr, 'clip_slots', []) or []
+            if not (1 <= si <= len(slots)):
+                return {"ok": False, "error": "scene_out_of_range"}
+            slot = slots[si - 1]
+            if getattr(slot, 'has_clip', False):
+                return {"ok": False, "error": "slot_already_has_clip"}
+            song = live
+            try:
+                if hasattr(song, 'begin_undo_step'):
+                    song.begin_undo_step()
+                slot.create_clip(length)
+                _emit({"event": "clip_created", "track": ti, "scene": si, "length": float(length)})
+                return {"ok": True}
+            finally:
+                try:
+                    if hasattr(song, 'end_undo_step'):
+                        song.end_undo_step()
+                except Exception:
+                    pass
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub
+    key = (int(track_index), int(scene_index))
+    _STATE.setdefault("clips", {})[key] = _STATE.get("clips", {}).get(key) or f"Clip {track_index}:{scene_index}"
+    _emit({"event": "clip_created", "track": int(track_index), "scene": int(scene_index), "length": float(length_beats)})
+    return {"ok": True}
+
+
+def capture_and_insert_scene(live) -> Dict[str, Any]:
+    """Capture current playing clips into a new scene and insert it below selection.
+
+    Wraps `Song.capture_and_insert_scene()` when available.
+    """
+    try:
+        if live is not None and hasattr(live, 'capture_and_insert_scene'):
+            song = live
+            try:
+                if hasattr(song, 'begin_undo_step'):
+                    song.begin_undo_step()
+                live.capture_and_insert_scene()
+                # Best effort: determine new count
+                try:
+                    count = len(getattr(live, 'scenes', []) or [])
+                except Exception:
+                    count = None
+                _emit({"event": "scene_captured", "scenes": count})
+                return {"ok": True, "scenes": count}
+            finally:
+                try:
+                    if hasattr(song, 'end_undo_step'):
+                        song.end_undo_step()
+                except Exception:
+                    pass
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub: increment scenes
+    _STATE["scenes"] = int(_STATE.get("scenes", 0) or 0) + 1
+    idx = _STATE["scenes"]
+    _STATE.setdefault("scene_names", {})[idx] = f"Scene {idx}"
+    _emit({"event": "scene_captured", "scenes": _STATE["scenes"]})
+    return {"ok": True, "scenes": _STATE["scenes"]}
+
+
+def set_view_mode(live, mode: str) -> Dict[str, Any]:
+    """Switch between Session and Arrangement views when possible.
+
+    mode: 'session' | 'arrangement'
+    """
+    m = (mode or '').strip().lower()
+    target = 'Session' if m.startswith('sess') else 'Arranger'
+    try:
+        if _APP_VIEW_GETTER is not None:
+            view = _APP_VIEW_GETTER()
+            if view is not None and hasattr(view, 'show_view'):
+                # Optional: avoid redundant calls
+                try:
+                    is_vis = None
+                    if hasattr(view, 'is_view_visible'):
+                        is_vis = bool(view.is_view_visible(target))
+                    if not is_vis:
+                        view.show_view(target)
+                except Exception:
+                    view.show_view(target)
+                _emit({"event": "view_changed", "mode": target})
+                return {"ok": True, "mode": target}
+        return {"ok": False, "error": "app_view_unavailable"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def fire_scene(live, scene_index: int, select: bool = True) -> Dict[str, Any]:
+    """Launch a scene by index (1-based). Optionally select it first."""
+    try:
+        si = int(scene_index)
+        if live is not None:
+            scenes = getattr(live, 'scenes', []) or []
+            if not (1 <= si <= len(scenes)):
+                return {"ok": False, "error": "scene_out_of_range"}
+            sc = scenes[si - 1]
+            try:
+                if select and hasattr(getattr(live, 'view', None), 'selected_scene'):
+                    live.view.selected_scene = sc
+            except Exception:
+                pass
+            sc.fire()
+            _emit({"event": "scene_fired", "scene": si})
+            return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub
+    _emit({"event": "scene_fired", "scene": int(scene_index)})
+    return {"ok": True}
+
+
+def stop_scene(live, scene_index: int) -> Dict[str, Any]:
+    """Stop all clips in a scene by stopping each track's clip slot at that scene index."""
+    try:
+        si = int(scene_index)
+        if live is not None:
+            tracks = getattr(live, 'tracks', []) or []
+            if not tracks:
+                return {"ok": True}
+            for tr in tracks:
+                slots = getattr(tr, 'clip_slots', []) or []
+                if 1 <= si <= len(slots):
+                    try:
+                        slots[si - 1].stop()
+                    except Exception:
+                        pass
+            _emit({"event": "scene_stopped", "scene": si})
+            return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub
+    _emit({"event": "scene_stopped", "scene": int(scene_index)})
+    return {"ok": True}
+
+
+def delete_return_device(live, return_index: int, device_index: int) -> bool:
+    """Remove a device from a return track by index (0-based device index)."""
+    try:
+        ri = int(return_index)
+        di = int(device_index)
+        if live is not None:
+            returns = getattr(live, 'return_tracks', []) or []
+            if 0 <= ri < len(returns):
+                rt = returns[ri]
+                if hasattr(rt, 'delete_device'):
+                    song = live
+                    try:
+                        if hasattr(song, 'begin_undo_step'):
+                            song.begin_undo_step()
+                        rt.delete_device(di)
+                        _emit({"event": "return_device_deleted", "return": ri, "device_index": di})
+                        return True
+                    finally:
+                        try:
+                            if hasattr(song, 'end_undo_step'):
+                                song.end_undo_step()
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+    # Stub
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            devs = r.setdefault("devices", [])
+            if 0 <= int(device_index) < len(devs):
+                devs.pop(int(device_index))
+                for i, d in enumerate(devs):
+                    d["index"] = i
+                _emit({"event": "return_device_deleted", "return": int(return_index), "device_index": int(device_index)})
+                return True
+            return False
+    return False
+
+
+def reorder_return_device(live, return_index: int, old_index: int, new_index: int) -> bool:
+    """Reorder a device within a return track from old_index to new_index (0-based)."""
+    try:
+        ri = int(return_index)
+        oi = int(old_index)
+        ni = int(new_index)
+        if live is not None:
+            returns = getattr(live, 'return_tracks', []) or []
+            if 0 <= ri < len(returns):
+                rt = returns[ri]
+                song = live
+                try:
+                    if hasattr(song, 'begin_undo_step'):
+                        song.begin_undo_step()
+                    ok = False
+                    try:
+                        if hasattr(rt, 'reorder_device'):
+                            try:
+                                rt.reorder_device(oi, ni)
+                                ok = True
+                            except Exception:
+                                devs = list(getattr(rt, 'devices', []) or [])
+                                if 0 <= oi < len(devs):
+                                    rt.reorder_device(devs[oi], ni)
+                                    ok = True
+                    except Exception:
+                        ok = False
+                    if not ok and hasattr(rt, 'reorder_devices'):
+                        try:
+                            rt.reorder_devices(oi, ni)
+                            ok = True
+                        except Exception:
+                            pass
+                    if ok:
+                        _emit({"event": "return_device_reordered", "return": ri, "from": oi, "to": ni})
+                        return True
+                finally:
+                    try:
+                        if hasattr(song, 'end_undo_step'):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    # Stub
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            devs = r.setdefault("devices", [])
+            if not (0 <= int(old_index) < len(devs) and 0 <= int(new_index) <= len(devs)):
+                return False
+            item = devs.pop(int(old_index))
+            devs.insert(int(new_index), item)
+            for i, d in enumerate(devs):
+                d["index"] = i
+            _emit({"event": "return_device_reordered", "return": int(return_index), "from": int(old_index), "to": int(new_index)})
             return True
     return False

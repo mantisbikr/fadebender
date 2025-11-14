@@ -69,3 +69,67 @@ def project_outline() -> Dict[str, Any]:
         data = resp.get("data") if isinstance(resp, dict) else resp
         return {"ok": True, "data": data}
 
+
+@router.get("/scenes")
+def list_scenes() -> Dict[str, Any]:
+    resp = request_op("get_scenes", timeout=1.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+from pydantic import BaseModel
+
+
+class CaptureInsertSceneBody(BaseModel):
+    pass
+
+
+@router.post("/scene/capture_insert")
+def capture_insert_scene(_: CaptureInsertSceneBody) -> Dict[str, Any]:
+    resp = request_op("capture_and_insert_scene", timeout=2.0)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class SetViewBody(BaseModel):
+    mode: str  # 'session' | 'arrangement'
+
+
+@router.post("/view")
+def set_view(body: SetViewBody) -> Dict[str, Any]:
+    resp = request_op("set_view", timeout=1.0, mode=str(body.mode))
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class FireSceneBody(BaseModel):
+    scene_index: int
+    select: bool = True
+
+
+@router.post("/scene/fire")
+def fire_scene(body: FireSceneBody) -> Dict[str, Any]:
+    resp = request_op("fire_scene", timeout=1.0, scene_index=int(body.scene_index), select=bool(body.select))
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class StopSceneBody(BaseModel):
+    scene_index: int
+
+
+@router.post("/scene/stop")
+def stop_scene(body: StopSceneBody) -> Dict[str, Any]:
+    resp = request_op("stop_scene", timeout=1.0, scene_index=int(body.scene_index))
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}

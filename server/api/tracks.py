@@ -34,6 +34,112 @@ def track_sends(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+# --------- Naming & Device Order Ops (UDP thin wrappers) ---------
+
+class TrackNameBody(BaseModel):
+    track_index: int
+    name: str
+
+
+@router.post("/track/name")
+def set_track_name(body: TrackNameBody) -> Dict[str, Any]:
+    resp = request_op("set_track_name", timeout=1.0, track_index=int(body.track_index), name=str(body.name))
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class SceneNameBody(BaseModel):
+    scene_index: int
+    name: str
+
+
+@router.post("/scene/name")
+def set_scene_name(body: SceneNameBody) -> Dict[str, Any]:
+    resp = request_op("set_scene_name", timeout=1.0, scene_index=int(body.scene_index), name=str(body.name))
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class ClipNameBody(BaseModel):
+    track_index: int
+    scene_index: int
+    name: str
+
+
+@router.post("/clip/name")
+def set_clip_name(body: ClipNameBody) -> Dict[str, Any]:
+    resp = request_op(
+        "set_clip_name",
+        timeout=1.0,
+        track_index=int(body.track_index),
+        scene_index=int(body.scene_index),
+        name=str(body.name),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class TrackDeviceDeleteBody(BaseModel):
+    track_index: int
+    device_index: int
+
+
+@router.post("/track/device/delete")
+def delete_track_device(body: TrackDeviceDeleteBody) -> Dict[str, Any]:
+    resp = request_op(
+        "delete_track_device",
+        timeout=1.0,
+        track_index=int(body.track_index),
+        device_index=int(body.device_index),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class TrackDeviceReorderBody(BaseModel):
+    track_index: int
+    old_index: int
+    new_index: int
+
+
+@router.post("/track/device/reorder")
+def reorder_track_device(body: TrackDeviceReorderBody) -> Dict[str, Any]:
+    resp = request_op(
+        "reorder_track_device",
+        timeout=1.2,
+        track_index=int(body.track_index),
+        old_index=int(body.old_index),
+        new_index=int(body.new_index),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class CreateClipBody(BaseModel):
+    track_index: int
+    scene_index: int
+    length_beats: float
+
+
+@router.post("/clip/create")
+def create_clip(body: CreateClipBody) -> Dict[str, Any]:
+    resp = request_op(
+        "create_clip",
+        timeout=1.5,
+        track_index=int(body.track_index),
+        scene_index=int(body.scene_index),
+        length_beats=float(body.length_beats),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 class TrackRoutingSetBody(BaseModel):
     track_index: int
     monitor_state: Optional[str] = None  # "in" | "auto" | "off"

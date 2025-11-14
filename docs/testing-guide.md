@@ -208,6 +208,69 @@ python3 scripts/test_webui_validation.py
 
 ---
 
+### 6. Scenes, Clips, and View Ops
+
+Manual backend tests (requires Ableton Live with Remote Script running and UDP enabled via `FADEBENDER_UDP_ENABLE=1`).
+
+List scenes:
+```bash
+curl -s http://127.0.0.1:8722/scenes | jq .
+```
+
+Fire and stop a scene:
+```bash
+curl -s -X POST http://127.0.0.1:8722/scene/fire \
+  -H 'Content-Type: application/json' \
+  -d '{"scene_index":2,"select":true}' | jq .
+
+curl -s -X POST http://127.0.0.1:8722/scene/stop \
+  -H 'Content-Type: application/json' \
+  -d '{"scene_index":2}' | jq .
+```
+
+Capture and insert a scene from currently playing clips:
+```bash
+curl -s -X POST http://127.0.0.1:8722/scene/capture_insert \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq .
+```
+
+Create an empty MIDI clip (Session view):
+```bash
+curl -s -X POST http://127.0.0.1:8722/clip/create \
+  -H 'Content-Type: application/json' \
+  -d '{"track_index":2,"scene_index":4,"length_beats":4}' | jq .
+```
+
+Switch views:
+```bash
+curl -s -X POST http://127.0.0.1:8722/view \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"session"}' | jq .
+```
+
+Rename items and reorder/delete devices:
+```bash
+# Track, scene, clip names
+curl -s -X POST http://127.0.0.1:8722/track/name -H 'Content-Type: application/json' -d '{"track_index":3,"name":"Guitars"}' | jq .
+curl -s -X POST http://127.0.0.1:8722/scene/name -H 'Content-Type: application/json' -d '{"scene_index":2,"name":"Chorus"}' | jq .
+curl -s -X POST http://127.0.0.1:8722/clip/name  -H 'Content-Type: application/json' -d '{"track_index":2,"scene_index":4,"name":"Hook"}' | jq .
+
+# Track devices
+curl -s -X POST http://127.0.0.1:8722/track/device/delete  -H 'Content-Type: application/json' -d '{"track_index":1,"device_index":0}' | jq .
+curl -s -X POST http://127.0.0.1:8722/track/device/reorder -H 'Content-Type: application/json' -d '{"track_index":1,"old_index":2,"new_index":0}' | jq .
+
+# Return devices
+curl -s -X POST http://127.0.0.1:8722/return/device/delete  -H 'Content-Type: application/json' -d '{"return_index":0,"device_index":1}' | jq .
+curl -s -X POST http://127.0.0.1:8722/return/device/reorder -H 'Content-Type: application/json' -d '{"return_index":1,"old_index":1,"new_index":0}' | jq .
+```
+
+Expected results:
+- 200 OK with `{ ok: true, ... }` bodies for successful operations
+- Informative errors for guard conditions (e.g., `track_not_midi`, `slot_already_has_clip`, `scene_out_of_range`)
+
+---
+
 ## Learning Endpoints (Gated)
 
 Fast device learning endpoints are gated to avoid accidental runs during development. Enable them only when you're ready to test against a running Live set.

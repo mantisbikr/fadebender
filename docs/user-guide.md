@@ -78,10 +78,36 @@ Transport
  - UI polish:
    - Playhead and loop fields display up to 2 decimal places
    - Compact widths for tempo, time signature, playhead, loop start/length
-   - After sending an intent, keyboard focus returns to the chat input automatically
+- After sending an intent, keyboard focus returns to the chat input automatically
 
 Undo/Redo
 - The header provides Undo/Redo for recent mixer/device adjustments
+
+Scenes, Clips, and Views
+- List scenes (names):
+  - HTTP: GET `/scenes`
+- Fire/stop a scene:
+  - HTTP: POST `/scene/fire` { "scene_index": N, "select": true }
+  - HTTP: POST `/scene/stop` { "scene_index": N }
+- Capture and insert a new scene from currently playing clips:
+  - HTTP: POST `/scene/capture_insert` {}
+- Create an empty MIDI clip in Session view:
+  - HTTP: POST `/clip/create` { "track_index": T, "scene_index": S, "length_beats": 4 }
+  - Notes: Only works on MIDI tracks; slot must be empty.
+- Switch between Session and Arrangement views:
+  - HTTP: POST `/view` { "mode": "session" | "arrangement" }
+
+Naming and Device Order
+- Rename items:
+  - Track: POST `/track/name` { "track_index": T, "name": "Guitars" }
+  - Scene: POST `/scene/name` { "scene_index": S, "name": "Chorus" }
+  - Clip: POST `/clip/name` { "track_index": T, "scene_index": S, "name": "Hook" }
+- Track devices:
+  - Delete: POST `/track/device/delete` { "track_index": T, "device_index": D }
+  - Reorder: POST `/track/device/reorder` { "track_index": T, "old_index": D1, "new_index": D2 }
+- Return devices:
+  - Delete: POST `/return/device/delete` { "return_index": R, "device_index": D }
+  - Reorder: POST `/return/device/reorder` { "return_index": R, "old_index": D1, "new_index": D2 }
 
 Troubleshooting
 - Param not found / ambiguous: UI shows suggestions and (for devices) a parameter list in the drawer
@@ -89,10 +115,13 @@ Troubleshooting
   - The system fetches information on‑demand; re‑ask the query after performing any mixer action if needed
 - Autocorrect didn’t trigger:
   - Add typos to `configs/app_config.json -> nlp.typo_corrections`; the client merges these at load
- - Audio/MIDI type not showing in outline or badges:
+- Audio/MIDI type not showing in outline or badges:
    - Track type comes from the Ableton Remote outline. After updating the Remote, restart Live or toggle the Control Surface in Live’s Preferences to reload the script.
    - Verify with: `curl -s http://127.0.0.1:8722/project/outline | jq '.data.tracks'`
    - Expect each track: `{ index, name, type: "audio"|"midi" }`
+ - Scene/view actions not working:
+   - Ensure the Remote Script UDP bridge is enabled in Live: set `FADEBENDER_UDP_ENABLE=1` before launching Live.
+   - Clip creation works only on MIDI tracks and empty slots.
 
 Configuration Tips
 - `configs/app_config.json`:
