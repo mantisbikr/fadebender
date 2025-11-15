@@ -178,7 +178,7 @@ def main():
         ("set track 1 volum to -20", "set_parameter", "Typo: volum → volume"),
         ("set track 1 volumz to -15", "set_parameter", "Typo: volumz → volume"),
         ("set return a reverbb decay to 3", "set_parameter", "Typo: reverbb → reverb"),
-        ("incrase track volume by 5db", "relative_change", "Typo: incrase → increase"),
+        ("incrase track 1 volume by 5db", "relative_change", "Typo: incrase → increase"),
     ])
 
     # ========================================================================

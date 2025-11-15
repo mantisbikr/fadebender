@@ -116,8 +116,11 @@ def _build_mixer_intent(
     meta: Dict
 ) -> Dict[str, Any]:
     """Build mixer parameter intent (volume, pan, mute, send, etc.)."""
+    # Determine intent type based on operation
+    intent_type = "relative_change" if action.operation == "relative" else "set_parameter"
+
     return {
-        "intent": "set_parameter",
+        "intent": intent_type,
         "targets": [{
             "track": track.reference,
             "plugin": None,  # NULL = mixer parameter
@@ -139,6 +142,9 @@ def _build_device_intent(
     meta: Dict
 ) -> Dict[str, Any]:
     """Build device parameter intent (reverb decay, delay feedback, etc.)."""
+    # Determine intent type based on operation
+    intent_type = "relative_change" if action.operation == "relative" else "set_parameter"
+
     target = {
         "track": track.reference,
         "plugin": device_param.device,
@@ -150,7 +156,7 @@ def _build_device_intent(
         target["device_ordinal"] = device_param.device_ordinal
 
     return {
-        "intent": "set_parameter",
+        "intent": intent_type,
         "targets": [target],
         "operation": {
             "type": action.operation,

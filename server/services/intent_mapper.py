@@ -394,7 +394,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 current_display_value = float(current_display)
                 new_display = current_display_value + delta_value
                 value = new_display
-                unit = None  # let executor use fit
+                unit = "dB"  # preserve dB unit so executor knows it's a display value, not normalized
                 op_type = "absolute"
             elif parameter.startswith("send ") and unit_l in ("%", "percent") and current_normalized is not None:
                 # Percent relative for sends: operate in DISPLAY (dB) space like volume.
@@ -789,7 +789,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     # Check this AFTER device parameters to avoid routing device params with mixer-like names
     if parameter in ("volume", "pan", "mute", "solo"):
         amount = _to_float(value)
-        print(f"[DEBUG] Mixer parameter {parameter}: amount={amount}, value={value}, unit={unit}")
+        print(f"[DEBUG] Mixer parameter {parameter}: amount={amount}, value={value}, unit={unit}, op_type={op_type}")
         if amount is None:
             print(f"[DEBUG] Failed to convert value to float: {value}")
             errors.append("invalid_value_amount")
@@ -802,7 +802,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             "unit": unit,
             **target_fields
         }
-        print(f"[DEBUG] Returning mixer intent: {intent}")
+        print(f"[DEBUG] About to return mixer intent with value={intent['value']}, unit={intent.get('unit')}")
         return intent, []
 
     # Master cue control (mixer): only valid on master

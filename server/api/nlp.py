@@ -49,9 +49,23 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         )
 
     raw_intent = interpret_daw_command(text, model_preference=body.model, strict=body.strict)
+
+    # Post-process: Fix intent type for relative operations
+    # Both regex and LLM parsers may return "set_parameter" for relative ops
+    # But the correct intent should be "relative_change" when operation.type is "relative"
+    if (raw_intent and
+        raw_intent.get("intent") == "set_parameter" and
+        raw_intent.get("operation", {}).get("type") == "relative"):
+        raw_intent["intent"] = "relative_change"
+
     canonical, errors = map_llm_to_canonical(raw_intent)
 
     if canonical is None:
+        # Navigation intents (open_capabilities, list_capabilities) are valid UI intents
+        # They don't go to the remote script, but should return ok=True for the UI to handle
+        if raw_intent and raw_intent.get("intent") in ("open_capabilities", "list_capabilities"):
+            return {"ok": True, "intent": raw_intent, "raw_intent": raw_intent}
+
         # Preserve original LLM output for non-control intents
         if any(str(e).startswith("non_control_intent") for e in (errors or [])):
             return {"ok": False, "errors": errors, "raw_intent": raw_intent}
