@@ -1,6 +1,224 @@
-# Layered NLP Architecture Design
+# Layered NLP Architecture - Implementation Status
 
-## Overview
+## ⚠️ CRITICAL STATUS: INCOMPLETE & NOT IN USE ⚠️
+
+**Date**: 2025-01-14
+**Current State**: New layered parser exists but is **NOT INTEGRATED**. All tests pass using the **OLD monolithic parser**.
+
+### Why Tests Pass But New Parser Doesn't Work
+
+**The system currently uses**:
+- `nlp-service/llm_daw.py` → `interpret_daw_command()`
+- `nlp-service/execution/dispatcher.py` → Routes to strategies
+- `nlp-service/execution/regex_executor.py` → **OLD monolithic parser** (374 lines)
+- `nlp-service/parsers/mixer_parser.py`, `device_parser.py`, `transport_parser.py` → **OLD parsers**
+
+**The new layered parser exists here (UNUSED)**:
+- `server/services/nlp/action_parser.py` - Layer 1 ✅ MOSTLY COMPLETE
+- `server/services/nlp/track_parser.py` - Layer 2 ✅ COMPLETE
+- `server/services/nlp/device_param_parser.py` - Layer 3 ✅ COMPLETE
+- `server/services/nlp/intent_builder.py` - Layer 4 ❌ **INCOMPLETE**
+
+---
+
+## What's Implemented vs What's Missing
+
+### ✅ Layer 1: Action Parser - MOSTLY COMPLETE
+**File**: `server/services/nlp/action_parser.py`
+
+**Implemented:**
+- ✅ `parse_absolute_change()` - "set X to Y"
+- ✅ `parse_relative_change()` - "increase/decrease X by Y"
+- ✅ `parse_toggle_operation()` - "mute/solo"
+- ✅ `parse_transport_command()` - "play/stop/loop/tempo"
+- ✅ `parse_get_query()` - "what is/how many/list" ← **JUST ADDED TODAY**
+- ✅ `parse_navigation_command()` - "open/close/pin/unpin" ← **JUST ADDED TODAY**
+
+**Needs**:
+- ⏳ Update `parse_action()` call order to include GET queries first
+
+### ✅ Layer 2: Track Parser - COMPLETE
+**File**: `server/services/nlp/track_parser.py`
+
+**Implemented:**
+- ✅ Track N (1-99)
+- ✅ Return A/B/C/D
+- ✅ Master
+- ✅ Confidence scoring
+- ✅ Typo tolerance
+
+### ✅ Layer 3: Device/Param Parser - COMPLETE
+**File**: `server/services/nlp/device_param_parser.py`
+
+**Implemented:**
+- ✅ Mixer params (volume/pan/mute/solo/send A/B/C)
+- ✅ Device names from parse_index
+- ✅ Parameter names from parse_index
+- ✅ Device ordinals (device 0, device 1)
+- ✅ Typo correction
+
+### ❌ Layer 4: Intent Builder - INCOMPLETE
+**File**: `server/services/nlp/intent_builder.py`
+
+**What works:**
+- ✅ `_build_transport_intent()` - Transport commands
+- ✅ `_build_mixer_intent()` - Mixer SET/relative commands
+- ✅ `_build_device_intent()` - Device SET/relative commands
+- ⚠️ `_build_navigation_intent()` - EXISTS but broken (returns string instead of structured object)
+
+**What's MISSING:**
+- ❌ GET intent route (if action.intent_type == "get_parameter")
+- ❌ `_build_get_mixer_intent()`  - Doesn't exist
+- ❌ `_build_get_device_intent()` - Doesn't exist
+- ❌ Structured navigation targets (current version just concatenates strings)
+
+---
+
+## Comparison: OLD vs NEW Parser
+
+### What OLD Parser Has That NEW Parser Lacks
+
+#### 1. GET Query Support (regex_executor.py lines 119-281)
+```python
+# OLD parser handles these:
+"what is track 1 volume"           → get_parameter intent ✅
+"what is return A reverb decay"    → get_parameter intent ✅
+"how many audio tracks"            → count query ✅
+"list audio tracks"                → list query ✅
+"who sends to return A"            → topology query ✅
+"what are return A devices"        → device list query ✅
+"what is track 1 state"            → state bundle query ✅
+
+# NEW parser:
+Layer 1 recognizes "what is" → intent_type="get_parameter" ✅
+Layer 4 has NO ROUTE for get_parameter ❌
+```
+
+#### 2. Structured Navigation Targets (regex_executor.py lines 295-373)
+```python
+# OLD parser returns:
+"open track 1 send A" → {
+    "target": {
+        "type": "mixer",
+        "entity": "track",
+        "track_index": 1,
+        "group_hint": "Sends",
+        "send_ref": "A"
+    }
+}
+
+"open return A device 0" → {
+    "target": {
+        "type": "device",
+        "scope": "return",
+        "return_ref": "A",
+        "device_index": 0
+    }
+}
+
+# NEW parser returns:
+"open track 1 send A" → {
+    "target": "Track 1 send A"  ← Just a string! ❌
+}
+```
+
+### What NEW Parser Does Better
+
+1. **Modular** - Each layer has single responsibility
+2. **Testable** - Can test layers independently
+3. **No hardcoding** - Uses parse_index for device/param vocabulary
+4. **Clear flow** - Action → Track → Device/Param → Intent
+5. **Maintainable** - Adding new patterns doesn't require touching multiple files
+
+---
+
+## How to Complete Integration
+
+### Phase 1: Complete Layer 4 (GET support) - 30 minutes
+1. ✅ Add `parse_get_query()` to Layer 1 - **DONE**
+2. ⏳ Add GET route to `build_raw_intent()` in Layer 4:
+   ```python
+   # After line 60 in intent_builder.py
+   if action.intent_type == "get_parameter":
+       if not track:
+           return None
+       if device_param and device_param.device == "mixer":
+           return _build_get_mixer_intent(action, track, device_param, meta)
+       elif device_param and device_param.device:
+           return _build_get_device_intent(action, track, device_param, meta)
+       else:
+           return None
+   ```
+3. ⏳ Add `_build_get_mixer_intent()` function
+4. ⏳ Add `_build_get_device_intent()` function
+5. ⏳ Update `parse_action()` to call `parse_get_query()` first
+
+### Phase 2: Fix Navigation Targets - 45 minutes
+1. ⏳ Rewrite `_build_navigation_intent()` to return structured targets
+2. ⏳ Handle all navigation patterns from OLD parser:
+   - "open track N" / "open return X" / "open master"
+   - "open track N send X" (with group_hint)
+   - "open return X device N" (by index)
+   - "open return X [device name]" (by name)
+   - "open/close/pin/unpin controls" (drawer actions)
+
+### Phase 3: Integration & Testing - 1 hour
+1. ⏳ Create new execution strategy: `nlp-service/execution/strategies/layered.py`
+2. ⏳ Add dispatcher support: `NLP_MODE=layered`
+3. ⏳ Test with all test suites:
+   - `test_comprehensive_intents.py` (34 tests - SET commands)
+   - `test_nlp_get_comprehensive.py` (13 tests - GET queries)
+   - `test_webui_validation.py` (9 tests - UI integration)
+   - `test_pan.py` (26 tests - Pan operations)
+4. ⏳ Fix any failures
+
+### Phase 4: Replace Old Parser - 30 minutes
+1. ⏳ Change default mode in dispatcher to layered
+2. ⏳ Archive OLD parser files
+3. ⏳ Full regression test
+4. ⏳ Update documentation
+
+**Total Time**: ~2.5 hours
+
+---
+
+## How to Verify I'm Not Lying
+
+Run these commands to verify current state:
+
+### 1. Check Layer 1 has GET support (ADDED TODAY)
+```bash
+grep -n "parse_get_query" server/services/nlp/action_parser.py
+```
+**Expected**: Function definition around line 309
+
+### 2. Check Layer 4 does NOT have GET route (MISSING)
+```bash
+grep -n "get_parameter" server/services/nlp/intent_builder.py | head -5
+```
+**Expected**: NO routing code, only in future comments/docstrings
+
+### 3. Check NEW parser is NOT imported in production code
+```bash
+grep -r "from server.services.nlp" --include="*.py" nlp-service/
+```
+**Expected**: NO results (only in test files)
+
+### 4. Check tests currently use OLD parser
+```bash
+grep -n "interpret_daw_command" nlp-service/llm_daw.py
+```
+**Expected**: Calls `dispatch()` which routes to regex_executor.py
+
+### 5. Check OLD parser still handles GET queries
+```bash
+grep -n "what\s+is\s+track" nlp-service/execution/regex_executor.py
+```
+**Expected**: Pattern matching code exists (that's why tests pass!)
+
+---
+
+## Original Architecture Design
 
 This document describes the 5-layer modular architecture for Fadebender's NLP system. Each layer is independently testable, has a single responsibility, and can leverage LLM assistance minimally where needed.
 

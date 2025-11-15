@@ -17,12 +17,20 @@ Chat Basics
 - Help: conceptual questions route to help; operational questions route to control or query flows
 
 Capabilities Drawer
-- Auto‑opens with context when you run a command or ask a supported “get” query
+- Auto‑opens with context when you run a command or ask a supported "get" query
 - Device drawer: shows grouped device parameters with inline editors
 - Mixer drawer: shows mixer parameters for tracks/returns/master (volume, pan, mute, solo, sends)
 - Pin to keep it visible; unpin to auto‑close when switching context
  - Type badge: shows AUDIO / MIDI on track contexts and RETURN on return contexts
- - Sidebar clicks no longer auto‑open the drawer; use list chips (see below) or explicit commands like `open track 1 controls`
+ - Sidebar clicks no longer auto‑open the drawer; use list chips (see below) or explicit commands
+
+Opening Controls (Navigation)
+- Multiple ways to open the capabilities drawer:
+  - `open track 1` / `view track 1` → opens mixer controls for Track 1
+  - `open return A` / `view return A` → opens mixer controls for Return A
+  - `open return A reverb` / `view return A reverb` → opens device controls for reverb on Return A
+  - `open track 2 delay` / `view track 2 delay` → opens device controls for delay on Track 2
+- Both "open" and "view" work identically for navigation commands
 
 Core Mixer Commands (examples)
 - Absolute:
@@ -43,9 +51,11 @@ Device Control (returns and tracks)
   - `set return B reverb 2 decay to 1.5 s`
 
 Get Parameter: Values and Topology
-- Value reads:
+- Value reads (multiple ways to ask):
   - `what is track 1 volume?`
-  - `what is return A pan?`
+  - `show me track 1 volume` / `show track 1 pan`
+  - `tell me return A pan` / `tell track 1 volume`
+  - `get track 2 volume` / `check track 1 mute`
   - `what's the current tempo?` / `is the metronome on?`
 - State bundles (volume, pan, mute, solo + routing summary):
   - `what is track 1 state`
@@ -135,16 +145,27 @@ Known Limitations
  - Additive percentage adjustments are not yet working (e.g., relative +% on some parameters) and need follow‑up
 
 Appendix: Handy Examples
-- `set track 1 send A to -12 dB`
-- `increase return B volume by 2 dB`
-- `set return A reverb wet to 15%`
-- `what are track 2 devices`
-- `who sends to return B`
-- `what is return A state`
+- SET commands:
+  - `set track 1 send A to -12 dB`
+  - `increase return B volume by 2 dB`
+  - `set return A reverb wet to 15%`
+- GET queries (multiple phrasings):
+  - `what are track 2 devices` / `show me track 2 devices`
+  - `who sends to return B` / `check return B senders`
+  - `what is return A state` / `tell me return A state`
+  - `what is track 1 volume` / `get track 1 volume`
+- NAVIGATION:
+  - `open track 1` / `view track 1`
+  - `open return A reverb` / `view return A reverb`
 
 Change Log (high‑level)
 - 2025‑11:
   - Transport/UI: 2‑decimal playhead/loop, compact fields, auto‑refocus chat input
   - Capabilities: type badges (AUDIO/MIDI/RETURN); Sidebar no longer auto‑opens drawer
-  - NLP/Queries: “how many/list audio/midi/returns” with clickable chips to open controls
+  - NLP/Queries: "how many/list audio/midi/returns" with clickable chips to open controls
+  - NLP/Action Words: Enhanced vocabulary with fuzzy matching
+    - GET queries: added "show", "tell", "get", "check" (in addition to "what is", "how many", "list")
+    - NAVIGATION: added "view" (in addition to "open")
+    - All action words support typo correction via fuzzy matching
+    - Fixed relative_change intent type for "increase"/"decrease" commands
   - Outline: more robust track type detection in the Ableton Remote (may require Live restart)

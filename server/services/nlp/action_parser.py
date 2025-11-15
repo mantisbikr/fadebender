@@ -11,6 +11,45 @@ from dataclasses import dataclass
 from typing import Optional
 import re
 
+# Fuzzy matching for action words using Damerau-Levenshtein distance
+# (same approach as device_context_parser.py - no external dependencies)
+FUZZY_AVAILABLE = True
+
+
+def damerau_levenshtein(a: str, b: str) -> int:
+    """Calculate Damerau-Levenshtein edit distance between two strings.
+
+    Handles:
+    - Insertions: "wat" → "what" (missing 'h')
+    - Deletions: "seet" → "set" (extra 'e')
+    - Substitutions: "incrase" → "increase" (wrong character)
+    - Transpositions: "opne" → "open" (swapped characters)
+    """
+    n, m = len(a), len(b)
+    if n == 0:
+        return m
+    if m == 0:
+        return n
+
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        dp[i][0] = i
+    for j in range(m + 1):
+        dp[0][j] = j
+
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            dp[i][j] = min(
+                dp[i - 1][j] + 1,        # deletion
+                dp[i][j - 1] + 1,        # insertion
+                dp[i - 1][j - 1] + cost  # substitution
+            )
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                dp[i][j] = min(dp[i][j], dp[i - 2][j - 2] + 1)  # transposition
+
+    return dp[n][m]
+
 
 @dataclass
 class ActionMatch:
@@ -22,6 +61,112 @@ class ActionMatch:
     confidence: float         # 0.0-1.0
     method: str              # "regex", "llm_fallback"
     raw_text: str            # Original matched text for debugging
+
+
+# Canonical action word vocabulary (known with absolute confidence)
+ACTION_WORDS = {
+    # SET operations
+    "set", "change", "adjust", "make",
+    # RELATIVE operations
+    "increase", "decrease", "raise", "lower",
+    # TOGGLE operations
+    "mute", "unmute", "solo", "unsolo",
+    # GET queries
+    "what", "how", "list", "who", "which",
+    "show", "tell", "get", "check",  # Enhanced vocabulary
+    # TRANSPORT
+    "play", "stop", "loop",
+    # NAVIGATION
+    "open", "close", "pin", "unpin",
+    "view",  # Enhanced vocabulary
+}
+
+
+def fuzzy_match_action_word(word: str) -> Optional[str]:
+    """Fuzzy match a word against canonical action vocabulary using edit distance.
+
+    Args:
+        word: Word to match (e.g., "wat", "incrase", "seet")
+
+    Returns:
+        Canonical action word if match found, None otherwise
+
+    Examples:
+        >>> fuzzy_match_action_word("wat")
+        "what"
+        >>> fuzzy_match_action_word("incrase")
+        "increase"
+        >>> fuzzy_match_action_word("seet")
+        "set"
+
+    Edit distance thresholds (same as device_context_parser):
+        - Words <= 4 chars: allow 1 edit
+        - Words 5-7 chars: allow 2 edits
+        - Words 8-10 chars: allow 3 edits
+        - Words >= 11 chars: allow 4 edits
+    """
+    if not FUZZY_AVAILABLE:
+        return None
+
+    if not word or len(word) < 2:
+        return None
+
+    # Already canonical
+    if word in ACTION_WORDS:
+        return word
+
+    # Find best match using edit distance
+    best_match = None
+    best_distance = float('inf')
+
+    for candidate in ACTION_WORDS:
+        dist = damerau_levenshtein(word, candidate)
+
+        # Check if within acceptable threshold (same logic as device_context_parser)
+        if len(candidate) <= 4 and dist > 1:
+            continue
+        if 5 <= len(candidate) <= 7 and dist > 2:
+            continue
+        if 8 <= len(candidate) <= 10 and dist > 3:
+            continue
+        if len(candidate) >= 11 and dist > 4:
+            continue
+
+        # Update best match
+        if dist < best_distance:
+            best_distance = dist
+            best_match = candidate
+
+    return best_match
+
+
+def normalize_action_words(text: str) -> str:
+    """Normalize action words in text using fuzzy matching.
+
+    Scans first 3 words (where action words typically appear) and
+    corrects typos against canonical vocabulary.
+
+    Args:
+        text: Input text (e.g., "wat is track 1 volume")
+
+    Returns:
+        Text with action words corrected (e.g., "what is track 1 volume")
+    """
+    if not FUZZY_AVAILABLE:
+        return text
+
+    words = text.split()
+    if not words:
+        return text
+
+    # Check first 3 words for action word typos
+    for i in range(min(3, len(words))):
+        word_lower = words[i].lower()
+        canonical = fuzzy_match_action_word(word_lower)
+        if canonical and canonical != word_lower:
+            words[i] = canonical
+
+    return " ".join(words)
 
 
 # ============================================================================
@@ -120,7 +265,7 @@ def parse_relative_change(text: str) -> Optional[ActionMatch]:
             value = abs(value)
 
         return ActionMatch(
-            intent_type="set_parameter",
+            intent_type="relative_change",
             operation="relative",
             value=value,
             unit=unit or "display",
@@ -303,21 +448,141 @@ def parse_transport_command(text: str) -> Optional[ActionMatch]:
 
 
 # ============================================================================
-# NAVIGATION PATTERNS (open/list)
+# GET QUERY PATTERNS (what is/how many/list)
 # ============================================================================
 
-def parse_navigation_command(text: str) -> Optional[ActionMatch]:
-    """Parse navigation commands: open, list
+def parse_get_query(text: str) -> Optional[ActionMatch]:
+    """Parse GET query commands: what is, how many, list, show, tell, get, check
 
     Examples:
-        "open track 1"
-        "list tracks"
-        "open return A reverb"
+        "what is track 1 volume"
+        "what is return A reverb decay"
+        "how many audio tracks"
+        "list audio tracks"
+        "show me track 1 volume"
+        "tell me return A pan"
+        "get track 1 volume"
+        "check track 2 mute"
     """
     s = text.lower().strip()
 
-    # Open command
-    if re.search(r"\bopen\b", s):
+    # GET queries: "what is...", "what's..."
+    if re.search(r"\b(what\s+is|what's|whats)\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="what is"
+        )
+
+    # Count queries: "how many..."
+    if re.search(r"\bhow\s+many\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="how many"
+        )
+
+    # List queries: "list..."
+    if re.search(r"\blist\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="list"
+        )
+
+    # Who/which queries: "who sends to...", "which tracks..."
+    if re.search(r"\b(who|which)\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="who/which"
+        )
+
+    # Show queries: "show me...", "show..."
+    if re.search(r"\bshow(\s+me)?\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="show"
+        )
+
+    # Tell queries: "tell me..."
+    if re.search(r"\btell(\s+me)?\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="tell"
+        )
+
+    # Get queries: "get..." (direct retrieval)
+    if re.search(r"\bget\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="get"
+        )
+
+    # Check queries: "check..."
+    if re.search(r"\bcheck\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="check"
+        )
+
+    return None
+
+
+# ============================================================================
+# NAVIGATION PATTERNS (open)
+# ============================================================================
+
+def parse_navigation_command(text: str) -> Optional[ActionMatch]:
+    """Parse navigation commands: open, view
+
+    Examples:
+        "open track 1"
+        "open return A reverb"
+        "open controls"
+        "view track 1"
+        "view return A"
+    """
+    s = text.lower().strip()
+
+    # Open/view command
+    if re.search(r"\b(open|close|pin|unpin|view)\b", s):
         return ActionMatch(
             intent_type="open_capabilities",
             operation=None,
@@ -326,18 +591,6 @@ def parse_navigation_command(text: str) -> Optional[ActionMatch]:
             confidence=0.95,
             method="regex",
             raw_text="open"
-        )
-
-    # List command
-    if re.search(r"\blist\b", s):
-        return ActionMatch(
-            intent_type="list_capabilities",
-            operation=None,
-            value=None,
-            unit=None,
-            confidence=0.95,
-            method="regex",
-            raw_text="list"
         )
 
     return None
@@ -351,11 +604,12 @@ def parse_action(text: str) -> Optional[ActionMatch]:
     """Parse action from text using regex patterns.
 
     Tries patterns in order of specificity:
-    1. Transport commands (most specific keywords)
-    2. Navigation commands (open/list)
-    3. Relative changes (increase/decrease by)
-    4. Absolute changes (set/change to)
-    5. Toggle operations (mute/solo)
+    1. GET queries (what is/how many/list) - checked first to avoid false SET matches
+    2. Transport commands (most specific keywords)
+    3. Navigation commands (open/list)
+    4. Relative changes (increase/decrease by)
+    5. Absolute changes (set/change to)
+    6. Toggle operations (mute/solo)
 
     Args:
         text: Input text (lowercase, typo-corrected)
@@ -363,28 +617,38 @@ def parse_action(text: str) -> Optional[ActionMatch]:
     Returns:
         ActionMatch if found, None otherwise
     """
-    # Try transport first (most specific keywords)
-    result = parse_transport_command(text)
+    # FIRST: Normalize action words using fuzzy matching
+    # This catches "wat" → "what", "incrase" → "increase", etc.
+    # Independent of LLM/nlp_config - uses known vocabulary
+    text_normalized = normalize_action_words(text)
+
+    # Try GET queries first (avoid "what is" being caught by other patterns)
+    result = parse_get_query(text_normalized)
+    if result:
+        return result
+
+    # Try transport (most specific keywords)
+    result = parse_transport_command(text_normalized)
     if result:
         return result
 
     # Try navigation
-    result = parse_navigation_command(text)
+    result = parse_navigation_command(text_normalized)
     if result:
         return result
 
     # Try relative changes (more specific than absolute)
-    result = parse_relative_change(text)
+    result = parse_relative_change(text_normalized)
     if result:
         return result
 
     # Try absolute changes
-    result = parse_absolute_change(text)
+    result = parse_absolute_change(text_normalized)
     if result:
         return result
 
     # Try toggles
-    result = parse_toggle_operation(text)
+    result = parse_toggle_operation(text_normalized)
     if result:
         return result
 
