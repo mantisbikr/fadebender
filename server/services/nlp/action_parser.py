@@ -111,6 +111,18 @@ def fuzzy_match_action_word(word: str) -> Optional[str]:
     if not word or len(word) < 2:
         return None
 
+    # Check protected words: parameters/entities that should NOT be fuzzy matched
+    # to avoid ambiguous interpretations (e.g., "pan" should not match "pin")
+    try:
+        from server.config.app_config import get_protected_words
+        protected = get_protected_words()
+        if word.lower() in protected:
+            return None  # Don't fuzzy match protected words
+    except Exception:
+        # If config unavailable, use minimal defaults
+        if word.lower() in ("pan", "mute", "solo", "volume", "send"):
+            return None
+
     # Already canonical
     if word in ACTION_WORDS:
         return word
@@ -560,6 +572,19 @@ def parse_get_query(text: str) -> Optional[ActionMatch]:
             confidence=0.95,
             method="regex",
             raw_text="check"
+        )
+
+    # Status queries: "is ... on/enabled" (GET, not toggle)
+    # Examples: "is track 3 mute on", "is return B solo enabled"
+    if re.search(r"\bis\s+.+?\s+(on|enabled|off|disabled)\b", s):
+        return ActionMatch(
+            intent_type="get_parameter",
+            operation=None,
+            value=None,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text="is ... on/enabled"
         )
 
     return None

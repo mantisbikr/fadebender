@@ -256,6 +256,20 @@ def get_percent_always_additive_config() -> list[str]:
     return list(cfg.get("nlp", {}).get("percent_always_additive", ["pan"]))
 
 
+def get_protected_words() -> list[str]:
+    """Get list of words that should NOT be fuzzy matched.
+
+    Protected words are parameter/entity names that should be preserved exactly
+    to avoid ambiguous interpretations (e.g., "pan" should not match "pin").
+
+    Returns:
+        List of protected words (lowercase)
+        Defaults to common mixer parameters if not configured
+    """
+    cfg = _load()
+    return list(cfg.get("nlp", {}).get("protected_words", ["pan", "mute", "solo", "volume", "send"]))
+
+
 def get_ui_settings() -> Dict[str, Any]:
     return dict(_load().get("ui", {}))
 

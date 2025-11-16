@@ -33,8 +33,10 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(500, f"NLP module not available: {e}")
 
-    # Lightweight pre-normalization for compact pan syntax (e.g., "25R"/"30L").
+    # Lightweight pre-normalization for compact pan syntax.
     text = str(body.text or "")
+
+    # Pattern 1: "pan track N to VALUE L/R" → "set track N pan to VALUE left/right"
     m = re.search(r"\bpan\s+track\s+(\d+)\s+to\s+(-?\d+)\s*([LR])\b", text, flags=re.IGNORECASE)
     if m:
         idx = m.group(1)
@@ -47,6 +49,61 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
             text,
             flags=re.IGNORECASE,
         )
+    else:
+        # Pattern 2: "pan track N to VALUE" (without L/R) → "set track N pan to VALUE"
+        m2 = re.search(r"\bpan\s+track\s+(\d+)\s+to\s+(-?\d+)\b", text, flags=re.IGNORECASE)
+        if m2:
+            idx = m2.group(1)
+            amt = m2.group(2)
+            text = re.sub(
+                r"\bpan\s+track\s+\d+\s+to\s+-?\d+\b",
+                f"set track {idx} pan to {amt}",
+                text,
+                flags=re.IGNORECASE,
+            )
+
+    # Pattern 3: "pan master to VALUE [L/R]" → "set master pan to VALUE [left/right]"
+    m3 = re.search(r"\bpan\s+master\s+to\s+(-?\d+)\s*([LR])?\b", text, flags=re.IGNORECASE)
+    if m3:
+        amt = m3.group(1)
+        side = m3.group(2)
+        if side:
+            side_word = "left" if side.upper() == "L" else "right"
+            text = re.sub(
+                r"\bpan\s+master\s+to\s+-?\d+\s*[LR]\b",
+                f"set master pan to {amt} {side_word}",
+                text,
+                flags=re.IGNORECASE,
+            )
+        else:
+            text = re.sub(
+                r"\bpan\s+master\s+to\s+-?\d+\b",
+                f"set master pan to {amt}",
+                text,
+                flags=re.IGNORECASE,
+            )
+
+    # Pattern 4: "pan return X to VALUE [L/R]" → "set return X pan to VALUE [left/right]"
+    m4 = re.search(r"\bpan\s+return\s+([A-C])\s+to\s+(-?\d+)\s*([LR])?\b", text, flags=re.IGNORECASE)
+    if m4:
+        ret = m4.group(1).upper()
+        amt = m4.group(2)
+        side = m4.group(3)
+        if side:
+            side_word = "left" if side.upper() == "L" else "right"
+            text = re.sub(
+                r"\bpan\s+return\s+[A-C]\s+to\s+-?\d+\s*[LR]\b",
+                f"set return {ret} pan to {amt} {side_word}",
+                text,
+                flags=re.IGNORECASE,
+            )
+        else:
+            text = re.sub(
+                r"\bpan\s+return\s+[A-C]\s+to\s+-?\d+\b",
+                f"set return {ret} pan to {amt}",
+                text,
+                flags=re.IGNORECASE,
+            )
 
     raw_intent = interpret_daw_command(text, model_preference=body.model, strict=body.strict)
 
@@ -58,7 +115,27 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         raw_intent.get("operation", {}).get("type") == "relative"):
         raw_intent["intent"] = "relative_change"
 
+    # Normalize parameter names in raw_intent for consistency (lowercase)
+    # This ensures tests and UI get consistent parameter names regardless of parser
+    # Do this BEFORE calling intent_mapper so it gets normalized input
+    if raw_intent and raw_intent.get("intent") in ("set_parameter", "relative_change"):
+        targets = raw_intent.get("targets", [])
+        normalized_targets = []
+        for target in targets:
+            param_raw = target.get("parameter") or ""
+            plugin = target.get("plugin")
+            # Normalize parameter name (lowercase for mixer params, preserve for device params)
+            normalized_param = str(param_raw).lower() if not plugin else param_raw
+            normalized_target = {**target, "parameter": normalized_param}
+            normalized_targets.append(normalized_target)
+        raw_intent["targets"] = normalized_targets
+
     canonical, errors = map_llm_to_canonical(raw_intent)
+
+    # For GET queries, intent_mapper returns normalized_intent in canonical (not None)
+    # Use the normalized version for raw_intent to ensure parameter names are lowercase
+    if canonical and any(str(e).startswith("non_control_intent:get_parameter") for e in (errors or [])):
+        return {"ok": False, "errors": errors, "raw_intent": canonical}
 
     if canonical is None:
         # Navigation intents (open_capabilities, list_capabilities) are valid UI intents

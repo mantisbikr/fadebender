@@ -19,6 +19,16 @@
   },
   "nlp": {
     "mode": "regex_first",
+    "protected_words": [
+      "pan",
+      "mute",
+      "solo",
+      "volume",
+      "send",
+      "arm",
+      "monitor",
+      "cue"
+    ],
     "percent_always_additive": [
       "diffusion",
       "dly < mod",

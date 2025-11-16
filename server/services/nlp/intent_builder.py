@@ -71,6 +71,19 @@ def build_raw_intent(
         else:
             return None  # Ambiguous - fallback to LLM
 
+    # ROUTE 3b: RELATIVE_CHANGE Parameter intents (same as set_parameter but with relative operation)
+    if action.intent_type == "relative_change":
+        if not track:
+            return None  # Need track for parameter intents
+
+        # Sub-route based on device field
+        if device_param and device_param.device == "mixer":
+            return _build_mixer_intent(action, track, device_param, meta)
+        elif device_param and device_param.device:
+            return _build_device_intent(action, track, device_param, meta)
+        else:
+            return None  # Ambiguous - fallback to LLM
+
     # ROUTE 4: GET Parameter queries (mixer or device)
     if action.intent_type == "get_parameter":
         if not track:
@@ -222,6 +235,38 @@ def _build_get_device_intent(
     }
 
 
+def _apply_fuzzy_action_corrections(text: str) -> str:
+    """Apply fuzzy matching to action words in text for better pattern matching.
+
+    Replaces fuzzy-matched action words with their canonical forms.
+    Example: "lsit audio tracks" → "list audio tracks"
+
+    Args:
+        text: Lowercase text to correct
+
+    Returns:
+        Text with fuzzy-matched action words replaced
+    """
+    from server.services.nlp.action_parser import fuzzy_match_action_word
+    import re
+
+    words = text.split()
+    corrected_words = []
+
+    for word in words:
+        # Remove punctuation for matching
+        clean_word = re.sub(r'[^\w]', '', word)
+        matched = fuzzy_match_action_word(clean_word)
+        if matched:
+            # Preserve punctuation but replace word
+            corrected_word = re.sub(r'[\w]+', matched, word, count=1)
+            corrected_words.append(corrected_word)
+        else:
+            corrected_words.append(word)
+
+    return ' '.join(corrected_words)
+
+
 def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, Any]]:
     """Full layered parsing pipeline.
 
@@ -256,6 +301,10 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     # Lowercase for consistency
     text_lower = text_corrected.lower()
 
+    # Apply fuzzy action word replacement for better pattern matching
+    # This ensures fallback patterns can match typos like "lsit" → "list"
+    text_fuzzy_corrected = _apply_fuzzy_action_corrections(text_lower)
+
     # Layer 1: Parse action/value/unit
     action = parse_action(text_lower)
 
@@ -274,7 +323,8 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
 
     # FALLBACK: Special GET patterns that don't fit the layered structure
     # These mirror the old regex_executor.py patterns (lines 118-281)
-    return _try_special_get_patterns(text_lower, text)
+    # Use fuzzy-corrected text for better pattern matching (e.g., "lsit" → "list")
+    return _try_special_get_patterns(text_fuzzy_corrected, text)
 
 
 def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[Dict[str, Any]]:

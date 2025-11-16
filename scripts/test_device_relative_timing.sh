@@ -48,7 +48,7 @@ echo ""
 # Step 3: Increase by 20%
 echo "3. Increasing by 20% using chat API..."
 curl -s "$BASE_URL/chat" -X POST -H "Content-Type: application/json" -d '{
-  "text": "increase return A device 1 dry wet by 20 percent"
+  "text": "increase return A device 0 dry wet by 20 percent"
 }' | python3 -m json.tool
 
 echo ""
