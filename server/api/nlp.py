@@ -171,24 +171,6 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
                 flags=re.IGNORECASE,
             )
 
-    # Pattern 5: "set track N pan to VALUE[%] left/right" → "set track N pan to +/-VALUE"
-    m5 = re.search(
-        r"\bset\s+track\s+(\d+)\s+pan\s+to\s+(-?\d+(?:\.\d+)?)(?:\s*%)?\s+(left|right)\b",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if m5:
-        idx = m5.group(1)
-        amt = m5.group(2)
-        side = m5.group(3).lower()
-        signed_amt = f"-{amt}" if side.startswith("left") else amt
-        text = re.sub(
-            r"\bset\s+track\s+\d+\s+pan\s+to\s+-?\d+(?:\.\d+)?(?:\s*%)?\s+(?:left|right)\b",
-            f"set track {idx} pan to {signed_amt}",
-            text,
-            flags=re.IGNORECASE,
-        )
-
     raw_intent: Dict[str, Any] | None = None
 
     # Try layered parser first when enabled
@@ -226,10 +208,38 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     # Post-process: Fix intent type for relative operations
     # Both regex and LLM parsers may return "set_parameter" for relative ops
     # But the correct intent should be "relative_change" when operation.type is "relative"
-    if (raw_intent and
-        raw_intent.get("intent") == "set_parameter" and
-        raw_intent.get("operation", {}).get("type") == "relative"):
+    if (
+        raw_intent
+        and raw_intent.get("intent") == "set_parameter"
+        and raw_intent.get("operation", {}).get("type") == "relative"
+    ):
         raw_intent["intent"] = "relative_change"
+
+    # Post-process: Pan absolute commands with explicit left/right.
+    # Normalize "25% left/right" into signed values (-25 / +25) for mixer pan.
+    try:
+        if raw_intent and raw_intent.get("intent") == "set_parameter":
+            op = raw_intent.get("operation") or {}
+            targets = raw_intent.get("targets") or []
+            if (
+                op.get("type") == "absolute"
+                and isinstance(op.get("value"), (int, float))
+                and any(
+                    (t.get("plugin") is None and str(t.get("parameter", "")).lower() == "pan")
+                    for t in targets
+                )
+            ):
+                tl = text.lower()
+                val = float(op.get("value") or 0.0)
+                if "left" in tl and val > 0:
+                    op["value"] = -val
+                    op["unit"] = None  # treat as display percent
+                elif "right" in tl and val < 0:
+                    op["value"] = -val
+                    op["unit"] = None
+                raw_intent["operation"] = op
+    except Exception:
+        pass
 
     # Normalize parameter names in raw_intent for consistency (lowercase)
     # This ensures tests and UI get consistent parameter names regardless of parser.
