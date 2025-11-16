@@ -208,6 +208,51 @@ python3 scripts/test_webui_validation.py
 
 ---
 
+### 5b. /chat Smoke Tests (Layered Path)
+
+These are lightweight checks that `/chat` behaves consistently with the layered `/intent/*` APIs.
+
+**Prerequisites:**
+- `.env`: `USE_LAYERED_PARSER=true` (layered NLP enabled)
+- `.env`: `USE_LAYERED_CHAT=1` (route /chat through layered parser)
+- `configs/app_config.json`: `"use_intents_for_chat": true`
+
+**Recommended curl commands:**
+```bash
+# Mixer control (should set Track 1 volume)
+curl -s http://127.0.0.1:8722/chat \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"text": "set track 1 volume to -6 dB", "confirm": true}' | python3 -m json.tool
+
+# Mixer GET query (delegates to snapshot/query)
+curl -s http://127.0.0.1:8722/chat \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"text": "what is track 1 volume", "confirm": true}' | python3 -m json.tool
+
+# Project list query (audio tracks list)
+curl -s http://127.0.0.1:8722/chat \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"text": "list audio tracks", "confirm": true}' | python3 -m json.tool
+
+# Navigation intent (UI-only; no Live execution)
+curl -s http://127.0.0.1:8722/chat \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"text": "open track 1", "confirm": true}' | python3 -m json.tool
+```
+
+**What to look for:**
+- Control: `ok: true`, sensible `summary`, and `canonical` with `domain="track"`, `field="volume"`.
+- GET: `ok: true`, `answer` string, and `values` array with the expected `track`/`parameter`.
+- Lists: `ok: true`, `answer` summarizing audio tracks, and `values[0].parameter="audio_tracks_list"`.
+- Navigation: `ok: true`, `intent.intent="open_capabilities"` with a structured `target` (e.g., `{type:"mixer", entity:"track", track_index:1}`) and `summary="navigation_intent"`.
+
+**When to run:**
+- After changing `/chat` behavior
+- After layered parser or intent mapping changes
+- Before exposing `/chat` as a public API
+
+---
+
 ### 6. Scenes, Clips, and View Ops
 
 Manual backend tests (requires Ableton Live with Remote Script running and UDP enabled via `FADEBENDER_UDP_ENABLE=1`).

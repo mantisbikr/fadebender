@@ -76,8 +76,8 @@ export default function ChatMessage({ message, onSuggestedIntent, showCapabiliti
     try {
       const results = Array.isArray(data?.values) ? data.values : [];
       if (results.length === 0) return null;
-      // Collect any list-type parameters (audio/midi/returns)
-      const listParams = new Set(['audio_tracks_list', 'midi_tracks_list', 'return_tracks_list']);
+      // Collect any list-type parameters (all tracks/audio/midi/returns)
+      const listParams = new Set(['tracks_list', 'audio_tracks_list', 'midi_tracks_list', 'return_tracks_list']);
       const lists = results.filter(r => listParams.has(String(r?.parameter || '').toLowerCase()) && Array.isArray(r?.value));
       if (lists.length === 0) return null;
       const items = lists.flatMap(r => r.value.map(v => ({ param: r.parameter, label: String(v) })));

@@ -482,6 +482,11 @@ async def query_parameters(request: SnapshotQueryRequest) -> Dict[str, Any]:
             if pn == "return_tracks_count":
                 results.append({"track": None, "parameter": "return_tracks_count", "value": len(returns), "display_value": str(len(returns))})
                 continue
+            if pn == "tracks_list":
+                non_returns = [t for t in tracks if str(t.get("type", "track")) != "return"]
+                names = [_display_track(t) for t in non_returns]
+                results.append({"track": None, "parameter": "tracks_list", "value": names, "display_value": ", ".join(names) or "(none)"})
+                continue
             if pn == "audio_tracks_list":
                 audio = [t for t in tracks if str(t.get("type", "")).lower() == "audio"]
                 names = [_display_track(t) for t in audio]

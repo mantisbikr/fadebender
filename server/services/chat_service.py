@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import pathlib
 import re
 import sys
@@ -37,6 +38,74 @@ from server.services.chat_summarizer import generate_summary_from_canonical
 
 
 """Chat models moved to server.services.chat_models; summarizer moved to chat_summarizer."""
+
+# Feature flag: route /chat through layered parser when enabled.
+# This is intentionally separate from USE_LAYERED_PARSER (which controls /intent/parse).
+USE_LAYERED_CHAT = os.getenv("USE_LAYERED_CHAT", "").lower() in ("1", "true", "yes")
+
+# Cached parse index for layered parser (avoids repeated initialization)
+_PARSE_INDEX: Optional[Dict[str, Any]] = None
+
+
+def _get_parse_index() -> Dict[str, Any]:
+    """Get or build parse index for layered parser.
+
+    Uses minimal index when device mappings are unavailable so that
+    mixer/track/open/list commands still work.
+    """
+    global _PARSE_INDEX
+    if _PARSE_INDEX is not None:
+        return _PARSE_INDEX
+
+    try:
+        from server.services.parse_index.parse_index_builder import ParseIndexBuilder
+
+        try:
+            # For now build from empty Live set; device-aware parsing
+            # still falls back to LLM if needed.
+            live_devices: list[Dict[str, Any]] = []
+            builder = ParseIndexBuilder()
+            _PARSE_INDEX = builder.build_from_live_set(live_devices)
+        except Exception:
+            _PARSE_INDEX = {
+                "version": "pi-minimal",
+                "devices_in_set": [],
+                "params_by_device": {},
+                "device_type_index": {},
+                "param_to_device_types": {},
+                "mixer_params": [
+                    "volume",
+                    "pan",
+                    "mute",
+                    "solo",
+                    "send a",
+                    "send b",
+                    "send c",
+                    "send d",
+                ],
+                "typo_map": {},
+            }
+    except Exception:
+        _PARSE_INDEX = {
+            "version": "pi-minimal",
+            "devices_in_set": [],
+            "params_by_device": {},
+            "device_type_index": {},
+            "param_to_device_types": {},
+            "mixer_params": [
+                "volume",
+                "pan",
+                "mute",
+                "solo",
+                "send a",
+                "send b",
+                "send c",
+                "send d",
+            ],
+            "typo_map": {},
+        }
+
+    return _PARSE_INDEX
 
 
 def udp_request(msg: Dict[str, Any], timeout: float = 1.0):
@@ -187,23 +256,96 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
     Both WebUI and command-line tests use this same path.
     """
     # Import llm_daw from nlp-service/ dynamically (folder has a hyphen)
-    import sys
-    import pathlib
     nlp_dir = pathlib.Path(__file__).resolve().parent.parent.parent / "nlp-service"
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
 
     text_lc = body.text.strip()
 
-    # Step 1: Parse command with NLP service (handles typos, natural language)
-    try:
-        from llm_daw import interpret_daw_command  # type: ignore
-    except Exception as e:
-        raise HTTPException(500, f"NLP module not available: {e}")
+    intent: Dict[str, Any] = {}
 
-    intent = interpret_daw_command(text_lc, model_preference=body.model, strict=body.strict)
+    # Step 1: Parse command.
+    # If layered chat mode is enabled, try the layered parser first and fall back
+    # to llm_daw for anything it cannot handle (questions, complex queries, etc.).
+    if USE_LAYERED_CHAT:
+        try:
+            from server.services.nlp.intent_builder import parse_command_layered
 
-    # Step 2: Transform to canonical format
+            parse_index = _get_parse_index()
+            layered_intent = parse_command_layered(text_lc, parse_index)
+            if layered_intent:
+                intent = layered_intent
+            else:
+                # Fallback to llm_daw if layered parser produced no intent
+                from llm_daw import interpret_daw_command  # type: ignore
+
+                intent = interpret_daw_command(
+                    text_lc, model_preference=body.model, strict=body.strict
+                )
+        except Exception:
+            # On any error, fall back to llm_daw path
+            try:
+                from llm_daw import interpret_daw_command  # type: ignore
+            except Exception as e:
+                raise HTTPException(500, f"NLP module not available: {e}")
+            intent = interpret_daw_command(
+                text_lc, model_preference=body.model, strict=body.strict
+            )
+    else:
+        # Original behavior: llm_daw-only path
+        try:
+            from llm_daw import interpret_daw_command  # type: ignore
+        except Exception as e:
+            raise HTTPException(500, f"NLP module not available: {e}")
+        intent = interpret_daw_command(
+            text_lc, model_preference=body.model, strict=body.strict
+        )
+
+    # Handle non-control intents that should not go through canonical mapper
+    # GET queries: delegate to snapshot/query (same behavior as /intent/query)
+    if intent.get("intent") == "get_parameter":
+        raw_targets = intent.get("targets") or []
+        # Normalize mixer parameter names to lowercase (device params keep casing)
+        targets = []
+        for t in raw_targets:
+            try:
+                plugin = t.get("plugin")
+                param_raw = t.get("parameter") or ""
+                param = str(param_raw).lower() if not plugin else param_raw
+                nt = dict(t)
+                nt["parameter"] = param
+                targets.append(nt)
+            except Exception:
+                targets.append(t)
+        try:
+            import httpx
+
+            resp = httpx.post(
+                "http://localhost:8722/snapshot/query",
+                json={"targets": targets},
+                timeout=5.0,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "ok": bool(data.get("ok", True)),
+                "intent": intent,
+                **data,
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "intent": intent,
+                "reason": "query_error",
+                "summary": f"Query error: {e}",
+                "error": str(e),
+            }
+
+    # Navigation intents are UI-only; surface intent without executing
+    if intent.get("intent") in ("open_capabilities", "list_capabilities"):
+        return {"ok": True, "intent": intent, "summary": "navigation_intent"}
+
+    # Step 2: Transform to canonical format for control intents
     from server.services.intent_mapper import map_llm_to_canonical
     canonical, errors = map_llm_to_canonical(intent)
 

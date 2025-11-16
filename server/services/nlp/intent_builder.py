@@ -120,18 +120,88 @@ def _build_navigation_intent(
     device_param: Optional[DeviceParamMatch],
     meta: Dict
 ) -> Dict[str, Any]:
-    """Build navigation intent (open/list tracks, devices, etc.)."""
-    # Build target reference
-    target_ref = track.reference if track else None
+    """Build navigation intent (open/list tracks, devices, etc.).
 
-    # If device specified, append to reference
-    if device_param and device_param.device:
-        target_ref = f"{target_ref} {device_param.device}" if target_ref else device_param.device
+    For compatibility with the existing WebUI and legacy regex executor,
+    we emit the same target structure as _open_capabilities_from_regex:
+
+        {"type": "mixer", "entity": "track", "track_index": 1}
+        {"type": "mixer", "entity": "return", "return_ref": "A"}
+        {"type": "mixer", "entity": "master"}
+        {"type": "device", "scope": "return", "return_ref": "A", "device_name_hint": "reverb"}
+    """
+    target: Dict[str, Any] = {}
+
+    # OPEN CAPABILITIES: build structured target for mixer/device scopes
+    if action.intent_type == "open_capabilities":
+        # Device on return (e.g., "open return A reverb")
+        if track and track.domain == "return" and device_param and device_param.device:
+            # Return ref letter (A/B/C...) from index if available
+            return_ref = None
+            if track.index is not None:
+                try:
+                    return_ref = chr(ord("A") + int(track.index))
+                except Exception:
+                    return_ref = None
+            # Fallback to reference string "Return X"
+            if not return_ref and isinstance(track.reference, str) and " " in track.reference:
+                try:
+                    return_ref = track.reference.split()[1].upper()
+                except Exception:
+                    return_ref = None
+
+            target = {
+                "type": "device",
+                "scope": "return",
+            }
+            if return_ref:
+                target["return_ref"] = return_ref
+            if device_param.device:
+                target["device_name_hint"] = device_param.device
+        # Mixer scopes: track / return / master
+        elif track:
+            if track.domain == "track" and track.index is not None:
+                # Track indices are 0-based in TrackMatch; UI expects 1-based
+                target = {
+                    "type": "mixer",
+                    "entity": "track",
+                    "track_index": int(track.index) + 1,
+                }
+            elif track.domain == "return":
+                return_ref = None
+                if track.index is not None:
+                    try:
+                        return_ref = chr(ord("A") + int(track.index))
+                    except Exception:
+                        return_ref = None
+                target = {
+                    "type": "mixer",
+                    "entity": "return",
+                }
+                if return_ref:
+                    target["return_ref"] = return_ref
+            elif track.domain == "master":
+                target = {
+                    "type": "mixer",
+                    "entity": "master",
+                }
+        # Drawer actions (e.g., "open controls") are currently handled by old stack;
+        # layered parser does not emit them yet, so we leave this path empty.
+
+    else:
+        # LIST CAPABILITIES: keep simple target reference + optional filter
+        target_ref = track.reference if track else None
+
+        # For list_capabilities with collection queries, add filter to meta if present
+        if track and hasattr(track, "filter") and track.filter:
+            meta["filter"] = track.filter
+
+        target = target_ref
 
     return {
         "intent": action.intent_type,
-        "target": target_ref,
-        "meta": meta
+        "target": target,
+        "meta": meta,
     }
 
 
@@ -305,6 +375,20 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     # This ensures fallback patterns can match typos like "lsit" → "list"
     text_fuzzy_corrected = _apply_fuzzy_action_corrections(text_lower)
 
+    # First: try OPEN navigation patterns that should always map to
+    # open_capabilities intents (mixer/device/drawer).
+    open_nav = _try_open_navigation_patterns(text_lower, text)
+    if open_nav:
+        return open_nav
+
+    # First: try special GET/query patterns that should always map to
+    # get_parameter intents (project counts/lists, topology queries, etc.).
+    # This preserves legacy behavior for queries like:
+    #   "list audio tracks" → audio_tracks_list
+    special = _try_special_get_patterns(text_fuzzy_corrected, text)
+    if special:
+        return special
+
     # Layer 1: Parse action/value/unit
     action = parse_action(text_lower)
 
@@ -321,10 +405,114 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     if raw_intent:
         return raw_intent
 
-    # FALLBACK: Special GET patterns that don't fit the layered structure
-    # These mirror the old regex_executor.py patterns (lines 118-281)
-    # Use fuzzy-corrected text for better pattern matching (e.g., "lsit" → "list")
-    return _try_special_get_patterns(text_fuzzy_corrected, text)
+    # No match
+    return None
+
+
+def _try_open_navigation_patterns(text_lower: str, original_text: str) -> Optional[Dict[str, Any]]:
+    """Recognize 'open …' drawer/mixer/device requests and build open_capabilities.
+
+    Mirrors logic from nlp-service/execution/regex_executor._open_capabilities_from_regex
+    for compatibility with existing UI behavior.
+    """
+    import re as _re
+
+    qs = text_lower.strip()
+    if not (qs.startswith("open ") or qs.startswith("close ") or qs.startswith("pin ") or qs.startswith("unpin ")):
+        return None
+
+    # Sends group (preselect) – must be checked before generic track mixer
+    m = _re.search(r"^\s*open\s+track\s+(\d+)\s+send\s+([a-c])(?:\s+controls)?\s*$", qs)
+    if m:
+        ti = int(m.group(1)); letter = m.group(2).upper()
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "track", "track_index": ti, "group_hint": "Sends", "send_ref": letter},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+
+    # Device on return by index
+    m = _re.search(r"^\s*open\s+return\s+([a-c])\s+device\s+(\d+)(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
+    if m:
+        letter = m.group(1).upper(); di = int(m.group(2)); ph = (m.group(3) or "").strip() or None
+        payload: Dict[str, Any] = {"type": "device", "scope": "return", "return_ref": letter, "device_index": di}
+        if ph:
+            payload["param_hint"] = ph
+        return {"intent": "open_capabilities", "target": payload, "meta": {"utterance": original_text, "parsed_by": "regex_open"}}
+
+    # Device on return by name (+ optional ordinal)
+    m = _re.search(r"^\s*open\s+return\s+([a-c])\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
+    if m:
+        letter = m.group(1).upper()
+        name = m.group(2).strip()
+        ords = m.group(3)
+        ph = (m.group(4) or "").strip() or None
+        payload: Dict[str, Any] = {"type": "device", "scope": "return", "return_ref": letter, "device_name_hint": name}
+        if ords:
+            try:
+                payload["device_ordinal_hint"] = int(ords)
+            except Exception:
+                pass
+        if ph:
+            payload["param_hint"] = ph
+        return {"intent": "open_capabilities", "target": payload, "meta": {"utterance": original_text, "parsed_by": "regex_open"}}
+
+    # Generic mixer scopes (track/return/master) checked after device/sends
+    m = _re.search(r"^\s*open\s+track\s+(\d+)(?:\s+(?:controls|mixer))?\s*$", qs)
+    if m:
+        ti = int(m.group(1))
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "track", "track_index": ti},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*open\s+return\s+([a-c])(?:\s+(?:controls|mixer))?\s*$", qs)
+    if m:
+        letter = m.group(1).upper()
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "return", "return_ref": letter},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*open\s+master(?:\s+(?:controls|mixer))?\s*$", qs)
+    if m:
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "mixer", "entity": "master"},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+
+    # Drawer actions
+    m = _re.search(r"^\s*open\s+controls\s*$", qs)
+    if m:
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "drawer", "action": "open"},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*close\s+controls\s*$", qs)
+    if m:
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "drawer", "action": "close"},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*pin\s+controls\s*$", qs)
+    if m:
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "drawer", "action": "pin"},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+    m = _re.search(r"^\s*unpin\s+controls\s*$", qs)
+    if m:
+        return {
+            "intent": "open_capabilities",
+            "target": {"type": "drawer", "action": "unpin"},
+            "meta": {"utterance": original_text, "parsed_by": "regex_open"}
+        }
+
+    return None
 
 
 def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[Dict[str, Any]]:
@@ -521,6 +709,17 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
         }
 
     # 6. PROJECT LISTS: List all tracks/returns
+    if re.search(r"\blist\s+(the\s+)?tracks\b|\blist\s+all\s+tracks\b|\btracks\s+list\b", text_lower):
+        return {
+            "intent": "get_parameter",
+            "targets": [{"track": None, "plugin": None, "parameter": "tracks_list"}],
+            "meta": {
+                "utterance": original_text,
+                "confidence": 0.95,
+                "pipeline": "regex",
+                "layer_methods": {"pattern": "project_lists"}
+            }
+        }
     if re.search(r"\blist\s+(the\s+)?audio\s+tracks\b|\baudio\s+tracks\s+list\b", text_lower):
         return {
             "intent": "get_parameter",
@@ -543,7 +742,7 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
                 "layer_methods": {"pattern": "project_lists"}
             }
         }
-    if re.search(r"\blist\s+(the\s+)?returns?\b|\blist\s+return\s+tracks\b|\breturns?\s+list\b", text_lower):
+    if re.search(r"\blist\s+(the\s+)?returns?\b|\blist\s+all\s+returns?\b|\blist\s+return\s+tracks\b|\blist\s+all\s+return\s+tracks\b|\breturns?\s+list\b", text_lower):
         return {
             "intent": "get_parameter",
             "targets": [{"track": None, "plugin": None, "parameter": "return_tracks_list"}],

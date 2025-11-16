@@ -16,10 +16,11 @@ import re
 class TrackMatch:
     """Result from track/return parsing."""
     domain: str              # "track", "return", "master"
-    index: Optional[int]     # Track number (0-indexed) or Return index (0=A, 1=B, etc.), None for master
-    reference: str           # Original reference string ("Track 1", "Return A", "Master")
+    index: Optional[int]     # Track number (0-indexed) or Return index (0=A, 1=B, etc.), None for master or collections
+    reference: str           # Original reference string ("Track 1", "Return A", "Master", "tracks", "returns")
     confidence: float        # 0.0-1.0
     method: str             # "regex", "llm_fallback"
+    filter: Optional[str] = None  # Optional filter: "audio", "midi" for collection queries
 
 
 # ============================================================================
@@ -112,6 +113,70 @@ def parse_master_reference(text: str) -> Optional[TrackMatch]:
 
 
 # ============================================================================
+# COLLECTION/PLURAL PATTERNS (for list commands)
+# ============================================================================
+
+def parse_track_collection(text: str) -> Optional[TrackMatch]:
+    """Parse plural track references: 'tracks', 'audio tracks', 'midi tracks', 'all tracks'.
+
+    Used for list commands like "list tracks", "list audio tracks", etc.
+
+    Examples:
+        "list tracks" → TrackMatch(domain="track", index=None, reference="tracks", filter=None)
+        "list audio tracks" → TrackMatch(domain="track", index=None, reference="tracks", filter="audio")
+        "list midi tracks" → TrackMatch(domain="track", index=None, reference="tracks", filter="midi")
+        "list all tracks" → TrackMatch(domain="track", index=None, reference="tracks", filter=None)
+    """
+    # Pattern: (all)? (audio|midi)? tracks - but NOT "return tracks"
+    # Negative lookbehind to exclude "return" before "tracks"
+    pattern = r"\b(?:all\s+)?(?:(audio|midi)\s+)?(?<!return\s)tracks\b"
+    match = re.search(pattern, text, re.IGNORECASE)
+
+    if match:
+        filter_type = match.group(1).lower() if match.group(1) else None
+        return TrackMatch(
+            domain="track",
+            index=None,
+            reference="tracks",
+            confidence=0.95,
+            method="regex",
+            filter=filter_type
+        )
+
+    return None
+
+
+def parse_return_collection(text: str) -> Optional[TrackMatch]:
+    """Parse plural return references: 'returns', 'return tracks', 'all returns', 'all return tracks'.
+
+    Used for list commands like "list returns", "list return tracks", etc.
+
+    Examples:
+        "list returns" → TrackMatch(domain="return", index=None, reference="returns")
+        "list return tracks" → TrackMatch(domain="return", index=None, reference="returns")
+        "list all returns" → TrackMatch(domain="return", index=None, reference="returns")
+        "list all return tracks" → TrackMatch(domain="return", index=None, reference="returns")
+    """
+    # Pattern 1: (all)? return tracks - requires "return" before "tracks"
+    pattern1 = r"\b(?:all\s+)?return\s+tracks\b"
+    # Pattern 2: (all)? returns - matches "returns" (with or without "all")
+    pattern2 = r"\b(?:all\s+)?returns\b"
+
+    match = re.search(pattern1, text, re.IGNORECASE) or re.search(pattern2, text, re.IGNORECASE)
+
+    if match:
+        return TrackMatch(
+            domain="return",
+            index=None,
+            reference="returns",
+            confidence=0.95,
+            method="regex"
+        )
+
+    return None
+
+
+# ============================================================================
 # MAIN PARSER FUNCTION
 # ============================================================================
 
@@ -119,9 +184,11 @@ def parse_track(text: str) -> Optional[TrackMatch]:
     """Parse track/return/master reference from text.
 
     Tries patterns in order:
-    1. Track references (track 1, track 2, ...)
-    2. Return references (return A, return B, ...)
+    1. Specific track references (track 1, track 2, ...) - most specific
+    2. Specific return references (return A, return B, ...)
     3. Master reference (master)
+    4. Track collections (tracks, audio tracks, midi tracks) - for list commands
+    5. Return collections (returns, return tracks) - for list commands
 
     Args:
         text: Input text (lowercase recommended but not required - patterns are case-insensitive)
@@ -129,18 +196,28 @@ def parse_track(text: str) -> Optional[TrackMatch]:
     Returns:
         TrackMatch if found, None otherwise
     """
-    # Try track first (most specific)
+    # Try specific track first (track 1, track 2) - most specific
     result = parse_track_reference(text)
     if result:
         return result
 
-    # Try return
+    # Try specific return (return A, return B)
     result = parse_return_reference(text)
     if result:
         return result
 
     # Try master
     result = parse_master_reference(text)
+    if result:
+        return result
+
+    # Try track collections (tracks, audio tracks, midi tracks)
+    result = parse_track_collection(text)
+    if result:
+        return result
+
+    # Try return collections (returns, return tracks)
+    result = parse_return_collection(text)
     if result:
         return result
 

@@ -502,12 +502,14 @@ def parse_get_query(text: str) -> Optional[ActionMatch]:
             raw_text="how many"
         )
 
-    # List queries: "list..."
+    # List command: "list..."
+    # Note: Target determination (tracks vs returns vs parameters) is handled by track_parser (Layer 2)
+    # This layer just detects the "list" action
     if re.search(r"\blist\b", s):
         return ActionMatch(
-            intent_type="get_parameter",
+            intent_type="list_capabilities",
             operation=None,
-            value=None,
+            value=None,  # No longer hardcoding "tracks" or "returns"
             unit=None,
             confidence=0.95,
             method="regex",
