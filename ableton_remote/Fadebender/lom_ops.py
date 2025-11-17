@@ -1633,6 +1633,40 @@ def set_track_routing(live, track_index: int, **kwargs) -> bool:
     return False
 
 
+def set_track_arm(live, track_index: int, arm: bool) -> bool:
+    """Arm or disarm a track by index (1-based)."""
+    try:
+        ti = int(track_index)
+        if live is not None:
+            tracks = getattr(live, "tracks", []) or []
+            if not (1 <= ti <= len(tracks)):
+                return False
+            tr = tracks[ti - 1]
+
+            def _do_set_arm():
+                try:
+                    if hasattr(tr, "can_be_armed") and not getattr(tr, "can_be_armed", True):
+                        return False
+                    setattr(tr, "arm", bool(arm))
+                    _emit({"event": "track_armed", "track": ti, "armed": bool(arm)})
+                    return True
+                except Exception:
+                    return False
+
+            ok = _run_on_main(_do_set_arm)
+            if bool(ok):
+                return True
+    except Exception:
+        pass
+    # Stub
+    for t in _STATE.get("tracks", []):
+        if t["index"] == int(track_index):
+            t["armed"] = bool(arm)
+            _emit({"event": "track_armed", "track": int(track_index), "armed": bool(arm)})
+            return True
+    return False
+
+
 def get_return_routing(live, return_index: int) -> Dict[str, Any]:
     try:
         if live is not None:
@@ -2266,6 +2300,77 @@ def stop_scene(live, scene_index: int) -> Dict[str, Any]:
         return {"ok": False, "error": str(e)}
     # Stub
     _emit({"event": "scene_stopped", "scene": int(scene_index)})
+    return {"ok": True}
+
+
+def fire_clip(live, track_index: int, scene_index: int, select: bool = True) -> Dict[str, Any]:
+    """Launch a clip in a given clip slot [track, scene] (1-based track, 1-based scene).
+
+    Optionally select the slot first.
+    """
+    try:
+        ti = int(track_index)
+        si = int(scene_index)
+        if live is not None:
+            tracks = getattr(live, "tracks", []) or []
+            if not (1 <= ti <= len(tracks)):
+                return {"ok": False, "error": "track_out_of_range"}
+            tr = tracks[ti - 1]
+            slots = getattr(tr, "clip_slots", []) or []
+            if not (1 <= si <= len(slots)):
+                return {"ok": False, "error": "scene_out_of_range"}
+            slot = slots[si - 1]
+            try:
+                if select and hasattr(getattr(live, "view", None), "selected_scene"):
+                    # Best-effort: select scene and track so UI follows
+                    try:
+                        live.view.selected_scene = getattr(live, "scenes", [None])[si - 1]
+                    except Exception:
+                        pass
+                    try:
+                        live.view.selected_track = tr
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            try:
+                slot.fire()
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+            _emit({"event": "clip_fired", "track": ti, "scene": si})
+            return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub: mark clip as "playing" in state
+    key = (int(track_index), int(scene_index))
+    _STATE.setdefault("clips", {})[key] = _STATE.get("clips", {}).get(key) or f"Clip {track_index}:{scene_index}"
+    _emit({"event": "clip_fired", "track": int(track_index), "scene": int(scene_index)})
+    return {"ok": True}
+
+
+def stop_clip(live, track_index: int, scene_index: int) -> Dict[str, Any]:
+    """Stop a single clip by stopping its clip slot at [track, scene]."""
+    try:
+        ti = int(track_index)
+        si = int(scene_index)
+        if live is not None:
+            tracks = getattr(live, "tracks", []) or []
+            if not (1 <= ti <= len(tracks)):
+                return {"ok": False, "error": "track_out_of_range"}
+            tr = tracks[ti - 1]
+            slots = getattr(tr, "clip_slots", []) or []
+            if not (1 <= si <= len(slots)):
+                return {"ok": False, "error": "scene_out_of_range"}
+            try:
+                slots[si - 1].stop()
+            except Exception:
+                pass
+            _emit({"event": "clip_stopped", "track": ti, "scene": si})
+            return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub
+    _emit({"event": "clip_stopped", "track": int(track_index), "scene": int(scene_index)})
     return {"ok": True}
 
 

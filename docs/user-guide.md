@@ -99,11 +99,18 @@ Scenes, Clips, and Views
 - Fire/stop a scene:
   - HTTP: POST `/scene/fire` { "scene_index": N, "select": true }
   - HTTP: POST `/scene/stop` { "scene_index": N }
+ - NLP examples (chat or `/intent/parse` when `use_intents_for_chat` is enabled):
+   - `fire scene 3`
+   - `launch scene 5`
+   - `stop scene 2`
 - Capture and insert a new scene from currently playing clips:
   - HTTP: POST `/scene/capture_insert` {}
 - Create an empty MIDI clip in Session view:
   - HTTP: POST `/clip/create` { "track_index": T, "scene_index": S, "length_beats": 4 }
   - Notes: Only works on MIDI tracks; slot must be empty.
+- Fire/stop a single clip in Session view:
+  - HTTP: POST `/clip/fire` { "track_index": T, "scene_index": S, "select": true }
+  - HTTP: POST `/clip/stop` { "track_index": T, "scene_index": S }
 - Switch between Session and Arrangement views:
   - HTTP: POST `/view` { "mode": "session" | "arrangement" }
 
@@ -112,12 +119,21 @@ Naming and Device Order
   - Track: POST `/track/name` { "track_index": T, "name": "Guitars" }
   - Scene: POST `/scene/name` { "scene_index": S, "name": "Chorus" }
   - Clip: POST `/clip/name` { "track_index": T, "scene_index": S, "name": "Hook" }
+- Devices:
+  - Track device: POST `/track/device/name` { "track_index": T, "device_index": D, "name": "Glue Comp" }
+  - Return device: POST `/return/device/name` { "return_index": R, "device_index": D, "name": "Main Reverb" }
 - Track devices:
   - Delete: POST `/track/device/delete` { "track_index": T, "device_index": D }
   - Reorder: POST `/track/device/reorder` { "track_index": T, "old_index": D1, "new_index": D2 }
 - Return devices:
   - Delete: POST `/return/device/delete` { "return_index": R, "device_index": D }
   - Reorder: POST `/return/device/reorder` { "return_index": R, "old_index": D1, "new_index": D2 }
+
+Track Arm and Monitoring
+- Arm/disarm a track:
+  - HTTP: POST `/track/arm` { "track_index": T, "arm": true|false }
+- Set monitoring/routing:
+  - HTTP: POST `/track/routing` { "track_index": T, "monitor_state": "in" | "auto" | "off", ... }
 
 Troubleshooting
 - Param not found / ambiguous: UI shows suggestions and (for devices) a parameter list in the drawer
@@ -157,6 +173,12 @@ Appendix: Handy Examples
 - NAVIGATION:
   - `open track 1` / `view track 1`
   - `open return A reverb` / `view return A reverb`
+
+- SCENES & CLIPS:
+  - `fire scene 3`
+  - `stop scene 3`
+  - (API) POST `/clip/fire` { "track_index": 4, "scene_index": 2, "select": true }
+  - (API) POST `/clip/stop` { "track_index": 4, "scene_index": 2 }
 
 Change Log (high‑level)
 - 2025‑11:

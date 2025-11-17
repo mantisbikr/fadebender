@@ -118,6 +118,12 @@ def start_udp_server():  # pragma: no cover
                     midi_to_channel=msg.get("midi_to_channel"),
                 )
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "set_track_arm":
+                track_index = int(msg.get("track_index", 0))
+                arm = bool(msg.get("arm", True))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_track_arm(live_ctx, track_index, arm)
+                resp = {"ok": bool(ok), "op": op}
             elif op == "get_return_tracks":
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_return_tracks(live_ctx)
@@ -217,6 +223,19 @@ def start_udp_server():  # pragma: no cover
                 length = float(msg.get("length_beats", 1.0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.create_clip(live_ctx, track_index, scene_index, length)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "fire_clip":
+                track_index = int(msg.get("track_index", 0))
+                scene_index = int(msg.get("scene_index", 0))
+                select = bool(msg.get("select", True))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.fire_clip(live_ctx, track_index, scene_index, select)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "stop_clip":
+                track_index = int(msg.get("track_index", 0))
+                scene_index = int(msg.get("scene_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.stop_clip(live_ctx, track_index, scene_index)
                 resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "get_master_devices":
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None

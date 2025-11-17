@@ -31,6 +31,29 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         from server.services.ableton_client import request_op as _req
         action = getattr(intent, "action", "")
         value = getattr(intent, "value", None)
+        # Scene fire/stop mapped to dedicated ops
+        if action == "scene_fire":
+            try:
+                scene_index = int(value)
+            except Exception:
+                raise HTTPException(400, "invalid_scene_index")
+            r = _req("fire_scene", timeout=1.0, scene_index=scene_index, select=True)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Scene {scene_index} fired",
+                "resp": r,
+            }
+        if action == "scene_stop":
+            try:
+                scene_index = int(value)
+            except Exception:
+                raise HTTPException(400, "invalid_scene_index")
+            r = _req("stop_scene", timeout=1.0, scene_index=scene_index)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Scene {scene_index} stopped",
+                "resp": r,
+            }
         # Combined time signature
         if action == "time_sig_both" and isinstance(value, dict):
             num = value.get("num"); den = value.get("den")

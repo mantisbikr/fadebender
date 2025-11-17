@@ -107,6 +107,24 @@ def set_track_device_name(body: TrackDeviceNameBody) -> Dict[str, Any]:
     return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
 
 
+class TrackArmBody(BaseModel):
+    track_index: int
+    arm: bool
+
+
+@router.post("/track/arm")
+def set_track_arm(body: TrackArmBody) -> Dict[str, Any]:
+    resp = request_op(
+        "set_track_arm",
+        timeout=1.0,
+        track_index=int(body.track_index),
+        arm=bool(body.arm),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 @router.post("/track/device/delete")
 def delete_track_device(body: TrackDeviceDeleteBody) -> Dict[str, Any]:
     resp = request_op(
@@ -154,6 +172,44 @@ def create_clip(body: CreateClipBody) -> Dict[str, Any]:
         track_index=int(body.track_index),
         scene_index=int(body.scene_index),
         length_beats=float(body.length_beats),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class ClipFireBody(BaseModel):
+    track_index: int
+    scene_index: int
+    select: bool = True
+
+
+@router.post("/clip/fire")
+def fire_clip(body: ClipFireBody) -> Dict[str, Any]:
+    resp = request_op(
+        "fire_clip",
+        timeout=1.0,
+        track_index=int(body.track_index),
+        scene_index=int(body.scene_index),
+        select=bool(body.select),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class ClipStopBody(BaseModel):
+    track_index: int
+    scene_index: int
+
+
+@router.post("/clip/stop")
+def stop_clip(body: ClipStopBody) -> Dict[str, Any]:
+    resp = request_op(
+        "stop_clip",
+        timeout=1.0,
+        track_index=int(body.track_index),
+        scene_index=int(body.scene_index),
     )
     if not resp:
         raise HTTPException(504, "no response")

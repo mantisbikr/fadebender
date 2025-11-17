@@ -173,8 +173,38 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
 
     raw_intent: Dict[str, Any] | None = None
 
-    # Try layered parser first when enabled
-    if USE_LAYERED:
+    # Fast path: scene fire/stop commands (no need for full NLP)
+    scene_fire_match = re.search(r"\b(fire|launch)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
+    scene_stop_match = re.search(r"\bstop\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
+    if scene_fire_match:
+        scene_idx = int(scene_fire_match.group(2))
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "scene_fire",
+                "value": scene_idx,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_scene",
+            },
+        }
+    elif scene_stop_match:
+        scene_idx = int(scene_stop_match.group(2))
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "scene_stop",
+                "value": scene_idx,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_scene",
+            },
+        }
+
+    # Try layered parser first when enabled (if no regex fast-path intent)
+    if raw_intent is None and USE_LAYERED:
         try:
             from server.services.nlp.intent_builder import parse_command_layered
 

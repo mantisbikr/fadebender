@@ -230,6 +230,11 @@ For end-to-end testing with actual Ableton Live:
 - [ ] **Label Value**: Set "Low-pass", verify filter type change
 - [ ] **Auto-Enable**: Set dependent param with master off, verify auto-enable
 - [ ] **Dry-Run**: Preview operation, verify nothing changes in Live
+- [ ] **Scene Fire/Stop (NLP)**: In the web UI (with intents-for-chat enabled), run `fire scene 3` / `stop scene 3` and verify the correct scene launches/stops in Live.
+- [ ] **Scene Fire/Stop (API)**: Call `/scene/fire` and `/scene/stop` and verify behavior matches Live’s UI.
+- [ ] **Clip Fire/Stop (API)**: Call `/clip/fire` and `/clip/stop` for a known [track, scene] and verify the clip slot fires/stops correctly.
+- [ ] **Device Naming (Track/Return)**: Rename a track and return device via `/track/device/name` and `/return/device/name`, confirm names update in Live and in `/track/devices` / `/return/devices`.
+- [ ] **Track Arm**: Use `/track/arm` to arm/disarm a track and confirm the arm button updates in Live and recording input works as expected.
 
 ## Future Test Enhancements
 
