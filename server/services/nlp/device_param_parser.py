@@ -25,11 +25,17 @@ class DeviceParamMatch:
 
 
 # Mixer parameter patterns (from existing mixer_parser.py)
+_SEND_LETTERS = [f"send {chr(ord('a') + i)}" for i in range(12)]  # send a–l
+_SEND_NUMBERS = [f"send {i}" for i in range(1, 13)]  # send 1–12
+
 MIXER_PARAMS = [
-    "volume", "pan", "mute", "solo",
-    "send a", "send b", "send c", "send d",
-    "send 1", "send 2", "send 3", "send 4",
-    "arm", "monitor"
+    "volume",
+    "pan",
+    "mute",
+    "solo",
+    *(_SEND_LETTERS + _SEND_NUMBERS),
+    "arm",
+    "monitor",
 ]
 
 

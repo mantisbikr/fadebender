@@ -422,7 +422,7 @@ def _try_open_navigation_patterns(text_lower: str, original_text: str) -> Option
         return None
 
     # Sends group (preselect) – must be checked before generic track mixer
-    m = _re.search(r"^\s*open\s+track\s+(\d+)\s+send\s+([a-c])(?:\s+controls)?\s*$", qs)
+    m = _re.search(r"^\s*open\s+track\s+(\d+)\s+send\s+([a-l])(?:\s+controls)?\s*$", qs)
     if m:
         ti = int(m.group(1)); letter = m.group(2).upper()
         return {
@@ -432,7 +432,7 @@ def _try_open_navigation_patterns(text_lower: str, original_text: str) -> Option
         }
 
     # Device on return by index
-    m = _re.search(r"^\s*open\s+return\s+([a-c])\s+device\s+(\d+)(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
+    m = _re.search(r"^\s*open\s+return\s+([a-l])\s+device\s+(\d+)(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
     if m:
         letter = m.group(1).upper(); di = int(m.group(2)); ph = (m.group(3) or "").strip() or None
         payload: Dict[str, Any] = {"type": "device", "scope": "return", "return_ref": letter, "device_index": di}
@@ -441,7 +441,7 @@ def _try_open_navigation_patterns(text_lower: str, original_text: str) -> Option
         return {"intent": "open_capabilities", "target": payload, "meta": {"utterance": original_text, "parsed_by": "regex_open"}}
 
     # Device on return by name (+ optional ordinal)
-    m = _re.search(r"^\s*open\s+return\s+([a-c])\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
+    m = _re.search(r"^\s*open\s+return\s+([a-l])\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
     if m:
         letter = m.group(1).upper()
         name = m.group(2).strip()
@@ -466,7 +466,7 @@ def _try_open_navigation_patterns(text_lower: str, original_text: str) -> Option
             "target": {"type": "mixer", "entity": "track", "track_index": ti},
             "meta": {"utterance": original_text, "parsed_by": "regex_open"}
         }
-    m = _re.search(r"^\s*open\s+return\s+([a-c])(?:\s+(?:controls|mixer))?\s*$", qs)
+    m = _re.search(r"^\s*open\s+return\s+([a-l])(?:\s+(?:controls|mixer))?\s*$", qs)
     if m:
         letter = m.group(1).upper()
         return {
@@ -531,8 +531,8 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
 
     # 1. TOPOLOGY: Send effects routing
     # "what does track 1 send A affect" | "what is track 1 send A connected to"
-    m1 = re.search(r"what\s+(?:does|is)\s+track\s+(\d+)\s+send\s+([a-c])\s+(?:affect|connect\w*|go\s+to|route|target|do)\b", text_lower)
-    m2 = re.search(r"what\s+is\s+the\s+effect\s+on\s+track\s+(\d+)\s+send\s+([a-c])\b", text_lower)
+    m1 = re.search(r"what\s+(?:does|is)\s+track\s+(\d+)\s+send\s+([a-l])\s+(?:affect|connect\w*|go\s+to|route|target|do)\b", text_lower)
+    m2 = re.search(r"what\s+is\s+the\s+effect\s+on\s+track\s+(\d+)\s+send\s+([a-l])\b", text_lower)
     m = m1 or m2
     if m:
         track_num = int(m.group(1))
@@ -554,7 +554,7 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
 
     # 2. DEVICE LISTS: Get all devices on track/return
     # "what are return A devices" | "what are track 1 devices"
-    m_ret = re.search(r"what\s+are\s+return\s+([a-c])\s+devices\b", text_lower)
+    m_ret = re.search(r"what\s+are\s+return\s+([a-l])\s+devices\b", text_lower)
     m_trk = re.search(r"what\s+are\s+track\s+(\d+)\s+devices\b", text_lower)
     if m_ret:
         return_letter = m_ret.group(1).upper()
@@ -591,7 +591,7 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
 
     # 3. SOURCE QUERIES: Who sends to return
     # "who sends to return A" | "which tracks send to return B"
-    m = re.search(r"(who|which\s+tracks)\s+sends?\s+to\s+return\s+([a-c])\b", text_lower)
+    m = re.search(r"(who|which\s+tracks)\s+sends?\s+to\s+return\s+([a-l])\b", text_lower)
     if m:
         return_letter = m.group(2).upper()
         return {
@@ -612,7 +612,7 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
     # 4. STATE BUNDLES: Full mixer state for track/return/master
     # "what is track 1 state" | "what is return A state" | "what is master state"
     m_trk = re.search(r"what\s+is\s+track\s+(\d+)\s+state\b", text_lower)
-    m_ret = re.search(r"what\s+is\s+return\s+([a-c])\s+state\b", text_lower)
+    m_ret = re.search(r"what\s+is\s+return\s+([a-l])\s+state\b", text_lower)
     m_mas = re.search(r"what\s+is\s+master\s+state\b", text_lower)
     if m_trk:
         track_num = int(m_trk.group(1))
@@ -756,7 +756,7 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
 
     # 7. DEVICE BY ORDINAL: Query device parameter by position
     # "what is return A device 1 feedback" | "what is track 2 device 3 decay"
-    m_ret = re.search(r"what\s+is\s+return\s+([a-c])\s+device\s+(\d+)\s+([a-z0-9][a-z0-9 /%\.-]+)\??$", text_lower)
+    m_ret = re.search(r"what\s+is\s+return\s+([a-l])\s+device\s+(\d+)\s+([a-z0-9][a-z0-9 /%\.-]+)\??$", text_lower)
     m_trk = re.search(r"what\s+is\s+track\s+(\d+)\s+device\s+(\d+)\s+([a-z0-9][a-z0-9 /%\.-]+)\??$", text_lower)
     if m_ret:
         return_letter = m_ret.group(1).upper()

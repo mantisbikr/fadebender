@@ -492,7 +492,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         try:
             import re as _re
             s = str(p or "").lower()
-            m = _re.search(r"\bsend\s*([a-d])\b", s)
+            m = _re.search(r"\bsend\s*([a-l])\b", s)
             if m:
                 return m.group(1).upper()
             # Very conservative fallback: exact single letter A-D only, and only if plugin is empty/generic

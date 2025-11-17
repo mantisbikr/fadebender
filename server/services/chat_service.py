@@ -78,10 +78,7 @@ def _get_parse_index() -> Dict[str, Any]:
                     "pan",
                     "mute",
                     "solo",
-                    "send a",
-                    "send b",
-                    "send c",
-                    "send d",
+                    *[f"send {chr(ord('a') + i)}" for i in range(12)],
                 ],
                 "typo_map": {},
             }
@@ -97,10 +94,7 @@ def _get_parse_index() -> Dict[str, Any]:
                 "pan",
                 "mute",
                 "solo",
-                "send a",
-                "send b",
-                "send c",
-                "send d",
+                *[f"send {chr(ord('a') + i)}" for i in range(12)],
             ],
             "typo_map": {},
         }

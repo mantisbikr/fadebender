@@ -149,7 +149,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
             )
 
     # Pattern 4: "pan return X to VALUE [L/R]" → "set return X pan to +/-VALUE"
-    m4 = re.search(r"\bpan\s+return\s+([A-C])\s+to\s+(-?\d+)\s*([LR])?\b", text, flags=re.IGNORECASE)
+    m4 = re.search(r"\bpan\s+return\s+([A-L])\s+to\s+(-?\d+)\s*([LR])?\b", text, flags=re.IGNORECASE)
     if m4:
         ret = m4.group(1).upper()
         amt = m4.group(2)

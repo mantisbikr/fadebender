@@ -66,7 +66,8 @@ def parse_return_reference(text: str) -> Optional[TrackMatch]:
         "return B" → TrackMatch(domain="return", index=1, reference="Return B")
         "return a" → TrackMatch(domain="return", index=0, reference="Return A")  # Case insensitive
     """
-    pattern = r"\breturn\s+([a-d])\b"
+    # Support Live's A–L returns (up to 12)
+    pattern = r"\breturn\s+([a-l])\b"
     match = re.search(pattern, text, re.IGNORECASE)
 
     if match:

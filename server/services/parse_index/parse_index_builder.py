@@ -295,16 +295,13 @@ class ParseIndexBuilder:
         Returns:
             List of mixer parameter names
         """
+        sends = [f"send {chr(ord('a') + i)}" for i in range(12)]  # send a–l
         return [
             "volume",
             "pan",
             "mute",
             "solo",
-            "send a",
-            "send b",
-            "send c",
-            "send d",
-            "send e",
+            *sends,
         ]
 
     def _get_typo_map(self) -> Dict[str, str]:

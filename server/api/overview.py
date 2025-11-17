@@ -1012,7 +1012,7 @@ def _parse_track_name(track_name: str) -> tuple[str | None, int | None]:
     if "return" in name_lower or name_lower[0] in "abc":
         # Extract letter: "Return A" → A, "A-Reverb" → A
         import re
-        match = re.search(r'\b([A-C])\b', track_name.upper())
+        match = re.search(r'\b([A-L])\b', track_name.upper())
         if match:
             letter = match.group(1)
             return "return", ord(letter) - ord('A')
