@@ -1734,19 +1734,25 @@ def set_track_name(live, track_index: int, name: str) -> bool:
         idx = int(track_index)
         if live is not None and 1 <= idx <= len(getattr(live, 'tracks', [])):
             song = live
-            try:
-                if hasattr(song, 'begin_undo_step'):
-                    song.begin_undo_step()
-                tr = song.tracks[idx - 1]
-                tr.name = str(name)
-                _emit({"event": "track_renamed", "track": idx, "name": str(name)})
-                return True
-            finally:
+
+            def _do_set_name():
                 try:
-                    if hasattr(song, 'end_undo_step'):
-                        song.end_undo_step()
-                except Exception:
-                    pass
+                    if hasattr(song, 'begin_undo_step'):
+                        song.begin_undo_step()
+                    tr = song.tracks[idx - 1]
+                    tr.name = str(name)
+                    _emit({"event": "track_renamed", "track": idx, "name": str(name)})
+                    return True
+                finally:
+                    try:
+                        if hasattr(song, 'end_undo_step'):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+
+            ok = _run_on_main(_do_set_name)
+            if bool(ok):
+                return True
     except Exception:
         pass
     # Stub fallback
@@ -1766,19 +1772,25 @@ def set_scene_name(live, scene_index: int, name: str) -> bool:
             scenes = getattr(live, 'scenes', []) or []
             if 1 <= si <= len(scenes):
                 song = live
-                try:
-                    if hasattr(song, 'begin_undo_step'):
-                        song.begin_undo_step()
-                    sc = scenes[si - 1]
-                    sc.name = str(name)
-                    _emit({"event": "scene_renamed", "scene": si, "name": str(name)})
-                    return True
-                finally:
+
+                def _do_set_scene_name():
                     try:
-                        if hasattr(song, 'end_undo_step'):
-                            song.end_undo_step()
-                    except Exception:
-                        pass
+                        if hasattr(song, 'begin_undo_step'):
+                            song.begin_undo_step()
+                        sc = scenes[si - 1]
+                        sc.name = str(name)
+                        _emit({"event": "scene_renamed", "scene": si, "name": str(name)})
+                        return True
+                    finally:
+                        try:
+                            if hasattr(song, 'end_undo_step'):
+                                song.end_undo_step()
+                        except Exception:
+                            pass
+
+                ok = _run_on_main(_do_set_scene_name)
+                if bool(ok):
+                    return True
     except Exception:
         pass
     # Stub
@@ -1806,18 +1818,24 @@ def set_clip_name(live, track_index: int, scene_index: int, name: str) -> bool:
                     if clip is None:
                         return False
                     song = live
-                    try:
-                        if hasattr(song, 'begin_undo_step'):
-                            song.begin_undo_step()
-                        clip.name = str(name)
-                        _emit({"event": "clip_renamed", "track": ti, "scene": si, "name": str(name)})
-                        return True
-                    finally:
+
+                    def _do_set_clip_name():
                         try:
-                            if hasattr(song, 'end_undo_step'):
-                                song.end_undo_step()
-                        except Exception:
-                            pass
+                            if hasattr(song, 'begin_undo_step'):
+                                song.begin_undo_step()
+                            clip.name = str(name)
+                            _emit({"event": "clip_renamed", "track": ti, "scene": si, "name": str(name)})
+                            return True
+                        finally:
+                            try:
+                                if hasattr(song, 'end_undo_step'):
+                                    song.end_undo_step()
+                            except Exception:
+                                pass
+
+                    ok = _run_on_main(_do_set_clip_name)
+                    if bool(ok):
+                        return True
     except Exception:
         pass
     # Stub
@@ -1825,6 +1843,126 @@ def set_clip_name(live, track_index: int, scene_index: int, name: str) -> bool:
     _STATE.setdefault("clips", {})[key] = str(name)
     _emit({"event": "clip_renamed", "track": int(track_index), "scene": int(scene_index), "name": str(name)})
     return True
+
+
+def set_track_device_name(live, track_index: int, device_index: int, name: str) -> bool:
+    """Rename a device on a track by [track, device] indices (1-based track, 0-based device)."""
+    try:
+        ti = int(track_index)
+        di = int(device_index)
+        if live is not None:
+            tracks = getattr(live, "tracks", []) or []
+            if 1 <= ti <= len(tracks):
+                song = live
+                tr = tracks[ti - 1]
+
+                def _do_set_track_device_name():
+                    try:
+                        if hasattr(song, "begin_undo_step"):
+                            song.begin_undo_step()
+                        devs = getattr(tr, "devices", []) or []
+                        if not (0 <= di < len(devs)):
+                            return False
+                        dv = devs[di]
+                        dv.name = str(name)
+                        _emit(
+                            {
+                                "event": "track_device_renamed",
+                                "track": ti,
+                                "device_index": di,
+                                "name": str(name),
+                            }
+                        )
+                        return True
+                    finally:
+                        try:
+                            if hasattr(song, "end_undo_step"):
+                                song.end_undo_step()
+                        except Exception:
+                            pass
+
+                ok = _run_on_main(_do_set_track_device_name)
+                if bool(ok):
+                    return True
+    except Exception:
+        pass
+    # Stub: update in-memory state
+    for t in _STATE.get("tracks", []):
+        if t["index"] == int(track_index):
+            devs = t.setdefault("devices", [])
+            if 0 <= int(device_index) < len(devs):
+                devs[int(device_index)]["name"] = str(name)
+                _emit(
+                    {
+                        "event": "track_device_renamed",
+                        "track": int(track_index),
+                        "device_index": int(device_index),
+                        "name": str(name),
+                    }
+                )
+                return True
+            break
+    return False
+
+
+def set_return_device_name(live, return_index: int, device_index: int, name: str) -> bool:
+    """Rename a device on a return track by [return, device] indices (0-based return, 0-based device)."""
+    try:
+        ri = int(return_index)
+        di = int(device_index)
+        if live is not None:
+            returns = getattr(live, "return_tracks", []) or []
+            if 0 <= ri < len(returns):
+                song = live
+                rt = returns[ri]
+
+                def _do_set_return_device_name():
+                    try:
+                        if hasattr(song, "begin_undo_step"):
+                            song.begin_undo_step()
+                        devs = getattr(rt, "devices", []) or []
+                        if not (0 <= di < len(devs)):
+                            return False
+                        dv = devs[di]
+                        dv.name = str(name)
+                        _emit(
+                            {
+                                "event": "return_device_renamed",
+                                "return": ri,
+                                "device_index": di,
+                                "name": str(name),
+                            }
+                        )
+                        return True
+                    finally:
+                        try:
+                            if hasattr(song, "end_undo_step"):
+                                song.end_undo_step()
+                        except Exception:
+                            pass
+
+                ok = _run_on_main(_do_set_return_device_name)
+                if bool(ok):
+                    return True
+    except Exception:
+        pass
+    # Stub: update in-memory state
+    for r in _STATE.get("returns", []):
+        if r["index"] == int(return_index):
+            devs = r.setdefault("devices", [])
+            if 0 <= int(device_index) < len(devs):
+                devs[int(device_index)]["name"] = str(name)
+                _emit(
+                    {
+                        "event": "return_device_renamed",
+                        "return": int(return_index),
+                        "device_index": int(device_index),
+                        "name": str(name),
+                    }
+                )
+                return True
+            break
+    return False
 
 
 def delete_track_device(live, track_index: int, device_index: int) -> bool:
@@ -1838,18 +1976,23 @@ def delete_track_device(live, track_index: int, device_index: int) -> bool:
                 tr = tracks[ti - 1]
                 if hasattr(tr, 'delete_device'):
                     song = live
-                    try:
-                        if hasattr(song, 'begin_undo_step'):
-                            song.begin_undo_step()
-                        tr.delete_device(di)
-                        _emit({"event": "track_device_deleted", "track": ti, "device_index": di})
-                        return True
-                    finally:
+                    def _do_delete_device():
                         try:
-                            if hasattr(song, 'end_undo_step'):
-                                song.end_undo_step()
-                        except Exception:
-                            pass
+                            if hasattr(song, 'begin_undo_step'):
+                                song.begin_undo_step()
+                            tr.delete_device(di)
+                            _emit({"event": "track_device_deleted", "track": ti, "device_index": di})
+                            return True
+                        finally:
+                            try:
+                                if hasattr(song, 'end_undo_step'):
+                                    song.end_undo_step()
+                            except Exception:
+                                pass
+
+                    ok = _run_on_main(_do_delete_device)
+                    if bool(ok):
+                        return True
     except Exception:
         pass
     # Stub
@@ -1880,37 +2023,76 @@ def reorder_track_device(live, track_index: int, old_index: int, new_index: int)
             if 1 <= ti <= len(tracks):
                 tr = tracks[ti - 1]
                 song = live
-                try:
-                    if hasattr(song, 'begin_undo_step'):
-                        song.begin_undo_step()
-                    ok = False
+
+                def _do_reorder_device():
+                    ok_inner = False
+                    errors = []
                     try:
-                        if hasattr(tr, 'reorder_device'):
-                            try:
-                                tr.reorder_device(oi, ni)
-                                ok = True
-                            except Exception:
-                                devs = list(getattr(tr, 'devices', []) or [])
-                                if 0 <= oi < len(devs):
-                                    tr.reorder_device(devs[oi], ni)
-                                    ok = True
-                    except Exception:
-                        ok = False
-                    if not ok and hasattr(tr, 'reorder_devices'):
+                        if hasattr(song, 'begin_undo_step'):
+                            song.begin_undo_step()
+
+                        devs = list(getattr(tr, 'devices', []) or [])
+                        if not (0 <= oi < len(devs)):
+                            return False
+                        # Clamp target index into valid range
+                        target_idx = ni
+                        if target_idx < 0:
+                            target_idx = 0
+                        if target_idx >= len(devs):
+                            target_idx = len(devs) - 1
+                        dev = devs[oi]
+
+                        owners = [tr]
                         try:
-                            tr.reorder_devices(oi, ni)
-                            ok = True
+                            dv_obj = getattr(tr, 'devices', None)
+                            if dv_obj is not None and dv_obj is not tr:
+                                owners.append(dv_obj)
+                        except Exception as e:
+                            errors.append(f"devices_owner_probe_failed:{type(e).__name__}")
+
+                        for owner in owners:
+                            # Preferred: reorder_device(device, index)
+                            try:
+                                if hasattr(owner, 'reorder_device'):
+                                    owner.reorder_device(dev, target_idx)
+                                    ok_inner = True
+                                    break
+                            except Exception as e:
+                                errors.append(f"reorder_device_failed:{type(e).__name__}")
+                            # Some Live builds may expose reorder_devices
+                            try:
+                                if hasattr(owner, 'reorder_devices'):
+                                    owner.reorder_devices(dev, target_idx)
+                                    ok_inner = True
+                                    break
+                            except Exception as e:
+                                errors.append(f"reorder_devices_failed:{type(e).__name__}")
+                            # Fallback: move_device-style API
+                            try:
+                                if hasattr(owner, 'move_device'):
+                                    owner.move_device(dev, target_idx)
+                                    ok_inner = True
+                                    break
+                            except Exception as e:
+                                errors.append(f"move_device_failed:{type(e).__name__}")
+
+                        if ok_inner:
+                            _emit({"event": "track_device_reordered", "track": ti, "from": oi, "to": target_idx})
+                            return {"ok": True, "from": oi, "to": target_idx}
+                        return {"ok": False, "error": ";".join(errors) or "reorder_failed", "from": oi, "to": target_idx}
+                    finally:
+                        try:
+                            if hasattr(song, 'end_undo_step'):
+                                song.end_undo_step()
                         except Exception:
                             pass
-                    if ok:
-                        _emit({"event": "track_device_reordered", "track": ti, "from": oi, "to": ni})
-                        return True
-                finally:
-                    try:
-                        if hasattr(song, 'end_undo_step'):
-                            song.end_undo_step()
-                    except Exception:
-                        pass
+
+                res = _run_on_main(_do_reorder_device)
+                if isinstance(res, dict):
+                    return res
+                if bool(res):
+                    return {"ok": True, "from": oi, "to": ni}
+                return {"ok": False, "error": "reorder_failed_no_detail", "from": oi, "to": ni}
     except Exception:
         pass
     # Stub
@@ -2098,18 +2280,23 @@ def delete_return_device(live, return_index: int, device_index: int) -> bool:
                 rt = returns[ri]
                 if hasattr(rt, 'delete_device'):
                     song = live
-                    try:
-                        if hasattr(song, 'begin_undo_step'):
-                            song.begin_undo_step()
-                        rt.delete_device(di)
-                        _emit({"event": "return_device_deleted", "return": ri, "device_index": di})
-                        return True
-                    finally:
+                    def _do_delete_return_device():
                         try:
-                            if hasattr(song, 'end_undo_step'):
-                                song.end_undo_step()
-                        except Exception:
-                            pass
+                            if hasattr(song, 'begin_undo_step'):
+                                song.begin_undo_step()
+                            rt.delete_device(di)
+                            _emit({"event": "return_device_deleted", "return": ri, "device_index": di})
+                            return True
+                        finally:
+                            try:
+                                if hasattr(song, 'end_undo_step'):
+                                    song.end_undo_step()
+                            except Exception:
+                                pass
+
+                    ok = _run_on_main(_do_delete_return_device)
+                    if bool(ok):
+                        return True
     except Exception:
         pass
     # Stub
@@ -2137,37 +2324,72 @@ def reorder_return_device(live, return_index: int, old_index: int, new_index: in
             if 0 <= ri < len(returns):
                 rt = returns[ri]
                 song = live
-                try:
-                    if hasattr(song, 'begin_undo_step'):
-                        song.begin_undo_step()
-                    ok = False
+
+                def _do_reorder_return_device():
+                    ok_inner = False
+                    errors = []
                     try:
-                        if hasattr(rt, 'reorder_device'):
-                            try:
-                                rt.reorder_device(oi, ni)
-                                ok = True
-                            except Exception:
-                                devs = list(getattr(rt, 'devices', []) or [])
-                                if 0 <= oi < len(devs):
-                                    rt.reorder_device(devs[oi], ni)
-                                    ok = True
-                    except Exception:
-                        ok = False
-                    if not ok and hasattr(rt, 'reorder_devices'):
+                        if hasattr(song, 'begin_undo_step'):
+                            song.begin_undo_step()
+
+                        devs = list(getattr(rt, 'devices', []) or [])
+                        if not (0 <= oi < len(devs)):
+                            return {"ok": False, "error": f"old_index_out_of_range:{oi}", "device_count": len(devs)}
+                        target_idx = ni
+                        if target_idx < 0:
+                            target_idx = 0
+                        if target_idx >= len(devs):
+                            target_idx = len(devs) - 1
+                        dev = devs[oi]
+
+                        owners = [rt]
                         try:
-                            rt.reorder_devices(oi, ni)
-                            ok = True
+                            dv_obj = getattr(rt, 'devices', None)
+                            if dv_obj is not None and dv_obj is not rt:
+                                owners.append(dv_obj)
+                        except Exception as e:
+                            errors.append(f"devices_owner_probe_failed:{type(e).__name__}")
+
+                        for owner in owners:
+                            try:
+                                if hasattr(owner, 'reorder_device'):
+                                    owner.reorder_device(dev, target_idx)
+                                    ok_inner = True
+                                    break
+                            except Exception as e:
+                                errors.append(f"reorder_device_failed:{type(e).__name__}")
+                            try:
+                                if hasattr(owner, 'reorder_devices'):
+                                    owner.reorder_devices(dev, target_idx)
+                                    ok_inner = True
+                                    break
+                            except Exception as e:
+                                errors.append(f"reorder_devices_failed:{type(e).__name__}")
+                            try:
+                                if hasattr(owner, 'move_device'):
+                                    owner.move_device(dev, target_idx)
+                                    ok_inner = True
+                                    break
+                            except Exception as e:
+                                errors.append(f"move_device_failed:{type(e).__name__}")
+
+                        if ok_inner:
+                            _emit({"event": "return_device_reordered", "return": ri, "from": oi, "to": target_idx})
+                            return {"ok": True, "from": oi, "to": target_idx}
+                        return {"ok": False, "error": ";".join(errors) or "reorder_failed", "from": oi, "to": target_idx}
+                    finally:
+                        try:
+                            if hasattr(song, 'end_undo_step'):
+                                song.end_undo_step()
                         except Exception:
                             pass
-                    if ok:
-                        _emit({"event": "return_device_reordered", "return": ri, "from": oi, "to": ni})
-                        return True
-                finally:
-                    try:
-                        if hasattr(song, 'end_undo_step'):
-                            song.end_undo_step()
-                    except Exception:
-                        pass
+
+                res = _run_on_main(_do_reorder_return_device)
+                if isinstance(res, dict):
+                    return res
+                if bool(res):
+                    return {"ok": True, "from": oi, "to": ni}
+                return {"ok": False, "error": "reorder_failed_no_detail", "from": oi, "to": ni}
     except Exception:
         pass
     # Stub

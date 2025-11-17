@@ -64,7 +64,27 @@ def get_return_routing(index: int) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
-# --------- Device Delete/Reorder (UDP thin wrappers) ---------
+# --------- Device Naming / Delete / Reorder (UDP thin wrappers) ---------
+
+class ReturnDeviceNameBody(BaseModel):
+    return_index: int
+    device_index: int
+    name: str
+
+
+@router.post("/return/device/name")
+def set_return_device_name(body: ReturnDeviceNameBody) -> Dict[str, Any]:
+    resp = request_op(
+        "set_return_device_name",
+        timeout=1.0,
+        return_index=int(body.return_index),
+        device_index=int(body.device_index),
+        name=str(body.name),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
 
 class ReturnDeviceDeleteBody(BaseModel):
     return_index: int

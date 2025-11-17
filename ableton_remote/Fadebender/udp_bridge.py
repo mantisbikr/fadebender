@@ -157,8 +157,11 @@ def start_udp_server():  # pragma: no cover
                 old_index = int(msg.get("old_index", 0))
                 new_index = int(msg.get("new_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
-                ok = lom_ops.reorder_return_device(live_ctx, return_index, old_index, new_index)
-                resp = {"ok": bool(ok), "op": op}
+                result = lom_ops.reorder_return_device(live_ctx, return_index, old_index, new_index)
+                if isinstance(result, dict):
+                    resp = {"op": op, **result}
+                else:
+                    resp = {"ok": bool(result), "op": op}
             elif op == "get_return_device_params":
                 return_index = int(msg.get("return_index", 0))
                 device_index = int(msg.get("device_index", 0))
@@ -189,8 +192,11 @@ def start_udp_server():  # pragma: no cover
                 old_index = int(msg.get("old_index", 0))
                 new_index = int(msg.get("new_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
-                ok = lom_ops.reorder_track_device(live_ctx, track_index, old_index, new_index)
-                resp = {"ok": bool(ok), "op": op}
+                result = lom_ops.reorder_track_device(live_ctx, track_index, old_index, new_index)
+                if isinstance(result, dict):
+                    resp = {"op": op, **result}
+                else:
+                    resp = {"ok": bool(result), "op": op}
             elif op == "get_track_device_params":
                 track_index = int(msg.get("track_index", 0))
                 device_index = int(msg.get("device_index", 0))
@@ -315,6 +321,20 @@ def start_udp_server():  # pragma: no cover
                 name = str(msg.get("name", "")).strip()
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_clip_name(live_ctx, track_index, scene_index, name)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "set_track_device_name":
+                track_index = int(msg.get("track_index", 0))
+                device_index = int(msg.get("device_index", 0))
+                name = str(msg.get("name", "")).strip()
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_track_device_name(live_ctx, track_index, device_index, name)
+                resp = {"ok": bool(ok), "op": op}
+            elif op == "set_return_device_name":
+                return_index = int(msg.get("return_index", 0))
+                device_index = int(msg.get("device_index", 0))
+                name = str(msg.get("name", "")).strip()
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                ok = lom_ops.set_return_device_name(live_ctx, return_index, device_index, name)
                 resp = {"ok": bool(ok), "op": op}
             else:
                 resp = {"ok": False, "error": f"unknown op: {op}", "echo": msg}

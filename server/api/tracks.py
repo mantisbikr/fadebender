@@ -87,6 +87,26 @@ class TrackDeviceDeleteBody(BaseModel):
     device_index: int
 
 
+class TrackDeviceNameBody(BaseModel):
+    track_index: int
+    device_index: int
+    name: str
+
+
+@router.post("/track/device/name")
+def set_track_device_name(body: TrackDeviceNameBody) -> Dict[str, Any]:
+    resp = request_op(
+        "set_track_device_name",
+        timeout=1.0,
+        track_index=int(body.track_index),
+        device_index=int(body.device_index),
+        name=str(body.name),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 @router.post("/track/device/delete")
 def delete_track_device(body: TrackDeviceDeleteBody) -> Dict[str, Any]:
     resp = request_op(
