@@ -95,6 +95,22 @@ def capture_insert_scene(_: CaptureInsertSceneBody) -> Dict[str, Any]:
     return {"ok": True, "data": data}
 
 
+class CreateSceneBody(BaseModel):
+    index: int | None = None  # 1-based insert position; omit to append
+
+
+@router.post("/scene/create")
+def create_scene(body: CreateSceneBody) -> Dict[str, Any]:
+    msg: Dict[str, Any] = {}
+    if body.index is not None:
+        msg["index"] = int(body.index)
+    resp = request_op("create_scene", timeout=1.5, **msg)
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
 class SetViewBody(BaseModel):
     mode: str  # 'session' | 'arrangement'
 
@@ -129,6 +145,32 @@ class StopSceneBody(BaseModel):
 @router.post("/scene/stop")
 def stop_scene(body: StopSceneBody) -> Dict[str, Any]:
     resp = request_op("stop_scene", timeout=1.0, scene_index=int(body.scene_index))
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class DeleteSceneBody(BaseModel):
+    scene_index: int
+
+
+@router.post("/scene/delete")
+def delete_scene(body: DeleteSceneBody) -> Dict[str, Any]:
+    resp = request_op("delete_scene", timeout=1.5, scene_index=int(body.scene_index))
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) else resp
+    return {"ok": True, "data": data}
+
+
+class DuplicateSceneBody(BaseModel):
+    scene_index: int
+
+
+@router.post("/scene/duplicate")
+def duplicate_scene(body: DuplicateSceneBody) -> Dict[str, Any]:
+    resp = request_op("duplicate_scene", timeout=1.5, scene_index=int(body.scene_index))
     if not resp:
         return {"ok": False, "error": "no response"}
     data = resp.get("data") if isinstance(resp, dict) else resp

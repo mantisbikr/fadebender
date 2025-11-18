@@ -110,6 +110,117 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                 "summary": f"Renamed Clip [{ti},{si}] to \"{name}\"",
                 "resp": r,
             }
+        # Project structure: tracks/scenes create/delete/duplicate
+        if action == "create_audio_track":
+            idx = None
+            if isinstance(value, dict):
+                idx = value.get("index")
+            elif value is not None:
+                try:
+                    idx = int(value)
+                except Exception:
+                    idx = None
+            params: Dict[str, Any] = {}
+            if idx is not None:
+                params["index"] = int(idx)
+            r = _req("create_audio_track", timeout=1.5, **params)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Created audio track at index {idx}" if idx is not None else "Created audio track at end",
+                "resp": r,
+            }
+        if action == "create_midi_track":
+            idx = None
+            if isinstance(value, dict):
+                idx = value.get("index")
+            elif value is not None:
+                try:
+                    idx = int(value)
+                except Exception:
+                    idx = None
+            params: Dict[str, Any] = {}
+            if idx is not None:
+                params["index"] = int(idx)
+            r = _req("create_midi_track", timeout=1.5, **params)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Created MIDI track at index {idx}" if idx is not None else "Created MIDI track at end",
+                "resp": r,
+            }
+        if action == "delete_track":
+            try:
+                ti = int(value)
+            except Exception:
+                raise HTTPException(400, "invalid_track_index")
+            r = _req("delete_track", timeout=1.5, track_index=ti)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Deleted track {ti}",
+                "resp": r,
+            }
+        if action == "duplicate_track":
+            try:
+                ti = int(value)
+            except Exception:
+                raise HTTPException(400, "invalid_track_index")
+            r = _req("duplicate_track", timeout=1.5, track_index=ti)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Duplicated track {ti}",
+                "resp": r,
+            }
+        if action == "create_scene":
+            idx = None
+            if isinstance(value, dict):
+                idx = value.get("scene_index")
+            elif value is not None:
+                try:
+                    idx = int(value)
+                except Exception:
+                    idx = None
+            params: Dict[str, Any] = {}
+            if idx is not None:
+                params["index"] = int(idx)
+            r = _req("create_scene", timeout=1.5, **params)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Created scene at index {idx}" if idx is not None else "Created scene at end",
+                "resp": r,
+            }
+        if action == "delete_scene":
+            si = None
+            if isinstance(value, dict):
+                si = value.get("scene_index")
+            else:
+                try:
+                    si = int(value)
+                except Exception:
+                    si = None
+            if si is None:
+                raise HTTPException(400, "invalid_scene_index")
+            r = _req("delete_scene", timeout=1.5, scene_index=int(si))
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Deleted scene {si}",
+                "resp": r,
+            }
+        if action == "duplicate_scene":
+            si = None
+            if isinstance(value, dict):
+                si = value.get("scene_index")
+            else:
+                try:
+                    si = int(value)
+                except Exception:
+                    si = None
+            if si is None:
+                raise HTTPException(400, "invalid_scene_index")
+            r = _req("duplicate_scene", timeout=1.5, scene_index=int(si))
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Duplicated scene {si}",
+                "resp": r,
+            }
         # Clip fire/stop (Session clips)
         if action == "clip_fire":
             ti = None
@@ -192,6 +303,21 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                 pass
         r = _req("set_transport", timeout=1.0, **params)
         return {"ok": bool(r and r.get("ok", True)), "summary": f"Transport: {action}{(' ' + str(value)) if value is not None else ''}", "resp": r}
+
+    # Track arm (separate from mixer field operations)
+    if d == "track" and getattr(intent, "action", "") == "arm" and intent.track_index is not None:
+        from server.services.ableton_client import request_op as _req
+        try:
+            arm_val = bool(intent.value) if intent.value is not None else True
+            ti = int(intent.track_index)
+        except Exception:
+            raise HTTPException(400, "invalid_track_arm_payload")
+        r = _req("set_track_arm", timeout=1.0, track_index=ti, arm=arm_val)
+        return {
+            "ok": bool(r and r.get("ok", True)),
+            "summary": f"Track {ti} {'armed' if arm_val else 'disarmed'}",
+            "resp": r,
+        }
 
     # Routing
     if d == "track" and field == "routing" and intent.track_index is not None:

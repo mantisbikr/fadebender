@@ -68,6 +68,15 @@ Scenes, Clips, and Views
   - `stop scene 2`
 - Capture and insert a new scene from currently playing clips:
   - HTTP: POST `/scene/capture_insert` {}
+- Create / delete / duplicate scenes:
+  - HTTP: POST `/scene/create` { "index": N? } (omit index to append)
+  - HTTP: POST `/scene/delete` { "scene_index": N }
+  - HTTP: POST `/scene/duplicate` { "scene_index": N }
+ - Chat examples (with intents-for-chat enabled):
+   - `create scene`
+   - `create scene at 3`
+   - `delete scene 2`
+   - `duplicate scene 1`
 - Create an empty MIDI clip in Session view:
   - HTTP: POST `/clip/create` { "track_index": T, "scene_index": S, "length_beats": 4 }
   - Notes: Only works on MIDI tracks; slot must be empty.
@@ -99,8 +108,27 @@ Naming and Device Order
 Track Arm and Monitoring
 - Arm/disarm a track:
   - HTTP: POST `/track/arm` { "track_index": T, "arm": true|false }
+  - Chat examples (with intents-for-chat enabled):
+    - `arm track 3`
+    - `disarm track 3`
 - Set monitoring/routing:
   - HTTP: POST `/track/routing` { "track_index": T, "monitor_state": "in" | "auto" | "off", ... }
+
+Track Creation and Management
+- Create tracks:
+  - HTTP: POST `/track/create_audio` { "index": N? } (omit index to append)
+  - HTTP: POST `/track/create_midi` { "index": N? } (omit index to append)
+  - Chat examples:
+    - `create audio track`
+    - `create audio track at 3`
+    - `create midi track`
+    - `create midi track at 4`
+- Delete / duplicate tracks:
+  - HTTP: POST `/track/delete` { "track_index": T }
+  - HTTP: POST `/track/duplicate` { "track_index": T }
+  - Chat examples:
+    - `delete track 3`
+    - `duplicate track 2`
 
 Transport
 - Reads:

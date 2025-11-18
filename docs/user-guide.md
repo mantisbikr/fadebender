@@ -96,6 +96,15 @@ Undo/Redo
 Scenes, Clips, and Views
 - List scenes (names):
   - HTTP: GET `/scenes`
+- Create / delete / duplicate scenes:
+  - HTTP: POST `/scene/create` { "index": N? } (omit index to append at end)
+  - HTTP: POST `/scene/delete` { "scene_index": N }
+  - HTTP: POST `/scene/duplicate` { "scene_index": N }
+ - NLP examples (when `use_intents_for_chat` is enabled):
+   - `create scene`
+   - `create scene at 3`
+   - `delete scene 2`
+   - `duplicate scene 1`
 - Fire/stop a scene:
   - HTTP: POST `/scene/fire` { "scene_index": N, "select": true }
   - HTTP: POST `/scene/stop` { "scene_index": N }
@@ -136,8 +145,27 @@ Naming and Device Order
 Track Arm and Monitoring
 - Arm/disarm a track:
   - HTTP: POST `/track/arm` { "track_index": T, "arm": true|false }
+  - NLP (when `use_intents_for_chat` is enabled):
+    - `arm track 3`
+    - `disarm track 3`
 - Set monitoring/routing:
   - HTTP: POST `/track/routing` { "track_index": T, "monitor_state": "in" | "auto" | "off", ... }
+
+Track Creation and Management
+- Create tracks:
+  - HTTP: POST `/track/create_audio` { "index": N? } (omit index to append)
+  - HTTP: POST `/track/create_midi` { "index": N? } (omit index to append)
+  - NLP (when `use_intents_for_chat` is enabled):
+    - `create audio track`
+    - `create audio track at 3`
+    - `create midi track`
+    - `create midi track at 4`
+- Delete / duplicate tracks:
+  - HTTP: POST `/track/delete` { "track_index": T }
+  - HTTP: POST `/track/duplicate` { "track_index": T }
+  - NLP:
+    - `delete track 3`
+    - `duplicate track 2`
 
 Troubleshooting
 - Param not found / ambiguous: UI shows suggestions and (for devices) a parameter list in the drawer

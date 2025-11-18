@@ -427,6 +427,347 @@ def get_scenes(live) -> Dict[str, Any]:
     return {"scenes": out}
 
 
+def create_audio_track(live, index: int | None = None) -> Dict[str, Any]:
+    """Create an audio track at the given 1-based index (or append if None)."""
+    try:
+        if live is not None:
+            song = live
+
+            def _do_create():
+                tracks = getattr(song, "tracks", []) or []
+                n = len(tracks)
+                if index is None:
+                    insert_idx = n
+                else:
+                    try:
+                        idx1 = int(index)
+                    except Exception:
+                        idx1 = n + 1
+                    insert_idx = max(0, min(n, idx1 - 1))
+                try:
+                    song.create_audio_track(insert_idx)
+                    _emit({"event": "track_created", "type": "audio", "index": insert_idx + 1})
+                    return {"ok": True, "index": insert_idx + 1}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_create) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: append audio track
+    tracks = _STATE.setdefault("tracks", [])
+    next_idx = (tracks[-1]["index"] + 1) if tracks else 1
+    tracks.append(
+        {
+            "index": next_idx,
+            "name": f"Track {next_idx}",
+            "type": "audio",
+            "mixer": {"volume": 0.5, "pan": 0.0},
+            "mute": False,
+            "solo": False,
+            "sends": [0.0, 0.0],
+            "devices": [],
+        }
+    )
+    _emit({"event": "track_created", "type": "audio", "index": next_idx})
+    return {"ok": True, "index": next_idx}
+
+
+def create_midi_track(live, index: int | None = None) -> Dict[str, Any]:
+    """Create a MIDI track at the given 1-based index (or append if None)."""
+    try:
+        if live is not None:
+            song = live
+
+            def _do_create():
+                tracks = getattr(song, "tracks", []) or []
+                n = len(tracks)
+                if index is None:
+                    insert_idx = n
+                else:
+                    try:
+                        idx1 = int(index)
+                    except Exception:
+                        idx1 = n + 1
+                    insert_idx = max(0, min(n, idx1 - 1))
+                try:
+                    song.create_midi_track(insert_idx)
+                    _emit({"event": "track_created", "type": "midi", "index": insert_idx + 1})
+                    return {"ok": True, "index": insert_idx + 1}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_create) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: append midi track
+    tracks = _STATE.setdefault("tracks", [])
+    next_idx = (tracks[-1]["index"] + 1) if tracks else 1
+    tracks.append(
+        {
+            "index": next_idx,
+            "name": f"Track {next_idx}",
+            "type": "midi",
+            "mixer": {"volume": 0.5, "pan": 0.0},
+            "mute": False,
+            "solo": False,
+            "sends": [0.0, 0.0],
+            "devices": [],
+        }
+    )
+    _emit({"event": "track_created", "type": "midi", "index": next_idx})
+    return {"ok": True, "index": next_idx}
+
+
+def create_return_track(live) -> Dict[str, Any]:
+    """Create a new return track (appended at the end)."""
+    try:
+        if live is not None:
+            song = live
+
+            def _do_create():
+                try:
+                    before = len(getattr(song, "return_tracks", []) or [])
+                    song.create_return_track()
+                    after = len(getattr(song, "return_tracks", []) or [])
+                    idx = after - 1 if after > 0 else before
+                    _emit({"event": "return_created", "index": idx})
+                    return {"ok": True, "index": idx}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_create) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: append return track
+    returns = _STATE.setdefault("returns", [])
+    next_idx = (returns[-1]["index"] + 1) if returns else 0
+    returns.append(
+        {
+            "index": next_idx,
+            "name": f"{chr(ord('A') + next_idx)} Return",
+            "routing": {"audio_to": {"type": "Master", "channel": "1/2"}, "sends_mode": "post"},
+            "devices": [],
+        }
+    )
+    _emit({"event": "return_created", "index": next_idx})
+    return {"ok": True, "index": next_idx}
+
+
+def delete_track(live, track_index: int) -> Dict[str, Any]:
+    """Delete a track by 1-based index (excluding master/return tracks)."""
+    try:
+        ti = int(track_index)
+        if live is not None:
+            song = live
+
+            def _do_delete():
+                tracks = getattr(song, "tracks", []) or []
+                if not (1 <= ti <= len(tracks)):
+                    return {"ok": False, "error": "track_out_of_range"}
+                try:
+                    song.delete_track(ti - 1)
+                    _emit({"event": "track_deleted", "index": ti})
+                    return {"ok": True}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_delete) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    tracks = _STATE.setdefault("tracks", [])
+    try:
+        ti = int(track_index)
+        idx = next((i for i, t in enumerate(tracks) if t["index"] == ti), None)
+        if idx is None:
+            return {"ok": False, "error": "track_not_found"}
+        tracks.pop(idx)
+        # Reindex
+        for i, t in enumerate(tracks, start=1):
+            t["index"] = i
+        _emit({"event": "track_deleted", "index": ti})
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def duplicate_track(live, track_index: int) -> Dict[str, Any]:
+    """Duplicate a track by 1-based index."""
+    try:
+        ti = int(track_index)
+        if live is not None:
+            song = live
+
+            def _do_dup():
+                tracks = getattr(song, "tracks", []) or []
+                if not (1 <= ti <= len(tracks)):
+                    return {"ok": False, "error": "track_out_of_range"}
+                try:
+                    song.duplicate_track(ti - 1)
+                    _emit({"event": "track_duplicated", "index": ti})
+                    return {"ok": True}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_dup) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: shallow duplicate of track dict
+    tracks = _STATE.setdefault("tracks", [])
+    try:
+        ti = int(track_index)
+        src = next((t for t in tracks if t["index"] == ti), None)
+        if src is None:
+            return {"ok": False, "error": "track_not_found"}
+        import copy
+
+        dup = copy.deepcopy(src)
+        next_idx = (tracks[-1]["index"] + 1) if tracks else ti + 1
+        dup["index"] = next_idx
+        dup["name"] = f"{src.get('name','Track')} Copy"
+        tracks.append(dup)
+        _emit({"event": "track_duplicated", "index": ti, "new_index": next_idx})
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def create_scene(live, index: int | None = None) -> Dict[str, Any]:
+    """Create a blank scene at the given 1-based index (or append if None)."""
+    try:
+        if live is not None:
+            song = live
+
+            def _do_create():
+                scenes = getattr(song, "scenes", []) or []
+                n = len(scenes)
+                if index is None:
+                    insert_idx = n
+                else:
+                    try:
+                        idx1 = int(index)
+                    except Exception:
+                        idx1 = n + 1
+                    insert_idx = max(0, min(n, idx1 - 1))
+                try:
+                    song.create_scene(insert_idx)
+                    _emit({"event": "scene_created", "index": insert_idx + 1})
+                    return {"ok": True, "index": insert_idx + 1}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_create) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    _STATE["scenes"] = int(_STATE.get("scenes", 0) or 0) + 1
+    idx = _STATE["scenes"]
+    _STATE.setdefault("scene_names", {})[idx] = f"Scene {idx}"
+    _emit({"event": "scene_created", "index": idx})
+    return {"ok": True, "index": idx}
+
+
+def delete_scene(live, scene_index: int) -> Dict[str, Any]:
+    """Delete a scene by 1-based index."""
+    try:
+        si = int(scene_index)
+        if live is not None:
+            song = live
+
+            def _do_delete():
+                scenes = getattr(song, "scenes", []) or []
+                if not (1 <= si <= len(scenes)):
+                    return {"ok": False, "error": "scene_out_of_range"}
+                try:
+                    song.delete_scene(si - 1)
+                    _emit({"event": "scene_deleted", "index": si})
+                    return {"ok": True}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_delete) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    try:
+        si = int(scene_index)
+        total = int(_STATE.get("scenes", 0) or 0)
+        if not (1 <= si <= total):
+            return {"ok": False, "error": "scene_out_of_range"}
+        names = _STATE.setdefault("scene_names", {})
+        # Shift down names above deleted index
+        for i in range(si, total):
+            names[i] = names.get(i + 1, f"Scene {i}")
+        names.pop(total, None)
+        _STATE["scenes"] = total - 1
+        _emit({"event": "scene_deleted", "index": si})
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def duplicate_scene(live, scene_index: int) -> Dict[str, Any]:
+    """Duplicate a scene by 1-based index."""
+    try:
+        si = int(scene_index)
+        if live is not None:
+            song = live
+
+            def _do_dup():
+                scenes = getattr(song, "scenes", []) or []
+                if not (1 <= si <= len(scenes)):
+                    return {"ok": False, "error": "scene_out_of_range"}
+                try:
+                    # Some Live versions provide duplicate_scene(scene), others duplicate_scene(index)
+                    sc = scenes[si - 1]
+                    dup_ok = False
+                    try:
+                        song.duplicate_scene(sc)
+                        dup_ok = True
+                    except Exception:
+                        try:
+                            song.duplicate_scene(si - 1)
+                            dup_ok = True
+                        except Exception:
+                            dup_ok = False
+                    if dup_ok:
+                        _emit({"event": "scene_duplicated", "index": si})
+                        return {"ok": True}
+                    return {"ok": False, "error": "duplicate_failed"}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            return _run_on_main(_do_dup) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    try:
+        si = int(scene_index)
+        total = int(_STATE.get("scenes", 0) or 0)
+        if not (1 <= si <= total):
+            return {"ok": False, "error": "scene_out_of_range"}
+        names = _STATE.setdefault("scene_names", {})
+        # Insert duplicate name after si
+        dup_name = names.get(si, f"Scene {si}") + " Copy"
+        for i in range(total, si, -1):
+            names[i + 1] = names.get(i, f"Scene {i}")
+        names[si + 1] = dup_name
+        _STATE["scenes"] = total + 1
+        _emit({"event": "scene_duplicated", "index": si})
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def get_track_status(live, track_index: int) -> dict:
     try:
         if live is not None:
@@ -2172,18 +2513,22 @@ def create_clip(live, track_index: int, scene_index: int, length_beats: float) -
             if getattr(slot, 'has_clip', False):
                 return {"ok": False, "error": "slot_already_has_clip"}
             song = live
-            try:
-                if hasattr(song, 'begin_undo_step'):
-                    song.begin_undo_step()
-                slot.create_clip(length)
-                _emit({"event": "clip_created", "track": ti, "scene": si, "length": float(length)})
-                return {"ok": True}
-            finally:
+
+            def _do_create_clip():
                 try:
-                    if hasattr(song, 'end_undo_step'):
-                        song.end_undo_step()
-                except Exception:
-                    pass
+                    if hasattr(song, 'begin_undo_step'):
+                        song.begin_undo_step()
+                    slot.create_clip(length)
+                    _emit({"event": "clip_created", "track": ti, "scene": si, "length": float(length)})
+                    return {"ok": True}
+                finally:
+                    try:
+                        if hasattr(song, 'end_undo_step'):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+
+            return _run_on_main(_do_create_clip) or {"ok": False}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     # Stub

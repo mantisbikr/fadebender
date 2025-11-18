@@ -125,6 +125,60 @@ def set_track_arm(body: TrackArmBody) -> Dict[str, Any]:
     return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
 
 
+class CreateAudioTrackBody(BaseModel):
+    index: Optional[int] = None  # 1-based insert position; omit to append
+
+
+@router.post("/track/create_audio")
+def create_audio_track(body: CreateAudioTrackBody) -> Dict[str, Any]:
+    msg: Dict[str, Any] = {}
+    if body.index is not None:
+        msg["index"] = int(body.index)
+    resp = request_op("create_audio_track", timeout=1.5, **msg)
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class CreateMidiTrackBody(BaseModel):
+    index: Optional[int] = None  # 1-based insert position; omit to append
+
+
+@router.post("/track/create_midi")
+def create_midi_track(body: CreateMidiTrackBody) -> Dict[str, Any]:
+    msg: Dict[str, Any] = {}
+    if body.index is not None:
+        msg["index"] = int(body.index)
+    resp = request_op("create_midi_track", timeout=1.5, **msg)
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class DeleteTrackBody(BaseModel):
+    track_index: int
+
+
+@router.post("/track/delete")
+def delete_track(body: DeleteTrackBody) -> Dict[str, Any]:
+    resp = request_op("delete_track", timeout=1.5, track_index=int(body.track_index))
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class DuplicateTrackBody(BaseModel):
+    track_index: int
+
+
+@router.post("/track/duplicate")
+def duplicate_track(body: DuplicateTrackBody) -> Dict[str, Any]:
+    resp = request_op("duplicate_track", timeout=1.5, track_index=int(body.track_index))
+    if not resp:
+        raise HTTPException(504, "no response from remote script")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 @router.post("/track/device/delete")
 def delete_track_device(body: TrackDeviceDeleteBody) -> Dict[str, Any]:
     resp = request_op(

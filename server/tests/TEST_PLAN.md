@@ -236,6 +236,10 @@ For end-to-end testing with actual Ableton Live:
 - [ ] **Device Naming (Track/Return)**: Rename a track and return device via `/track/device/name` and `/return/device/name`, confirm names update in Live and in `/track/devices` / `/return/devices`.
 - [ ] **Track Arm**: Use `/track/arm` to arm/disarm a track and confirm the arm button updates in Live and recording input works as expected.
 - [ ] **Track/Scene/Clip Naming (NLP)**: In the web UI, use `rename track 3 to Pianos`, `rename scene 1 to Intro`, and `rename clip 4 2 to Beatbox`; verify names update in Live with correct capitalization.
+- [ ] **Track Arm (NLP)**: In the web UI, run `arm track 3` and `disarm track 3` and verify the arm button toggles correctly in Live.
+- [ ] **Track Create/Delete/Duplicate (API)**: Use `/track/create_audio`, `/track/create_midi`, `/track/delete`, and `/track/duplicate` to add/remove/duplicate tracks; verify track order and types in Live and via `/project/outline`.
+- [ ] **Scene Create/Delete/Duplicate (API)**: Use `/scene/create`, `/scene/delete`, and `/scene/duplicate` to manage scenes; verify scene order and names in Live and via `/scenes`.
+ - [ ] **Track/Scene Create/Delete/Duplicate (NLP)**: In the web UI, test `create audio track`, `delete track 3`, `duplicate track 2`, `create scene at 3`, `delete scene 2`, and `duplicate scene 1`; verify structure changes match Live and the outline endpoints.
 
 ## Future Test Enhancements
 

@@ -358,6 +358,141 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         canonical = {"domain": "transport", "action": "rename_clip", "value": value}
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
+    # Fast path: track arm/disarm
+    # Examples:
+    #   arm track 3
+    #   disarm track 3
+    m_arm = re.search(r"\b(arm|disarm|unarm)\s+track\s+(\d+)\b", text, flags=re.IGNORECASE)
+    if m_arm:
+        verb = (m_arm.group(1) or "").lower()
+        ti = int(m_arm.group(2))
+        arm = verb == "arm"
+        value = {"track_index": ti, "arm": arm}
+        raw_intent = {
+            "intent": "track_arm",
+            "operation": {
+                "action": "arm" if arm else "disarm",
+                "value": arm,
+            },
+            "meta": {
+                "utterance": original_text,
+                "pipeline": "regex_arm",
+            },
+        }
+        canonical = {
+            "domain": "track",
+            "action": "arm",
+            "track_index": ti,
+            "value": arm,
+        }
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Fast path: track/scene create/delete/duplicate (project structure)
+    # Track creation
+    m_create_audio = re.search(
+        r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?\b", text, flags=re.IGNORECASE
+    )
+    if m_create_audio:
+        idx = m_create_audio.group(2)
+        index_val = int(idx) if idx else None
+        value = {"type": "audio", "index": index_val}
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "create_audio_track", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "create_audio_track", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    m_create_midi = re.search(
+        r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?\b", text, flags=re.IGNORECASE
+    )
+    if m_create_midi:
+        idx = m_create_midi.group(2)
+        index_val = int(idx) if idx else None
+        value = {"type": "midi", "index": index_val}
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "create_midi_track", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "create_midi_track", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Track delete / duplicate
+    m_delete_track = re.search(
+        r"\b(delete|remove)\s+track\s+(\d+)\b", text, flags=re.IGNORECASE
+    )
+    if m_delete_track:
+        ti = int(m_delete_track.group(2))
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "delete_track", "value": ti},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "delete_track", "value": ti}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    m_dup_track = re.search(
+        r"\b(duplicate|copy)\s+track\s+(\d+)\b", text, flags=re.IGNORECASE
+    )
+    if m_dup_track:
+        ti = int(m_dup_track.group(2))
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "duplicate_track", "value": ti},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "duplicate_track", "value": ti}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Scene creation (blank scenes)
+    m_create_scene = re.search(
+        r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if m_create_scene:
+        idx = m_create_scene.group(2)
+        index_val = int(idx) if idx else None
+        value = {"scene_index": index_val} if index_val is not None else {}
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "create_scene", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "create_scene", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Scene delete / duplicate
+    m_delete_scene = re.search(
+        r"\b(delete|remove)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE
+    )
+    if m_delete_scene:
+        si = int(m_delete_scene.group(2))
+        value = {"scene_index": si}
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "delete_scene", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "delete_scene", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    m_dup_scene = re.search(
+        r"\b(duplicate|copy)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE
+    )
+    if m_dup_scene:
+        si = int(m_dup_scene.group(2))
+        value = {"scene_index": si}
+        raw_intent = {
+            "intent": "project",
+            "operation": {"action": "duplicate_scene", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_project"},
+        }
+        canonical = {"domain": "transport", "action": "duplicate_scene", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
     # Try layered parser first when enabled (if no regex fast-path intent)
     if raw_intent is None and USE_LAYERED:
         try:

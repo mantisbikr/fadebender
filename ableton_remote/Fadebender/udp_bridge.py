@@ -95,6 +95,32 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_track_sends(live_ctx, track_index)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "create_audio_track":
+                index = msg.get("index")
+                index_int = int(index) if index is not None else None
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.create_audio_track(live_ctx, index_int)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "create_midi_track":
+                index = msg.get("index")
+                index_int = int(index) if index is not None else None
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.create_midi_track(live_ctx, index_int)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "create_return_track":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.create_return_track(live_ctx)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "delete_track":
+                track_index = int(msg.get("track_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.delete_track(live_ctx, track_index)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "duplicate_track":
+                track_index = int(msg.get("track_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.duplicate_track(live_ctx, track_index)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "get_track_routing":
                 track_index = int(msg.get("track_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
@@ -223,6 +249,22 @@ def start_udp_server():  # pragma: no cover
                 length = float(msg.get("length_beats", 1.0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.create_clip(live_ctx, track_index, scene_index, length)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "create_scene":
+                index = msg.get("index")
+                index_int = int(index) if index is not None else None
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.create_scene(live_ctx, index_int)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "delete_scene":
+                scene_index = int(msg.get("scene_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.delete_scene(live_ctx, scene_index)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "duplicate_scene":
+                scene_index = int(msg.get("scene_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.duplicate_scene(live_ctx, scene_index)
                 resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "fire_clip":
                 track_index = int(msg.get("track_index", 0))
