@@ -54,6 +54,112 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                 "summary": f"Scene {scene_index} stopped",
                 "resp": r,
             }
+        # Naming: track / scene / clip (mapped to existing UDP ops)
+        if action == "rename_track":
+            if not isinstance(value, dict):
+                raise HTTPException(400, "invalid_rename_track_payload")
+            try:
+                ti = int(value.get("track_index"))
+                name = str(value.get("name") or "").strip()
+            except Exception:
+                raise HTTPException(400, "invalid_rename_track_payload")
+            if not name:
+                raise HTTPException(400, "empty_track_name")
+            r = _req("set_track_name", timeout=1.0, track_index=ti, name=name)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Renamed Track {ti} to \"{name}\"",
+                "resp": r,
+            }
+        if action == "rename_scene":
+            if not isinstance(value, dict):
+                raise HTTPException(400, "invalid_rename_scene_payload")
+            try:
+                si = int(value.get("scene_index"))
+                name = str(value.get("name") or "").strip()
+            except Exception:
+                raise HTTPException(400, "invalid_rename_scene_payload")
+            if not name:
+                raise HTTPException(400, "empty_scene_name")
+            r = _req("set_scene_name", timeout=1.0, scene_index=si, name=name)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Renamed Scene {si} to \"{name}\"",
+                "resp": r,
+            }
+        if action == "rename_clip":
+            if not isinstance(value, dict):
+                raise HTTPException(400, "invalid_rename_clip_payload")
+            try:
+                ti = int(value.get("track_index"))
+                si = int(value.get("scene_index"))
+                name = str(value.get("name") or "").strip()
+            except Exception:
+                raise HTTPException(400, "invalid_rename_clip_payload")
+            if not name:
+                raise HTTPException(400, "empty_clip_name")
+            r = _req(
+                "set_clip_name",
+                timeout=1.0,
+                track_index=ti,
+                scene_index=si,
+                name=name,
+            )
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Renamed Clip [{ti},{si}] to \"{name}\"",
+                "resp": r,
+            }
+        # Clip fire/stop (Session clips)
+        if action == "clip_fire":
+            ti = None
+            si = None
+            if isinstance(value, dict):
+                ti = value.get("track_index")
+                si = value.get("scene_index")
+            elif isinstance(value, (list, tuple)) and len(value) >= 2:
+                ti, si = value[0], value[1]
+            try:
+                track_index = int(ti)
+                scene_index = int(si)
+            except Exception:
+                raise HTTPException(400, "invalid_clip_coordinates")
+            r = _req(
+                "fire_clip",
+                timeout=1.0,
+                track_index=track_index,
+                scene_index=scene_index,
+                select=True,
+            )
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Clip [{track_index},{scene_index}] fired",
+                "resp": r,
+            }
+        if action == "clip_stop":
+            ti = None
+            si = None
+            if isinstance(value, dict):
+                ti = value.get("track_index")
+                si = value.get("scene_index")
+            elif isinstance(value, (list, tuple)) and len(value) >= 2:
+                ti, si = value[0], value[1]
+            try:
+                track_index = int(ti)
+                scene_index = int(si)
+            except Exception:
+                raise HTTPException(400, "invalid_clip_coordinates")
+            r = _req(
+                "stop_clip",
+                timeout=1.0,
+                track_index=track_index,
+                scene_index=scene_index,
+            )
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Clip [{track_index},{scene_index}] stopped",
+                "resp": r,
+            }
         # Combined time signature
         if action == "time_sig_both" and isinstance(value, dict):
             num = value.get("num"); den = value.get("den")

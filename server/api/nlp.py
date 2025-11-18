@@ -98,6 +98,23 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
 
     # Lightweight pre-normalization for compact pan syntax.
     text = str(body.text or "")
+    # Preserve original text (with casing) when provided via context for operations
+    # that care about name formatting (e.g., rename track/scene/clip).
+    context = body.context or {}
+    original_text = str(context.get("original_text") or body.text or "")
+
+    # Normalize clip coordinates so \"clip 4,2\" and \"clip 4 2\" behave the same.
+    # This makes client-side punctuation differences harmless.
+    try:
+        text = re.sub(
+            r"\bclip\s+(\d+)\s*,\s*(\d+)\b",
+            r"clip \1 \2",
+            text,
+            flags=re.IGNORECASE,
+        )
+    except Exception:
+        # If anything goes wrong, fall back to original text
+        text = str(body.text or "")
 
     # Pattern 1: "pan track N to VALUE L/R" → "set track N pan to +/-VALUE"
     m = re.search(r"\bpan\s+track\s+(\d+)\s+to\s+(-?\d+)\s*([LR])\b", text, flags=re.IGNORECASE)
@@ -173,7 +190,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
 
     raw_intent: Dict[str, Any] | None = None
 
-    # Fast path: scene fire/stop commands (no need for full NLP)
+    # Fast path: scene fire/stop commands (no need for full NLP or canonical mapper)
     scene_fire_match = re.search(r"\b(fire|launch)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
     scene_stop_match = re.search(r"\bstop\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
     if scene_fire_match:
@@ -189,8 +206,11 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
                 "pipeline": "regex_scene",
             },
         }
+        canonical = {"domain": "transport", "action": "scene_fire", "value": scene_idx}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
     elif scene_stop_match:
-        scene_idx = int(scene_stop_match.group(2))
+        # stop scene pattern has a single capturing group for the index
+        scene_idx = int(scene_stop_match.group(1))
         raw_intent = {
             "intent": "transport",
             "operation": {
@@ -202,6 +222,141 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
                 "pipeline": "regex_scene",
             },
         }
+        canonical = {"domain": "transport", "action": "scene_stop", "value": scene_idx}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Fast path: clip fire/stop commands (Session view)
+    clip_fire_match = re.search(
+        r"\b(fire|launch)\s+clip\s+(\d+)[,\s]+(\d+)\b", text, flags=re.IGNORECASE
+    )
+    clip_stop_match = re.search(
+        r"\bstop\s+clip\s+(\d+)[,\s]+(\d+)\b", text, flags=re.IGNORECASE
+    )
+    if clip_fire_match:
+        ti = int(clip_fire_match.group(2))
+        si = int(clip_fire_match.group(3))
+        value = {"track_index": ti, "scene_index": si}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "clip_fire",
+                "value": value,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_clip",
+            },
+        }
+        canonical = {"domain": "transport", "action": "clip_fire", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+    if clip_stop_match:
+        ti = int(clip_stop_match.group(1))
+        si = int(clip_stop_match.group(2))
+        value = {"track_index": ti, "scene_index": si}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "clip_stop",
+                "value": value,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_clip",
+            },
+        }
+        canonical = {"domain": "transport", "action": "clip_stop", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Fast path: naming commands (track / scene / clip)
+    # Examples:
+    #   rename track 3 to Guitars
+    #   name scene 2 \"Chorus\"
+    #   rename clip 4 2 to Hook
+    m_rename_track = re.search(
+        r"\b(rename|name)\s+track\s+(\d+)\s+(?:to\s+)?(.+)$", text, flags=re.IGNORECASE
+    )
+    if m_rename_track:
+        ti = int(m_rename_track.group(2))
+        # Re-extract name portion from original_text to preserve casing
+        m_orig = re.search(
+            r"\b(rename|name)\s+track\s+(\d+)\s+(?:to\s+)?(.+)$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = m_orig.group(3) if m_orig else m_rename_track.group(3)
+        name = (raw_name or "").strip().strip('"').strip("'")
+        value = {"track_index": ti, "name": name}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "rename_track",
+                "value": value,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_rename",
+            },
+        }
+        canonical = {"domain": "transport", "action": "rename_track", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    m_rename_scene = re.search(
+        r"\b(rename|name)\s+scene\s+(\d+)\s+(?:to\s+)?(.+)$", text, flags=re.IGNORECASE
+    )
+    if m_rename_scene:
+        si = int(m_rename_scene.group(2))
+        m_orig = re.search(
+            r"\b(rename|name)\s+scene\s+(\d+)\s+(?:to\s+)?(.+)$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = m_orig.group(3) if m_orig else m_rename_scene.group(3)
+        name = (raw_name or "").strip().strip('"').strip("'")
+        value = {"scene_index": si, "name": name}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "rename_scene",
+                "value": value,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_rename",
+            },
+        }
+        canonical = {"domain": "transport", "action": "rename_scene", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Clip rename supports both \"clip 4 1\" and \"clip 4,1\" forms
+    m_rename_clip = re.search(
+        r"\b(rename|name)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\s+(?:to\s+)?(.+)$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if m_rename_clip:
+        ti = int(m_rename_clip.group(2))
+        si = int(m_rename_clip.group(3))
+        m_orig = re.search(
+            r"\b(rename|name)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\s+(?:to\s+)?(.+)$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = m_orig.group(4) if m_orig else m_rename_clip.group(4)
+        name = (raw_name or "").strip().strip('"').strip("'")
+        value = {"track_index": ti, "scene_index": si, "name": name}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {
+                "action": "rename_clip",
+                "value": value,
+            },
+            "meta": {
+                "utterance": text,
+                "pipeline": "regex_rename",
+            },
+        }
+        canonical = {"domain": "transport", "action": "rename_clip", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     # Try layered parser first when enabled (if no regex fast-path intent)
     if raw_intent is None and USE_LAYERED:

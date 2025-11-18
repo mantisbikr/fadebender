@@ -67,56 +67,41 @@ This document compares Fadebender's capabilities against AbletonOSC to identify 
 
 ### 🔴 HIGH PRIORITY GAPS (Core Session View Workflow)
 
-#### 1. Clip Fire/Stop ⭐ **CRITICAL**
+#### 1. Clip Fire/Stop ✅ **IMPLEMENTED**
 **AbletonOSC**:
 - `/live/clip/fire <track_id> <clip_id>` - Fire/stop clip
 - `/live/clip_slot/fire <track_index> <clip_index>` - Fire clip in slot
 
-**Fadebender**: ❌ Not implemented
+**Fadebender**: ✅ **IMPLEMENTED**
+- ✅ HTTP: `POST /clip/fire { track_index, scene_index, select: true }`
+- ✅ HTTP: `POST /clip/stop { track_index, scene_index }`
+- ✅ Remote Script: `clip.fire()`, `clip.stop()`
+- ❌ NLP: Not wired yet ("fire track 1 clip 2")
 
-**Impact**: Can't perform in session view, can't trigger clips
-**Minimum to Add**:
-```
-NLP: "fire track 1 clip 2", "play track 3 scene 1", "stop track 1 clip 4"
-HTTP: POST /clip/fire { track_index, scene_index }
-HTTP: POST /clip/stop { track_index, scene_index }
-Remote Script: clip.fire(), clip.stop()
-```
-
-#### 2. Scene Fire (NLP Missing) ⭐ **HIGH**
+#### 2. Scene Fire/Stop ✅ **IMPLEMENTED**
 **AbletonOSC**:
 - `/live/scene/fire <scene_id>`
 - `/live/scene/fire_as_selected <scene_id>`
 - `/live/scene/fire_selected`
 
-**Fadebender**:
-- ✅ HTTP endpoint exists: `POST /scene/fire`
-- ❌ No NLP support
+**Fadebender**: ✅ **IMPLEMENTED**
+- ✅ HTTP: `POST /scene/fire { scene_index, select: true }`
+- ✅ HTTP: `POST /scene/stop { scene_index }`
+- ✅ NLP: Wired through /intent/parse and /intent/execute
+- ✅ Remote Script: Complete
 
-**Impact**: Have to use HTTP, can't say "fire scene 3"
-**Minimum to Add**:
-```
-NLP: "fire scene 1", "trigger scene 2", "play scene 3"
-```
-
-#### 3. Track Arm/Monitoring ⭐ **HIGH**
+#### 3. Track Arm/Monitoring ✅ **IMPLEMENTED**
 **AbletonOSC**:
 - `/live/track/get/arm <track_id>`
 - `/live/track/set/arm <track_id> <0|1>`
 - `/live/track/get/current_monitoring_state <track_id>`
 - `/live/track/set/current_monitoring_state <track_id> <state>`
 
-**Fadebender**: ❌ Not implemented
-
-**Impact**: Can't arm tracks for recording, can't control monitoring
-**Minimum to Add**:
-```
-NLP: "arm track 1", "disarm track 2"
-NLP: "set track 1 monitoring to auto", "set track 2 monitoring to in/off"
-HTTP: POST /track/arm { track_index, armed: true/false }
-HTTP: POST /track/monitoring { track_index, mode: "auto"|"in"|"off" }
-Remote Script: track.arm, track.current_monitoring_state
-```
+**Fadebender**: ✅ **IMPLEMENTED**
+- ✅ HTTP: `POST /track/arm { track_index, arm: true/false }`
+- ✅ HTTP: `POST /track/routing { track_index, monitor_state: "in"|"auto"|"off" }`
+- ✅ Remote Script: `track.arm`, `track.current_monitoring_state`
+- ❌ NLP: Not wired yet ("arm track 1", "set track 2 monitoring to auto")
 
 #### 4. Clip Playing Status ⭐ **MEDIUM-HIGH**
 **AbletonOSC**:
@@ -162,7 +147,23 @@ Remote Script: song.undo(), song.redo()
 
 ### 🟡 MEDIUM PRIORITY GAPS (Enhanced Control)
 
-#### 6. Track Colors
+#### 6. Track/Scene/Clip/Device Renaming ✅ **IMPLEMENTED**
+**AbletonOSC**:
+- `/live/track/set/name <track_id> <name>`
+- `/live/scene/set/name <scene_id> <name>`
+- `/live/clip/set/name <track_id> <clip_id> <name>`
+- ❌ No device naming in AbletonOSC
+
+**Fadebender**: ✅ **IMPLEMENTED (+ Device Naming)**
+- ✅ HTTP: `POST /track/name { track_index, name }`
+- ✅ HTTP: `POST /scene/name { scene_index, name }`
+- ✅ HTTP: `POST /clip/name { track_index, scene_index, name }`
+- ✅ HTTP: `POST /track/device/name { track_index, device_index, name }`
+- ✅ HTTP: `POST /return/device/name { return_index, device_index, name }`
+- ✅ Remote Script: All with undo support and main thread safety
+- ❌ NLP: Not wired yet
+
+#### 7. Track Colors
 **AbletonOSC**:
 - `/live/track/get/color <track_id>`
 - `/live/track/set/color <track_id> <color>`
@@ -177,7 +178,7 @@ HTTP: POST /track/color { track_index, color }
 Visual: Color indicators in capabilities drawer
 ```
 
-#### 7. Track Metering (Real-time levels)
+#### 8. Track Metering (Real-time levels)
 **AbletonOSC**:
 - `/live/track/get/output_meter_left <track_id>`
 - `/live/track/get/output_meter_right <track_id>`
@@ -193,7 +194,7 @@ Visual: Level meters in capabilities drawer
 Requires: Listener/polling mechanism
 ```
 
-#### 8. Cue Points
+#### 9. Cue Points
 **AbletonOSC**:
 - `/live/song/cue_point/jump <cue_point>`
 - `/live/song/cue_point/add_or_delete`
@@ -209,7 +210,7 @@ HTTP: POST /song/cue/jump { name_or_index }
 HTTP: GET /song/cues
 ```
 
-#### 9. Track Routing Info
+#### 10. Track Routing Info
 **AbletonOSC**:
 - `/live/track/get/input_routing_type <track_id>`
 - `/live/track/get/input_routing_channel <track_id>`
@@ -226,12 +227,15 @@ HTTP: GET /track/routing?track_index=1
 Visual: Routing info in state bundle
 ```
 
-#### 10. Clip Duplicate/Delete
+#### 11. Clip Duplicate/Delete
 **AbletonOSC**:
 - `/live/clip_slot/delete_clip <track_index> <clip_index>`
 - `/live/clip_slot/duplicate_clip_to <track_index> <clip_index> <target_track> <target_clip>`
 
-**Fadebender**: ❌ Not implemented (have create, but not delete/duplicate)
+**Fadebender**:
+- ✅ Clip create: `POST /clip/create`
+- ❌ Clip delete: Not implemented
+- ❌ Clip duplicate: Not implemented
 
 **Minimum to Add**:
 ```
@@ -244,7 +248,25 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 ### 🟢 LOW PRIORITY GAPS (Advanced Features)
 
-#### 11. Clip Loop Markers & Warping
+#### 12. Track/Scene Creation & Deletion
+**AbletonOSC**:
+- `/live/song/create_audio_track <index>`
+- `/live/song/create_midi_track <index>`
+- `/live/song/create_return_track`
+- `/live/song/create_scene <index>`
+- `/live/song/delete_scene <scene_index>`
+- `/live/song/delete_track <track_index>`
+- `/live/song/duplicate_scene <scene_index>`
+- `/live/song/duplicate_track <track_index>`
+
+**Fadebender**:
+- ✅ Scene capture: `POST /scene/capture_insert`
+- ❌ Create audio/MIDI/return track: Not implemented
+- ❌ Create empty scene: Not implemented
+- ❌ Delete track/scene: Not implemented
+- ❌ Duplicate track/scene: Not implemented
+
+#### 13. Clip Loop Markers & Warping
 **AbletonOSC**:
 - `/live/clip/get/loop_start`, `/live/clip/set/loop_start`
 - `/live/clip/get/loop_end`, `/live/clip/set/loop_end`
@@ -257,7 +279,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Fadebender**: ❌ Not implemented
 
-#### 12. MIDI Note Manipulation
+#### 14. MIDI Note Manipulation
 **AbletonOSC**:
 - `/live/clip/get/notes <track_id> <clip_id> [range]`
 - `/live/clip/add/notes <track_id> <clip_id> <pitch> <start_time> <duration> <velocity> ...`
@@ -267,7 +289,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Impact**: Complex, likely out of scope for chat-first interface
 
-#### 13. Device Parameter Listeners (Push Updates)
+#### 15. Device Parameter Listeners (Push Updates)
 **AbletonOSC**:
 - `/live/device/start_listen/parameter/value <track_index> <device_index> <parameter_index>`
 - Automatic push notifications when parameter changes
@@ -278,7 +300,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Impact**: UI doesn't update when parameters change in Live
 
-#### 14. Beat Synchronization
+#### 16. Beat Synchronization
 **AbletonOSC**:
 - `/live/song/start_listen/beat`
 - `/live/song/get/beat` - Pushed on every beat
@@ -287,7 +309,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Impact**: Can't sync UI animations to beat
 
-#### 15. Selection Control
+#### 17. Selection Control
 **AbletonOSC**:
 - `/live/view/get/selected_track`
 - `/live/view/set/selected_track <track_index>`
@@ -300,7 +322,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Fadebender**: ❌ Not explicitly implemented (may have indirect control via "open track 1")
 
-#### 16. Session Recording & Arrangement
+#### 18. Session Recording & Arrangement
 **AbletonOSC**:
 - `/live/song/set/session_record <0|1>`
 - `/live/song/get/session_record_status`
@@ -311,7 +333,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Fadebender**: ❌ Not implemented
 
-#### 17. Additional Song Properties
+#### 19. Additional Song Properties
 **AbletonOSC**:
 - Groove amount
 - Clip trigger quantization
@@ -322,7 +344,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Fadebender**: ❌ Not implemented
 
-#### 18. Arrangement Clips
+#### 20. Arrangement Clips
 **AbletonOSC**:
 - `/live/track/get/arrangement_clips/name <track_id>`
 - `/live/track/get/arrangement_clips/length <track_id>`
@@ -330,7 +352,7 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 
 **Fadebender**: ❌ Not implemented (session view focused)
 
-#### 19. MIDI CC Mapping
+#### 21. MIDI CC Mapping
 **AbletonOSC**:
 - `/live/midimap/map_cc <track_id> <device_id> <param_id> <channel> <cc>`
 
@@ -344,91 +366,112 @@ HTTP: POST /clip/duplicate { source_track, source_scene, target_track, target_sc
 ✅ Natural language interface (huge UX advantage)
 ✅ Smart UI with context-aware capabilities
 ✅ Topology queries (send analysis, state bundles)
-✅ Remote Script features (device reorder/delete, renaming)
+✅ Remote Script features (device reorder/delete, track/scene/clip/device renaming)
 ✅ Integrated HTTP + Chat
 ✅ Typo correction & fuzzy matching
+✅ Clip fire/stop control (implemented)
+✅ Scene fire/stop control (implemented)
+✅ Track arm/monitoring (implemented)
+✅ Device naming (Fadebender exclusive - AbletonOSC doesn't have this)
 
 ### AbletonOSC Strengths vs Fadebender:
-✅ Complete clip fire/stop control
-✅ Track arm/monitoring
-✅ Clip playing status
-✅ Song-level undo/redo
-✅ Track colors & metering
-✅ Cue points
-✅ Track routing info
-✅ Clip loop markers & warping
-✅ MIDI note manipulation
-✅ Parameter listeners (push updates)
-✅ Beat sync
-✅ Selection control
+❌ Track/scene creation & deletion
+❌ Clip deletion & duplication
+❌ Clip playing status (visual feedback)
+❌ Song-level undo/redo
+❌ Track colors & metering
+❌ Cue points
+❌ Track routing info (detailed)
+❌ Clip loop markers & warping
+❌ MIDI note manipulation
+❌ Parameter listeners (push updates)
+❌ Beat sync
+❌ Selection control (explicit)
 
 ---
 
-## ⭐ Minimum Features to Add for Competitive Parity
+## ⭐ Remaining Features to Add for Competitive Parity
 
-To match core session view workflow, prioritize these **5 features**:
+### ✅ COMPLETED (Core Session View):
+1. ✅ Clip Fire/Stop - **DONE**
+2. ✅ Scene Fire/Stop - **DONE**
+3. ✅ Track Arm/Monitoring - **DONE**
+4. ✅ Track/Scene/Clip/Device Renaming - **DONE** (+ Device naming is Fadebender exclusive!)
 
-### 1. Clip Fire/Stop ⭐⭐⭐ (CRITICAL)
-**Why**: Fundamental for session view performance
+### ❌ REMAINING PRIORITIES:
+
+### 1. Clip/Scene NLP Wiring ⭐⭐⭐ (QUICK WIN)
+**Why**: HTTP exists, just need NLP
+**Status**: HTTP endpoints complete, NLP not wired
 **Implementation**:
-- NLP: "fire track 1 clip 2", "stop track 1 clip 3"
-- HTTP: POST /clip/fire, POST /clip/stop
-- Remote Script: clip.fire(), clip.stop()
+- NLP: "fire track 1 clip 2", "stop scene 3", "arm track 2"
+- Wire existing HTTP through layered parser
 
-### 2. Scene Fire (NLP Support) ⭐⭐⭐ (HIGH)
-**Why**: HTTP exists, just need NLP for chat interface
-**Implementation**:
-- NLP: "fire scene 1", "trigger scene 2"
-- Reuse existing HTTP endpoint
-
-### 3. Track Arm/Monitoring ⭐⭐⭐ (HIGH)
-**Why**: Essential for recording workflow
-**Implementation**:
-- NLP: "arm track 1", "set track 2 monitoring to auto"
-- HTTP: POST /track/arm, POST /track/monitoring
-- Remote Script: track.arm, track.current_monitoring_state
-
-### 4. Clip Playing Status ⭐⭐ (MEDIUM-HIGH)
+### 2. Clip Playing Status ⭐⭐ (MEDIUM-HIGH)
 **Why**: Visual feedback for what's playing
 **Implementation**:
 - NLP: "is track 1 clip 2 playing?"
-- HTTP: GET /clip/status
+- HTTP: GET /clip/status, GET /track/playing_clip
 - Visual: Indicators in UI
 - Remote Script: clip.is_playing, track.playing_slot_index
 
-### 5. Song-Level Undo/Redo ⭐⭐ (MEDIUM)
+### 3. Song-Level Undo/Redo ⭐⭐ (MEDIUM)
 **Why**: Undo clip/track operations, not just parameters
 **Implementation**:
 - NLP: "undo", "redo"
 - HTTP: POST /song/undo, POST /song/redo
 - Remote Script: song.undo(), song.redo()
 
+### 4. Track/Scene Creation ⭐ (MEDIUM)
+**Why**: Complete project management workflow
+**Implementation**:
+- NLP: "create audio track", "create scene"
+- HTTP: POST /track/create, POST /scene/create
+- Remote Script: song.create_audio_track(), song.create_scene()
+
+### 5. Clip/Track/Scene Deletion ⭐ (MEDIUM-LOW)
+**Why**: Cleanup operations
+**Implementation**:
+- NLP: "delete track 3", "delete scene 2"
+- HTTP: POST /track/delete, POST /scene/delete, POST /clip/delete
+- Remote Script: song.delete_track(), song.delete_scene()
+
 ---
 
 ## 🎯 Recommended Implementation Priority
 
-**Phase 1 (Session View Essentials):**
-1. Clip fire/stop
-2. Scene fire NLP
-3. Clip playing status
+**✅ Phase 1 COMPLETE (Session View Essentials):**
+1. ✅ Clip fire/stop - HTTP done
+2. ✅ Scene fire/stop - HTTP + NLP done
+3. ✅ Track arm/monitoring - HTTP done
+4. ✅ Track/scene/clip/device renaming - Complete with undo support
 
-**Phase 2 (Recording Workflow):**
-4. Track arm/monitoring
-5. Song undo/redo
+**Phase 2 (NLP Integration - QUICK WINS):**
+1. Wire clip fire/stop NLP
+2. Wire track arm/monitoring NLP
+3. Test end-to-end chat commands
 
-**Phase 3 (Enhanced Control):**
-6. Track colors
-7. Clip delete/duplicate
-8. Cue points
+**Phase 3 (Visual Feedback):**
+4. Clip playing status (remote script + HTTP + visual)
+5. Track metering (real-time updates)
 
-**Phase 4 (Advanced):**
-9. Track metering (live updates)
-10. Parameter listeners
-11. Clip loop markers
+**Phase 4 (Project Management):**
+6. Song undo/redo
+7. Track/scene creation
+8. Clip/track/scene deletion
+
+**Phase 5 (Enhanced Control):**
+9. Track colors
+10. Clip duplicate
+11. Cue points
+
+**Phase 6 (Advanced - Optional):**
+12. Parameter listeners (push updates)
+13. Beat sync
+14. Clip loop markers
 
 **Out of Scope (For Now):**
 - MIDI note manipulation (complex, may not fit chat interface)
-- Beat sync (nice but not critical)
 - Arrangement clips (if session view focused)
 - MIDI CC mapping (advanced use case)
 
@@ -438,10 +481,29 @@ To match core session view workflow, prioritize these **5 features**:
 
 **Fadebender's NLP + Smart UI is a huge competitive advantage over AbletonOSC's raw OSC commands.**
 
-The main gaps are in **session view clip control** (fire/stop) and **recording workflow** (arm/monitoring). Adding the 5 minimum features above would give Fadebender competitive parity for core workflows while maintaining its superior UX.
+### ✅ Core Parity ACHIEVED:
+The main gaps in **session view clip control** (fire/stop), **scene control**, and **recording workflow** (arm/monitoring) have been **IMPLEMENTED**!
 
-After that, focus on where Fadebender can differentiate further:
-- Smarter topology queries
-- Workflow automation (chains of commands)
-- Context-aware suggestions
-- Better visualization of project state
+Fadebender now has HTTP endpoints for:
+- ✅ Clip fire/stop
+- ✅ Scene fire/stop
+- ✅ Track arm/monitoring
+- ✅ Complete renaming (tracks, scenes, clips, devices)
+
+**Next Priority**: Wire NLP for clip operations and track arm so users can say:
+- "fire track 1 clip 2"
+- "arm track 3"
+- "stop scene 1"
+
+### Fadebender's Unique Advantages:
+- **Device naming** - AbletonOSC doesn't have this!
+- **Natural language** - Conversational interface vs raw OSC
+- **Topology intelligence** - "who sends to return A"
+- **Smart UI** - Context-aware capabilities drawer
+- **Thread-safe operations** - Proper undo blocks and main thread execution
+
+After NLP wiring, focus on differentiation:
+- Clip playing status visualization
+- Smarter workflow suggestions
+- Context-aware project management
+- Better state visualization

@@ -119,6 +119,10 @@ Naming and Device Order
   - Track: POST `/track/name` { "track_index": T, "name": "Guitars" }
   - Scene: POST `/scene/name` { "scene_index": S, "name": "Chorus" }
   - Clip: POST `/clip/name` { "track_index": T, "scene_index": S, "name": "Hook" }
+ - NLP examples (when `use_intents_for_chat` is enabled):
+   - `rename track 3 to Pianos`
+   - `rename scene 1 to Intro`
+   - `rename clip 4 2 to Beatbox`
 - Devices:
   - Track device: POST `/track/device/name` { "track_index": T, "device_index": D, "name": "Glue Comp" }
   - Return device: POST `/return/device/name` { "return_index": R, "device_index": D, "name": "Main Reverb" }
@@ -177,6 +181,7 @@ Appendix: Handy Examples
 - SCENES & CLIPS:
   - `fire scene 3`
   - `stop scene 3`
+  - `fire clip 4 2` / `stop clip 4 2`
   - (API) POST `/clip/fire` { "track_index": 4, "scene_index": 2, "select": true }
   - (API) POST `/clip/stop` { "track_index": 4, "scene_index": 2 }
 

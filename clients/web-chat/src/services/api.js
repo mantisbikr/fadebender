@@ -109,11 +109,11 @@ class ApiService {
     if (!response.ok) throw new Error(`Config reload failed: ${response.statusText}`);
     return response.json();
   }
-  async parseIntent(text, model = undefined, strict = undefined) {
+  async parseIntent(text, model = undefined, strict = undefined, context = null) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/intent/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, model, strict })
+      body: JSON.stringify({ text, model, strict, context })
     });
 
     if (!response.ok) {

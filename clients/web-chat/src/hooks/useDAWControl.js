@@ -309,7 +309,12 @@ export function useDAWControl() {
       // First: parse to canonical intent for clear UI preview
       let parsed;
       try {
-        parsed = await apiService.parseIntent(processed.processed, modelPref, undefined);
+        parsed = await apiService.parseIntent(
+          processed.processed,
+          modelPref,
+          undefined,
+          { original_text: rawInput }
+        );
       } catch (e) {
         updateMessageStatus(userMessageId, 'error');
         addMessage({ type: 'error', content: `Intent parse error: ${e.message}` });

@@ -71,6 +71,9 @@ class TextProcessor {
     return text
       .trim()
       .replace(/\s+/g, ' ') // Multiple spaces to single space
+      // Normalize clip coordinates so \"clip 4,2\" and \"clip 4 2\" behave the same
+      // before stripping punctuation.
+      .replace(/\bclip\s+(\d+)\s*,\s*(\d+)\b/gi, 'clip $1 $2')
       // Keep digits, letters, space, %, -, and decimal point for dB values
       .replace(/[^\w\s%.-]/g, '')
       .toLowerCase();

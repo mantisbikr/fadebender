@@ -235,6 +235,7 @@ For end-to-end testing with actual Ableton Live:
 - [ ] **Clip Fire/Stop (API)**: Call `/clip/fire` and `/clip/stop` for a known [track, scene] and verify the clip slot fires/stops correctly.
 - [ ] **Device Naming (Track/Return)**: Rename a track and return device via `/track/device/name` and `/return/device/name`, confirm names update in Live and in `/track/devices` / `/return/devices`.
 - [ ] **Track Arm**: Use `/track/arm` to arm/disarm a track and confirm the arm button updates in Live and recording input works as expected.
+- [ ] **Track/Scene/Clip Naming (NLP)**: In the web UI, use `rename track 3 to Pianos`, `rename scene 1 to Intro`, and `rename clip 4 2 to Beatbox`; verify names update in Live with correct capitalization.
 
 ## Future Test Enhancements
 
