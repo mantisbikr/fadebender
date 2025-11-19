@@ -1,0 +1,169 @@
+{
+  "rag": {
+    "enabled": true,
+    "version": "1.0.0",
+    "environment": "development",
+
+    "vertex_ai_search": {
+      "enabled": true,
+      "project_id": "487213218407",
+      "location": "global",
+      "engine_id": "fadebender-search",
+      "data_store_id": "fadebender-knowledge",
+      "serving_config": "default_search",
+      "fallback_on_error": true,
+      "max_results": 5,
+      "min_relevance_score": 0.3
+    },
+
+    "firebase_studio": {
+      "project_id": "fadebender",
+      "region": "us-central1",
+      "data_sources": {
+        "description": "Knowledge base files to index in Firebase Studio",
+        "paths": {
+          "ableton_live": "knowledge/ableton-live/**/*.md",
+          "audio_fundamentals": "knowledge/audio-fundamentals/**/*.md",
+          "fadebender": "knowledge/fadebender/**/*.md",
+          "device_catalog": "knowledge/fadebender/device-catalog.md",
+          "preset_catalog": "knowledge/fadebender/preset-catalog.md"
+        },
+        "excluded_paths": [
+          "knowledge/.archive/**",
+          "knowledge/references/**"
+        ]
+      },
+      "indexing": {
+        "auto_reindex": true,
+        "watch_paths": ["knowledge/"],
+        "embedding_model": "text-embedding-004",
+        "chunk_size": 1000,
+        "chunk_overlap": 200
+      }
+    },
+
+    "device_signatures": {
+      "description": "Device signatures enabled for RAG (incremental addition)",
+      "enabled_for_rag": [],
+      "in_progress": [],
+      "planned": [
+        "AudioEffectGroupDevice:Reverb",
+        "AudioEffectGroupDevice:Compressor",
+        "AudioEffectGroupDevice:EQ Eight",
+        "AudioEffectGroupDevice:Glue Compressor",
+        "AudioEffectGroupDevice:Delay"
+      ],
+      "excluded": [
+        "MidiEffectGroupDevice:*"
+      ]
+    },
+
+    "structure_signatures": {
+      "description": "Preset structure signatures enabled for RAG (incremental addition)",
+      "enabled_for_rag": [],
+      "in_progress": [],
+      "planned": [
+        "reverb_v1",
+        "compressor_v1",
+        "eq_eight_v1"
+      ]
+    },
+
+    "auto_generation": {
+      "description": "Automatic generation of device/preset catalogs from Firestore",
+      "device_catalog": {
+        "enabled": true,
+        "sources": ["device_mappings"],
+        "filter": {
+          "include_in_rag": true
+        },
+        "output": "knowledge/fadebender/device-catalog.md",
+        "schedule": "manual",
+        "template": "templates/device-catalog.md.j2"
+      },
+      "preset_catalog": {
+        "enabled": true,
+        "sources": ["presets"],
+        "filter": {
+          "is_public": true,
+          "include_in_rag": true
+        },
+        "output": "knowledge/fadebender/preset-catalog.md",
+        "schedule": "manual",
+        "template": "templates/preset-catalog.md.j2"
+      }
+    },
+
+    "retrieval": {
+      "description": "Settings for RAG retrieval behavior",
+      "top_k": 5,
+      "min_relevance_score": 0.7,
+      "rerank": true,
+      "max_context_tokens": 4000
+    },
+
+    "conversation": {
+      "description": "Multi-turn conversation management settings",
+      "enabled": true,
+      "max_history_turns": 10,
+      "session_timeout_minutes": 30,
+      "cache_project_analysis": true,
+      "cache_ttl_minutes": 15
+    },
+
+    "context_injection": {
+      "description": "Project context injection settings",
+      "enabled": false,
+      "max_context_size_kb": 50,
+      "progressive_loading": true,
+      "default_scope": "minimal",
+      "scopes": {
+        "minimal": {
+          "includes": ["current_track"],
+          "max_size_kb": 5
+        },
+        "single_track": {
+          "includes": ["track_details", "track_routing"],
+          "max_size_kb": 15
+        },
+        "routing_chain": {
+          "includes": ["source_tracks", "return_tracks", "routing_graph"],
+          "max_size_kb": 30
+        },
+        "full_project": {
+          "includes": ["all_tracks", "all_returns", "routing_graph", "frequency_analysis"],
+          "max_size_kb": 50
+        }
+      }
+    },
+
+    "cost_optimization": {
+      "description": "Cost control and optimization settings",
+      "cache_rag_results": true,
+      "cache_ttl_seconds": 300,
+      "use_gemini_flash_for_simple_queries": true,
+      "max_tokens_per_query": 2048,
+      "budget_alert_threshold_usd": 100
+    },
+
+    "monitoring": {
+      "description": "Monitoring and logging settings",
+      "log_queries": true,
+      "log_retrieval_quality": true,
+      "track_costs": true,
+      "alert_on_errors": true
+    }
+  },
+
+  "_metadata": {
+    "created": "2025-11-18",
+    "last_updated": "2025-11-18",
+    "schema_version": "1.0.0",
+    "notes": [
+      "This configuration manages RAG system behavior for Fadebender",
+      "Update device_signatures.enabled_for_rag as you complete device mapping",
+      "Update structure_signatures.enabled_for_rag as you complete presets",
+      "Run 'npm run generate:rag-catalogs' after adding new signatures"
+    ]
+  }
+}

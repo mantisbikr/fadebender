@@ -58,3 +58,16 @@ credentials/
 backups/
 backups/database_backups/*.json
 server/.coverage
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+functions/lib/
+functions/node_modules/
+functions/.env.local
+
+# Generated knowledge base HTML files (regenerated from markdown)
+knowledge-html/

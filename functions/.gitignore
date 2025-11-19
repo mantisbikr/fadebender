@@ -1,0 +1,32 @@
+# Compiled JavaScript files
+lib/
+*.js
+*.js.map
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Firebase cache
+.firebase/
+
+# Environment files
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Test coverage
+coverage/
