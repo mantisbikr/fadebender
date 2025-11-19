@@ -250,6 +250,22 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.create_clip(live_ctx, track_index, scene_index, length)
                 resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "delete_clip":
+                track_index = int(msg.get("track_index", 0))
+                scene_index = int(msg.get("scene_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.delete_clip(live_ctx, track_index, scene_index)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "duplicate_clip":
+                track_index = int(msg.get("track_index", 0))
+                scene_index = int(msg.get("scene_index", 0))
+                target_track_index = msg.get("target_track_index")
+                target_scene_index = msg.get("target_scene_index")
+                tti = int(target_track_index) if target_track_index is not None else None
+                tsi = int(target_scene_index) if target_scene_index is not None else None
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.duplicate_clip(live_ctx, track_index, scene_index, tti, tsi)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "create_scene":
                 index = msg.get("index")
                 index_int = int(index) if index is not None else None

@@ -270,6 +270,47 @@ def stop_clip(body: ClipStopBody) -> Dict[str, Any]:
     return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
 
 
+class ClipDeleteBody(BaseModel):
+    track_index: int
+    scene_index: int
+
+
+@router.post("/clip/delete")
+def delete_clip(body: ClipDeleteBody) -> Dict[str, Any]:
+    resp = request_op(
+        "delete_clip",
+        timeout=1.5,
+        track_index=int(body.track_index),
+        scene_index=int(body.scene_index),
+    )
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
+class ClipDuplicateBody(BaseModel):
+    track_index: int
+    scene_index: int
+    target_track_index: Optional[int] = None
+    target_scene_index: Optional[int] = None
+
+
+@router.post("/clip/duplicate")
+def duplicate_clip(body: ClipDuplicateBody) -> Dict[str, Any]:
+    msg: Dict[str, Any] = {
+        "track_index": int(body.track_index),
+        "scene_index": int(body.scene_index),
+    }
+    if body.target_track_index is not None:
+        msg["target_track_index"] = int(body.target_track_index)
+    if body.target_scene_index is not None:
+        msg["target_scene_index"] = int(body.target_scene_index)
+    resp = request_op("duplicate_clip", timeout=1.5, **msg)
+    if not resp:
+        raise HTTPException(504, "no response")
+    return resp if isinstance(resp, dict) else {"ok": True, "data": resp}
+
+
 class TrackRoutingSetBody(BaseModel):
     track_index: int
     monitor_state: Optional[str] = None  # "in" | "auto" | "off"

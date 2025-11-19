@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from server.models.requests import IntentParseBody
 from server.services.ableton_client import request_op
 from server.services.intent_mapper import map_llm_to_canonical
+from server.services.param_normalizer import _levenshtein_distance
 
 
 router = APIRouter()
@@ -21,6 +22,76 @@ USE_LAYERED = os.getenv("USE_LAYERED_PARSER", "").lower() in ("1", "true", "yes"
 
 # Module-level cache for parse index (only needed for layered parser)
 _PARSE_INDEX = None
+
+
+_VERB_CANONICAL_MAP = {
+    # Creation
+    "create": "create",
+    "add": "create",
+    "new": "create",
+    # Deletion
+    "delete": "delete",
+    "remove": "delete",
+    # Duplication
+    "duplicate": "duplicate",
+    "copy": "duplicate",
+    # Transport / firing
+    "fire": "fire",
+    "launch": "fire",
+    "stop": "stop",
+    # Naming
+    "rename": "rename",
+    "name": "rename",
+    # Track arm
+    "arm": "arm",
+    "disarm": "disarm",
+    "unarm": "disarm",
+}
+
+
+def _normalize_command_verbs(text: str) -> str:
+    """Fuzzy-normalize key command verbs before regex parsing.
+
+    This recovers from common one-off typos like 'duplidate' → 'duplicate'
+    without touching names, numbers, or parameters. Only verbs in
+    _VERB_CANONICAL_MAP are considered, and we require Levenshtein distance 1.
+    """
+    if not text:
+        return text
+
+    # Split but keep whitespace separators so we can rejoin faithfully
+    tokens = re.split(r"(\s+)", text)
+    for i, tok in enumerate(tokens):
+        word = tok.strip()
+        if not word or not word.isalpha():
+            continue
+
+        lower = word.lower()
+        if lower in _VERB_CANONICAL_MAP:
+            # Already a known verb/synonym; leave as-is so regexes
+            # that distinguish 'copy' vs 'duplicate' still work.
+            continue
+
+        best = None
+        best_dist = 10
+        for cand in _VERB_CANONICAL_MAP.keys():
+            # Quick length gate to avoid wild matches
+            if abs(len(cand) - len(lower)) > 2:
+                continue
+            dist = _levenshtein_distance(lower, cand)
+            if dist < best_dist:
+                best = cand
+                best_dist = dist
+
+        # Only accept very close matches:
+        #   - distance 1 for any length
+        #   - distance 2 allowed for longer words (>= 6 chars)
+        if best is not None and (
+            best_dist == 1 or (best_dist == 2 and len(lower) >= 6)
+        ):
+            tokens[i] = best
+
+    return "".join(tokens)
 
 
 def _get_parse_index() -> Dict[str, Any]:
@@ -115,6 +186,10 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     except Exception:
         # If anything goes wrong, fall back to original text
         text = str(body.text or "")
+
+    # Fuzzy-normalize key verbs before regex parsing so that
+    # common typos like "duplidate" still hit fast paths.
+    text = _normalize_command_verbs(text)
 
     # Pattern 1: "pan track N to VALUE L/R" → "set track N pan to +/-VALUE"
     m = re.search(r"\bpan\s+track\s+(\d+)\s+to\s+(-?\d+)\s*([LR])\b", text, flags=re.IGNORECASE)
@@ -267,6 +342,102 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         canonical = {"domain": "transport", "action": "clip_stop", "value": value}
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
+    # Fast path: clip create/delete/duplicate (Session view)
+    # Create clip: "create clip 4 3 [len]" or "create clip on track 4 scene 3 [len]"
+    m_create_clip = re.search(
+        r"\bcreate\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)(?:\s+(\d+(?:\.\d+)?))?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not m_create_clip:
+        m_create_clip = re.search(
+            r"\bcreate\s+clip\s+on\s+track\s+(\d+)\s+(?:scene\s+)?(\d+)(?:\s+(\d+(?:\.\d+)?))?\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+    if m_create_clip:
+        ti = int(m_create_clip.group(1))
+        si = int(m_create_clip.group(2))
+        length = float(m_create_clip.group(3)) if m_create_clip.group(3) else 4.0
+        value = {"track_index": ti, "scene_index": si, "length_beats": length}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {"action": "clip_create", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_clip_create"},
+        }
+        canonical = {"domain": "transport", "action": "clip_create", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Delete clip: "delete clip 4 3" / "remove clip 4,3"
+    m_delete_clip = re.search(
+        r"\b(delete|remove)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if m_delete_clip:
+        ti = int(m_delete_clip.group(2))
+        si = int(m_delete_clip.group(3))
+        value = {"track_index": ti, "scene_index": si}
+        raw_intent = {
+            "intent": "transport",
+            "operation": {"action": "clip_delete", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_clip_delete"},
+        }
+        canonical = {"domain": "transport", "action": "clip_delete", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
+    # Duplicate clip:
+    #   "duplicate clip 4 3" (implied target: 4,4)
+    #   "duplicate clip 4,3 to 4,5"
+    #   "duplicate clip 4 3 to 4 5 as Bongos"
+    m_dup_clip = re.search(
+        r"\b(duplicate|copy)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)"
+        r"(?:\s+to\s+(\d+)\s*(?:,|\s)\s*(\d+))?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if m_dup_clip:
+        ti = int(m_dup_clip.group(2))
+        si = int(m_dup_clip.group(3))
+        if m_dup_clip.group(4) and m_dup_clip.group(5):
+            tti = int(m_dup_clip.group(4))
+            tsi = int(m_dup_clip.group(5))
+        else:
+            tti = ti
+            tsi = si + 1
+
+        # Optional new name (preserve casing via original_text):
+        #   "duplicate clip 4 2 to 4 5 as Bongos"
+        #   "duplicate clip 4 2 to 4 5 Bongos"
+        m_orig = re.search(
+            r"\b(duplicate|copy)\s+clip\s+\d+\s*(?:,|\s)\s*\d+"
+            r"(?:\s+to\s+\d+\s*(?:,|\s)\s*\d+)?"
+            r"(?:\s+(?:as|to)\s+(.+)|\s+(.+))?$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = None
+        if m_orig:
+            # Prefer explicit 'as/to' name if present, else trailing words
+            raw_name = m_orig.group(2) or m_orig.group(3)
+        name = (raw_name or "").strip().strip('"').strip("'") or None
+
+        value = {
+            "track_index": ti,
+            "scene_index": si,
+            "target_track_index": tti,
+            "target_scene_index": tsi,
+        }
+        if name:
+            value["name"] = name
+        raw_intent = {
+            "intent": "transport",
+            "operation": {"action": "clip_duplicate", "value": value},
+            "meta": {"utterance": original_text, "pipeline": "regex_clip_duplicate"},
+        }
+        canonical = {"domain": "transport", "action": "clip_duplicate", "value": value}
+        return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
+
     # Fast path: naming commands (track / scene / clip)
     # Examples:
     #   rename track 3 to Guitars
@@ -388,14 +559,26 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     # Fast path: track/scene create/delete/duplicate (project structure)
-    # Track creation
+    # Track creation (optionally with name)
     m_create_audio = re.search(
-        r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?\b", text, flags=re.IGNORECASE
+        r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+        text,
+        flags=re.IGNORECASE,
     )
     if m_create_audio:
         idx = m_create_audio.group(2)
         index_val = int(idx) if idx else None
+        # Re-extract from original_text to preserve casing for names
+        m_orig = re.search(
+            r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = (m_orig.group(3) if m_orig else m_create_audio.group(3)) if m_create_audio.lastindex and m_create_audio.lastindex >= 3 else None
+        name = (raw_name or "").strip().strip('"').strip("'") or None
         value = {"type": "audio", "index": index_val}
+        if name:
+            value["name"] = name
         raw_intent = {
             "intent": "project",
             "operation": {"action": "create_audio_track", "value": value},
@@ -405,12 +588,23 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     m_create_midi = re.search(
-        r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?\b", text, flags=re.IGNORECASE
+        r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+        text,
+        flags=re.IGNORECASE,
     )
     if m_create_midi:
         idx = m_create_midi.group(2)
         index_val = int(idx) if idx else None
+        m_orig = re.search(
+            r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = (m_orig.group(3) if m_orig else m_create_midi.group(3)) if m_create_midi.lastindex and m_create_midi.lastindex >= 3 else None
+        name = (raw_name or "").strip().strip('"').strip("'") or None
         value = {"type": "midi", "index": index_val}
+        if name:
+            value["name"] = name
         raw_intent = {
             "intent": "project",
             "operation": {"action": "create_midi_track", "value": value},
@@ -446,16 +640,25 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         canonical = {"domain": "transport", "action": "duplicate_track", "value": ti}
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
-    # Scene creation (blank scenes)
+    # Scene creation (blank or named)
     m_create_scene = re.search(
-        r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?\b",
+        r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
         text,
         flags=re.IGNORECASE,
     )
     if m_create_scene:
         idx = m_create_scene.group(2)
         index_val = int(idx) if idx else None
+        m_orig = re.search(
+            r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = (m_orig.group(3) if m_orig else m_create_scene.group(3)) if m_create_scene.lastindex and m_create_scene.lastindex >= 3 else None
+        name = (raw_name or "").strip().strip('"').strip("'") or None
         value = {"scene_index": index_val} if index_val is not None else {}
+        if name:
+            value["name"] = name
         raw_intent = {
             "intent": "project",
             "operation": {"action": "create_scene", "value": value},
@@ -479,12 +682,32 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         canonical = {"domain": "transport", "action": "delete_scene", "value": value}
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
+    # Scene duplicate (optionally with new name: "duplicate scene 3 as Outro 3"
+    # or "duplicate scene 3 Outro 3")
     m_dup_scene = re.search(
-        r"\b(duplicate|copy)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE
+        r"\b(duplicate|copy)\s+scene\s+(\d+)"
+        r"(?:\s+(?:as|to)\s+(.+)|\s+(.+))?\b",
+        text,
+        flags=re.IGNORECASE,
     )
     if m_dup_scene:
         si = int(m_dup_scene.group(2))
-        value = {"scene_index": si}
+        m_orig = re.search(
+            r"\b(duplicate|copy)\s+scene\s+(\d+)"
+            r"(?:\s+(?:as|to)\s+(.+)|\s+(.+))?\b",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = None
+        if m_orig:
+            # Prefer explicit 'as/to' name if present, else trailing words
+            raw_name = m_orig.group(3) or m_orig.group(4)
+        else:
+            raw_name = m_dup_scene.group(3) or m_dup_scene.group(4) if m_dup_scene.lastindex and m_dup_scene.lastindex >= 3 else None
+        name = (raw_name or "").strip().strip('"').strip("'") or None
+        value: Dict[str, Any] = {"scene_index": si}
+        if name:
+            value["name"] = name
         raw_intent = {
             "intent": "project",
             "operation": {"action": "duplicate_scene", "value": value},

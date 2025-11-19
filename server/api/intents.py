@@ -113,8 +113,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         # Project structure: tracks/scenes create/delete/duplicate
         if action == "create_audio_track":
             idx = None
+            name = None
             if isinstance(value, dict):
                 idx = value.get("index")
+                name = (value.get("name") or "").strip() or None
             elif value is not None:
                 try:
                     idx = int(value)
@@ -124,15 +126,32 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             if idx is not None:
                 params["index"] = int(idx)
             r = _req("create_audio_track", timeout=1.5, **params)
+            new_index = None
+            try:
+                new_index = r.get("index")
+            except Exception:
+                new_index = idx
+            # Optional naming step
+            if name and new_index:
+                try:
+                    _ = _req("set_track_name", timeout=1.0, track_index=int(new_index), name=name)
+                except Exception:
+                    pass
             return {
                 "ok": bool(r and r.get("ok", True)),
-                "summary": f"Created audio track at index {idx}" if idx is not None else "Created audio track at end",
+                "summary": (
+                    f"Created audio track {new_index} \"{name}\""
+                    if new_index and name
+                    else f"Created audio track at index {idx}" if idx is not None else "Created audio track at end"
+                ),
                 "resp": r,
             }
         if action == "create_midi_track":
             idx = None
+            name = None
             if isinstance(value, dict):
                 idx = value.get("index")
+                name = (value.get("name") or "").strip() or None
             elif value is not None:
                 try:
                     idx = int(value)
@@ -142,9 +161,23 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             if idx is not None:
                 params["index"] = int(idx)
             r = _req("create_midi_track", timeout=1.5, **params)
+            new_index = None
+            try:
+                new_index = r.get("index")
+            except Exception:
+                new_index = idx
+            if name and new_index:
+                try:
+                    _ = _req("set_track_name", timeout=1.0, track_index=int(new_index), name=name)
+                except Exception:
+                    pass
             return {
                 "ok": bool(r and r.get("ok", True)),
-                "summary": f"Created MIDI track at index {idx}" if idx is not None else "Created MIDI track at end",
+                "summary": (
+                    f"Created MIDI track {new_index} \"{name}\""
+                    if new_index and name
+                    else f"Created MIDI track at index {idx}" if idx is not None else "Created MIDI track at end"
+                ),
                 "resp": r,
             }
         if action == "delete_track":
@@ -171,8 +204,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             }
         if action == "create_scene":
             idx = None
+            name = None
             if isinstance(value, dict):
                 idx = value.get("scene_index")
+                name = (value.get("name") or "").strip() or None
             elif value is not None:
                 try:
                     idx = int(value)
@@ -182,9 +217,23 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             if idx is not None:
                 params["index"] = int(idx)
             r = _req("create_scene", timeout=1.5, **params)
+            new_index = None
+            try:
+                new_index = r.get("index")
+            except Exception:
+                new_index = idx
+            if name and new_index:
+                try:
+                    _ = _req("set_scene_name", timeout=1.0, scene_index=int(new_index), name=name)
+                except Exception:
+                    pass
             return {
                 "ok": bool(r and r.get("ok", True)),
-                "summary": f"Created scene at index {idx}" if idx is not None else "Created scene at end",
+                "summary": (
+                    f"Created scene {new_index} \"{name}\""
+                    if new_index and name
+                    else f"Created scene at index {idx}" if idx is not None else "Created scene at end"
+                ),
                 "resp": r,
             }
         if action == "delete_scene":
@@ -206,8 +255,10 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             }
         if action == "duplicate_scene":
             si = None
+            name = None
             if isinstance(value, dict):
                 si = value.get("scene_index")
+                name = (value.get("name") or "").strip() or None
             else:
                 try:
                     si = int(value)
@@ -216,9 +267,21 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             if si is None:
                 raise HTTPException(400, "invalid_scene_index")
             r = _req("duplicate_scene", timeout=1.5, scene_index=int(si))
+            # In Live, duplicate_scene inserts the new scene directly after the source.
+            # Use si+1 as the new index for optional renaming.
+            new_index = int(si) + 1
+            if name:
+                try:
+                    _ = _req("set_scene_name", timeout=1.0, scene_index=new_index, name=name)
+                except Exception:
+                    pass
             return {
                 "ok": bool(r and r.get("ok", True)),
-                "summary": f"Duplicated scene {si}",
+                "summary": (
+                    f"Duplicated scene {si} as {new_index} \"{name}\""
+                    if name
+                    else f"Duplicated scene {si}"
+                ),
                 "resp": r,
             }
         # Clip fire/stop (Session clips)
@@ -269,6 +332,106 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             return {
                 "ok": bool(r and r.get("ok", True)),
                 "summary": f"Clip [{track_index},{scene_index}] stopped",
+                "resp": r,
+            }
+        if action == "clip_create":
+            ti = None
+            si = None
+            length = 4.0
+            if isinstance(value, dict):
+                ti = value.get("track_index")
+                si = value.get("scene_index")
+                if value.get("length_beats") is not None:
+                    try:
+                        length = float(value.get("length_beats"))
+                    except Exception:
+                        length = 4.0
+            try:
+                track_index = int(ti)
+                scene_index = int(si)
+            except Exception:
+                raise HTTPException(400, "invalid_clip_coordinates")
+            r = _req(
+                "create_clip",
+                timeout=1.5,
+                track_index=track_index,
+                scene_index=scene_index,
+                length_beats=length,
+            )
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Created clip on Track {track_index}, Scene {scene_index}",
+                "resp": r,
+            }
+        if action == "clip_delete":
+            ti = None
+            si = None
+            if isinstance(value, dict):
+                ti = value.get("track_index")
+                si = value.get("scene_index")
+            try:
+                track_index = int(ti)
+                scene_index = int(si)
+            except Exception:
+                raise HTTPException(400, "invalid_clip_coordinates")
+            r = _req(
+                "delete_clip",
+                timeout=1.5,
+                track_index=track_index,
+                scene_index=scene_index,
+            )
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Deleted clip on Track {track_index}, Scene {scene_index}",
+                "resp": r,
+            }
+        if action == "clip_duplicate":
+            ti = None
+            si = None
+            tti = None
+            tsi = None
+            name = None
+            if isinstance(value, dict):
+                ti = value.get("track_index")
+                si = value.get("scene_index")
+                tti = value.get("target_track_index")
+                tsi = value.get("target_scene_index")
+                name = (value.get("name") or "").strip() or None
+            try:
+                track_index = int(ti)
+                scene_index = int(si)
+                target_track_index = int(tti) if tti is not None else track_index
+                target_scene_index = int(tsi) if tsi is not None else (scene_index + 1)
+            except Exception:
+                raise HTTPException(400, "invalid_clip_coordinates")
+            r = _req(
+                "duplicate_clip",
+                timeout=1.5,
+                track_index=track_index,
+                scene_index=scene_index,
+                target_track_index=target_track_index,
+                target_scene_index=target_scene_index,
+            )
+            # Optional rename of duplicated clip when a name is provided
+            if name and (r and r.get("ok", True)):
+                try:
+                    _ = _req(
+                        "set_clip_name",
+                        timeout=1.0,
+                        track_index=target_track_index,
+                        scene_index=target_scene_index,
+                        name=name,
+                    )
+                except Exception:
+                    # Best-effort only; don't fail duplication on rename issues
+                    pass
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": (
+                    f"Duplicated clip [{track_index},{scene_index}] \u2192 [{target_track_index},{target_scene_index}] \"{name}\""
+                    if name
+                    else f"Duplicated clip [{track_index},{scene_index}] \u2192 [{target_track_index},{target_scene_index}]"
+                ),
                 "resp": r,
             }
         # Combined time signature

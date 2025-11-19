@@ -120,6 +120,16 @@ Scenes, Clips, and Views
 - Fire/stop a single clip in Session view:
   - HTTP: POST `/clip/fire` { "track_index": T, "scene_index": S, "select": true }
   - HTTP: POST `/clip/stop` { "track_index": T, "scene_index": S }
+ - Create/delete/duplicate clips (NLP + API):
+   - NLP (when `use_intents_for_chat` is enabled):
+     - `create clip 4 3` (creates a MIDI clip of default length at Track 4, Scene 3)
+     - `create clip 4 3 8` (explicit length in beats)
+     - `delete clip 4 3`
+     - `duplicate clip 4 3` (duplicates to Track 4, Scene 4 if empty)
+     - `duplicate clip 4 3 to 4 5`
+   - API:
+     - POST `/clip/delete` { "track_index": T, "scene_index": S }
+     - POST `/clip/duplicate` { "track_index": T, "scene_index": S, "target_track_index"?: T2, "target_scene_index"?: S2 }
 - Switch between Session and Arrangement views:
   - HTTP: POST `/view` { "mode": "session" | "arrangement" }
 

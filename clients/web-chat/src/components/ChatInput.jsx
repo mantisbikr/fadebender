@@ -312,7 +312,11 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
             disabled={disabled}
             autoComplete="off"
             inputProps={{
-              spellCheck: false, // Disable spell check - we handle autocorrect on space/tab
+              // Enable native browser spellcheck/autocorrect so users
+              // get underlines and OS-level suggestions as a first line
+              // of defense, in addition to our DAW-specific autocorrect.
+              spellCheck: true,
+              autoCorrect: 'on',
               style: { fontSize: '0.9rem' }
             }}
             InputProps={{}}

@@ -2538,6 +2538,151 @@ def create_clip(live, track_index: int, scene_index: int, length_beats: float) -
     return {"ok": True}
 
 
+def delete_clip(live, track_index: int, scene_index: int) -> Dict[str, Any]:
+    """Delete a clip in the given clip slot (Session view)."""
+    try:
+        ti = int(track_index)
+        si = int(scene_index)
+        if live is not None:
+            tracks = getattr(live, "tracks", []) or []
+            if not (1 <= ti <= len(tracks)):
+                return {"ok": False, "error": "track_out_of_range"}
+            tr = tracks[ti - 1]
+            slots = getattr(tr, "clip_slots", []) or []
+            if not (1 <= si <= len(slots)):
+                return {"ok": False, "error": "scene_out_of_range"}
+            slot = slots[si - 1]
+            if not getattr(slot, "has_clip", False):
+                return {"ok": False, "error": "slot_empty"}
+            song = live
+
+            def _do_delete_clip():
+                try:
+                    if hasattr(song, "begin_undo_step"):
+                        song.begin_undo_step()
+                    if hasattr(slot, "delete_clip"):
+                        slot.delete_clip()
+                    else:
+                        # Fallback: stop and clear clip if possible
+                        try:
+                            slot.stop()
+                        except Exception:
+                            pass
+                    _emit({"event": "clip_deleted", "track": ti, "scene": si})
+                    return {"ok": True}
+                finally:
+                    try:
+                        if hasattr(song, "end_undo_step"):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+
+            return _run_on_main(_do_delete_clip) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    key = (int(track_index), int(scene_index))
+    try:
+        if key in _STATE.get("clips", {}):
+            try:
+                del _STATE.setdefault("clips", {})[key]
+            except Exception:
+                pass
+        _emit({"event": "clip_deleted", "track": int(track_index), "scene": int(scene_index)})
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def duplicate_clip(
+    live,
+    track_index: int,
+    scene_index: int,
+    target_track_index: int | None = None,
+    target_scene_index: int | None = None,
+) -> Dict[str, Any]:
+    """Duplicate a clip from [track, scene] to [target_track, target_scene].
+
+    Defaults to same track and next scene (scene_index + 1) when targets are omitted.
+    """
+    try:
+        ti = int(track_index)
+        si = int(scene_index)
+        tti = int(target_track_index) if target_track_index is not None else ti
+        tsi = int(target_scene_index) if target_scene_index is not None else (si + 1)
+        if live is not None:
+            tracks = getattr(live, "tracks", []) or []
+            if not (1 <= ti <= len(tracks) and 1 <= tti <= len(tracks)):
+                return {"ok": False, "error": "track_out_of_range"}
+            src_tr = tracks[ti - 1]
+            dst_tr = tracks[tti - 1]
+            src_slots = getattr(src_tr, "clip_slots", []) or []
+            dst_slots = getattr(dst_tr, "clip_slots", []) or []
+            if not (1 <= si <= len(src_slots) and 1 <= tsi <= len(dst_slots)):
+                return {"ok": False, "error": "scene_out_of_range"}
+            src_slot = src_slots[si - 1]
+            dst_slot = dst_slots[tsi - 1]
+            if not getattr(src_slot, "has_clip", False):
+                return {"ok": False, "error": "source_slot_empty"}
+            if getattr(dst_slot, "has_clip", False):
+                return {"ok": False, "error": "target_slot_not_empty"}
+            song = live
+
+            def _do_duplicate_clip():
+                try:
+                    if hasattr(song, "begin_undo_step"):
+                        song.begin_undo_step()
+                    if hasattr(src_slot, "duplicate_clip_to"):
+                        src_slot.duplicate_clip_to(dst_slot)
+                    else:
+                        # Fallback: use copy/paste semantics if ever needed (not implemented)
+                        pass
+                    _emit(
+                        {
+                            "event": "clip_duplicated",
+                            "track": ti,
+                            "scene": si,
+                            "target_track": tti,
+                            "target_scene": tsi,
+                        }
+                    )
+                    return {"ok": True}
+                finally:
+                    try:
+                        if hasattr(song, "end_undo_step"):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+
+            return _run_on_main(_do_duplicate_clip) or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    key_src = (int(track_index), int(scene_index))
+    key_dst = (int(target_track_index or track_index), int(target_scene_index or (int(scene_index) + 1)))
+    clips = _STATE.setdefault("clips", {})
+    try:
+        if key_src not in clips:
+            return {"ok": False, "error": "source_slot_empty"}
+        if key_dst in clips:
+            return {"ok": False, "error": "target_slot_not_empty"}
+        clips[key_dst] = clips[key_src]
+        _emit(
+            {
+                "event": "clip_duplicated",
+                "track": int(track_index),
+                "scene": int(scene_index),
+                "target_track": key_dst[0],
+                "target_scene": key_dst[1],
+            }
+        )
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def capture_and_insert_scene(live) -> Dict[str, Any]:
     """Capture current playing clips into a new scene and insert it below selection.
 

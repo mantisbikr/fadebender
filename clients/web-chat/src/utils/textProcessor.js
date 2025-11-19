@@ -36,7 +36,10 @@ class TextProcessor {
 
       // dB and percentages
       'db': 'dB', 'decibel': 'dB', 'decibels': 'dB',
-      'percent': '%', 'pct': '%', 'percnt': '%'
+      'percent': '%', 'pct': '%', 'percnt': '%',
+
+      // Clip/project verbs
+      'duplidate': 'duplicate', 'duplciate': 'duplicate'
     };
   }
 
