@@ -6,6 +6,7 @@ Routes based on intent_type and device field.
 
 from __future__ import annotations
 from typing import Dict, Optional, Any
+import re
 from server.services.nlp.action_parser import ActionMatch
 from server.services.nlp.track_parser import TrackMatch
 from server.services.nlp.device_param_parser import DeviceParamMatch
@@ -337,6 +338,50 @@ def _apply_fuzzy_action_corrections(text: str) -> str:
     return ' '.join(corrected_words)
 
 
+def _normalize_track_number_words(text: str) -> str:
+    """Normalize simple number words in track references.
+
+    Examples:
+        "open track one" → "open track 1"
+        "set track two volume" → "set track 2 volume"
+        "set track to volume" → "set track 2 volume"  (STT mis-hear)
+    """
+    num_words = {
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+        "ten": "10",
+    }
+
+    normalized = text
+    for word, num in num_words.items():
+        # Match "track one", "track   two", etc. as whole words
+        pattern = rf"\btrack\s+{word}\b"
+        normalized = re.sub(pattern, f"track {num}", normalized)
+
+    # Handle common STT mis-hear: "track to" → "track 2" in mixer contexts
+    # Example: "set track to volume to -10 db"
+    normalized = re.sub(
+        r"\btrack\s+to\b\s+(volume|pan|mute|solo|send\b)",
+        r"track 2 \1",
+        normalized,
+    )
+    # Also handle "track too" → "track 2" for the same contexts
+    normalized = re.sub(
+        r"\btrack\s+too\b\s+(volume|pan|mute|solo|send\b)",
+        r"track 2 \1",
+        normalized,
+    )
+
+    return normalized
+
+
 def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, Any]]:
     """Full layered parsing pipeline.
 
@@ -370,6 +415,10 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
 
     # Lowercase for consistency
     text_lower = text_corrected.lower()
+
+    # Normalize simple number words in track references so
+    # "open track one" behaves like "open track 1".
+    text_lower = _normalize_track_number_words(text_lower)
 
     # Apply fuzzy action word replacement for better pattern matching
     # This ensures fallback patterns can match typos like "lsit" → "list"

@@ -3,6 +3,8 @@
 ## Overview
 Fadebender is a natural language interface for controlling Ableton Live. Users type commands in a web-based chat interface. The system displays context-aware visual controls in a capabilities drawer (mixer controls, device parameters) and a sidebar showing tracks and returns.
 
+Fadebender also includes a knowledge-backed help system. You can ask audio engineering questions, Ableton Live questions, and Fadebender usage questions in the same chat and get grounded answers plus suggested commands you can click or copy.
+
 ## Interface Components
 
 ### Web Chat Interface
@@ -10,6 +12,7 @@ Fadebender is a natural language interface for controlling Ableton Live. Users t
 - Auto-correction: automatic typo correction on space/tab
 - Clarification prompts: system asks follow-up questions for ambiguous commands
 - Message history: displays command results and system responses
+- Help routing: conceptual questions (e.g., "my vocals sound weak") are routed to a help assistant that uses the Fadebender knowledge base and audio engineering notes
 
 ### Transport Bar
 - Location: top of interface
@@ -29,6 +32,7 @@ Fadebender is a natural language interface for controlling Ableton Live. Users t
 - Auto-open: opens when executing commands or asking "get" queries
 - Pin behavior: pin to keep open, unpin for auto-close on context switch
 - Type badges: displays AUDIO, MIDI, or RETURN for current context
+- Parameter accordion: after device commands or parameter reads, parameters are grouped (e.g., "Main", "Reverb", "EQ") with clickable chips for fast reads and follow-up control
 
 ### Undo/Redo
 - Location: header buttons
@@ -56,6 +60,25 @@ Syntax variations: "open" or "view" (interchangeable)
 - `open track 3 compressor` or `view track 3 compressor`
 
 Result: Opens capabilities drawer with relevant mixer or device controls
+
+### Help and Conceptual Questions
+You can ask for mixing advice, Ableton Live concepts, or how to use Fadebender itself. The system uses a knowledge base to answer and will often include suggested commands you can run directly.
+
+**Examples:**
+- `my vocals sound weak`
+- `my mix sounds muddy`
+- `how should I use reverb on vocals`
+- `what are sends and returns`
+- `how do I control reverb on return A`
+
+Result:
+- A short explanation (audio engineering + Ableton context)
+- One or more example commands, such as:
+  - `increase track 1 volume by 3 dB`
+  - `set track 1 send A to -12 dB`
+  - `set return A reverb decay to 2 s`
+
+Tip: Use these suggested commands as a starting point and then refine the settings with additional commands.
 
 ## Mixer Control Commands
 
@@ -152,6 +175,17 @@ Action words: "what is", "show", "show me", "tell", "tell me", "get", "check" (a
 - `get return B delay feedback`
 
 Result: Opens capabilities drawer with relevant controls
+
+### Fast Parameter Reads (UI chips)
+When you click a parameter chip in the parameter accordion, Fadebender uses an optimized "read-only" path to fetch just that parameter without going through the full language model.
+
+**Examples (triggered by clicking in the UI):**
+- `Reverb • Decay Time`
+- `Compressor • Threshold`
+
+Result:
+- A chat message like: "Current value for Decay Time on Return A • Reverb is 2.0 s"
+- Suggested follow-up commands (e.g., `set return A reverb decay to 1.5 s`)
 
 ### State Bundle Queries
 Returns complete overview: volume, pan, mute, solo, sends, routing summary
