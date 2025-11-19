@@ -14,8 +14,14 @@ import {
   Chip,
   Fade,
   Button,
+  Tooltip,
 } from '@mui/material';
-import { Send as SendIcon, Undo as UndoIcon, Clear as ClearIcon } from '@mui/icons-material';
+import {
+  Send as SendIcon,
+  Undo as UndoIcon,
+  Clear as ClearIcon,
+  Mic as MicIcon,
+} from '@mui/icons-material';
 
 // Common DAW typo corrections (defaults; merged with server-provided)
 const DEFAULT_AUTOCORRECT_MAP = {
@@ -129,11 +135,30 @@ function levenshteinDistance(a, b) {
   return matrix[b.length][a.length];
 }
 
+function normalizeSpeechText(text) {
+  if (!text) return text;
+
+  // Only do very targeted fixes for common STT mistakes
+  // to avoid surprising the user.
+  let normalized = text;
+
+  // "track to volume" / "track too volume" → "track 2 volume"
+  normalized = normalized.replace(
+    /\btrack\s+(to|too)\s+(volume|pan|mute|solo|send)\b/gi,
+    'track 2 $2'
+  );
+
+  return normalized;
+}
+
 export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorrections }) {
   const [input, setInput] = useState('');
   const [lastCorrection, setLastCorrection] = useState(null); // {from, to, position}
   const [showUndo, setShowUndo] = useState(false);
   const textFieldRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef(null);
 
   const focusInput = () => {
     try {
@@ -174,6 +199,66 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
     }
   }, [showUndo]);
 
+  // Initialise browser speech recognition (if available)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+
+      recognition.onresult = (event) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript;
+          }
+        }
+
+        if (!finalTranscript) return;
+
+        const normalizedTranscript = normalizeSpeechText(finalTranscript.trim());
+
+        setInput((prev) => {
+          const prefix = prev && !prev.endsWith(' ') ? `${prev} ` : prev || '';
+          return `${prefix}${normalizedTranscript} `;
+        });
+
+        setTimeout(() => focusInput(), 0);
+      };
+
+      recognition.onerror = (event) => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      setSpeechSupported(true);
+    } catch {
+      setSpeechSupported(false);
+    }
+  }, []);
+
+  // Stop listening if the input is disabled
+  useEffect(() => {
+    if (disabled && isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  }, [disabled, isListening]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!input.trim() || disabled) return;
@@ -183,6 +268,27 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
     setInput('');
     // Return cursor focus to input immediately
     setTimeout(() => focusInput(), 0);
+  };
+
+  const handleToggleVoice = () => {
+    if (!speechSupported || !recognitionRef.current || disabled) {
+      return;
+    }
+
+    const recognition = recognitionRef.current;
+
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch (err) {
+      setIsListening(false);
+    }
   };
 
   const applyAutocorrect = (text, cursorPosition) => {
@@ -301,6 +407,30 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
         </Fade>
 
         <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+          <Tooltip
+            title={
+              speechSupported
+                ? (isListening ? 'Stop voice input' : 'Start voice input')
+                : 'Voice input not supported in this browser'
+            }
+          >
+            <span>
+              <IconButton
+                onClick={handleToggleVoice}
+                disabled={!speechSupported || disabled}
+                size="small"
+                sx={{
+                  color: isListening ? 'error.main' : 'text.secondary',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                  mr: 0.5,
+                }}
+              >
+                <MicIcon sx={{ fontSize: 22 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
           <TextField
             ref={textFieldRef}
             fullWidth
@@ -344,6 +474,15 @@ export default function ChatInput({ onSubmit, onHelp, disabled, draft, typoCorre
             <SendIcon sx={{ color: 'inherit' }} />
           </IconButton>
         </Box>
+        {!speechSupported && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 0.5, display: 'block' }}
+          >
+            Voice input is not available in this browser. Try Chrome or Edge for mic support.
+          </Typography>
+        )}
       </Container>
     </Paper>
   );
