@@ -654,7 +654,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
 
     # Scene creation (blank or named)
     m_create_scene = re.search(
-        r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+        r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?(?:\s+(?:as\s+)?(.+))?$",
         text,
         flags=re.IGNORECASE,
     )
@@ -662,7 +662,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         idx = m_create_scene.group(2)
         index_val = int(idx) if idx else None
         m_orig = re.search(
-            r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+            r"\b(create|add|new)\s+(?:empty\s+)?scene(?:\s+(?:at\s+)?(\d+))?(?:\s+(?:as\s+)?(.+))?$",
             original_text,
             flags=re.IGNORECASE,
         )
