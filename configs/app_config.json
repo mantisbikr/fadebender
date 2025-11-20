@@ -43,7 +43,8 @@
       "track",
       "return",
       "master",
-      "device"
+      "device",
+      "mod"
     ],
     "percent_always_additive": [
       "diffusion",
@@ -97,7 +98,6 @@
       "streo": "stereo",
       "strereo": "stereo",
       "tack": "track",
-      "rack": "track",
       "testtypo": "testcorrect",
       "trac": "track",
       "trck": "track",
