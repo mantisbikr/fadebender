@@ -181,25 +181,56 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                 "resp": r,
             }
         if action == "delete_track":
-            try:
-                ti = int(value)
-            except Exception:
+            ti = None
+            if isinstance(value, dict):
+                ti = value.get("index")
+            else:
+                try:
+                    ti = int(value)
+                except Exception:
+                    ti = None
+            if ti is None:
                 raise HTTPException(400, "invalid_track_index")
-            r = _req("delete_track", timeout=1.5, track_index=ti)
+            r = _req("delete_track", timeout=1.5, track_index=int(ti))
             return {
                 "ok": bool(r and r.get("ok", True)),
                 "summary": f"Deleted track {ti}",
                 "resp": r,
             }
         if action == "duplicate_track":
-            try:
-                ti = int(value)
-            except Exception:
+            ti = None
+            name = None
+            if isinstance(value, dict):
+                ti = value.get("index")
+                name = (value.get("name") or "").strip() or None
+            else:
+                try:
+                    ti = int(value)
+                except Exception:
+                    ti = None
+            print(f"[DEBUG duplicate_track] ti={ti}, name='{name}'")
+            if ti is None:
                 raise HTTPException(400, "invalid_track_index")
-            r = _req("duplicate_track", timeout=1.5, track_index=ti)
+            r = _req("duplicate_track", timeout=1.5, track_index=int(ti))
+            print(f"[DEBUG duplicate_track] duplicate result: {r}")
+            # In Live, duplicate_track inserts the new track directly after the source.
+            # Use ti+1 as the new index for optional renaming.
+            new_index = int(ti) + 1
+            if name:
+                print(f"[DEBUG duplicate_track] Calling set_track_name with track_index={new_index}, name='{name}'")
+                try:
+                    rename_result = _req("set_track_name", timeout=1.0, track_index=new_index, name=name)
+                    print(f"[DEBUG duplicate_track] set_track_name result: {rename_result}")
+                except Exception as e:
+                    print(f"[DEBUG duplicate_track] set_track_name failed: {e}")
+                    pass
             return {
                 "ok": bool(r and r.get("ok", True)),
-                "summary": f"Duplicated track {ti}",
+                "summary": (
+                    f"Duplicated track {ti} as {new_index} \"{name}\""
+                    if name
+                    else f"Duplicated track {ti} as {new_index}"
+                ),
                 "resp": r,
             }
         if action == "create_scene":

@@ -388,6 +388,27 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
                 pass
             return {"ok": ok_all, "intent": intent, "canonical": canonical, "summary": f"Transport: loop_region start={start} length={length}"}
 
+        # Project structure commands should be routed to execute_intent
+        PROJECT_STRUCTURE_ACTIONS = {
+            "create_audio_track", "create_midi_track", "delete_track", "duplicate_track",
+            "create_scene", "delete_scene", "duplicate_scene",
+            "rename_track", "rename_scene", "rename_clip",
+            "scene_fire", "scene_stop"
+        }
+        if action in PROJECT_STRUCTURE_ACTIONS:
+            # Route to execute_intent which has dedicated handlers
+            from server.api.intents import execute_intent as exec_canonical
+            from server.models.intents_api import CanonicalIntent
+            canonical_intent = CanonicalIntent(
+                domain="transport",
+                action=action,
+                value=value
+            )
+            result = exec_canonical(canonical_intent)
+            result["intent"] = intent
+            result["canonical"] = canonical
+            return result
+
         # Simple transport action passthrough
         msg = {"op": "set_transport", "action": action}
         if value is not None:
@@ -480,7 +501,7 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
         ]
         return {"ok": False, "summary": answer, "answer": answer, "suggested_intents": suggested, "sources": sources, "intent": intent}
 
-    # Transport controls
+    # Transport controls (when confirm=false, for preview)
     if intent.get("intent") == "transport":
         op = intent.get("operation") or {}
         action = str(op.get("action", ""))

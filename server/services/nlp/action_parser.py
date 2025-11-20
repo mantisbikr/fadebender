@@ -321,6 +321,145 @@ def parse_toggle_operation(text: str) -> Optional[ActionMatch]:
 
 
 # ============================================================================
+# PROJECT STRUCTURE PATTERNS (create/delete/duplicate)
+# ============================================================================
+
+def parse_project_structure_command(text: str, original_text: str) -> Optional[ActionMatch]:
+    """Parse create/delete/duplicate commands for tracks/scenes/clips.
+
+    Args:
+        text: Normalized/lowercased text for pattern matching
+        original_text: Original text with preserved case for name extraction
+
+    Examples:
+        "create track"
+        "create track 3"
+        "create track Drums"
+        "create track 3 Drums"
+        "delete track 2"
+        "duplicate track 3"
+        "duplicate track 3 as Bass"
+        "create scene"
+        "create scene 5 Intro"
+        "delete scene 2"
+        "duplicate scene 3 as Verse"
+    """
+    s = text.lower().strip()
+    print(f"[DEBUG parse_project_structure] normalized text='{text}', original text='{original_text}'")
+
+    # Track commands: create/delete/duplicate
+    # Pattern: (create|delete|duplicate) [midi|audio] track [index] [as] [name]
+    pattern = r"\b(create|delete|duplicate|copy|remove)\s+(?:(midi|audio)\s+)?track(?:\s+(\d+))?(?:\s+(.+?))?$"
+    m = re.search(pattern, s)
+    print(f"[DEBUG parse_project_structure] pattern='{pattern}', match={m is not None}")
+    if m:
+        action = m.group(1)
+        track_type = m.group(2)  # "midi" or "audio" or None
+        index = m.group(3)
+        name_raw_lower = m.group(4)
+
+        # Extract name from original text to preserve case
+        # Match on original text to get the case-preserved name
+        m_original = re.search(pattern, original_text, re.IGNORECASE)
+        name_raw_original = m_original.group(4) if m_original else name_raw_lower
+
+        # Strip "as" prefix if present (case-insensitive)
+        name = None
+        if name_raw_original:
+            name = name_raw_original.strip()
+            print(f"[DEBUG parse_project_structure] name_raw='{name}', starts_with_as={name.lower().startswith('as ')}")
+            if name.lower().startswith("as "):
+                name = name[3:].strip()
+
+        print(f"[DEBUG parse_project_structure] action={action}, track_type={track_type}, index={index}, name_after_strip='{name}'")
+
+        # Normalize action
+        if action in ('copy',):
+            action = 'duplicate'
+        if action in ('remove',):
+            action = 'delete'
+
+        # Store structured data in value as string (will be parsed by intent_builder)
+        # If only index is present, return it as a plain integer
+        # If multiple fields or track_type/name, encode as pipe-separated string
+        if index and not track_type and not name:
+            # Simple case: just an index
+            value = index
+        else:
+            # Complex case: multiple fields or track_type/name
+            value_parts = []
+            if track_type:
+                value_parts.append(f"type:{track_type}")
+            if index:
+                value_parts.append(f"index:{index}")
+            if name:
+                value_parts.append(f"name:{name}")
+            value = "|".join(value_parts) if value_parts else "default"
+
+        return ActionMatch(
+            intent_type=f"{action}_track",
+            operation=None,
+            value=value,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text=m.group(0)
+        )
+
+    # Scene commands: create/delete/duplicate
+    scene_pattern = r"\b(create|delete|duplicate|copy|remove)\s+scene(?:\s+(\d+))?(?:\s+(.+?))?$"
+    m = re.search(scene_pattern, s)
+    if m:
+        action = m.group(1)
+        index = m.group(2)
+        name_raw_lower = m.group(3)
+
+        # Extract name from original text to preserve case
+        m_original = re.search(scene_pattern, original_text, re.IGNORECASE)
+        name_raw_original = m_original.group(3) if m_original else name_raw_lower
+
+        # Strip "as" prefix if present (case-insensitive)
+        name = None
+        if name_raw_original:
+            name = name_raw_original.strip()
+            if name.lower().startswith("as "):
+                name = name[3:].strip()
+
+        # Normalize action
+        if action in ('copy',):
+            action = 'duplicate'
+        if action in ('remove',):
+            action = 'delete'
+
+        # Store structured data in value
+        # If only index is present, return it as a plain integer
+        # If multiple fields or name, encode as pipe-separated string
+        if index and not name:
+            # Simple case: just an index
+            value = index
+        else:
+            # Complex case: multiple fields or name
+            value_parts = []
+            if index:
+                value_parts.append(f"index:{index}")
+            if name:
+                value_parts.append(f"name:{name}")
+            value = "|".join(value_parts) if value_parts else "default"
+
+        return ActionMatch(
+            intent_type=f"{action}_scene",
+            operation=None,
+            value=value,
+            unit=None,
+            confidence=0.95,
+            method="regex",
+            raw_text=m.group(0)
+        )
+
+    return None
+
+
+# ============================================================================
 # TRANSPORT PATTERNS (from transport_parser.py)
 # ============================================================================
 
@@ -627,23 +766,29 @@ def parse_navigation_command(text: str) -> Optional[ActionMatch]:
 # MAIN PARSER FUNCTION
 # ============================================================================
 
-def parse_action(text: str) -> Optional[ActionMatch]:
+def parse_action(text: str, original_text: Optional[str] = None) -> Optional[ActionMatch]:
     """Parse action from text using regex patterns.
+
+    Args:
+        text: Normalized/lowercased text for pattern matching
+        original_text: Original text with preserved case for name extraction
 
     Tries patterns in order of specificity:
     1. GET queries (what is/how many/list) - checked first to avoid false SET matches
-    2. Transport commands (most specific keywords)
-    3. Navigation commands (open/list)
-    4. Relative changes (increase/decrease by)
-    5. Absolute changes (set/change to)
-    6. Toggle operations (mute/solo)
-
-    Args:
-        text: Input text (lowercase, typo-corrected)
+    2. Project structure (create/delete/duplicate) - specific keywords
+    3. Transport commands (most specific keywords)
+    4. Navigation commands (open/list)
+    5. Relative changes (increase/decrease by)
+    6. Absolute changes (set/change to)
+    7. Toggle operations (mute/solo)
 
     Returns:
         ActionMatch if found, None otherwise
     """
+    # Use original_text if provided, otherwise default to text
+    if original_text is None:
+        original_text = text
+
     # FIRST: Normalize action words using fuzzy matching
     # This catches "wat" → "what", "incrase" → "increase", etc.
     # Independent of LLM/nlp_config - uses known vocabulary
@@ -651,6 +796,12 @@ def parse_action(text: str) -> Optional[ActionMatch]:
 
     # Try GET queries first (avoid "what is" being caught by other patterns)
     result = parse_get_query(text_normalized)
+    if result:
+        return result
+
+    # Try project structure commands (create/delete/duplicate tracks/scenes/clips)
+    # Pass original_text to preserve case in names
+    result = parse_project_structure_command(text_normalized, original_text)
     if result:
         return result
 

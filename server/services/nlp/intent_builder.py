@@ -29,7 +29,9 @@ def build_raw_intent(
     Returns:
         raw_intent dict ready for intent_mapper, or None if incomplete/ambiguous
     """
+    print(f"[DEBUG build_raw_intent] text='{text}', action={action.intent_type if action else None}")
     if not action:
+        print(f"[DEBUG build_raw_intent] No action parsed, returning None")
         return None  # No action parsed - can't build intent
 
     # Calculate overall confidence
@@ -54,6 +56,11 @@ def build_raw_intent(
     # ROUTE 1: Transport intents (no targets)
     if action.intent_type == "transport":
         return _build_transport_intent(action, meta)
+
+    # ROUTE 1b: Project structure intents (create/delete/duplicate)
+    if action.intent_type in ("create_track", "delete_track", "duplicate_track",
+                               "create_scene", "delete_scene", "duplicate_scene"):
+        return _build_project_structure_intent(action, meta)
 
     # ROUTE 2: Navigation intents (open/list)
     if action.intent_type in ("open_capabilities", "list_capabilities"):
@@ -104,12 +111,90 @@ def build_raw_intent(
 def _build_transport_intent(action: ActionMatch, meta: Dict) -> Dict[str, Any]:
     """Build transport intent (play, stop, loop, tempo, etc.)."""
     # Transport intents have no targets, just action/value
+    # Determine action from unit (tempo, loop_start, etc), value (play, stop), or raw_text (loop)
+    transport_action = None
+    transport_value = None
+
+    if action.unit:
+        # Commands with units: "set tempo to 130" → unit="bpm", value=130.0
+        transport_action = str(action.unit)
+        transport_value = action.value
+    elif isinstance(action.value, str):
+        # String value commands: "play" → value="play"
+        transport_action = str(action.value)
+        transport_value = None
+    else:
+        # Numeric value without unit: "loop off" → value=0.0, unit=None, raw_text="loop off"
+        # Extract action from raw_text
+        raw = (action.raw_text or "").lower()
+        if "loop" in raw:
+            transport_action = "loop"
+            transport_value = action.value
+
     return {
         "intent": "transport",
         "operation": {
-            "action": str(action.value) if isinstance(action.value, str) else None,
-            "value": action.value if not isinstance(action.value, str) else None,
+            "action": transport_action,
+            "value": transport_value,
             "unit": action.unit
+        },
+        "meta": meta
+    }
+
+
+def _build_project_structure_intent(action: ActionMatch, meta: Dict) -> Dict[str, Any]:
+    """Build project structure intent (create/delete/duplicate tracks/scenes)."""
+    # Parse value string: "type:midi|index:3|name:Drums" or "default" or just an integer
+    value_str = str(action.value) if action.value else "default"
+
+    # Parse the structured value
+    value_data = None
+    track_type = None  # "midi" or "audio"
+
+    if value_str == "default":
+        # No index or name provided - create at end
+        value_data = None
+    elif "|" in value_str:
+        # Structured data: "type:midi|index:3|name:Drums"
+        value_data = {}
+        for part in value_str.split("|"):
+            if ":" in part:
+                key, val = part.split(":", 1)
+                if key == "index":
+                    value_data["index"] = int(val)
+                elif key == "name":
+                    value_data["name"] = val
+                elif key == "type":
+                    track_type = val
+    else:
+        # Simple integer
+        try:
+            value_data = int(value_str)
+        except:
+            value_data = None
+
+    # Map intent type to action name, using track_type if specified
+    if action.intent_type == "create_track":
+        if track_type == "midi":
+            action_name = "create_midi_track"
+        else:
+            action_name = "create_audio_track"
+    else:
+        action_map = {
+            "delete_track": "delete_track",
+            "duplicate_track": "duplicate_track",
+            "create_scene": "create_scene",
+            "delete_scene": "delete_scene",
+            "duplicate_scene": "duplicate_scene",
+        }
+        action_name = action_map.get(action.intent_type, action.intent_type)
+
+    return {
+        "intent": "transport",
+        "operation": {
+            "action": action_name,
+            "value": value_data,
+            "unit": None
         },
         "meta": meta
     }
@@ -405,16 +490,20 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
 
+    print(f"[DEBUG parse_intent_layered] ORIGINAL text received: '{text}'")
+
     try:
         from parsers import apply_typo_corrections
         # Apply typo corrections BEFORE parsing (same as old parser)
         text_corrected = apply_typo_corrections(text)
+        print(f"[DEBUG parse_intent_layered] After typo correction: '{text_corrected}'")
     except Exception:
         # Fallback to uncorrected text if typo corrector unavailable
         text_corrected = text
 
     # Lowercase for consistency
     text_lower = text_corrected.lower()
+    print(f"[DEBUG parse_intent_layered] After lowercase: '{text_lower}'")
 
     # Normalize simple number words in track references so
     # "open track one" behaves like "open track 1".
@@ -439,7 +528,8 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
         return special
 
     # Layer 1: Parse action/value/unit
-    action = parse_action(text_lower)
+    # Pass original text to preserve case in user-provided names
+    action = parse_action(text_lower, original_text=text)
 
     # Layer 2: Parse track/return/master
     track = parse_track(text_lower)

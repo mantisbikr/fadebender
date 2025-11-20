@@ -19,6 +19,7 @@ router = APIRouter()
 
 # Check if layered parser should be used
 USE_LAYERED = os.getenv("USE_LAYERED_PARSER", "").lower() in ("1", "true", "yes")
+print(f"[NLP] USE_LAYERED_PARSER env var: {os.getenv('USE_LAYERED_PARSER')}, USE_LAYERED={USE_LAYERED}")
 
 # Module-level cache for parse index (only needed for layered parser)
 _PARSE_INDEX = None
@@ -561,7 +562,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     # Fast path: track/scene create/delete/duplicate (project structure)
     # Track creation (optionally with name)
     m_create_audio = re.search(
-        r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+        r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(?:as\s+)?(.+))?$",
         text,
         flags=re.IGNORECASE,
     )
@@ -570,7 +571,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         index_val = int(idx) if idx else None
         # Re-extract from original_text to preserve casing for names
         m_orig = re.search(
-            r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+            r"\b(create|add|new)\s+audio\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(?:as\s+)?(.+))?$",
             original_text,
             flags=re.IGNORECASE,
         )
@@ -588,7 +589,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     m_create_midi = re.search(
-        r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+        r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(?:as\s+)?(.+))?$",
         text,
         flags=re.IGNORECASE,
     )
@@ -596,7 +597,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         idx = m_create_midi.group(2)
         index_val = int(idx) if idx else None
         m_orig = re.search(
-            r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(.+))?$",
+            r"\b(create|add|new)\s+midi\s+track(?:\s+(?:at\s+)?(\d+))?(?:\s+(?:as\s+)?(.+))?$",
             original_text,
             flags=re.IGNORECASE,
         )
@@ -628,16 +629,27 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     m_dup_track = re.search(
-        r"\b(duplicate|copy)\s+track\s+(\d+)\b", text, flags=re.IGNORECASE
+        r"\b(duplicate|copy)\s+track\s+(\d+)(?:\s+(?:as\s+)?(.+))?$", text, flags=re.IGNORECASE
     )
     if m_dup_track:
         ti = int(m_dup_track.group(2))
+        # Extract name from original_text to preserve casing
+        m_orig = re.search(
+            r"\b(duplicate|copy)\s+track\s+(\d+)(?:\s+(?:as\s+)?(.+))?$",
+            original_text,
+            flags=re.IGNORECASE,
+        )
+        raw_name = (m_orig.group(3) if m_orig else m_dup_track.group(3)) if m_dup_track.lastindex and m_dup_track.lastindex >= 3 else None
+        name = (raw_name or "").strip().strip('"').strip("'") or None
+        value = {"index": ti}
+        if name:
+            value["name"] = name
         raw_intent = {
             "intent": "project",
-            "operation": {"action": "duplicate_track", "value": ti},
+            "operation": {"action": "duplicate_track", "value": value},
             "meta": {"utterance": original_text, "pipeline": "regex_project"},
         }
-        canonical = {"domain": "transport", "action": "duplicate_track", "value": ti}
+        canonical = {"domain": "transport", "action": "duplicate_track", "value": value}
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     # Scene creation (blank or named)
@@ -722,7 +734,9 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
             from server.services.nlp.intent_builder import parse_command_layered
 
             parse_index = _get_parse_index()
-            layered_intent = parse_command_layered(text, parse_index)
+            # Use original_text to preserve case in user-provided names
+            # Layered parser handles its own typo correction and lowercasing internally
+            layered_intent = parse_command_layered(original_text, parse_index)
             if layered_intent:
                 raw_intent = layered_intent
                 try:
@@ -815,6 +829,10 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         # Navigation intents (open_capabilities, list_capabilities) are valid UI intents
         # They don't go to the remote script, but should return ok=True for the UI to handle
         if raw_intent and raw_intent.get("intent") in ("open_capabilities", "list_capabilities"):
+            return {"ok": True, "intent": raw_intent, "raw_intent": raw_intent}
+
+        # Help/question intents should route to /help endpoint with ok=True
+        if raw_intent and raw_intent.get("intent") == "question_response":
             return {"ok": True, "intent": raw_intent, "raw_intent": raw_intent}
 
         # Preserve original LLM output for non-control intents
