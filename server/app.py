@@ -136,14 +136,20 @@ app.include_router(presets_router)
 app.include_router(ops_router)
 app.include_router(intents_router)
 app.include_router(nlp_router)
-from server.config.feature_flags import is_enabled
-if is_enabled("new_routing"):
-    # New split overview: status/snapshot and devices enrichment
-    app.include_router(overview_status_router)
-    app.include_router(overview_devices_router)
-else:
-    # Legacy monolithic overview router
-    app.include_router(overview_router)
+
+# FORCE legacy router (full enrichment) - new_routing flag is broken
+print("[APP STARTUP] FORCING LEGACY ROUTING (overview_router - full enrichment)")
+app.include_router(overview_router)
+
+# Disabled: new_routing uses empty devices, breaks NLP
+# from server.config.feature_flags import is_enabled
+# if is_enabled("new_routing"):
+#     print("[APP STARTUP] Using NEW_ROUTING (overview_status_router - empty devices)")
+#     app.include_router(overview_status_router)
+#     app.include_router(overview_devices_router)
+# else:
+#     print("[APP STARTUP] Using LEGACY ROUTING (overview_router - full enrichment)")
+#     app.include_router(overview_router)
 # app.include_router(snapshot_router)  # Merged into overview_router
 
 

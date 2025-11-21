@@ -23,6 +23,8 @@ print(f"[NLP] USE_LAYERED_PARSER env var: {os.getenv('USE_LAYERED_PARSER')}, USE
 
 # Module-level cache for parse index (only needed for layered parser)
 _PARSE_INDEX = None
+_PARSE_INDEX_TIMESTAMP = 0.0
+_PARSE_INDEX_TTL = 60.0  # Refresh every 60 seconds to pick up device changes
 
 
 _VERB_CANONICAL_MAP = {
@@ -99,11 +101,15 @@ def _get_parse_index() -> Dict[str, Any]:
     """Get or build the parse index for layered parser.
 
     Builds index from Live set if available, otherwise returns minimal index.
-    Cached at module level for performance.
+    Cached at module level with 60s TTL to pick up device changes.
     """
-    global _PARSE_INDEX
+    global _PARSE_INDEX, _PARSE_INDEX_TIMESTAMP
 
-    if _PARSE_INDEX is not None:
+    import time
+
+    # Check if cache is still valid (non-empty AND not expired)
+    cache_age = time.time() - _PARSE_INDEX_TIMESTAMP
+    if _PARSE_INDEX is not None and cache_age < _PARSE_INDEX_TTL:
         return _PARSE_INDEX
 
     try:
@@ -132,6 +138,7 @@ def _get_parse_index() -> Dict[str, Any]:
                         )
             builder = ParseIndexBuilder()
             _PARSE_INDEX = builder.build_from_live_set(live_devices)
+            _PARSE_INDEX_TIMESTAMP = time.time()
             print(f"[LAYERED] Built parse index with {len(_PARSE_INDEX.get('devices_in_set', []))} devices from snapshot")
         except Exception as e:
             print(f"[LAYERED] Failed to build parse index from snapshot: {e}, using minimal index")
@@ -144,6 +151,7 @@ def _get_parse_index() -> Dict[str, Any]:
                 "mixer_params": ["volume", "pan", "mute", "solo", "send a", "send b", "send c", "send d"],
                 "typo_map": {},
             }
+            _PARSE_INDEX_TIMESTAMP = time.time()
     except Exception as e:
         print(f"[LAYERED] Failed to initialize parse index: {e}")
         _PARSE_INDEX = {
@@ -155,6 +163,7 @@ def _get_parse_index() -> Dict[str, Any]:
             "mixer_params": ["volume", "pan", "mute", "solo", "send a", "send b", "send c", "send d"],
             "typo_map": {},
         }
+        _PARSE_INDEX_TIMESTAMP = time.time()
 
     return _PARSE_INDEX
 

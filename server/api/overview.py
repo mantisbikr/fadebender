@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any, Dict, List
 
@@ -10,6 +11,8 @@ from pydantic import BaseModel
 from server.services.ableton_client import request_op, data_or_raw
 from server.core.deps import get_live_index, get_value_registry
 from server.config.app_config import get_snapshot_config
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -61,6 +64,8 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
     """
     global _enriched_devices_cache
 
+    logger.info(f"[CACHE] Starting cache refresh: {len(tracks)} tracks, {len(returns)} returns")
+
     async with _enriched_devices_cache_lock:
         new_cache: Dict[str, Any] = {
             "tracks": {},
@@ -68,6 +73,7 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
             "master": [],
             "timestamp": time.time(),
         }
+        logger.info(f"[CACHE] Created new_cache structure")
 
         # Enrich track devices
         for track in tracks:
@@ -87,18 +93,25 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
                     enriched_devices.append(dev_obj)
 
                 new_cache["tracks"][track_idx] = enriched_devices
-            except Exception:
+            except Exception as e:
+                logger.error(f"[CACHE ERROR] Failed to fetch track {track_idx} devices: {e}", exc_info=True)
                 new_cache["tracks"][track_idx] = []
 
         # Enrich return devices
+        logger.info(f"[CACHE] Processing {len(returns)} returns...")
         for ret in returns:
             ret_idx = int(ret.get("index", 0))
+            logger.info(f"[CACHE] Fetching devices for return {ret_idx}...")
             try:
                 devs_resp = request_op("get_return_devices", timeout=0.8, return_index=ret_idx) or {}
+                logger.info(f"[CACHE] Return {ret_idx} response: ok={devs_resp.get('ok')}, has_data={bool(devs_resp.get('data'))}")
                 devs_data = data_or_raw(devs_resp) or {}
+                logger.info(f"[CACHE] Return {ret_idx} devices_data: {devs_data}")
 
                 enriched_devices = []
-                for d in (devs_data.get("devices") or []):
+                devices_list = devs_data.get("devices") or []
+                logger.info(f"[CACHE] Return {ret_idx} has {len(devices_list)} devices")
+                for d in devices_list:
                     dev_obj = {
                         "index": int(d.get("index", 0)),
                         "name": str(d.get("name", f"Device {int(d.get('index',0))}")),
@@ -106,9 +119,12 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
                     # Enrich with device_type
                     dev_obj.update(_enrich_device_with_type(dev_obj["name"]))
                     enriched_devices.append(dev_obj)
+                    logger.info(f"[CACHE] Added device: {dev_obj}")
 
                 new_cache["returns"][ret_idx] = enriched_devices
-            except Exception:
+                logger.info(f"[CACHE] Cached {len(enriched_devices)} devices for return {ret_idx}")
+            except Exception as e:
+                logger.error(f"[CACHE ERROR] Failed to fetch return {ret_idx} devices: {e}", exc_info=True)
                 new_cache["returns"][ret_idx] = []
 
         # Enrich master track devices
@@ -127,11 +143,13 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
                 enriched_devices.append(dev_obj)
 
             new_cache["master"] = enriched_devices
-        except Exception:
+        except Exception as e:
+            logger.error(f"[CACHE ERROR] Failed to fetch master devices: {e}", exc_info=True)
             new_cache["master"] = []
 
         # Update global cache
         _enriched_devices_cache = new_cache
+        logger.info(f"[CACHE] Cache updated! Returns: {list(new_cache['returns'].keys())}, Total devices across returns: {sum(len(v) for v in new_cache['returns'].values())}")
 
 
 async def _refresh_device_values_chunked(tracks: List[Dict[str, Any]], returns: List[Dict[str, Any]]) -> None:
@@ -257,6 +275,10 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
     - Devices: LiveIndex cached device structures (tracks, returns)
     - Mixer: ValueRegistry mixer parameter values (volume, pan, sends, etc.)
     """
+    import sys
+    print(f"\n\n=== SNAPSHOT CALLED: force_refresh={force_refresh} ===\n", flush=True)
+    sys.stdout.flush()
+
     global _enriched_devices_cache
 
     # Get overview data (track/return names and types)
@@ -271,8 +293,27 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
 
     # Refresh enriched device cache if needed (first call or force_refresh)
     cache_age = time.time() - _enriched_devices_cache.get("timestamp", 0)
-    if force_refresh or cache_age > 3600 or not _enriched_devices_cache.get("tracks"):
+    has_tracks_in_cache = bool(_enriched_devices_cache.get("tracks"))
+    should_refresh = force_refresh or cache_age > 3600 or not has_tracks_in_cache
+
+    debug_info = {
+        "force_refresh": force_refresh,
+        "cache_age": cache_age,
+        "has_tracks_in_cache": has_tracks_in_cache,
+        "should_refresh": should_refresh,
+        "cache_refresh_called": False
+    }
+
+    print(f"[SNAPSHOT] force_refresh={force_refresh}, cache_age={cache_age:.1f}s, has_tracks={has_tracks_in_cache}", flush=True)
+    logger.info(f"[SNAPSHOT] force_refresh={force_refresh}, cache_age={cache_age:.1f}s, has_tracks={has_tracks_in_cache}")
+
+    if should_refresh:
+        print(f"[SNAPSHOT] Calling _refresh_enriched_devices_cache with {len(tracks)} tracks, {len(returns)} returns...", flush=True)
+        logger.info(f"[SNAPSHOT] Calling _refresh_enriched_devices_cache with {len(tracks)} tracks, {len(returns)} returns...")
+        debug_info["cache_refresh_called"] = True
         await _refresh_enriched_devices_cache(tracks, returns)
+        print(f"[SNAPSHOT] Cache refresh completed", flush=True)
+        logger.info(f"[SNAPSHOT] Cache refresh completed")
 
     # Build output using cached enriched devices
     out_tracks: List[Dict[str, Any]] = []
@@ -365,7 +406,9 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
             "device_cache_age_seconds": round(now - _device_cache_timestamp, 2),
             "device_ttl_seconds": ttl,
             "enriched_devices_cache_age_seconds": round(cache_age, 2),
-        }
+            "code_version": "v2_debug_enabled"
+        },
+        "debug": debug_info
     }
 
 

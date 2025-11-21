@@ -234,6 +234,17 @@ class DeviceContextParser:
         self.device_vocab = device_names
         self.DEVICE_RE = re.compile(build_alt(device_names)) if device_names else None
 
+        # Build device type vocabulary (for excluding from parameter matches)
+        device_types_list = list(set(
+            spec.get('device_type', '')
+            for spec in parse_index['params_by_device'].values()
+        ))
+        device_types_list = [dt for dt in device_types_list if dt and dt != 'unknown']
+
+        # Combine device names and types into exclusion set (lowercase for matching)
+        self.device_words = set(d.lower() for d in device_names + device_types_list)
+        print(f"[DEBUG DeviceContextParser] device_words ({len(self.device_words)}): {sorted(list(self.device_words))[:20]}")
+
         # Build per-device parameter regexes
         self.PARAM_RE = {}
         for dev, spec in parse_index["params_by_device"].items():
@@ -320,7 +331,8 @@ class DeviceContextParser:
         text: str,
         vocab: List[str],
         want: str = "rightmost",
-        limit_region: Optional[Tuple[int, int]] = None
+        limit_region: Optional[Tuple[int, int]] = None,
+        exclude_device_words: bool = False
     ) -> Optional[Tuple[str, Tuple[int, int], float]]:
         """
         Find best fuzzy match in text using sliding window with space normalization.
@@ -330,6 +342,7 @@ class DeviceContextParser:
             vocab: List of candidate strings to match
             want: "leftmost" or "rightmost" (tie-breaker for equal scores)
             limit_region: Optional (start, end) character indices to limit search
+            exclude_device_words: If True, skip spans that contain device/type words
 
         Returns:
             (matched_string, (start_idx, end_idx), score) or None if no match
@@ -348,6 +361,12 @@ class DeviceContextParser:
                 for L in range(1, min(5, len(words) - i) + 1):
                     span_words = words[i:i + L]
                     span_text = " ".join(span_words)
+
+                    # Skip this span if it contains device/type words (for parameter matching)
+                    if exclude_device_words and hasattr(self, 'device_words'):
+                        if any(w.lower() in self.device_words for w in span_words):
+                            print(f"[DEBUG fuzzy_best] Skipping span '{span_text}' - contains device word")
+                            continue
 
                     # Try space-normalized variations of the span
                     # This handles typos like "mixgel" vs "mix gel" or "8 dot ball" vs "8dotball"
@@ -392,14 +411,18 @@ class DeviceContextParser:
         Internal method: Parse device and parameter using dynamic device-type resolution.
 
         Algorithm:
-        1. Parse parameter name (exact/fuzzy)
-        2. Look up which device types have this parameter
-        3. Find device type word in text (e.g., "delay", "reverb")
-        4. Resolve to actual device name from snapshot
+        1. Parse parameter name (exact/fuzzy, excluding spans with device words)
+        2. Look up which device types have this parameter (from Firestore)
+        3. Find device type/name word in text (e.g., "delay", "4th bandpass", "reverb")
+        4. Resolve device type to actual device name from snapshot
         5. Handle ordinals and ambiguity
 
+        The parameter-first approach is intentional: often the parameter is easier to
+        identify than the device. Fuzzy matching excludes spans containing device/type
+        words to prevent "reverb decay" from matching as a single parameter.
+
         Args:
-            text: Input text (already normalized, e.g., "set delay feedback to 50%")
+            text: Input text (already normalized, e.g., "set reverb decay to 5")
 
         Returns:
             DeviceParamMatch with parsed device, param, and confidence
@@ -421,7 +444,8 @@ class DeviceContextParser:
                 confidence += 0.5
                 method = "exact"
             else:
-                # Try fuzzy parameter match
+                # Try fuzzy parameter match - exclude spans containing device/type words
+                # This prevents "reverb decay" from matching as single parameter
                 vocab = set()
                 vocab.update(self.index.get("mixer_params", []))
                 for spec in self.index["params_by_device"].values():
@@ -429,12 +453,15 @@ class DeviceContextParser:
                     for vs in spec.get("aliases", {}).values():
                         vocab.update(vs)
 
-                best = self.fuzzy_best(text, list(vocab), want="rightmost")
+                best = self.fuzzy_best(text, list(vocab), want="rightmost", exclude_device_words=True)
                 if best:
                     param = self.param_canonical.get(best[0].lower(), best[0])
                     param_span = best[1]
                     confidence += 0.35
                     method = "fuzzy_param"
+                    print(f"[DEBUG Step 1] Fuzzy matched parameter: '{param}' from span '{text[param_span[0]:param_span[1]]}'")
+                else:
+                    print(f"[DEBUG Step 1] No fuzzy parameter match found (with device word exclusion)")
         else:
             return DeviceParamMatch(None, None, None, None, 0.0, "no_params")
 
