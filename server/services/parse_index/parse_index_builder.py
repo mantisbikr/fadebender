@@ -40,7 +40,6 @@ class ParseIndexBuilder:
             Parse index dict ready for serialization/use by parser
         """
 
-        print(f"Building parse index from {len(live_set_devices)} devices in Live set...")
         start_time = time.time()
 
         # Collect unique device names (de-duplicate if same device appears multiple times)
@@ -62,20 +61,14 @@ class ParseIndexBuilder:
                 # Increment ordinal count
                 unique_devices[name]["ordinals"] += device.get("ordinals", 1)
 
-        print(f"  Found {len(unique_devices)} unique device types")
 
         # Query Firestore for parameter names using batch queries
-        print()
-        print("Loading device mappings from Firestore...")
 
         device_names = list(unique_devices.keys())
         batch_start = time.time()
         device_mappings = self._load_devices_batch(device_names)
         batch_elapsed = time.time() - batch_start
 
-        print(f"  Batch loading completed in {batch_elapsed*1000:.1f}ms")
-        print(f"  Average: {batch_elapsed*1000/len(device_names):.1f}ms per device")
-        print()
 
         # Build params_by_device from batch results
         params_by_device: Dict[str, Dict[str, Any]] = {}
@@ -92,7 +85,6 @@ class ParseIndexBuilder:
                     "device_type": device_type,
                     "aliases": self._build_param_aliases(device_name, param_names),
                 }
-                print(f"  ✓ {device_name:30s} → {len(param_names):3d} params ({device_type})")
             else:
                 # No params found - will fall back to LLM at parse time
                 params_by_device[device_name] = {
@@ -100,7 +92,6 @@ class ParseIndexBuilder:
                     "device_type": "unknown",
                     "aliases": {},
                 }
-                print(f"  ✗ {device_name:30s} → no params found")
 
         # Build devices_in_set list
         devices_in_set = [
@@ -149,10 +140,6 @@ class ParseIndexBuilder:
 
         total_time = time.time() - start_time
 
-        print()
-        print(f"Parse index built in {total_time*1000:.1f}ms")
-        print(f"  Total devices: {len(devices_in_set)}")
-        print(f"  Total params: {sum(len(p['params']) for p in params_by_device.values())}")
 
         return parse_index
 
@@ -324,10 +311,8 @@ class ParseIndexBuilder:
             if doc.exists:
                 data = doc.to_dict()
                 corrections = data.get("corrections", {})
-                print(f"  Loaded {len(corrections)} typo corrections from nlp_config")
                 return corrections
         except Exception as e:
-            print(f"  Warning: Could not load typo corrections: {e}")
 
         # Return minimal fallback
         return {

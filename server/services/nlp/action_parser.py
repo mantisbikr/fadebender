@@ -345,13 +345,11 @@ def parse_project_structure_command(text: str, original_text: str) -> Optional[A
         "duplicate scene 3 as Verse"
     """
     s = text.lower().strip()
-    print(f"[DEBUG parse_project_structure] normalized text='{text}', original text='{original_text}'")
 
     # Track commands: create/delete/duplicate
     # Pattern: (create|delete|duplicate) [midi|audio] track [index] [as] [name]
     pattern = r"\b(create|delete|duplicate|copy|remove)\s+(?:(midi|audio)\s+)?track(?:\s+(\d+))?(?:\s+(.+?))?$"
     m = re.search(pattern, s)
-    print(f"[DEBUG parse_project_structure] pattern='{pattern}', match={m is not None}")
     if m:
         action = m.group(1)
         track_type = m.group(2)  # "midi" or "audio" or None
@@ -367,11 +365,9 @@ def parse_project_structure_command(text: str, original_text: str) -> Optional[A
         name = None
         if name_raw_original:
             name = name_raw_original.strip()
-            print(f"[DEBUG parse_project_structure] name_raw='{name}', starts_with_as={name.lower().startswith('as ')}")
             if name.lower().startswith("as "):
                 name = name[3:].strip()
 
-        print(f"[DEBUG parse_project_structure] action={action}, track_type={track_type}, index={index}, name_after_strip='{name}'")
 
         # Normalize action
         if action in ('copy',):

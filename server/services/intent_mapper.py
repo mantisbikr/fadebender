@@ -90,7 +90,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
 
     # Debug logging for relative changes
     if kind == "relative_change":
-        print(f"[DEBUG] Processing relative_change: targets={targets}, op={op}")
 
     # Pass-through for transport intents (handled by chat_service and API directly)
     if kind == "transport":
@@ -132,11 +131,8 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
         from server.core.deps import get_value_registry
 
         try:
-            print(f"[DEBUG] Starting relative change conversion for {parameter}")
             registry = get_value_registry()
-            print(f"[DEBUG] Got registry: {registry}")
             mixer_data = registry.get_mixer()
-            print(f"[DEBUG] Got mixer_data keys: {mixer_data.keys() if mixer_data else 'None'}")
 
             # Get current value from registry (both normalized and display)
             current_normalized = None
@@ -186,7 +182,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
 
             if current_normalized is None:
                 # ValueRegistry doesn't have the value - fetch it from Live
-                print(f"[DEBUG] No current value in registry for {domain} {target_fields} {parameter}, fetching from Live...")
 
                 # Import utilities to fetch and convert current value from Live
                 from server.services.ableton_client import request_op, data_or_raw
@@ -195,12 +190,9 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 try:
                     if domain == "track" and "track_index" in target_fields:
                         idx = target_fields["track_index"]
-                        print(f"[DEBUG] Requesting track status for track_index={idx}")
                         resp = request_op("get_track_status", timeout=1.0, track_index=idx)
-                        print(f"[DEBUG] Got response: {resp}")
                         if resp:
                             track_info = data_or_raw(resp)
-                            print(f"[DEBUG] track_info: {track_info}")
 
                             if parameter == "volume":
                                 current_normalized = track_info.get("mixer", {}).get("volume")
@@ -233,9 +225,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                             elif parameter.startswith("send "):
                                 send_letter = parameter.split()[-1]
                                 send_idx = ord(send_letter.upper()) - ord('A')
-                                print(f"[DEBUG] Requesting track sends for track_index={idx}")
                                 sresp = request_op("get_track_sends", timeout=1.0, track_index=idx)
-                                print(f"[DEBUG] Got track_sends response: {sresp}")
                                 if sresp:
                                     sends_obj = data_or_raw(sresp)
                                     sends = sends_obj.get("sends", []) if isinstance(sends_obj, dict) else []
@@ -250,9 +240,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                         letter = target_fields["return_ref"]
                         ret_idx = ord(letter.upper()) - ord('A')
                         if parameter == "volume" or parameter == "pan":
-                            print(f"[DEBUG] Requesting return tracks, will use index {ret_idx} for return {letter}")
                             resp = request_op("get_return_tracks", timeout=1.0)
-                            print(f"[DEBUG] Got return response: {resp}")
                             if resp:
                                 returns_data = data_or_raw(resp)
                                 returns = returns_data.get('returns', []) if isinstance(returns_data, dict) else []
@@ -269,9 +257,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                                             current_unit = "%"
                         elif parameter.startswith("send "):
                             # Fetch return sends via dedicated endpoint
-                            print(f"[DEBUG] Requesting return sends for return_index={ret_idx}")
                             rs = request_op("get_return_sends", timeout=1.0, return_index=ret_idx)
-                            print(f"[DEBUG] Got return_sends response: {rs}")
                             if rs:
                                 sends_obj = data_or_raw(rs)
                                 sends = sends_obj.get("sends", []) if isinstance(sends_obj, dict) else []
@@ -327,20 +313,16 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                                         current_display = None
                                         current_unit = None
 
-                    print(f"[DEBUG] Fetched from Live - normalized: {current_normalized}, display: {current_display}, unit: {current_unit}")
 
                 except Exception as fetch_error:
-                    print(f"[DEBUG] Failed to fetch from Live: {fetch_error}")
                     errors.append(f"relative_change_fetch_error:{str(fetch_error)}")
                     return None, errors
 
                 # Still no value after fetching from Live
                 if current_normalized is None:
-                    print(f"[DEBUG] Value not available in Live either")
                     errors.append("relative_change_no_current_value")
                     return None, errors
 
-            print(f"[DEBUG] Current values - normalized: {current_normalized}, display: {current_display}, unit: {current_unit}")
 
             # Decide semantics based on parameter and unit
             delta_value = float(value)
@@ -463,10 +445,8 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                     unit = current_unit
                 op_type = "absolute"
 
-            print(f"[DEBUG] Converted relative to absolute: value={value}, unit={unit}, op_type={op_type}")
 
         except Exception as e:
-            print(f"[DEBUG] Exception in relative change handling: {type(e).__name__}: {str(e)}")
             import traceback
             traceback.print_exc()
             errors.append(f"relative_change_error:{str(e)}")
@@ -474,11 +454,9 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
 
     # Validate operation type and value (skip for device parameters - they handle their own conversion)
     if op_type != "absolute" and not (plugin or device_ordinal is not None):
-        print(f"[DEBUG] Unsupported op_type: {op_type}")
         errors.append(f"unsupported_op_type:{op_type}")
         return None, errors
 
-    print(f"[DEBUG] Validation passed, proceeding to parameter mapping")
 
     # For mixer/sends we require numeric; for device we allow display strings
     def _to_float(v: Any) -> Optional[float]:
@@ -508,7 +486,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     if plugin or device_ordinal is not None:
         # For relative changes on device parameters, we need to fetch current value first
         if op_type == "relative":
-            print(f"[DEBUG] Handling relative change for device parameter: {parameter}")
 
             # Import read service to fetch current device parameter value
             from server.services.intents.read_service import read_intent as _read_intent_func
@@ -519,7 +496,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 normalized_param = _normalize_device_param(parameter)
                 # Get lowercase version AFTER normalization for percent_additive check
                 param_lower = normalized_param.lower()
-                print(f"[DEBUG] Normalized param: {normalized_param}, lowercase: {param_lower}")
 
                 # Build read intent to fetch current value (resolve correct device index)
                 read_payload = {
@@ -592,9 +568,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                     else:
                         read_payload["device_index"] = 0
 
-                print(f"[DEBUG] Fetching current device param value with: {read_payload}")
                 read_result = _read_intent_func(ReadIntent(**read_payload))
-                print(f"[DEBUG] Read result: {read_result}")
 
                 if not read_result.get("ok"):
                     errors.append("relative_change_device_read_failed")
@@ -607,7 +581,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                     errors.append("relative_change_device_no_current_value")
                     return None, errors
 
-                print(f"[DEBUG] Current device param - normalized: {current_normalized}, display: {current_display}")
 
                 # Apply relative change
                 delta_value = float(value)
@@ -617,9 +590,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 from server.config.app_config import get_percent_always_additive_config
                 percent_additive_params = [p.lower() for p in get_percent_always_additive_config()]
 
-                print(f"[DEBUG] Percent additive params: {percent_additive_params}")
                 is_additive = (param_lower in percent_additive_params) or any(pa in param_lower for pa in percent_additive_params)
-                print(f"[DEBUG] Is {param_lower} additive? {is_additive}")
 
                 # Check if this is a percent-based parameter (display value matches normalized * 100)
                 # E.g., dry/wet: normalized=0.5, display=50% → IS percent parameter
@@ -652,12 +623,10 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                     if is_additive:
                         # Additive: 50% + 20% = 70%
                         new_display_percent = current_display_percent + delta_value
-                        print(f"[DEBUG] Using ADDITIVE math: {current_display_percent}% + {delta_value}% = {new_display_percent}%")
                     else:
                         # Multiplicative: 50% + 20% = 50% * 1.20 = 60%
                         multiplier = 1.0 + (delta_value / 100.0)
                         new_display_percent = current_display_percent * multiplier
-                        print(f"[DEBUG] Using MULTIPLICATIVE math: {current_display_percent}% * {multiplier} = {new_display_percent}%")
 
                     # Clamp to valid range (0-100)
                     new_display_percent = max(0.0, min(100.0, new_display_percent))
@@ -689,12 +658,10 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                                 # E.g., 60ms with delta=-20: 60 * (1 + -20/100) = 60 * 0.8 = 48ms
                                 multiplier = 1.0 + (delta_value / 100.0)
                                 new_display = current_display_val * multiplier
-                                print(f"[DEBUG] Percent change on non-percent param: {current_display_val} * {multiplier} = {new_display}")
                             else:
                                 # Direct value change (e.g., "increase by 10ms")
                                 # delta_value already has sign: +10 or -10
                                 new_display = current_display_val + delta_value
-                                print(f"[DEBUG] Direct value change: {current_display_val} + {delta_value} = {new_display}")
 
                             value = new_display
                             # Keep original unit for display-space values
@@ -705,7 +672,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                             value = new_normalized
                             unit = "normalized"
 
-                print(f"[DEBUG] Converted device relative to absolute: value={value}, unit={unit}")
 
                 # Update parameter to use normalized name (already set above)
                 parameter = normalized_param
@@ -714,7 +680,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                 op_type = "absolute"
 
             except Exception as e:
-                print(f"[DEBUG] Exception in device relative change: {type(e).__name__}: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 errors.append(f"relative_change_device_error:{str(e)}")
@@ -789,9 +754,7 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     # Check this AFTER device parameters to avoid routing device params with mixer-like names
     if parameter in ("volume", "pan", "mute", "solo"):
         amount = _to_float(value)
-        print(f"[DEBUG] Mixer parameter {parameter}: amount={amount}, value={value}, unit={unit}, op_type={op_type}")
         if amount is None:
-            print(f"[DEBUG] Failed to convert value to float: {value}")
             errors.append("invalid_value_amount")
             return None, errors
         intent = {
@@ -802,7 +765,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             "unit": unit,
             **target_fields
         }
-        print(f"[DEBUG] About to return mixer intent with value={intent['value']}, unit={intent.get('unit')}")
         return intent, []
 
     # Master cue control (mixer): only valid on master

@@ -29,9 +29,7 @@ def build_raw_intent(
     Returns:
         raw_intent dict ready for intent_mapper, or None if incomplete/ambiguous
     """
-    print(f"[DEBUG build_raw_intent] text='{text}', action={action.intent_type if action else None}")
     if not action:
-        print(f"[DEBUG build_raw_intent] No action parsed, returning None")
         return None  # No action parsed - can't build intent
 
     # Calculate overall confidence
@@ -490,20 +488,17 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
         sys.path.insert(0, str(nlp_dir))
 
-    print(f"[DEBUG parse_intent_layered] ORIGINAL text received: '{text}'")
 
     try:
         from parsers import apply_typo_corrections
         # Apply typo corrections BEFORE parsing (same as old parser)
         text_corrected = apply_typo_corrections(text)
-        print(f"[DEBUG parse_intent_layered] After typo correction: '{text_corrected}'")
     except Exception:
         # Fallback to uncorrected text if typo corrector unavailable
         text_corrected = text
 
     # Lowercase for consistency
     text_lower = text_corrected.lower()
-    print(f"[DEBUG parse_intent_layered] After lowercase: '{text_lower}'")
 
     # Normalize simple number words in track references so
     # "open track one" behaves like "open track 1".
