@@ -115,20 +115,21 @@ def _get_parse_index() -> Dict[str, Any]:
     try:
         from server.services.parse_index.parse_index_builder import ParseIndexBuilder
 
-        # Try to build index from Live snapshot devices (returns only for now).
+        # Try to build index from Live snapshot devices (tracks + returns + master).
         try:
-            # Snapshot endpoint is exposed by this same server.
-            # We only need device names/types; ordinals default to 1.
+            # Use fast snapshot/full endpoint (structure only, no param values needed)
+            # This is 6-7x faster than old snapshot endpoint (1.0s vs 6.8s)
             import requests
 
-            snap_resp = requests.get("http://127.0.0.1:8722/snapshot", timeout=2.0)
+            snap_resp = requests.get("http://127.0.0.1:8722/snapshot/full?skip_param_values=true", timeout=3.0)
             live_devices = []
             if snap_resp.ok:
                 snapshot = snap_resp.json()
-                devices_data = (snapshot.get("data") or {}).get("devices", {})
-                returns_data = devices_data.get("returns", {})
-                for _, ret_data in returns_data.items():
-                    for dev in ret_data.get("devices", []):
+                data = snapshot.get("data", {})
+
+                # Extract devices from tracks
+                for track in data.get("tracks", []):
+                    for dev in track.get("devices", []):
                         live_devices.append(
                             {
                                 "name": dev.get("name"),
@@ -136,10 +137,32 @@ def _get_parse_index() -> Dict[str, Any]:
                                 "ordinals": 1,
                             }
                         )
+
+                # Extract devices from returns
+                for ret in data.get("returns", []):
+                    for dev in ret.get("devices", []):
+                        live_devices.append(
+                            {
+                                "name": dev.get("name"),
+                                "device_type": str(dev.get("device_type", "unknown")).lower(),
+                                "ordinals": 1,
+                            }
+                        )
+
+                # Extract devices from master
+                for dev in data.get("master", {}).get("devices", []):
+                    live_devices.append(
+                        {
+                            "name": dev.get("name"),
+                            "device_type": str(dev.get("device_type", "unknown")).lower(),
+                            "ordinals": 1,
+                        }
+                    )
+
             builder = ParseIndexBuilder()
             _PARSE_INDEX = builder.build_from_live_set(live_devices)
             _PARSE_INDEX_TIMESTAMP = time.time()
-            print(f"[LAYERED] Built parse index with {len(_PARSE_INDEX.get('devices_in_set', []))} devices from snapshot")
+            print(f"[LAYERED] Built parse index with {len(_PARSE_INDEX.get('devices_in_set', []))} devices from fast snapshot")
         except Exception as e:
             print(f"[LAYERED] Failed to build parse index from snapshot: {e}, using minimal index")
             _PARSE_INDEX = {

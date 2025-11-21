@@ -102,6 +102,25 @@
       "max_context_tokens": 4000
     },
 
+    "query_expansion": {
+      "description": "Query expansion for synonym mapping to improve search relevance",
+      "enabled": true,
+      "fadebender_terminology": {
+        "play": "fire play trigger launch start",
+        "stop": "stop mute halt",
+        "scene": "scene",
+        "clip": "clip",
+        "track": "track channel",
+        "return": "return send",
+        "device": "device plugin effect instrument",
+        "parameter": "parameter param control knob",
+        "volume": "volume level gain",
+        "pan": "pan panning",
+        "mute": "mute silence",
+        "solo": "solo isolate"
+      }
+    },
+
     "conversation": {
       "description": "Multi-turn conversation management settings",
       "enabled": true,

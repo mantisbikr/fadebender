@@ -3000,3 +3000,219 @@ def reorder_return_device(live, return_index: int, old_index: int, new_index: in
             _emit({"event": "return_device_reordered", "return": int(return_index), "from": int(old_index), "to": int(new_index)})
             return True
     return False
+
+
+def get_full_snapshot(live, skip_param_values: bool = False) -> dict:
+    """Get complete Live set snapshot in a single call.
+
+    Returns all tracks, returns, master with devices and optionally parameters.
+    This is WAY faster than making dozens of separate UDP calls.
+
+    Args:
+        live: Live song object
+        skip_param_values: If True, skip parameter values (structure only, faster)
+
+    Returns:
+        {
+            "tracks": [{index, name, type, mixer: {volume, pan, mute, solo}, devices: [...]}],
+            "returns": [{index, name, mixer: {volume, pan, mute, solo}, devices: [...]}],
+            "master": {mixer: {volume, pan}, devices: [...]},
+            "transport": {tempo, metronome, is_playing, is_recording}
+        }
+    """
+    result = {
+        "tracks": [],
+        "returns": [],
+        "master": {},
+        "transport": {}
+    }
+
+    try:
+        if live is None:
+            # Stub mode
+            result["tracks"] = _STATE.get("tracks", [])
+            result["returns"] = _STATE.get("returns", [])
+            result["transport"] = _STATE.get("transport", {})
+            return result
+
+        # Transport
+        try:
+            result["transport"] = {
+                "tempo": float(getattr(live, "tempo", 120.0)),
+                "metronome": bool(getattr(live, "metronome", False)),
+                "is_playing": bool(getattr(live, "is_playing", False)),
+                "is_recording": bool(getattr(live, "is_recording", False)),
+            }
+        except Exception:
+            result["transport"] = {}
+
+        # Tracks
+        try:
+            for idx, tr in enumerate(getattr(live, "tracks", []), start=1):
+                track_data = {"index": idx, "name": str(getattr(tr, "name", f"Track {idx}"))}
+
+                # Type detection
+                try:
+                    has_midi = bool(getattr(tr, "has_midi_input", False))
+                    has_audio = bool(getattr(tr, "has_audio_input", False))
+                    track_data["type"] = "midi" if has_midi and not has_audio else "audio"
+                except Exception:
+                    track_data["type"] = "audio"
+
+                # Mixer
+                try:
+                    mixer_device = getattr(tr, "mixer_device", None)
+                    if mixer_device:
+                        track_data["mixer"] = {
+                            "volume": float(getattr(getattr(mixer_device, "volume", None), "value", 0.85)),
+                            "pan": float(getattr(getattr(mixer_device, "panning", None), "value", 0.0)),
+                        }
+                        track_data["mute"] = bool(getattr(tr, "mute", False))
+                        track_data["solo"] = bool(getattr(tr, "solo", False))
+
+                        # Sends
+                        sends = getattr(mixer_device, "sends", []) or []
+                        track_data["sends"] = []
+                        for si, s in enumerate(sends):
+                            try:
+                                track_data["sends"].append({
+                                    "index": si,
+                                    "value": float(getattr(s, "value", 0.0))
+                                })
+                            except Exception:
+                                pass
+                except Exception:
+                    track_data["mixer"] = {}
+
+                # Devices
+                devices = []
+                for di, dv in enumerate(getattr(tr, "devices", []) or []):
+                    dev_data = {
+                        "index": di,
+                        "name": str(getattr(dv, "name", f"Device {di}"))
+                    }
+
+                    # Parameters (optional)
+                    if not skip_param_values:
+                        params = []
+                        for pi, p in enumerate(getattr(dv, "parameters", []) or []):
+                            try:
+                                params.append({
+                                    "index": pi,
+                                    "name": str(getattr(p, "name", f"Param {pi}")),
+                                    "value": float(getattr(p, "value", 0.0)),
+                                    "display_value": str(getattr(p, "display_value", "")),
+                                })
+                            except Exception:
+                                pass
+                        dev_data["params"] = params
+
+                    devices.append(dev_data)
+
+                track_data["devices"] = devices
+                result["tracks"].append(track_data)
+        except Exception:
+            pass
+
+        # Returns
+        try:
+            for ri, ret in enumerate(getattr(live, "return_tracks", []) or []):
+                return_data = {
+                    "index": ri,
+                    "name": str(getattr(ret, "name", f"Return {chr(ord('A') + ri)}"))
+                }
+
+                # Mixer
+                try:
+                    mixer_device = getattr(ret, "mixer_device", None)
+                    if mixer_device:
+                        return_data["mixer"] = {
+                            "volume": float(getattr(getattr(mixer_device, "volume", None), "value", 0.85)),
+                            "pan": float(getattr(getattr(mixer_device, "panning", None), "value", 0.0)),
+                        }
+                        return_data["mute"] = bool(getattr(ret, "mute", False))
+                        return_data["solo"] = bool(getattr(ret, "solo", False))
+                except Exception:
+                    return_data["mixer"] = {}
+
+                # Devices
+                devices = []
+                for di, dv in enumerate(getattr(ret, "devices", []) or []):
+                    dev_data = {
+                        "index": di,
+                        "name": str(getattr(dv, "name", f"Device {di}"))
+                    }
+
+                    # Parameters (optional)
+                    if not skip_param_values:
+                        params = []
+                        for pi, p in enumerate(getattr(dv, "parameters", []) or []):
+                            try:
+                                params.append({
+                                    "index": pi,
+                                    "name": str(getattr(p, "name", f"Param {pi}")),
+                                    "value": float(getattr(p, "value", 0.0)),
+                                    "display_value": str(getattr(p, "display_value", "")),
+                                })
+                            except Exception:
+                                pass
+                        dev_data["params"] = params
+
+                    devices.append(dev_data)
+
+                return_data["devices"] = devices
+                result["returns"].append(return_data)
+        except Exception:
+            pass
+
+        # Master
+        try:
+            master = getattr(live, "master_track", None)
+            if master:
+                master_data = {}
+
+                # Mixer
+                try:
+                    mixer_device = getattr(master, "mixer_device", None)
+                    if mixer_device:
+                        master_data["mixer"] = {
+                            "volume": float(getattr(getattr(mixer_device, "volume", None), "value", 0.85)),
+                            "pan": float(getattr(getattr(mixer_device, "panning", None), "value", 0.0)),
+                        }
+                except Exception:
+                    master_data["mixer"] = {}
+
+                # Devices
+                devices = []
+                for di, dv in enumerate(getattr(master, "devices", []) or []):
+                    dev_data = {
+                        "index": di,
+                        "name": str(getattr(dv, "name", f"Device {di}"))
+                    }
+
+                    # Parameters (optional)
+                    if not skip_param_values:
+                        params = []
+                        for pi, p in enumerate(getattr(dv, "parameters", []) or []):
+                            try:
+                                params.append({
+                                    "index": pi,
+                                    "name": str(getattr(p, "name", f"Param {pi}")),
+                                    "value": float(getattr(p, "value", 0.0)),
+                                    "display_value": str(getattr(p, "display_value", "")),
+                                })
+                            except Exception:
+                                pass
+                        dev_data["params"] = params
+
+                    devices.append(dev_data)
+
+                master_data["devices"] = devices
+                result["master"] = master_data
+        except Exception:
+            pass
+
+    except Exception:
+        pass
+
+    return result

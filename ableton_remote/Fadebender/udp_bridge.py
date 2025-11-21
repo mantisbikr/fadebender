@@ -413,6 +413,11 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.set_return_device_name(live_ctx, return_index, device_index, name)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "get_full_snapshot":
+                skip_param_values = bool(msg.get("skip_param_values", False))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_full_snapshot(live_ctx, skip_param_values=skip_param_values)
+                resp = {"ok": True, "op": op, "data": data_out}
             else:
                 resp = {"ok": False, "error": f"unknown op: {op}", "echo": msg}
         except Exception as e:  # pragma: no cover

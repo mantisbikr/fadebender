@@ -362,11 +362,20 @@ class DeviceContextParser:
                     span_words = words[i:i + L]
                     span_text = " ".join(span_words)
 
-                    # Skip this span if it contains device/type words (for parameter matching)
+                    # Smart device word filtering: extract non-device words from span
                     if exclude_device_words and hasattr(self, 'device_words'):
-                        if any(w.lower() in self.device_words for w in span_words):
-                            print(f"[DEBUG fuzzy_best] Skipping span '{span_text}' - contains device word")
+                        # Filter out device words, keep the rest
+                        non_device_words = [w for w in span_words if w.lower() not in self.device_words]
+
+                        if not non_device_words:
+                            # All words are device words, skip entire span
+                            print(f"[DEBUG fuzzy_best] Skipping span '{span_text}' - all device words")
                             continue
+
+                        if len(non_device_words) < len(span_words):
+                            # Some device words filtered out, use remaining words
+                            span_text = " ".join(non_device_words)
+                            print(f"[DEBUG fuzzy_best] Filtered device words from span, trying '{span_text}'")
 
                     # Try space-normalized variations of the span
                     # This handles typos like "mixgel" vs "mix gel" or "8 dot ball" vs "8dotball"

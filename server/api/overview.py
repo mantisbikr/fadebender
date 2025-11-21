@@ -30,9 +30,16 @@ _enriched_devices_cache: Dict[str, Any] = {
 }
 _enriched_devices_cache_lock = asyncio.Lock()
 
+# In-memory cache for device_type lookups (device_name -> device_type)
+# Avoids repeated Firestore queries for the same devices
+_device_type_cache: Dict[str, str] = {}
+
 
 def _enrich_device_with_type(device_name: str) -> Dict[str, Any]:
     """Look up device_type from Firestore and enrich device object.
+
+    Uses in-memory cache to avoid repeated Firestore lookups.
+    Device types never change once learned, so cache is safe.
 
     Args:
         device_name: Device name from Live (e.g., "Reverb", "4th Bandpass")
@@ -40,12 +47,21 @@ def _enrich_device_with_type(device_name: str) -> Dict[str, Any]:
     Returns:
         Dict with device_type if found, empty dict otherwise
     """
+    global _device_type_cache
+
+    # Check cache first
+    if device_name in _device_type_cache:
+        return {"device_type": _device_type_cache[device_name]}
+
+    # Cache miss - lookup in Firestore once
     try:
         from server.core.deps import get_store
         store = get_store()
         if store and store.enabled:
             device_type = store.get_device_type_by_name(device_name)
             if device_type:
+                # Cache for future lookups
+                _device_type_cache[device_name] = device_type
                 return {"device_type": device_type}
     except Exception:
         pass
@@ -64,8 +80,6 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
     """
     global _enriched_devices_cache
 
-    logger.info(f"[CACHE] Starting cache refresh: {len(tracks)} tracks, {len(returns)} returns")
-
     async with _enriched_devices_cache_lock:
         new_cache: Dict[str, Any] = {
             "tracks": {},
@@ -73,7 +87,6 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
             "master": [],
             "timestamp": time.time(),
         }
-        logger.info(f"[CACHE] Created new_cache structure")
 
         # Enrich track devices
         for track in tracks:
@@ -98,19 +111,14 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
                 new_cache["tracks"][track_idx] = []
 
         # Enrich return devices
-        logger.info(f"[CACHE] Processing {len(returns)} returns...")
         for ret in returns:
             ret_idx = int(ret.get("index", 0))
-            logger.info(f"[CACHE] Fetching devices for return {ret_idx}...")
             try:
                 devs_resp = request_op("get_return_devices", timeout=0.8, return_index=ret_idx) or {}
-                logger.info(f"[CACHE] Return {ret_idx} response: ok={devs_resp.get('ok')}, has_data={bool(devs_resp.get('data'))}")
                 devs_data = data_or_raw(devs_resp) or {}
-                logger.info(f"[CACHE] Return {ret_idx} devices_data: {devs_data}")
 
                 enriched_devices = []
                 devices_list = devs_data.get("devices") or []
-                logger.info(f"[CACHE] Return {ret_idx} has {len(devices_list)} devices")
                 for d in devices_list:
                     dev_obj = {
                         "index": int(d.get("index", 0)),
@@ -119,10 +127,8 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
                     # Enrich with device_type
                     dev_obj.update(_enrich_device_with_type(dev_obj["name"]))
                     enriched_devices.append(dev_obj)
-                    logger.info(f"[CACHE] Added device: {dev_obj}")
 
                 new_cache["returns"][ret_idx] = enriched_devices
-                logger.info(f"[CACHE] Cached {len(enriched_devices)} devices for return {ret_idx}")
             except Exception as e:
                 logger.error(f"[CACHE ERROR] Failed to fetch return {ret_idx} devices: {e}", exc_info=True)
                 new_cache["returns"][ret_idx] = []
@@ -149,7 +155,6 @@ async def _refresh_enriched_devices_cache(tracks: List[Dict[str, Any]], returns:
 
         # Update global cache
         _enriched_devices_cache = new_cache
-        logger.info(f"[CACHE] Cache updated! Returns: {list(new_cache['returns'].keys())}, Total devices across returns: {sum(len(v) for v in new_cache['returns'].values())}")
 
 
 async def _refresh_device_values_chunked(tracks: List[Dict[str, Any]], returns: List[Dict[str, Any]]) -> None:
@@ -275,10 +280,6 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
     - Devices: LiveIndex cached device structures (tracks, returns)
     - Mixer: ValueRegistry mixer parameter values (volume, pan, sends, etc.)
     """
-    import sys
-    print(f"\n\n=== SNAPSHOT CALLED: force_refresh={force_refresh} ===\n", flush=True)
-    sys.stdout.flush()
-
     global _enriched_devices_cache
 
     # Get overview data (track/return names and types)
@@ -296,24 +297,8 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
     has_tracks_in_cache = bool(_enriched_devices_cache.get("tracks"))
     should_refresh = force_refresh or cache_age > 3600 or not has_tracks_in_cache
 
-    debug_info = {
-        "force_refresh": force_refresh,
-        "cache_age": cache_age,
-        "has_tracks_in_cache": has_tracks_in_cache,
-        "should_refresh": should_refresh,
-        "cache_refresh_called": False
-    }
-
-    print(f"[SNAPSHOT] force_refresh={force_refresh}, cache_age={cache_age:.1f}s, has_tracks={has_tracks_in_cache}", flush=True)
-    logger.info(f"[SNAPSHOT] force_refresh={force_refresh}, cache_age={cache_age:.1f}s, has_tracks={has_tracks_in_cache}")
-
     if should_refresh:
-        print(f"[SNAPSHOT] Calling _refresh_enriched_devices_cache with {len(tracks)} tracks, {len(returns)} returns...", flush=True)
-        logger.info(f"[SNAPSHOT] Calling _refresh_enriched_devices_cache with {len(tracks)} tracks, {len(returns)} returns...")
-        debug_info["cache_refresh_called"] = True
         await _refresh_enriched_devices_cache(tracks, returns)
-        print(f"[SNAPSHOT] Cache refresh completed", flush=True)
-        logger.info(f"[SNAPSHOT] Cache refresh completed")
 
     # Build output using cached enriched devices
     out_tracks: List[Dict[str, Any]] = []
@@ -406,9 +391,7 @@ async def snapshot(force_refresh: bool = False) -> Dict[str, Any]:
             "device_cache_age_seconds": round(now - _device_cache_timestamp, 2),
             "device_ttl_seconds": ttl,
             "enriched_devices_cache_age_seconds": round(cache_age, 2),
-            "code_version": "v2_debug_enabled"
         },
-        "debug": debug_info
     }
 
 
@@ -429,6 +412,71 @@ async def invalidate_device_cache() -> Dict[str, Any]:
         }
 
     return {"ok": True, "message": "Device cache invalidated"}
+
+
+@router.post("/snapshot/invalidate_device_type_cache")
+async def invalidate_device_type_cache() -> Dict[str, Any]:
+    """Invalidate in-memory device_type cache.
+
+    Call this after learning new device types or if device types are manually updated.
+    """
+    global _device_type_cache
+
+    cache_size = len(_device_type_cache)
+    _device_type_cache.clear()
+
+    return {"ok": True, "message": f"Device type cache invalidated ({cache_size} entries cleared)"}
+
+
+@router.get("/snapshot/full")
+async def snapshot_full(skip_param_values: bool = False) -> Dict[str, Any]:
+    """NEW: Get full snapshot in a single UDP call for performance testing.
+
+    This uses the new get_full_snapshot operation which gets everything in one call
+    instead of making dozens of separate UDP calls.
+
+    Args:
+        skip_param_values: If True, only get device structure (no param values)
+
+    Returns:
+        Complete snapshot from single UDP call
+    """
+    import time
+    start = time.time()
+
+    # Single UDP call to get everything
+    resp = request_op("get_full_snapshot", timeout=10.0, skip_param_values=skip_param_values)
+
+    if not resp or not resp.get("ok"):
+        return {"ok": False, "error": "failed_to_get_snapshot"}
+
+    data = data_or_raw(resp) or {}
+    elapsed = time.time() - start
+
+    # Enrich with device_type from Firestore (cached)
+    # Enrich track devices
+    for track in data.get("tracks", []):
+        for dev in track.get("devices", []):
+            dev.update(_enrich_device_with_type(dev.get("name", "")))
+
+    # Enrich return devices
+    for ret in data.get("returns", []):
+        for dev in ret.get("devices", []):
+            dev.update(_enrich_device_with_type(dev.get("name", "")))
+
+    # Enrich master devices
+    master = data.get("master", {})
+    for dev in master.get("devices", []):
+        dev.update(_enrich_device_with_type(dev.get("name", "")))
+
+    return {
+        "ok": True,
+        "data": data,
+        "performance": {
+            "elapsed_seconds": round(elapsed, 3),
+            "method": "single_udp_call",
+        }
+    }
 
 
 @router.get("/snapshot/devices")
