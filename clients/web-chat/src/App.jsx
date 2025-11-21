@@ -3,7 +3,7 @@
  * Orchestrates the chat interface
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ThemeProvider,
   CssBaseline,
@@ -39,6 +39,7 @@ function App() {
   const [draftInput, setDraftInput] = useState(null);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(true);
   const [leftDrawerPinned, setLeftDrawerPinned] = useState(true);
+  const chatContainerRef = useRef(null);
 
   const {
     messages,
@@ -74,6 +75,17 @@ function App() {
   useEffect(() => {
     checkSystemHealth();
   }, [checkSystemHealth]);
+
+  // Auto-scroll chat to bottom when messages change or processing state changes
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      // Use smooth scroll for better UX
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [messages, isProcessing]);
 
   // Load app config once to configure sidebar width
   useEffect(() => {
@@ -287,6 +299,7 @@ function App() {
           {/* Main chat area */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <Box
+              ref={chatContainerRef}
               sx={{
                 flex: 1,
                 overflow: 'auto',

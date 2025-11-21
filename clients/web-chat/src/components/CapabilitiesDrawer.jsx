@@ -6,56 +6,117 @@
 import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Tooltip, Chip } from '@mui/material';
 import { Close as CloseIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon } from '@mui/icons-material';
 import ParamAccordion from './ParamAccordion.jsx';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiService } from '../services/api.js';
+import { useMixerEvents } from '../hooks/useMixerEvents.js';
 
 export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned = false, onPinnedChange, ignoreCloseSelectors = [], initialGroup = null, initialParam = null }) {
-  if (!capabilities) {
+  // Local state for capabilities with live-updated values
+  const [liveCapabilities, setLiveCapabilities] = useState(capabilities);
+
+  // Update local state when prop changes
+  useEffect(() => {
+    setLiveCapabilities(capabilities);
+  }, [capabilities]);
+
+  if (!liveCapabilities) {
     return null;
   }
 
   // Determine what type of entity this is based on available fields
-  const hasEntityType = typeof capabilities?.entity_type === 'string';
-  const hasDeviceIndex = typeof capabilities?.device_index === 'number';
+  const hasEntityType = typeof liveCapabilities?.entity_type === 'string';
+  const hasDeviceIndex = typeof liveCapabilities?.device_index === 'number';
 
-  // Type badge: AUDIO/MIDI/RETURN when applicable
-  const [typeBadge, setTypeBadge] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // Return contexts: mixer or device on return
-        if (capabilities?.entity_type === 'return' || typeof capabilities?.return_index === 'number') {
-          if (!cancelled) setTypeBadge('RETURN');
-          return;
+  // Real-time event handlers for Live parameter changes
+  const handleMixerChanged = useCallback((payload) => {
+    if (!liveCapabilities || !liveCapabilities.values) return;
+
+    // Track mixer events
+    if (liveCapabilities.entity_type === 'track') {
+      const trackLabel = payload.track;
+      const trackIndex = trackLabel ? parseInt(trackLabel.replace(/\D+/g, ''), 10) - 1 : null;
+
+      if (trackIndex === liveCapabilities.track_index) {
+        // Update mixer value in capabilities
+        const field = payload.field; // e.g., "volume", "pan", "mute", "solo"
+        const value = payload.value;
+
+        if (field && value !== undefined) {
+          setLiveCapabilities(prev => ({
+            ...prev,
+            values: {
+              ...prev.values,
+              [field]: value
+            }
+          }));
         }
-        // Track mixer
-        if (capabilities?.entity_type === 'track' && typeof capabilities?.track_index === 'number') {
-          const ov = await apiService.getProjectOutline();
-          const list = (ov && ov.data && Array.isArray(ov.data.tracks)) ? ov.data.tracks : [];
-          const idx1 = Number(capabilities.track_index) + 1;
-          const match = list.find(t => Number(t.index) === idx1);
-          const ttype = match && match.type ? String(match.type).toUpperCase() : null;
-          if (!cancelled) setTypeBadge(ttype);
-          return;
-        }
-        // Device on track
-        if (typeof capabilities?.device_index === 'number' && typeof capabilities?.track_index === 'number') {
-          const ov = await apiService.getProjectOutline();
-          const list = (ov && ov.data && Array.isArray(ov.data.tracks)) ? ov.data.tracks : [];
-          const idx1 = Number(capabilities.track_index) + 1;
-          const match = list.find(t => Number(t.index) === idx1);
-          const ttype = match && match.type ? String(match.type).toUpperCase() : null;
-          if (!cancelled) setTypeBadge(ttype);
-          return;
-        }
-        if (!cancelled) setTypeBadge(null);
-      } catch {
-        if (!cancelled) setTypeBadge(null);
       }
-    })();
-    return () => { cancelled = true; };
-  }, [capabilities?.entity_type, capabilities?.track_index, capabilities?.return_index, capabilities?.device_index]);
+    }
+  }, [liveCapabilities]);
+
+  const handleOtherEvent = useCallback((payload) => {
+    if (!liveCapabilities || !liveCapabilities.values) return;
+
+    // Return mixer events
+    if (payload.event === 'return_mixer_changed' && liveCapabilities.entity_type === 'return') {
+      const returnIndex = payload.return_index;
+      if (returnIndex === liveCapabilities.return_index) {
+        const field = payload.field;
+        const value = payload.value;
+
+        if (field && value !== undefined) {
+          setLiveCapabilities(prev => ({
+            ...prev,
+            values: {
+              ...prev.values,
+              [field]: value
+            }
+          }));
+        }
+      }
+    }
+
+    // Master mixer events
+    else if (payload.event === 'master_mixer_changed' && liveCapabilities.entity_type === 'master') {
+      const field = payload.field;
+      const value = payload.value;
+
+      if (field && value !== undefined) {
+        setLiveCapabilities(prev => ({
+          ...prev,
+          values: {
+            ...prev.values,
+            [field]: value
+          }
+        }));
+      }
+    }
+  }, [liveCapabilities]);
+
+  // Subscribe to Live events for real-time sync
+  useMixerEvents(handleMixerChanged, null, handleOtherEvent, open);
+
+  // Type badge: simplified to avoid expensive API calls
+  // Prefer using track_type from liveCapabilities if available, otherwise show entity type
+  const typeBadge = (() => {
+    // Return contexts
+    if (liveCapabilities?.entity_type === 'return' || typeof liveCapabilities?.return_index === 'number') {
+      return 'RETURN';
+    }
+    // Track contexts - use track_type from liveCapabilities if available (added by server)
+    if (liveCapabilities?.entity_type === 'track' && liveCapabilities?.track_type) {
+      return String(liveCapabilities.track_type).toUpperCase();
+    }
+    // Device on track - use track_type if available
+    if (typeof liveCapabilities?.device_index === 'number' && typeof liveCapabilities?.track_index === 'number' && liveCapabilities?.track_type) {
+      return String(liveCapabilities.track_type).toUpperCase();
+    }
+    // Master contexts
+    if (liveCapabilities?.entity_type === 'master') {
+      return 'MASTER';
+    }
+    return null;
+  })();
 
   // Build context-sensitive title
   let title = 'Controls';
@@ -63,13 +124,13 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
   if (hasEntityType) {
     // Mixer entity (track/return/master mixer controls)
     // Backend provides device_name like "Track 1 Mixer", "Return A Mixer", etc.
-    title = capabilities.device_name || 'Mixer Controls';
+    title = liveCapabilities.device_name || 'Mixer Controls';
   } else if (hasDeviceIndex) {
     // Device entity (effect/instrument on track or return)
-    const deviceName = capabilities.device_name || 'Device';
-    const deviceIndex = capabilities.device_index;
-    const trackIndex = capabilities.track_index;
-    const returnIndex = capabilities.return_index;
+    const deviceName = liveCapabilities.device_name || 'Device';
+    const deviceIndex = liveCapabilities.device_index;
+    const trackIndex = liveCapabilities.track_index;
+    const returnIndex = liveCapabilities.return_index;
 
     if (trackIndex !== undefined) {
       // Track device: "Track 1 Device 0, Reverb"
@@ -147,8 +208,8 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
 
           <Divider sx={{ mb: 2 }} />
 
-          {/* Capabilities content */}
-          <ParamAccordion capabilities={capabilities} initialGroup={initialGroup} initialParam={initialParam} />
+          {/* Capabilities content - use liveCapabilities for real-time updates */}
+          <ParamAccordion capabilities={liveCapabilities} initialGroup={initialGroup} initialParam={initialParam} />
         </Box>
       </Drawer>
     </ClickAwayListener>
