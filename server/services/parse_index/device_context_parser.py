@@ -243,7 +243,6 @@ class DeviceContextParser:
 
         # Combine device names and types into exclusion set (lowercase for matching)
         self.device_words = set(d.lower() for d in device_names + device_types_list)
-        print(f"[DEBUG DeviceContextParser] device_words ({len(self.device_words)}): {sorted(list(self.device_words))[:20]}")
 
         # Build per-device parameter regexes
         self.PARAM_RE = {}
@@ -369,13 +368,11 @@ class DeviceContextParser:
 
                         if not non_device_words:
                             # All words are device words, skip entire span
-                            print(f"[DEBUG fuzzy_best] Skipping span '{span_text}' - all device words")
                             continue
 
                         if len(non_device_words) < len(span_words):
                             # Some device words filtered out, use remaining words
                             span_text = " ".join(non_device_words)
-                            print(f"[DEBUG fuzzy_best] Filtered device words from span, trying '{span_text}'")
 
                     # Try space-normalized variations of the span
                     # This handles typos like "mixgel" vs "mix gel" or "8 dot ball" vs "8dotball"
@@ -468,9 +465,6 @@ class DeviceContextParser:
                     param_span = best[1]
                     confidence += 0.35
                     method = "fuzzy_param"
-                    print(f"[DEBUG Step 1] Fuzzy matched parameter: '{param}' from span '{text[param_span[0]:param_span[1]]}'")
-                else:
-                    print(f"[DEBUG Step 1] No fuzzy parameter match found (with device word exclusion)")
         else:
             return DeviceParamMatch(None, None, None, None, 0.0, "no_params")
 
