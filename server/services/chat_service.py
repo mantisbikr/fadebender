@@ -6,6 +6,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -242,6 +243,79 @@ def generate_summary_from_canonical(canonical: Dict[str, Any]) -> str:
         return f"{action_verb} {entity} {field_desc}"
 
 
+def _add_capabilities_ref(result: Dict[str, Any], canonical: Dict[str, Any]) -> Dict[str, Any]:
+    """Centralized function to add capabilities_ref based on canonical intent.
+
+    Inspects the canonical intent structure and adds appropriate capabilities_ref
+    for the WebUI to fetch capabilities on-demand.
+
+    Args:
+        result: The execution result dict
+        canonical: The canonical intent dict
+
+    Returns:
+        Result dict with capabilities_ref added if applicable
+    """
+    if not isinstance(result, dict) or not isinstance(canonical, dict):
+        return result
+
+    # Skip if already has capabilities_ref (shouldn't happen, but defensive)
+    if result.get("capabilities_ref"):
+        return result
+
+    try:
+        from server.api.cap_utils import build_capabilities_ref
+
+        domain = canonical.get("domain")
+
+        # Device parameters (track or return)
+        if domain == "device":
+            track_index = canonical.get("track_index")
+            return_index = canonical.get("return_index")
+            device_index = canonical.get("device_index")
+
+            if return_index is not None and device_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="return_device",
+                    return_index=return_index,
+                    device_index=device_index
+                )
+            elif track_index is not None and device_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="track_device",
+                    track_index=track_index,
+                    device_index=device_index
+                )
+
+        # Track mixer parameters (volume, pan, mute, solo, sends)
+        elif domain == "track":
+            track_index = canonical.get("track_index")
+            if track_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="track",
+                    track_index=track_index
+                )
+
+        # Return mixer parameters (volume, pan, sends)
+        elif domain == "return":
+            return_index = canonical.get("return_index")
+            if return_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="return",
+                    return_index=return_index
+                )
+
+        # Master mixer parameters (cue)
+        elif domain == "master":
+            result["capabilities_ref"] = build_capabilities_ref(domain="master")
+
+    except Exception:
+        # If anything fails, don't break the response - just skip capabilities_ref
+        pass
+
+    return result
+
+
 def handle_chat(body: ChatBody) -> Dict[str, Any]:
     """
     Handle chat commands through unified NLP → Intent → Execution path.
@@ -249,6 +323,9 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
     This is the single source of truth for all command processing.
     Both WebUI and command-line tests use this same path.
     """
+    # Generate unique request ID for tracking (used for capabilities history)
+    request_id = str(int(time.time() * 1000))  # millisecond timestamp
+
     # Import llm_daw from nlp-service/ dynamically (folder has a hyphen)
     nlp_dir = pathlib.Path(__file__).resolve().parent.parent.parent / "nlp-service"
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
@@ -335,9 +412,63 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
                 "error": str(e),
             }
 
-    # Navigation intents are UI-only; surface intent without executing
-    if intent.get("intent") in ("open_capabilities", "list_capabilities"):
-        return {"ok": True, "intent": intent, "summary": "navigation_intent"}
+    # Navigation intents: auto-open capabilities drawer
+    if intent.get("intent") == "open_capabilities":
+        target = intent.get("target", {})
+        capabilities_ref = None
+        summary = "Open controls"
+
+        try:
+            from server.api.cap_utils import build_capabilities_ref
+
+            # Parse target structure and build capabilities_ref
+            target_type = target.get("type")
+
+            if target_type == "mixer":
+                entity = target.get("entity")
+                if entity == "track":
+                    track_index = target.get("track_index", 0)  # 1-based from intent
+                    capabilities_ref = build_capabilities_ref(domain="track", track_index=track_index)
+                    summary = f"Opening Track {track_index} controls"
+                elif entity == "return":
+                    return_ref = target.get("return_ref", "A")
+                    return_index = ord(return_ref.upper()) - ord('A') if return_ref else 0
+                    capabilities_ref = build_capabilities_ref(domain="return", return_index=return_index)
+                    summary = f"Opening Return {return_ref} controls"
+                elif entity == "master":
+                    capabilities_ref = build_capabilities_ref(domain="master")
+                    summary = "Opening Master controls"
+
+            elif target_type == "device":
+                scope = target.get("scope")
+                if scope == "return":
+                    return_ref = target.get("return_ref", "A")
+                    return_index = ord(return_ref.upper()) - ord('A') if return_ref else 0
+                    device_name_hint = target.get("device_name_hint", "")
+                    # For now, assume device_index=0 (first device)
+                    # TODO: Could use device resolver to find exact device index from hint
+                    capabilities_ref = build_capabilities_ref(
+                        domain="return_device",
+                        return_index=return_index,
+                        device_index=0
+                    )
+                    summary = f"Opening Return {return_ref} {device_name_hint} controls"
+
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "intent": intent,
+            "capabilities_ref": capabilities_ref,
+            "auto_open": True,  # Signal WebUI to open drawer immediately
+            "summary": summary
+        }
+
+    # List capabilities: still UI-only, no auto-open
+    if intent.get("intent") == "list_capabilities":
+        return {"ok": True, "request_id": request_id, "intent": intent, "summary": "navigation_intent"}
 
     # Step 2: Transform to canonical format for control intents
     from server.services.intent_mapper import map_llm_to_canonical
@@ -430,9 +561,13 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
             canonical_intent = CanonicalIntent(**canonical)
             result = exec_canonical(canonical_intent, debug=False)
 
-            # Build response preserving all fields from result (especially 'data' with capabilities)
+            # Centralized: Add capabilities_ref based on canonical intent
+            result = _add_capabilities_ref(result, canonical)
+
+            # Build response preserving all fields from result (especially capabilities_ref)
             response = {
                 "ok": result.get("ok", True),
+                "request_id": request_id,
                 "intent": intent,
                 "canonical": canonical,
             }
@@ -443,11 +578,11 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
             else:
                 response["summary"] = generate_summary_from_canonical(canonical)
 
-            # Explicitly preserve data field with capabilities if present
+            # Explicitly preserve data field (deprecated - for backward compat)
             if "data" in result:
                 response["data"] = result["data"]
 
-            # Add any other fields from result
+            # Add any other fields from result (including capabilities_ref)
             for key, value in result.items():
                 if key not in response:
                     response[key] = value

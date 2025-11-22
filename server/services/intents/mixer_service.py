@@ -144,13 +144,7 @@ def set_track_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # Ensure mixer capabilities (track)
-    try:
-        from server.api.cap_utils import ensure_capabilities  # type: ignore
-        resp = ensure_capabilities(resp, domain="track", track_index=track_idx)
-    except Exception:
-        pass
-
+    # Capabilities ref now added centrally in chat_service.py
     return resp
 
 
@@ -277,13 +271,7 @@ def set_return_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
                 resp["summary"] = f"Set Return {letter} {field}"
     except Exception:
         pass
-    # Ensure return mixer capabilities
-    try:
-        from server.api.cap_utils import ensure_capabilities  # type: ignore
-        resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
-    except Exception:
-        pass
-
+    # Capabilities ref now added centrally in chat_service.py
     return resp
 
 
@@ -337,12 +325,7 @@ def set_track_send(intent: CanonicalIntent) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # Ensure track capabilities
-    try:
-        from server.api.cap_utils import ensure_capabilities  # type: ignore
-        resp = ensure_capabilities(resp, domain="track", track_index=track_idx)
-    except Exception:
-        pass
+    # Capabilities ref now added centrally in chat_service.py
 
     # Emit SSE event for real-time UI updates
     try:
@@ -435,12 +418,7 @@ def set_return_send(intent: CanonicalIntent) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # Ensure return capabilities
-    try:
-        from server.api.cap_utils import ensure_capabilities  # type: ignore
-        resp = ensure_capabilities(resp, domain="return", return_index=return_idx)
-    except Exception:
-        pass
+    # Capabilities ref now added centrally in chat_service.py
 
     # Emit SSE event for real-time UI updates
     try:
@@ -542,11 +520,5 @@ def set_master_mixer(intent: CanonicalIntent) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # Ensure master capabilities
-    try:
-        from server.api.cap_utils import ensure_capabilities  # type: ignore
-        resp = ensure_capabilities(resp, domain="master")
-    except Exception:
-        pass
-
+    # Capabilities ref now added centrally in chat_service.py
     return resp

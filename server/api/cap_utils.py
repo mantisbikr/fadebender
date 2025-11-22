@@ -3,6 +3,36 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
+def build_capabilities_ref(*, domain: str,
+                           track_index: Optional[int] = None,
+                           return_index: Optional[int] = None,
+                           device_index: Optional[int] = None) -> Dict[str, Any]:
+    """Build a lightweight capabilities reference for deferred loading.
+
+    Instead of fetching full capabilities immediately (blocking on Firestore),
+    return metadata that allows the client to fetch capabilities on demand.
+
+    Args:
+        domain: One of "track", "return", "master", "track_device", "return_device".
+        track_index: Track index when domain involves tracks.
+        return_index: Return index when domain involves returns.
+        device_index: Device index when domain involves devices.
+
+    Returns:
+        Dict with available=True and necessary indices for later fetch.
+    """
+    ref = {"available": True, "domain": domain}
+
+    if track_index is not None:
+        ref["track_index"] = int(track_index)
+    if return_index is not None:
+        ref["return_index"] = int(return_index)
+    if device_index is not None:
+        ref["device_index"] = int(device_index)
+
+    return ref
+
+
 def ensure_capabilities(resp: Dict[str, Any], *, domain: str,
                         track_index: Optional[int] = None,
                         return_index: Optional[int] = None,
