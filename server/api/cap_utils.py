@@ -57,6 +57,13 @@ def add_capabilities_ref(result: Dict[str, Any], canonical: Dict[str, Any]) -> D
         # Return mixer parameters (volume, pan, sends)
         elif domain == "return":
             return_index = canonical.get("return_index")
+            # Canonical may use return_ref (letter) instead of return_index (number)
+            if return_index is None:
+                return_ref = canonical.get("return_ref")
+                if return_ref and isinstance(return_ref, str):
+                    # Convert letter to index: A=0, B=1, etc.
+                    return_index = ord(return_ref.upper()) - ord('A')
+
             if return_index is not None:
                 result["capabilities_ref"] = build_capabilities_ref(
                     domain="return",
