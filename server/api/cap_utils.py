@@ -3,6 +3,77 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
+def add_capabilities_ref(result: Dict[str, Any], canonical: Dict[str, Any]) -> Dict[str, Any]:
+    """Centralized function to add capabilities_ref based on canonical intent.
+
+    Inspects the canonical intent structure and adds appropriate capabilities_ref
+    for the WebUI to fetch capabilities on-demand.
+
+    Args:
+        result: The execution result dict
+        canonical: The canonical intent dict
+
+    Returns:
+        Result dict with capabilities_ref added if applicable
+    """
+    if not isinstance(result, dict) or not isinstance(canonical, dict):
+        return result
+
+    # Skip if already has capabilities_ref (shouldn't happen, but defensive)
+    if result.get("capabilities_ref"):
+        return result
+
+    try:
+        domain = canonical.get("domain")
+
+        # Device parameters (track or return)
+        if domain == "device":
+            track_index = canonical.get("track_index")
+            return_index = canonical.get("return_index")
+            device_index = canonical.get("device_index")
+
+            if return_index is not None and device_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="return_device",
+                    return_index=return_index,
+                    device_index=device_index
+                )
+            elif track_index is not None and device_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="track_device",
+                    track_index=track_index,
+                    device_index=device_index
+                )
+
+        # Track mixer parameters (volume, pan, mute, solo, sends)
+        elif domain == "track":
+            track_index = canonical.get("track_index")
+            if track_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="track",
+                    track_index=track_index
+                )
+
+        # Return mixer parameters (volume, pan, sends)
+        elif domain == "return":
+            return_index = canonical.get("return_index")
+            if return_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="return",
+                    return_index=return_index
+                )
+
+        # Master mixer parameters (cue)
+        elif domain == "master":
+            result["capabilities_ref"] = build_capabilities_ref(domain="master")
+
+    except Exception:
+        # If anything fails, don't break the response - just skip capabilities_ref
+        pass
+
+    return result
+
+
 def build_capabilities_ref(*, domain: str,
                            track_index: Optional[int] = None,
                            return_index: Optional[int] = None,
