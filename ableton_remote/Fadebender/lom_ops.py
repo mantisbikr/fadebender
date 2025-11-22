@@ -184,7 +184,13 @@ def _attach_track_listeners(live) -> None:
             def make_cb(param=vol, track_idx=idx):
                 def _cb():
                     try:
-                        _emit({"event": "mixer_changed", "track": track_idx, "field": "volume", "value": float(getattr(param, 'value', 0.0))})
+                        val = float(getattr(param, 'value', 0.0))
+                        display = None
+                        try:
+                            display = str(param.str_for_value(val))
+                        except:
+                            pass
+                        _emit({"event": "mixer_changed", "track": track_idx, "field": "volume", "value": val, "display_value": display})
                     except Exception:
                         pass
                 return _cb
@@ -193,7 +199,13 @@ def _attach_track_listeners(live) -> None:
             def make_cb(param=pan, track_idx=idx):
                 def _cb():
                     try:
-                        _emit({"event": "mixer_changed", "track": track_idx, "field": "pan", "value": float(getattr(param, 'value', 0.0))})
+                        val = float(getattr(param, 'value', 0.0))
+                        display = None
+                        try:
+                            display = str(param.str_for_value(val))
+                        except:
+                            pass
+                        _emit({"event": "mixer_changed", "track": track_idx, "field": "pan", "value": val, "display_value": display})
                     except Exception:
                         pass
                 return _cb
@@ -212,7 +224,13 @@ def _attach_return_listeners(live) -> None:
             def make_cb(param=vol, return_idx=idx):
                 def _cb():
                     try:
-                        _emit({"event": "return_mixer_changed", "return": return_idx, "field": "volume", "value": float(getattr(param, 'value', 0.0))})
+                        val = float(getattr(param, 'value', 0.0))
+                        display = None
+                        try:
+                            display = str(param.str_for_value(val))
+                        except:
+                            pass
+                        _emit({"event": "return_mixer_changed", "return": return_idx, "field": "volume", "value": val, "display_value": display})
                     except Exception:
                         pass
                 return _cb
@@ -221,7 +239,13 @@ def _attach_return_listeners(live) -> None:
             def make_cb(param=pan, return_idx=idx):
                 def _cb():
                     try:
-                        _emit({"event": "return_mixer_changed", "return": return_idx, "field": "pan", "value": float(getattr(param, 'value', 0.0))})
+                        val = float(getattr(param, 'value', 0.0))
+                        display = None
+                        try:
+                            display = str(param.str_for_value(val))
+                        except:
+                            pass
+                        _emit({"event": "return_mixer_changed", "return": return_idx, "field": "pan", "value": val, "display_value": display})
                     except Exception:
                         pass
                 return _cb
@@ -250,7 +274,12 @@ def _attach_master_listeners(live) -> None:
                 last = _LAST_MASTER_VALUES.get(field)
                 if last is None or abs(val - last) > 0.0001:
                     _LAST_MASTER_VALUES[field] = val
-                    _emit({"event": "master_mixer_changed", "field": field, "value": val})
+                    display = None
+                    try:
+                        display = str(param.str_for_value(val))
+                    except:
+                        pass
+                    _emit({"event": "master_mixer_changed", "field": field, "value": val, "display_value": display})
             except Exception:
                 pass
         _add_param_listener(param, _cb)

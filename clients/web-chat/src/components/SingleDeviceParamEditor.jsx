@@ -36,11 +36,11 @@ export default function SingleDeviceParamEditor({ editor }) {
       busy
     });
 
-    const fetchCurrentValue = async () => {
+    const fetchCurrentValue = async (showLoading = false) => {
       try {
         if (!mountedRef.current) return;
         if (busy) return; // avoid clobbering local value during commits
-        setLoading((prev) => prev && true); // keep spinner only on first fetch
+        if (showLoading) setLoading(true);
         const requestBody = {
           domain: 'device',
           return_index: return_index,
@@ -67,15 +67,14 @@ export default function SingleDeviceParamEditor({ editor }) {
       }
     };
 
-    // initial fetch
-    fetchCurrentValue();
+    // initial fetch (show loading spinner)
+    fetchCurrentValue(true);
 
-    // start polling for live updates while open
-    // TEMPORARILY DISABLED FOR DEBUGGING
-    // if (pollingRef.current) clearInterval(pollingRef.current);
-    // pollingRef.current = setInterval(() => {
-    //   fetchCurrentValue();
-    // }, 600);
+    // start polling for live updates while open (every 600ms, no loading spinner)
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(() => {
+      fetchCurrentValue(false);
+    }, 600);
 
     // cleanup
     return () => {
@@ -86,6 +85,19 @@ export default function SingleDeviceParamEditor({ editor }) {
       }
     };
   }, [return_index, device_index, param.name]);
+
+  // Update local state when current_values change from parent (SSE updates)
+  useEffect(() => {
+    const newValue = current_values?.[param.name]?.display_value;
+    if (newValue !== undefined && newValue !== currentValue) {
+      console.log('[SingleDeviceParamEditor] Updating from parent:', {
+        param: param.name,
+        old: currentValue,
+        new: newValue
+      });
+      setCurrentValue(newValue);
+    }
+  }, [current_values?.[param.name]?.display_value, current_values?.[param.name]?.value]);
 
   const initialValue = useMemo(() => {
     if (!param) return 0;

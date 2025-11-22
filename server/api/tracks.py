@@ -748,17 +748,25 @@ def get_track_mixer_capabilities(index: int) -> Dict[str, Any]:
             "sonic_focus": sec_meta.get("sonic_focus"),
         })
 
-    # Resolve human track name from overview for nicer titles
+    # Resolve human track name and type from LiveIndex cache (fast, no UDP call)
+    tname = f"Track {ti+1}"
+    track_type = None
     try:
-        ov = request_op("get_overview", timeout=0.8) or {}
-        tracks = (data_or_raw(ov) or {}).get("tracks") or []
-        tname = next((str(t.get("name", f"Track {ti+1}")) for t in tracks if int(t.get("index", -1)) == ti+1), f"Track {ti+1}")
+        from server.core.deps import get_live_index
+        live_index = get_live_index()
+        if live_index and live_index.snapshot:
+            tracks_data = live_index.snapshot.get("tracks", [])
+            track_match = next((t for t in tracks_data if int(t.get("index", -1)) == ti+1), None)
+            if track_match:
+                tname = track_match.get("name", tname)
+                track_type = track_match.get("type")  # "audio" or "midi"
     except Exception:
-        tname = f"Track {ti+1}"
+        pass
 
     return {"ok": True, "data": {
         "entity_type": "track",
         "track_index": ti,
+        "track_type": track_type,  # Add for client-side type badge
         "device_name": f"{tname} Mixer",
         "groups": groups,
         "ungrouped": [],
@@ -846,7 +854,9 @@ def set_track_device_param(body: TrackDeviceParamBody) -> Dict[str, Any]:
             "track": int(body.track_index),
             "device_index": int(body.device_index),
             "param_index": int(body.param_index),
+            "param_name": resp.get("param_name") if isinstance(resp, dict) else None,
             "value": float(body.value),
+            "display_value": resp.get("display_value") if isinstance(resp, dict) else None,
         }))
     except Exception:
         pass

@@ -622,7 +622,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
         resp = udp_request(msg, timeout=1.0)
         # Publish SSE so UI tooltips/details refresh immediately
         try:
-            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "volume"})
+            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "volume", "value": float_value})
         except Exception:
             pass
         # Add capabilities for mixer operations
@@ -685,7 +685,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            schedule_emit({"event": "send_changed", "track": track_index, "send_index": si})
+            schedule_emit({"event": "send_changed", "track": track_index, "send_index": si, "value": target_float})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"Set Track {track_index} send {send_label} to {raw_val:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
@@ -746,7 +746,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"{action.title()} Track {track_index} send {send_label} by {amt:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            schedule_emit({"event": "send_changed", "track": track_index, "send_index": si})
+            schedule_emit({"event": "send_changed", "track": track_index, "send_index": si, "value": target_float})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get('ok', True)), "resp": resp, "summary": f"{action.title()} Track {track_index} send {send_label} by {amt:g}{' ' + (unit or 'dB') if unit else ' dB'}"}
@@ -764,7 +764,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "pan"})
+            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "pan", "value": pan})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
@@ -782,7 +782,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
             return {"ok": True, "preview": msg, "summary": f"Set Track {track_index} pan to {label}"}
         resp = udp_request(msg, timeout=1.0)
         try:
-            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "pan"})
+            schedule_emit({"event": "mixer_changed", "track": track_index, "field": "pan", "value": pan})
         except Exception:
             pass
         return {"ok": bool(resp and resp.get("ok", True)), "resp": resp, "summary": f"Set Track {track_index} pan to {label}"}
@@ -930,7 +930,7 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
                 summary = f"Set Track {track_index} volume to {float(achieved):.1f} dB"
             # Publish SSE for freshness
             try:
-                asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "volume"}))
+                asyncio.create_task(broker.publish({"event": "mixer_changed", "track": track_index, "field": "volume", "value": nv if nv is not None else LAST_SENT.get(k)}))
             except Exception:
                 pass
             return {"ok": True, "preview": msg, "resp": resp, "intent": intent, "summary": summary}

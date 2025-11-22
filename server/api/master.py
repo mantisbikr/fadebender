@@ -224,7 +224,9 @@ def set_master_device_param(body: MasterDeviceParamBody) -> Dict[str, Any]:
             "event": "master_device_param_changed",
             "device_index": int(body.device_index),
             "param_index": int(body.param_index),
+            "param_name": resp.get("param_name") if isinstance(resp, dict) else None,
             "value": float(body.value),
+            "display_value": resp.get("display_value") if isinstance(resp, dict) else None,
         }))
     except Exception:
         pass

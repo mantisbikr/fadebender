@@ -3,14 +3,19 @@ import { apiService } from '../services/api.js';
 
 export function useMixerEvents(onMixerChanged, onSelectionChanged, onOtherEvent, enabled = true) {
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled) {
+      console.log('[useMixerEvents] Disabled, not subscribing');
+      return undefined;
+    }
     const url = apiService.getEventsURL();
+    console.log('[useMixerEvents] Creating EventSource:', url);
     const es = new EventSource(url);
     es.onmessage = (evt) => {
+      console.log('[useMixerEvents] Received event:', evt.data);
       try {
         const payload = JSON.parse(evt.data);
         if (!payload || typeof payload !== 'object') return;
-        if ((payload.event === 'mixer_changed' || payload.event === 'send_changed') && payload.track) {
+        if ((payload.event === 'mixer_changed' || payload.event === 'send_changed') && typeof payload.track === 'number') {
           onMixerChanged && onMixerChanged(payload);
         } else if (payload.event === 'selection_changed') {
           onSelectionChanged && onSelectionChanged(payload);
@@ -40,5 +45,5 @@ export function useMixerEvents(onMixerChanged, onSelectionChanged, onOtherEvent,
       try { es.close(); } catch {}
     };
     return () => { try { es.close(); } catch {} };
-  }, [onMixerChanged, onSelectionChanged, enabled]);
+  }, [onMixerChanged, onSelectionChanged, onOtherEvent, enabled]);
 }

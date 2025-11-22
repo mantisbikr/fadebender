@@ -63,7 +63,7 @@ def op_return_device_param(op: ReturnDeviceParamBody) -> Dict[str, Any]:
     try:
         Events.publish(
             "return_device_param_changed",
-            **{"return": int(op.return_index), "device": int(op.device_index), "param": int(op.param_index)}
+            **{"return": int(op.return_index), "device_index": int(op.device_index), "param_index": int(op.param_index), "param_name": resp.get("param_name"), "value": op.value, "display_value": resp.get("display_value")}
         )
     except Exception:
         pass
@@ -129,7 +129,7 @@ def op_return_mixer(body: ReturnMixerBody) -> Dict[str, Any]:
         pass
 
     try:
-        Events.publish("return_mixer_changed", **{"return": int(body.return_index), "field": body.field})
+        Events.publish("return_mixer_changed", **{"return": int(body.return_index), "field": body.field, "value": body.value, "display_value": resp.get("display_value")})
     except Exception:
         pass
     return resp
@@ -156,7 +156,7 @@ def op_mixer(op: MixerOp) -> Dict[str, Any]:
         pass
 
     try:
-        Events.publish("mixer_changed", track=op.track_index, field=op.field)
+        Events.publish("mixer_changed", track=op.track_index, field=op.field, value=op.value, display_value=resp.get("display_value"))
     except Exception:
         pass
     return resp
@@ -199,7 +199,7 @@ def op_device_param(op: DeviceParamOp) -> Dict[str, Any]:
         pass
 
     try:
-        Events.publish("device_param_changed", track=op.track_index, device=op.device_index, param=op.param_index)
+        Events.publish("device_param_changed", track=op.track_index, device_index=op.device_index, param_index=op.param_index, param_name=resp.get("param_name"), value=op.value, display_value=resp.get("display_value"))
     except Exception:
         pass
     return resp
@@ -218,7 +218,7 @@ def op_volume_db(body: VolumeDbBody) -> Dict[str, Any]:
     if not resp:
         raise HTTPException(504, "No reply from Ableton Remote Script")
     try:
-        Events.publish("mixer_changed", track=int(body.track_index), field="volume")
+        Events.publish("mixer_changed", track=int(body.track_index), field="volume", value=float_value, display_value=resp.get("display_value"))
     except Exception:
         pass
     return resp

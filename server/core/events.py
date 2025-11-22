@@ -62,6 +62,33 @@ async def emit_event(payload: Dict[str, Any]) -> None:
                 _MASTER_DEDUP[fld] = (v, time.time())
     except Exception:
         pass
+
+    # Add display_value for mixer events that don't have it (from Live listeners)
+    try:
+        if isinstance(payload, dict) and "display_value" not in payload:
+            event = payload.get("event")
+            field = payload.get("field")
+            value = payload.get("value")
+            print(f"[SSE-CONVERT] Event={event}, field={field}, value={value}, has_display={('display_value' in payload)}")
+
+            if event in ("mixer_changed", "return_mixer_changed", "master_mixer_changed"):
+                if field == "volume" and isinstance(value, (int, float)):
+                    from server.volume_utils import live_float_to_db
+                    display = round(live_float_to_db(float(value)), 2)
+                    payload["display_value"] = display
+                    print(f"[SSE-CONVERT] Added volume display_value: {display}")
+                elif field == "pan" and isinstance(value, (int, float)):
+                    pan_val = float(value) * 50.0
+                    payload["display_value"] = round(pan_val, 1)
+                elif field == "cue" and isinstance(value, (int, float)):
+                    from server.volume_utils import live_float_to_db
+                    payload["display_value"] = round(live_float_to_db(float(value)), 2)
+            elif event == "send_changed" and isinstance(value, (int, float)):
+                from server.volume_utils import live_float_to_db_send
+                payload["display_value"] = round(live_float_to_db_send(float(value)), 1)
+    except Exception:
+        pass
+
     if _debug_enabled():
         try:
             ename = payload.get("event")

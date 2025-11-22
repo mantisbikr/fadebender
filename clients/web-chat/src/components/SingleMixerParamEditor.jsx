@@ -34,12 +34,12 @@ export default function SingleMixerParamEditor({ editor }) {
     mountedRef.current = true;
     console.log('[SingleMixerParamEditor] useEffect triggered for param:', param?.name);
 
-    const fetchCurrentValue = async () => {
+    const fetchCurrentValue = async (showLoading = false) => {
       let readBody = null;
       try {
         if (!mountedRef.current) return;
         if (busy) return; // avoid clobbering during commits
-        if (loading) setLoading(true);
+        if (showLoading) setLoading(true);
         readBody = { domain: entity_type, field: param.name };
 
         if (entity_type === 'track') {
@@ -70,15 +70,14 @@ export default function SingleMixerParamEditor({ editor }) {
       }
     };
 
-    // initial fetch
-    fetchCurrentValue();
+    // initial fetch (show loading spinner)
+    fetchCurrentValue(true);
 
-    // start polling for live changes
-    // TEMPORARILY DISABLED FOR DEBUGGING
-    // if (pollingRef.current) clearInterval(pollingRef.current);
-    // pollingRef.current = setInterval(() => {
-    //   fetchCurrentValue();
-    // }, 600);
+    // start polling for live changes (every 600ms, no loading spinner)
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(() => {
+      fetchCurrentValue(false);
+    }, 600);
 
     // cleanup
     return () => {
@@ -89,6 +88,21 @@ export default function SingleMixerParamEditor({ editor }) {
       }
     };
   }, [entity_type, index_ref, param.name, send_ref, busy]);
+
+  // Update local state when param values change from parent (SSE updates)
+  useEffect(() => {
+    if (param?.current_value !== undefined && param.current_value !== currentValue) {
+      console.log('[SingleMixerParamEditor] Updating from parent:', {
+        param: param.name,
+        old: currentValue,
+        new: param.current_value
+      });
+      setCurrentValue(param.current_value);
+    }
+    if (param?.current_display !== undefined && param.current_display !== currentDisplay) {
+      setCurrentDisplay(param.current_display);
+    }
+  }, [param?.current_value, param?.current_display]);
 
   // Parse pan display value
   const parsePanDisplay = (s, fallbackNorm, minD, maxD) => {

@@ -238,7 +238,7 @@ export default function ParamAccordion({ capabilities, onParamClick, initialGrou
 
                 // For device parameters
                 if (isDevice) {
-                  const currentValues = capabilities.current_values || {};
+                  const currentValues = capabilities.values || {};
 
                   const editorProps = {
                     return_index: capabilities.return_index,

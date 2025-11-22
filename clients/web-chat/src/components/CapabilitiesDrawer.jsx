@@ -19,82 +19,152 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
     setLiveCapabilities(capabilities);
   }, [capabilities]);
 
-  if (!liveCapabilities) {
-    return null;
-  }
+  // Real-time event handlers for Live parameter changes
+  // IMPORTANT: Must be defined before any conditional returns (Rules of Hooks)
+  // Use functional setState to avoid recreating callbacks on every state change
+  const handleMixerChanged = useCallback((payload) => {
+    setLiveCapabilities(prev => {
+      if (!prev || !prev.values) return prev;
+
+      // Track mixer events - payload.track is a number (0-based index from Ableton)
+      if (prev.entity_type === 'track') {
+        const trackIndex = typeof payload.track === 'number' ? payload.track : null;
+
+        if (trackIndex === prev.track_index) {
+          // Update mixer value in capabilities
+          const field = payload.field; // e.g., "volume", "pan", "mute", "solo"
+          const value = payload.value;
+
+          console.log('[CapabilitiesDrawer] Received mixer_changed:', { trackIndex, field, value, current: prev.values[field] });
+
+          if (field && value !== undefined) {
+            return {
+              ...prev,
+              values: {
+                ...prev.values,
+                [field]: { value, display_value: payload.display_value || prev.values[field]?.display_value }
+              }
+            };
+          }
+        }
+      }
+      return prev;
+    });
+  }, []); // Empty deps - callback never recreated, EventSource stays connected
+
+  const handleOtherEvent = useCallback((payload) => {
+    setLiveCapabilities(prev => {
+      if (!prev || !prev.values) return prev;
+
+      // Return mixer events - payload.return is a number (0-based index)
+      if (payload.event === 'return_mixer_changed' && prev.entity_type === 'return') {
+        const returnIndex = typeof payload.return === 'number' ? payload.return : null;
+        if (returnIndex === prev.return_index) {
+          const field = payload.field;
+          const value = payload.value;
+
+          console.log('[CapabilitiesDrawer] Received return_mixer_changed:', { returnIndex, field, value, current: prev.values[field] });
+
+          if (field && value !== undefined) {
+            return {
+              ...prev,
+              values: {
+                ...prev.values,
+                [field]: { value, display_value: payload.display_value || prev.values[field]?.display_value }
+              }
+            };
+          }
+        }
+      }
+
+      // Master mixer events
+      else if (payload.event === 'master_mixer_changed' && prev.entity_type === 'master') {
+        const field = payload.field;
+        const value = payload.value;
+
+        console.log('[CapabilitiesDrawer] Received master_mixer_changed:', { field, value, current: prev.values[field] });
+
+        if (field && value !== undefined) {
+          return {
+            ...prev,
+            values: {
+              ...prev.values,
+              [field]: { value, display_value: payload.display_value || prev.values[field]?.display_value }
+            }
+          };
+        }
+      }
+
+      // Track device parameter events
+      else if (payload.event === 'device_param_changed' && typeof prev.device_index === 'number' && typeof prev.track_index === 'number') {
+        const trackIndex = typeof payload.track === 'number' ? payload.track : null;
+        const deviceIndex = typeof payload.device_index === 'number' ? payload.device_index : null;
+        const paramName = payload.param_name;
+        const value = payload.value;
+
+        if (trackIndex === prev.track_index && deviceIndex === prev.device_index && paramName && value !== undefined) {
+          console.log('[CapabilitiesDrawer] Received device_param_changed:', { trackIndex, deviceIndex, paramName, value, current: prev.values[paramName] });
+
+          return {
+            ...prev,
+            values: {
+              ...prev.values,
+              [paramName]: { value, display_value: payload.display_value || prev.values[paramName]?.display_value }
+            }
+          };
+        }
+      }
+
+      // Return device parameter events
+      else if (payload.event === 'return_device_param_changed' && typeof prev.device_index === 'number' && typeof prev.return_index === 'number') {
+        const returnIndex = typeof payload.return === 'number' ? payload.return : null;
+        const deviceIndex = typeof payload.device_index === 'number' ? payload.device_index : null;
+        const paramName = payload.param_name;
+        const value = payload.value;
+
+        if (returnIndex === prev.return_index && deviceIndex === prev.device_index && paramName && value !== undefined) {
+          console.log('[CapabilitiesDrawer] Received return_device_param_changed:', { returnIndex, deviceIndex, paramName, value, current: prev.values[paramName] });
+
+          return {
+            ...prev,
+            values: {
+              ...prev.values,
+              [paramName]: { value, display_value: payload.display_value || prev.values[paramName]?.display_value }
+            }
+          };
+        }
+      }
+
+      // Master device parameter events
+      else if (payload.event === 'master_device_param_changed' && prev.entity_type === 'master' && typeof prev.device_index === 'number') {
+        const deviceIndex = typeof payload.device_index === 'number' ? payload.device_index : null;
+        const paramName = payload.param_name;
+        const value = payload.value;
+
+        if (deviceIndex === prev.device_index && paramName && value !== undefined) {
+          console.log('[CapabilitiesDrawer] Received master_device_param_changed:', { deviceIndex, paramName, value, current: prev.values[paramName] });
+
+          return {
+            ...prev,
+            values: {
+              ...prev.values,
+              [paramName]: { value, display_value: payload.display_value || prev.values[paramName]?.display_value }
+            }
+          };
+        }
+      }
+
+      return prev;
+    });
+  }, []); // Empty deps - callback never recreated, EventSource stays connected
+
+  // Subscribe to Live events for real-time sync
+  console.log('[CapabilitiesDrawer] Subscribing to mixer events, open=', open);
+  useMixerEvents(handleMixerChanged, null, handleOtherEvent, open);
 
   // Determine what type of entity this is based on available fields
   const hasEntityType = typeof liveCapabilities?.entity_type === 'string';
   const hasDeviceIndex = typeof liveCapabilities?.device_index === 'number';
-
-  // Real-time event handlers for Live parameter changes
-  const handleMixerChanged = useCallback((payload) => {
-    if (!liveCapabilities || !liveCapabilities.values) return;
-
-    // Track mixer events
-    if (liveCapabilities.entity_type === 'track') {
-      const trackLabel = payload.track;
-      const trackIndex = trackLabel ? parseInt(trackLabel.replace(/\D+/g, ''), 10) - 1 : null;
-
-      if (trackIndex === liveCapabilities.track_index) {
-        // Update mixer value in capabilities
-        const field = payload.field; // e.g., "volume", "pan", "mute", "solo"
-        const value = payload.value;
-
-        if (field && value !== undefined) {
-          setLiveCapabilities(prev => ({
-            ...prev,
-            values: {
-              ...prev.values,
-              [field]: value
-            }
-          }));
-        }
-      }
-    }
-  }, [liveCapabilities]);
-
-  const handleOtherEvent = useCallback((payload) => {
-    if (!liveCapabilities || !liveCapabilities.values) return;
-
-    // Return mixer events
-    if (payload.event === 'return_mixer_changed' && liveCapabilities.entity_type === 'return') {
-      const returnIndex = payload.return_index;
-      if (returnIndex === liveCapabilities.return_index) {
-        const field = payload.field;
-        const value = payload.value;
-
-        if (field && value !== undefined) {
-          setLiveCapabilities(prev => ({
-            ...prev,
-            values: {
-              ...prev.values,
-              [field]: value
-            }
-          }));
-        }
-      }
-    }
-
-    // Master mixer events
-    else if (payload.event === 'master_mixer_changed' && liveCapabilities.entity_type === 'master') {
-      const field = payload.field;
-      const value = payload.value;
-
-      if (field && value !== undefined) {
-        setLiveCapabilities(prev => ({
-          ...prev,
-          values: {
-            ...prev.values,
-            [field]: value
-          }
-        }));
-      }
-    }
-  }, [liveCapabilities]);
-
-  // Subscribe to Live events for real-time sync
-  useMixerEvents(handleMixerChanged, null, handleOtherEvent, open);
 
   // Type badge: simplified to avoid expensive API calls
   // Prefer using track_type from liveCapabilities if available, otherwise show entity type
@@ -163,6 +233,11 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
     if (isInIgnoredArea(event)) return; // allow typing in chat input without closing
     onClose?.();
   };
+
+  // Early return check AFTER all hooks (Rules of Hooks)
+  if (!liveCapabilities) {
+    return null;
+  }
 
   return (
     <ClickAwayListener onClickAway={handleClickAway} mouseEvent="onMouseDown" touchEvent="onTouchStart">
