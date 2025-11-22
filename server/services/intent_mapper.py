@@ -88,9 +88,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
     # Original utterance (if provided by NLP) for lightweight heuristics
     orig_utterance = str(((llm_intent or {}).get("meta") or {}).get("utterance") or "")
 
-    # Debug logging for relative changes
-    if kind == "relative_change":
-
     # Pass-through for transport intents (handled by chat_service and API directly)
     if kind == "transport":
         op = (llm_intent or {}).get("operation") or {}
