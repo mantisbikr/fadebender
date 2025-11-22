@@ -779,7 +779,6 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
                     intent["display"] = f"{val_num:.0f}R"
                 else:
                     intent["display"] = "C"
-        logger.debug(f"About to return mixer intent with value={intent['value']}, unit={intent.get('unit')}, display={intent.get('display')}")
         return intent, []
 
     # Master cue control (mixer): only valid on master
