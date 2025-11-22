@@ -120,6 +120,12 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
 
     # Only normalize mixer params if there's NO plugin (device operations keep original parameter names)
     parameter = str(param_raw).lower() if plugin else _normalize_mixer_param(str(param_raw).lower())
+
+    # Strip device name prefix from parameter if present (e.g., "reverb decay" -> "decay")
+    if plugin and parameter:
+        plugin_prefix = str(plugin).lower() + " "
+        if parameter.startswith(plugin_prefix):
+            parameter = parameter[len(plugin_prefix):].strip()
     op_type = (op.get("type") or "").lower()
     value = op.get("value")
     unit = op.get("unit")
@@ -765,6 +771,18 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             "unit": unit,
             **target_fields
         }
+        # When unit="display" and value is numeric, populate display field for pan
+        if parameter == "pan" and str(unit).lower() == "display" and isinstance(value, (int, float, str)):
+            # Format as display string with L/R suffix
+            val_num = float(amount) if isinstance(amount, (int, float)) else _to_float(str(amount))
+            if val_num is not None:
+                if val_num < -0.1:
+                    intent["display"] = f"{abs(val_num):.0f}L"
+                elif val_num > 0.1:
+                    intent["display"] = f"{val_num:.0f}R"
+                else:
+                    intent["display"] = "C"
+        logger.debug(f"About to return mixer intent with value={intent['value']}, unit={intent.get('unit')}, display={intent.get('display')}")
         return intent, []
 
     # Master cue control (mixer): only valid on master

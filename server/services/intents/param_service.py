@@ -75,7 +75,7 @@ def alias_param_name_if_needed(name: Optional[str]) -> Optional[str]:
         "width": "stereo image",
         # "stereo width": "stereo image",  # Commented out - Echo has "Stereo Width" as distinct param
         "image": "stereo image",
-        "decay time": "decay",
+        "decay": "decay time",
         "pre delay": "predelay",
         "pre-delay": "predelay",
     }

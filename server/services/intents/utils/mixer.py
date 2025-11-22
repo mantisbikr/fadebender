@@ -12,11 +12,31 @@ def _clamp(x: float, lo: float, hi: float) -> float:
 
 
 def _parse_target_display(s: str) -> Optional[float]:
+    """Parse numeric value from display string.
+
+    For pan values, handles L/R suffix (e.g., "35L" -> -35, "35R" -> 35).
+    """
     try:
-        m = _re.search(r"-?\d+(?:\.\d+)?", str(s))
+        s_str = str(s).strip().upper()
+
+        # Check for pan L/R suffix
+        has_left = s_str.endswith('L')
+        has_right = s_str.endswith('R')
+
+        # Extract number
+        m = _re.search(r"-?\d+(?:\.\d+)?", s_str)
         if not m:
             return None
-        return float(m.group(0))
+
+        num = float(m.group(0))
+
+        # Apply L/R sign for pan
+        if has_left:
+            return -abs(num)  # Left is negative
+        elif has_right:
+            return abs(num)   # Right is positive
+
+        return num
     except Exception:
         return None
 
