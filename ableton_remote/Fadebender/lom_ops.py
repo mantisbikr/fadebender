@@ -1768,6 +1768,376 @@ def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]
     return {"ok": ok, "state": dict(tr)}
 
 
+# ---------------- Song-level helpers (undo, info, cues) ----------------
+
+def get_undo_status(live) -> Dict[str, Any]:
+    """Return whether Live reports that undo/redo are currently possible."""
+    try:
+        if live is not None:
+            song = live
+            can_undo = bool(getattr(song, "can_undo", False))
+            can_redo = bool(getattr(song, "can_redo", False))
+            return {"can_undo": can_undo, "can_redo": can_redo}
+    except Exception:
+        pass
+    # Stub: no real undo stack, just report False
+    return {"can_undo": False, "can_redo": False}
+
+
+def song_undo(live) -> Dict[str, Any]:
+    """Trigger Live's global undo (project-wide history)."""
+    try:
+        if live is not None and hasattr(live, "undo"):
+            def _do_undo():
+                try:
+                    live.undo()
+                    return {"ok": True}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+            res = _run_on_main(_do_undo)
+            return res or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub: nothing to undo
+    return {"ok": False, "error": "undo_not_available"}
+
+
+def song_redo(live) -> Dict[str, Any]:
+    """Trigger Live's global redo (project-wide history)."""
+    try:
+        if live is not None and hasattr(live, "redo"):
+            def _do_redo():
+                try:
+                    live.redo()
+                    return {"ok": True}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+            res = _run_on_main(_do_redo)
+            return res or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    # Stub: nothing to redo
+    return {"ok": False, "error": "redo_not_available"}
+
+
+def get_song_info(live) -> Dict[str, Any]:
+    """Return basic Live Set metadata (name, tempo, time signature)."""
+    if live is not None:
+        try:
+            song = live
+            name = ""
+            try:
+                raw_name = getattr(song, "name", "")  # Live Set name (no .als)
+                if raw_name is not None:
+                    name = str(raw_name)
+            except Exception:
+                name = ""
+            try:
+                tempo = float(getattr(song, "tempo", 120.0))
+            except Exception:
+                tempo = 120.0
+            try:
+                num = int(getattr(song, "signature_numerator", 4))
+            except Exception:
+                num = 4
+            try:
+                den = int(getattr(song, "signature_denominator", 4))
+            except Exception:
+                den = 4
+            return {
+                "name": name,
+                "tempo": tempo,
+                "time_signature_numerator": num,
+                "time_signature_denominator": den,
+            }
+        except Exception:
+            pass
+    # Stub: derive from in-memory transport + a generic name
+    tr = dict(_STATE.get("transport", {}))
+    return {
+        "name": "Untitled Set",
+        "tempo": float(tr.get("tempo", 120.0)),
+        "time_signature_numerator": int(tr.get("time_signature_numerator", 4)),
+        "time_signature_denominator": int(tr.get("time_signature_denominator", 4)),
+    }
+
+
+def get_cue_points(live) -> Dict[str, Any]:
+    """Return arrangement cue points (locators) as a simple list."""
+    try:
+        if live is not None:
+            song = live
+            cues = list(getattr(song, "cue_points", []) or [])
+            out = []
+            for idx, cp in enumerate(cues, start=1):
+                try:
+                    t = float(getattr(cp, "time", 0.0))
+                except Exception:
+                    t = 0.0
+                try:
+                    name = str(getattr(cp, "name", f"Cue {idx}"))
+                except Exception:
+                    name = f"Cue {idx}"
+                out.append({"index": idx, "time": t, "name": name})
+            return {"cue_points": out}
+    except Exception:
+        pass
+    # Stub: use in-memory list
+    cps = _STATE.setdefault("cue_points", [])
+    return {"cue_points": list(cps)}
+
+
+def add_cue_point(live, time_beats: float | None = None, name: str | None = None) -> Dict[str, Any]:
+    """Add a cue point at the given time (or current song time if None)."""
+    try:
+        if live is not None:
+            song = live
+
+            def _do_add():
+                # Snapshot existing cue objects so we can detect the new one
+                before = list(getattr(song, "cue_points", []) or [])
+                try:
+                    t = float(time_beats) if time_beats is not None else float(getattr(song, "current_song_time", 0.0))
+                except Exception:
+                    t = 0.0
+                created = None
+                # Prefer explicit create API when available
+                try:
+                    if hasattr(song, "create_cue_point"):
+                        created = song.create_cue_point(t)
+                    elif hasattr(song, "add_or_delete_cue"):
+                        # Fallback: move playhead then toggle cue at that point
+                        try:
+                            setattr(song, "current_song_time", t)
+                        except Exception:
+                            pass
+                        song.add_or_delete_cue()
+                except Exception:
+                    created = None
+
+                cues = list(getattr(song, "cue_points", []) or [])
+                # Try to infer which cue is new
+                new_cue = None
+                try:
+                    if created is not None and created in cues and created not in before:
+                        new_cue = created
+                    else:
+                        before_set = set(before)
+                        candidates = [cp for cp in cues if cp not in before_set]
+                        if len(candidates) == 1:
+                            new_cue = candidates[0]
+                        elif candidates:
+                            # Pick the one whose time is closest to requested t
+                            def _time(cp):
+                                try:
+                                    return float(getattr(cp, "time", 0.0))
+                                except Exception:
+                                    return 0.0
+                            new_cue = min(candidates, key=lambda cp: abs(_time(cp) - float(t)))
+                except Exception:
+                    new_cue = None
+
+                # Fallback: if we still didn't identify a unique cue, just use the last one
+                if new_cue is None and cues:
+                    new_cue = cues[-1]
+
+                # Apply name if requested
+                if name and new_cue is not None:
+                    try:
+                        setattr(new_cue, "name", str(name))
+                    except Exception:
+                        pass
+
+                # Compute index and actual time from the final cue list
+                idx = 0
+                actual_time = t
+                cue_name = name
+                try:
+                    # Sort cues by time to derive a stable 1-based index
+                    def _time(cp):
+                        try:
+                            return float(getattr(cp, "time", 0.0))
+                        except Exception:
+                            return 0.0
+
+                    cues_sorted = sorted(cues, key=_time)
+                    if new_cue is not None and new_cue in cues_sorted:
+                        idx = cues_sorted.index(new_cue) + 1
+                        actual_time = _time(new_cue)
+                        try:
+                            cue_name = str(getattr(new_cue, "name", cue_name or f"Cue {idx}"))
+                        except Exception:
+                            cue_name = cue_name or f"Cue {idx}"
+                    else:
+                        # Fallback: use last cue
+                        last = cues_sorted[-1]
+                        idx = len(cues_sorted)
+                        actual_time = _time(last)
+                        try:
+                            cue_name = str(getattr(last, "name", cue_name or f"Cue {idx}"))
+                        except Exception:
+                            cue_name = cue_name or f"Cue {idx}"
+                except Exception:
+                    idx = len(cues) or 1
+                    actual_time = t
+                    if not cue_name:
+                        cue_name = f"Cue {idx}"
+
+                return {"ok": True, "index": idx, "time": float(actual_time), "name": cue_name}
+
+            res = _run_on_main(_do_add)
+            return res or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: append to in-memory list
+    cps = _STATE.setdefault("cue_points", [])
+    idx = len(cps) + 1
+    try:
+        t = float(time_beats) if time_beats is not None else float(_STATE.get("transport", {}).get("current_song_time", 0.0))
+    except Exception:
+        t = 0.0
+    cue_name = name or f"Cue {idx}"
+    cp = {"index": idx, "time": float(t), "name": cue_name}
+    cps.append(cp)
+    return {"ok": True, "index": idx, "time": float(t), "name": cue_name}
+
+
+def set_cue_name(live, cue_index: int, name: str) -> Dict[str, Any]:
+    """Rename a cue point by 1-based index."""
+    try:
+        ci = int(cue_index)
+        if live is not None:
+            song = live
+
+            def _do_rename():
+                cues = list(getattr(song, "cue_points", []) or [])
+                if not (1 <= ci <= len(cues)):
+                    return {"ok": False, "error": "cue_out_of_range"}
+                cp = cues[ci - 1]
+                try:
+                    setattr(cp, "name", str(name))
+                except Exception:
+                    return {"ok": False, "error": "rename_failed"}
+                return {"ok": True, "index": ci, "name": str(name)}
+
+            res = _run_on_main(_do_rename)
+            return res or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    cps = _STATE.setdefault("cue_points", [])
+    if 1 <= int(cue_index) <= len(cps):
+        cps[int(cue_index) - 1]["name"] = str(name)
+        return {"ok": True, "index": int(cue_index), "name": str(name)}
+    return {"ok": False, "error": "cue_out_of_range"}
+
+
+def delete_cue_point(live, cue_index: int) -> Dict[str, Any]:
+    """Delete a cue point by 1-based index."""
+    try:
+        ci = int(cue_index)
+        if live is not None:
+            song = live
+
+            def _do_delete():
+                cues = list(getattr(song, "cue_points", []) or [])
+                if not (1 <= ci <= len(cues)):
+                    return {"ok": False, "error": "cue_out_of_range"}
+                cp = cues[ci - 1]
+                try:
+                    if hasattr(song, "delete_cue_point"):
+                        song.delete_cue_point(cp)
+                    elif hasattr(cp, "delete"):
+                        cp.delete()
+                    else:
+                        return {"ok": False, "error": "delete_not_supported"}
+                    return {"ok": True, "index": ci}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+
+            res = _run_on_main(_do_delete)
+            return res or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    cps = _STATE.setdefault("cue_points", [])
+    ci = int(cue_index)
+    if not (1 <= ci <= len(cps)):
+        return {"ok": False, "error": "cue_out_of_range"}
+    cps.pop(ci - 1)
+    for i, cp in enumerate(cps, start=1):
+        cp["index"] = i
+    return {"ok": True, "index": ci}
+
+
+def jump_to_cue(live, cue_index: int | None = None, name: str | None = None) -> Dict[str, Any]:
+    """Move the song position to a cue point by index or name."""
+    try:
+        if live is not None:
+            song = live
+
+            def _do_jump():
+                cues = list(getattr(song, "cue_points", []) or [])
+                target = None
+                if cue_index is not None:
+                    try:
+                        ci = int(cue_index)
+                        if 1 <= ci <= len(cues):
+                            target = cues[ci - 1]
+                    except Exception:
+                        target = None
+                elif name:
+                    target_name = str(name).strip().lower()
+                    for cp in cues:
+                        try:
+                            if str(getattr(cp, "name", "")).strip().lower() == target_name:
+                                target = cp
+                                break
+                        except Exception:
+                            continue
+                if target is None:
+                    return {"ok": False, "error": "cue_not_found"}
+                try:
+                    t = float(getattr(target, "time", 0.0))
+                except Exception:
+                    t = 0.0
+                try:
+                    setattr(song, "current_song_time", t)
+                except Exception:
+                    return {"ok": False, "error": "jump_failed"}
+                return {"ok": True, "time": float(t)}
+
+            res = _run_on_main(_do_jump)
+            return res or {"ok": False}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub
+    cps = _STATE.setdefault("cue_points", [])
+    target = None
+    if cue_index is not None:
+        try:
+            ci = int(cue_index)
+            if 1 <= ci <= len(cps):
+                target = cps[ci - 1]
+        except Exception:
+            target = None
+    elif name:
+        n = str(name).strip().lower()
+        for cp in cps:
+            if str(cp.get("name", "")).strip().lower() == n:
+                target = cp
+                break
+    if target is None:
+        return {"ok": False, "error": "cue_not_found"}
+    t = float(target.get("time", 0.0))
+    _STATE.setdefault("transport", {})["current_song_time"] = t
+    return {"ok": True, "time": float(t)}
+
+
 # ---------------- Master ----------------
 
 def get_master_status(live) -> Dict[str, Any]:

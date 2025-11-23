@@ -360,12 +360,28 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_transport(live_ctx)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "get_song_info":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_song_info(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
             elif op == "set_transport":
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 action = str(msg.get("action", ""))
                 val = msg.get("value")
                 data_out = lom_ops.set_transport(live_ctx, action, val)
                 resp = {"ok": bool(data_out.get("ok", True)), "op": op, "data": data_out.get("state", {})}
+            elif op == "get_undo_status":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_undo_status(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "song_undo":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.song_undo(live_ctx)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "song_redo":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.song_redo(live_ctx)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "get_master_status":
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_master_status(live_ctx)
@@ -418,6 +434,34 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.get_full_snapshot(live_ctx, skip_param_values=skip_param_values)
                 resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "get_cue_points":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.get_cue_points(live_ctx)
+                resp = {"ok": True, "op": op, "data": data_out}
+            elif op == "add_cue_point":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                time_beats = msg.get("time_beats")
+                name = msg.get("name")
+                data_out = lom_ops.add_cue_point(live_ctx, time_beats, name)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "set_cue_name":
+                cue_index = int(msg.get("cue_index", 0))
+                name = str(msg.get("name", "")).strip()
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.set_cue_name(live_ctx, cue_index, name)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "delete_cue_point":
+                cue_index = int(msg.get("cue_index", 0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.delete_cue_point(live_ctx, cue_index)
+                resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "jump_to_cue":
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                cue_index = msg.get("cue_index")
+                name = msg.get("name")
+                ci = int(cue_index) if cue_index is not None else None
+                data_out = lom_ops.jump_to_cue(live_ctx, ci, name)
+                resp = {"op": op, **(data_out or {"ok": False})}
             else:
                 resp = {"ok": False, "error": f"unknown op: {op}", "echo": msg}
         except Exception as e:  # pragma: no cover
