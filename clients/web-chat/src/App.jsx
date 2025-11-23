@@ -70,6 +70,7 @@ function App() {
     capabilitiesHistoryLength,
     onHistoryBack,
     onHistoryForward,
+    onHistoryHome,
     pendingCapabilitiesRef
   } = useDAWControl();
 
@@ -432,6 +433,7 @@ function App() {
           historyLength={capabilitiesHistoryLength}
           onHistoryBack={onHistoryBack}
           onHistoryForward={onHistoryForward}
+          onHistoryHome={onHistoryHome}
         />
       )}
     </ThemeProvider>

@@ -3,14 +3,28 @@
  * Right-anchored drawer showing capabilities for current track/return/device
  */
 
-import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Tooltip, Chip } from '@mui/material';
-import { Close as CloseIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon } from '@mui/icons-material';
+import { Box, Drawer, Typography, IconButton, Divider, ClickAwayListener, Tooltip } from '@mui/material';
+import { Close as CloseIcon, PushPin as PushPinIcon, PushPinOutlined as PushPinOutlinedIcon, ArrowBack as ArrowBackIcon, ArrowForward as ArrowForwardIcon, Home as HomeIcon } from '@mui/icons-material';
 import ParamAccordion from './ParamAccordion.jsx';
 import { useEffect, useState, useCallback } from 'react';
 import { apiService } from '../services/api.js';
 import { useMixerEvents } from '../hooks/useMixerEvents.js';
 
-export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned = false, onPinnedChange, ignoreCloseSelectors = [], initialGroup = null, initialParam = null }) {
+export default function CapabilitiesDrawer({
+  open,
+  onClose,
+  capabilities,
+  pinned = false,
+  onPinnedChange,
+  ignoreCloseSelectors = [],
+  initialGroup = null,
+  initialParam = null,
+  historyIndex = -1,
+  historyLength = 0,
+  onHistoryBack = null,
+  onHistoryForward = null,
+  onHistoryHome = null
+}) {
   // Local state for capabilities with live-updated values
   const [liveCapabilities, setLiveCapabilities] = useState(capabilities);
 
@@ -166,35 +180,24 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
   const hasEntityType = typeof liveCapabilities?.entity_type === 'string';
   const hasDeviceIndex = typeof liveCapabilities?.device_index === 'number';
 
-  // Type badge: simplified to avoid expensive API calls
-  // Prefer using track_type from liveCapabilities if available, otherwise show entity type
-  const typeBadge = (() => {
-    // Return contexts
-    if (liveCapabilities?.entity_type === 'return' || typeof liveCapabilities?.return_index === 'number') {
-      return 'RETURN';
-    }
-    // Track contexts - use track_type from liveCapabilities if available (added by server)
-    if (liveCapabilities?.entity_type === 'track' && liveCapabilities?.track_type) {
-      return String(liveCapabilities.track_type).toUpperCase();
-    }
-    // Device on track - use track_type if available
-    if (typeof liveCapabilities?.device_index === 'number' && typeof liveCapabilities?.track_index === 'number' && liveCapabilities?.track_type) {
-      return String(liveCapabilities.track_type).toUpperCase();
-    }
-    // Master contexts
-    if (liveCapabilities?.entity_type === 'master') {
-      return 'MASTER';
-    }
-    return null;
-  })();
-
   // Build context-sensitive title
   let title = 'Controls';
 
   if (hasEntityType) {
     // Mixer entity (track/return/master mixer controls)
-    // Backend provides device_name like "Track 1 Mixer", "Return A Mixer", etc.
-    title = liveCapabilities.device_name || 'Mixer Controls';
+    if (liveCapabilities.entity_type === 'return' && typeof liveCapabilities.return_index === 'number') {
+      // Return mixer: simple format "Return A Mixer"
+      const returnLetter = String.fromCharCode(65 + liveCapabilities.return_index);
+      title = `Return ${returnLetter} Mixer`;
+    } else if (liveCapabilities.entity_type === 'track') {
+      // Track mixer: use device_name from backend (e.g., "Track 1 Mixer")
+      title = liveCapabilities.device_name || 'Track Mixer';
+    } else if (liveCapabilities.entity_type === 'master') {
+      // Master mixer
+      title = liveCapabilities.device_name || 'Master Mixer';
+    } else {
+      title = liveCapabilities.device_name || 'Mixer Controls';
+    }
   } else if (hasDeviceIndex) {
     // Device entity (effect/instrument on track or return)
     const deviceName = liveCapabilities.device_name || 'Device';
@@ -261,22 +264,75 @@ export default function CapabilitiesDrawer({ open, onClose, capabilities, pinned
         <Box sx={{ p: 2 }}>
           {/* Header with title, pin and close buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h6" fontWeight="bold" color="primary">
-                {title}
-              </Typography>
-              {typeBadge && (
-                <Chip size="small" label={typeBadge} sx={{ height: 20 }} />
-              )}
+            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, mr: 0.5, minWidth: 0 }}>
+              <Tooltip title={title} placement="bottom-start">
+                <Typography
+                  variant="subtitle1"
+                  fontWeight="bold"
+                  color="primary"
+                  sx={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {title}
+                </Typography>
+              </Tooltip>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
+              {/* History navigation */}
+              {historyLength > 1 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, mr: 0.5, borderRight: '1px solid', borderColor: 'divider', pr: 0.5 }}>
+                  <Tooltip title="Previous">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={onHistoryBack}
+                        disabled={historyIndex >= historyLength - 1}
+                        sx={{ p: 0.5 }}
+                      >
+                        <ArrowBackIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Typography variant="caption" color="text.secondary" sx={{ minWidth: '3ch', textAlign: 'center', fontSize: '0.7rem' }}>
+                    {historyIndex + 1}/{historyLength}
+                  </Typography>
+                  <Tooltip title="Next">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={onHistoryForward}
+                        disabled={historyIndex <= 0}
+                        sx={{ p: 0.5 }}
+                      >
+                        <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Latest">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={onHistoryHome}
+                        disabled={historyIndex === 0}
+                        sx={{ p: 0.5 }}
+                      >
+                        <HomeIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Box>
+              )}
               <Tooltip title={pinned ? 'Unpin' : 'Pin'}>
-                <IconButton size="small" onClick={() => onPinnedChange?.(!pinned)}>
-                  {pinned ? <PushPinIcon /> : <PushPinOutlinedIcon />}
+                <IconButton size="small" onClick={() => onPinnedChange?.(!pinned)} sx={{ p: 0.5 }}>
+                  {pinned ? <PushPinIcon sx={{ fontSize: 18 }} /> : <PushPinOutlinedIcon sx={{ fontSize: 18 }} />}
                 </IconButton>
               </Tooltip>
-              <IconButton onClick={onClose} size="small">
-                <CloseIcon />
+              <IconButton onClick={onClose} size="small" sx={{ p: 0.5 }}>
+                <CloseIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Box>
           </Box>

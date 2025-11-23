@@ -139,8 +139,8 @@ export default function ParamAccordion({ capabilities, onParamClick, initialGrou
 
   return (
     <Box sx={{ mt: 2 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Parameters • {deviceName}
+      <Typography variant="subtitle1" fontWeight="medium" color="text.primary" sx={{ mb: 1 }}>
+        {deviceName} Parameters
       </Typography>
 
       {/* Group selector buttons */}

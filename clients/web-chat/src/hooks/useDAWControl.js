@@ -1033,8 +1033,42 @@ export function useDAWControl() {
 
         const ref = result.capabilities_ref;
 
+        // Helper: Check if two capability refs target the same entity
+        const refsMatch = (ref1, ref2) => {
+          if (!ref1 || !ref2 || ref1.domain !== ref2.domain) return false;
+
+          // Compare indices based on domain
+          if (ref1.domain === 'track' || ref1.domain === 'track_device') {
+            if (ref1.track_index !== ref2.track_index) return false;
+          }
+          if (ref1.domain === 'return' || ref1.domain === 'return_device') {
+            if (ref1.return_index !== ref2.return_index) return false;
+          }
+          if (ref1.domain === 'track_device' || ref1.domain === 'return_device') {
+            if (ref1.device_index !== ref2.device_index) return false;
+          }
+
+          return true;
+        };
+
         // Add to history IMMEDIATELY (lazy loading - fetch capabilities on-demand when navigating)
+        // Skip if the most recent entry targets the same entity (deduplication)
         setCapabilitiesHistory(prev => {
+          // Check if most recent entry is for the same target
+          if (prev.length > 0 && refsMatch(prev[0].capabilities_ref, ref)) {
+            // Update existing entry: newer timestamp, summary, and clear cached capabilities
+            const updated = [...prev];
+            updated[0] = {
+              ...updated[0],
+              request_id: requestId,
+              summary: result.summary,
+              capabilities: null, // Clear cache to force fresh fetch
+              timestamp: Date.now()
+            };
+            return updated;
+          }
+
+          // Different target - add new entry
           const newEntry = {
             request_id: requestId,
             summary: result.summary,
@@ -1320,6 +1354,56 @@ export function useDAWControl() {
     navigateHistory('forward');
   }, [navigateHistory]);
 
+  const handleHistoryHome = useCallback(async () => {
+    if (historyIndex === 0) return; // Already at latest
+
+    const entry = capabilitiesHistory[0];
+    if (!entry) return;
+
+    setHistoryIndex(0);
+
+    // If capabilities already loaded, use them
+    if (entry.capabilities) {
+      setCurrentCapabilities(entry.capabilities);
+      return;
+    }
+
+    // Otherwise, fetch capabilities on-demand
+    if (entry.capabilities_ref) {
+      try {
+        const ref = entry.capabilities_ref;
+        let caps = null;
+
+        if (ref.domain === 'return_device') {
+          caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
+        } else if (ref.domain === 'track_device') {
+          caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+        } else if (ref.domain === 'track') {
+          caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
+        } else if (ref.domain === 'return') {
+          caps = await apiService.getReturnMixerCapabilities(ref.return_index);
+        } else if (ref.domain === 'master') {
+          caps = await apiService.getMasterMixerCapabilities();
+        }
+
+        if (caps && caps.ok) {
+          setCurrentCapabilities(caps.data);
+
+          // Update history entry with fetched capabilities
+          setCapabilitiesHistory(prev => {
+            return prev.map(e =>
+              e.request_id === entry.request_id
+                ? { ...e, capabilities: caps.data }
+                : e
+            );
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch capabilities for latest entry:', err);
+      }
+    }
+  }, [capabilitiesHistory, historyIndex, apiService]);
+
   return {
     messages,
     isProcessing,
@@ -1348,6 +1432,7 @@ export function useDAWControl() {
     capabilitiesHistoryLength: capabilitiesHistory.length,
     onHistoryBack: handleHistoryBack,
     onHistoryForward: handleHistoryForward,
+    onHistoryHome: handleHistoryHome,
     pendingCapabilitiesRef
   };
 }

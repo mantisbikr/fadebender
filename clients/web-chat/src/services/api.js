@@ -341,6 +341,11 @@ class ApiService {
     if (!response.ok) throw new Error(`Return device capabilities failed: ${response.statusText}`);
     return response.json();
   }
+  async getTrackDeviceCapabilities(index, device) {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/device/capabilities?index=${index}&device=${device}`);
+    if (!response.ok) throw new Error(`Track device capabilities failed: ${response.statusText}`);
+    return response.json();
+  }
   async getTrackMixerCapabilities(index) {
     const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/track/mixer/capabilities?index=${index}`);
     if (!response.ok) throw new Error(`Track mixer capabilities failed: ${response.statusText}`);
