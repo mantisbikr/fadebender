@@ -6,6 +6,7 @@
   },
   "features": {
     "auto_open_capabilities_on_navigation": true,
+    "auto_open_capabilities_for_all_commands": false,
     "display_only_io": true,
     "simple_device_resolver": true,
     "sticky_capabilities_card": true,

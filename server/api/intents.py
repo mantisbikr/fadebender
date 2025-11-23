@@ -23,6 +23,12 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
     The API layer keeps minimal logic and delegates execution to
     server.services.intents.* modules to avoid drift and reduce size.
     """
+    import time
+    from server.api.cap_utils import add_capabilities_ref
+
+    # Generate unique request ID
+    request_id = str(int(time.time() * 1000))
+
     d = intent.domain
     field = (intent.field or "").strip().lower()
 
@@ -519,29 +525,43 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
     # Mixer (track/return/master)
     if d == "track" and field in ("volume", "pan", "mute", "solo"):
         from server.services.intents.mixer_service import set_track_mixer
-        return set_track_mixer(intent)
+        result = set_track_mixer(intent)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
     if d == "track" and field == "send":
         from server.services.intents.mixer_service import set_track_send
-        return set_track_send(intent)
+        result = set_track_send(intent)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
 
     if d == "return" and field in ("volume", "pan", "mute", "solo"):
         from server.services.intents.mixer_service import set_return_mixer
-        return set_return_mixer(intent)
+        result = set_return_mixer(intent)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
     if d == "return" and field == "send":
         from server.services.intents.mixer_service import set_return_send
-        return set_return_send(intent)
+        result = set_return_send(intent)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
 
     if d == "master" and field in ("volume", "pan", "cue"):
         from server.services.intents.mixer_service import set_master_mixer
-        return set_master_mixer(intent)
+        result = set_master_mixer(intent)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
 
     # Device parameters (track/return)
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
         from server.services.intents.param_service import set_return_device_param
-        return set_return_device_param(intent, debug=debug)
+        result = set_return_device_param(intent, debug=debug)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
     if d == "device" and intent.track_index is not None and intent.device_index is not None:
         from server.services.intents.param_service import set_track_device_param
-        return set_track_device_param(intent, debug=debug)
+        result = set_track_device_param(intent, debug=debug)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
 
     # If we reach here, the intent is unsupported
     raise HTTPException(400, "unsupported_intent")
