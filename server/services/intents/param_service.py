@@ -854,13 +854,7 @@ def set_return_device_param(intent: CanonicalIntent, debug: bool = False) -> Dic
     except Exception:
         pass
 
-    if not intent.dry_run:
-        try:
-            from server.api.cap_utils import ensure_capabilities  # type: ignore
-            resp = ensure_capabilities(resp, domain="return_device", return_index=ri, device_index=di)
-        except Exception:
-            pass
-
+    # Capabilities ref now added centrally in chat_service.py
     return resp
 
 

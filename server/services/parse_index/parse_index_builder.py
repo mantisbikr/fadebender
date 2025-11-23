@@ -313,6 +313,7 @@ class ParseIndexBuilder:
                 corrections = data.get("corrections", {})
                 return corrections
         except Exception as e:
+            pass
 
         # Return minimal fallback
         return {

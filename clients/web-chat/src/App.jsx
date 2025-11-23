@@ -13,6 +13,7 @@ import {
   Tooltip,
   Fade,
   Drawer,
+  Badge,
   ClickAwayListener
 } from '@mui/material';
 import { useMediaQuery } from '@mui/material';
@@ -64,7 +65,13 @@ function App() {
     capabilitiesDrawerPinned,
     setCapabilitiesDrawerPinned,
     drawerInit,
-    typoCorrections
+    typoCorrections,
+    capabilitiesHistoryIndex,
+    capabilitiesHistoryLength,
+    onHistoryBack,
+    onHistoryForward,
+    onHistoryHome,
+    pendingCapabilitiesRef
   } = useDAWControl();
 
   const theme = useMemo(
@@ -309,68 +316,79 @@ function App() {
                 scrollPaddingTop: '140px'
               }}
             >
-              {/* Sticky Clear Chat Button - stays at top right */}
-              {messages.length > 0 && (
-                <Fade in={true}>
-                  <Tooltip title="Clear Chat" arrow>
-                    <IconButton
-                      onClick={clearMessages}
-                      size="small"
-                      sx={{
-                        position: 'sticky',
-                        top: 16,
-                        float: 'right',
-                        marginBottom: '-40px',
-                        bgcolor: 'background.paper',
-                        boxShadow: 2,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        zIndex: 10,
-                        '&:hover': {
-                          bgcolor: '#dc2626',
-                          color: 'white',
-                          borderColor: '#dc2626'
-                        }
-                      }}
-                    >
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Fade>
-              )}
+              {/* Sticky button panel - right side */}
+              <Box sx={{
+                position: 'sticky',
+                top: 16,
+                float: 'right',
+                zIndex: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                marginBottom: '-80px'
+              }}>
+                {/* Clear Chat Button */}
+                {messages.length > 0 && (
+                  <Fade in={true}>
+                    <Tooltip title="Clear Chat" arrow placement="left">
+                      <IconButton
+                        onClick={clearMessages}
+                        size="small"
+                        sx={{
+                          bgcolor: 'background.paper',
+                          boxShadow: 2,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          '&:hover': {
+                            bgcolor: '#dc2626',
+                            color: 'white',
+                            borderColor: '#dc2626'
+                          }
+                        }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Fade>
+                )}
 
-              {/* Reopen Capabilities Drawer Button - shows when drawer is closed */}
-              {!capabilitiesDrawerOpen && currentCapabilities && featureFlags?.sticky_capabilities_card && (
-                <Fade in={true}>
-                  <Tooltip title="Show Controls" arrow>
-                    <IconButton
-                      onClick={() => setCapabilitiesDrawerOpen(true)}
-                      size="small"
-                      sx={{
-                        position: 'sticky',
-                        top: 64,
-                        float: 'right',
-                        marginBottom: '-40px',
-                        bgcolor: 'primary.main',
-                        color: 'white',
-                        boxShadow: 2,
-                        border: '1px solid',
-                        borderColor: 'primary.dark',
-                        zIndex: 10,
-                        '&:hover': {
-                          bgcolor: 'primary.dark'
-                        }
-                      }}
-                    >
-                      <TuneIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Fade>
-              )}
+                {/* Show Controls Button with badge indicator */}
+                {!capabilitiesDrawerOpen && (currentCapabilities || pendingCapabilitiesRef) && featureFlags?.sticky_capabilities_card && (
+                  <Fade in={true}>
+                    <Tooltip title={pendingCapabilitiesRef ? "Show Controls (new)" : "Show Controls"} arrow placement="left">
+                      <Badge
+                        badgeContent={pendingCapabilitiesRef ? "!" : 0}
+                        color="error"
+                        overlap="circular"
+                        sx={{
+                          '& .MuiBadge-badge': { fontSize: '0.7rem', height: '16px', minWidth: '16px' }
+                        }}
+                      >
+                        <IconButton
+                          onClick={() => setCapabilitiesDrawerOpen(true)}
+                          size="small"
+                          sx={{
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            boxShadow: 2,
+                            border: '1px solid',
+                            borderColor: 'primary.dark',
+                            '&:hover': {
+                              bgcolor: 'primary.dark'
+                            }
+                          }}
+                        >
+                          <TuneIcon fontSize="small" />
+                        </IconButton>
+                      </Badge>
+                    </Tooltip>
+                  </Fade>
+                )}
+              </Box>
               {messages.length === 0 ? (
                 <WelcomeCard />
               ) : (
-                <Container maxWidth="lg" sx={{ position: 'relative' }}>
+                <Container maxWidth="md" sx={{ position: 'relative', pr: 8 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {messages.map((message) => (
                       <ChatMessage
@@ -411,6 +429,11 @@ function App() {
           initialGroup={drawerInit?.group}
           initialParam={drawerInit?.param}
           ignoreCloseSelectors={[ '#chat-input-root' ]}
+          historyIndex={capabilitiesHistoryIndex}
+          historyLength={capabilitiesHistoryLength}
+          onHistoryBack={onHistoryBack}
+          onHistoryForward={onHistoryForward}
+          onHistoryHome={onHistoryHome}
         />
       )}
     </ThemeProvider>

@@ -3,6 +3,114 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
+def add_capabilities_ref(result: Dict[str, Any], canonical: Dict[str, Any]) -> Dict[str, Any]:
+    """Centralized function to add capabilities_ref based on canonical intent.
+
+    Inspects the canonical intent structure and adds appropriate capabilities_ref
+    for the WebUI to fetch capabilities on-demand.
+
+    Args:
+        result: The execution result dict
+        canonical: The canonical intent dict
+
+    Returns:
+        Result dict with capabilities_ref added if applicable
+    """
+    if not isinstance(result, dict) or not isinstance(canonical, dict):
+        return result
+
+    # Skip if already has capabilities_ref (shouldn't happen, but defensive)
+    if result.get("capabilities_ref"):
+        return result
+
+    try:
+        domain = canonical.get("domain")
+
+        # Device parameters (track or return)
+        if domain == "device":
+            track_index = canonical.get("track_index")
+            return_index = canonical.get("return_index")
+            device_index = canonical.get("device_index")
+
+            if return_index is not None and device_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="return_device",
+                    return_index=return_index,
+                    device_index=device_index
+                )
+            elif track_index is not None and device_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="track_device",
+                    track_index=track_index,
+                    device_index=device_index
+                )
+
+        # Track mixer parameters (volume, pan, mute, solo, sends)
+        elif domain == "track":
+            track_index = canonical.get("track_index")
+            if track_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="track",
+                    track_index=track_index
+                )
+
+        # Return mixer parameters (volume, pan, sends)
+        elif domain == "return":
+            return_index = canonical.get("return_index")
+            # Canonical may use return_ref (letter) instead of return_index (number)
+            if return_index is None:
+                return_ref = canonical.get("return_ref")
+                if return_ref and isinstance(return_ref, str):
+                    # Convert letter to index: A=0, B=1, etc.
+                    return_index = ord(return_ref.upper()) - ord('A')
+
+            if return_index is not None:
+                result["capabilities_ref"] = build_capabilities_ref(
+                    domain="return",
+                    return_index=return_index
+                )
+
+        # Master mixer parameters (cue)
+        elif domain == "master":
+            result["capabilities_ref"] = build_capabilities_ref(domain="master")
+
+    except Exception:
+        # If anything fails, don't break the response - just skip capabilities_ref
+        pass
+
+    return result
+
+
+def build_capabilities_ref(*, domain: str,
+                           track_index: Optional[int] = None,
+                           return_index: Optional[int] = None,
+                           device_index: Optional[int] = None) -> Dict[str, Any]:
+    """Build a lightweight capabilities reference for deferred loading.
+
+    Instead of fetching full capabilities immediately (blocking on Firestore),
+    return metadata that allows the client to fetch capabilities on demand.
+
+    Args:
+        domain: One of "track", "return", "master", "track_device", "return_device".
+        track_index: Track index when domain involves tracks.
+        return_index: Return index when domain involves returns.
+        device_index: Device index when domain involves devices.
+
+    Returns:
+        Dict with available=True and necessary indices for later fetch.
+    """
+    ref = {"available": True, "domain": domain}
+
+    if track_index is not None:
+        ref["track_index"] = int(track_index)
+    if return_index is not None:
+        ref["return_index"] = int(return_index)
+    if device_index is not None:
+        ref["device_index"] = int(device_index)
+
+    return ref
+
+
 def ensure_capabilities(resp: Dict[str, Any], *, domain: str,
                         track_index: Optional[int] = None,
                         return_index: Optional[int] = None,

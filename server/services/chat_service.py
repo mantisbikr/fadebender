@@ -6,6 +6,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -249,6 +250,9 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
     This is the single source of truth for all command processing.
     Both WebUI and command-line tests use this same path.
     """
+    # Generate unique request ID for tracking (used for capabilities history)
+    request_id = str(int(time.time() * 1000))  # millisecond timestamp
+
     # Import llm_daw from nlp-service/ dynamically (folder has a hyphen)
     nlp_dir = pathlib.Path(__file__).resolve().parent.parent.parent / "nlp-service"
     if nlp_dir.exists() and str(nlp_dir) not in sys.path:
@@ -335,9 +339,72 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
                 "error": str(e),
             }
 
-    # Navigation intents are UI-only; surface intent without executing
-    if intent.get("intent") in ("open_capabilities", "list_capabilities"):
-        return {"ok": True, "intent": intent, "summary": "navigation_intent"}
+    # Navigation intents: auto-open capabilities drawer
+    if intent.get("intent") == "open_capabilities":
+        target = intent.get("target", {})
+        capabilities_ref = None
+        summary = "Open controls"
+
+        try:
+            from server.api.cap_utils import build_capabilities_ref
+
+            # Parse target structure and build capabilities_ref
+            target_type = target.get("type")
+
+            if target_type == "mixer":
+                entity = target.get("entity")
+                if entity == "track":
+                    track_index = target.get("track_index", 0)  # 1-based from intent
+                    capabilities_ref = build_capabilities_ref(domain="track", track_index=track_index)
+                    summary = f"Opening Track {track_index} controls"
+                elif entity == "return":
+                    return_ref = target.get("return_ref", "A")
+                    return_index = ord(return_ref.upper()) - ord('A') if return_ref else 0
+                    capabilities_ref = build_capabilities_ref(domain="return", return_index=return_index)
+                    summary = f"Opening Return {return_ref} controls"
+                elif entity == "master":
+                    capabilities_ref = build_capabilities_ref(domain="master")
+                    summary = "Opening Master controls"
+
+            elif target_type == "device":
+                scope = target.get("scope")
+                if scope == "return":
+                    return_ref = target.get("return_ref", "A")
+                    return_index = ord(return_ref.upper()) - ord('A') if return_ref else 0
+                    device_name_hint = target.get("device_name_hint", "")
+                    # For now, assume device_index=0 (first device)
+                    # TODO: Could use device resolver to find exact device index from hint
+                    capabilities_ref = build_capabilities_ref(
+                        domain="return_device",
+                        return_index=return_index,
+                        device_index=0
+                    )
+                    summary = f"Opening Return {return_ref} {device_name_hint} controls"
+
+        except Exception:
+            pass
+
+        # Check config to determine if navigation commands should auto-open
+        auto_open_enabled = False
+        try:
+            from server.config.app_config import get_app_config
+            cfg = get_app_config()
+            auto_open_enabled = cfg.get("features", {}).get("auto_open_capabilities_on_navigation", True)
+        except Exception:
+            auto_open_enabled = True  # Default to True if config unavailable
+
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "intent": intent,
+            "capabilities_ref": capabilities_ref,
+            "auto_open": auto_open_enabled,  # Configurable via app_config.json
+            "summary": summary
+        }
+
+    # List capabilities: still UI-only, no auto-open
+    if intent.get("intent") == "list_capabilities":
+        return {"ok": True, "request_id": request_id, "intent": intent, "summary": "navigation_intent"}
 
     # Step 2: Transform to canonical format for control intents
     from server.services.intent_mapper import map_llm_to_canonical
@@ -430,9 +497,14 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
             canonical_intent = CanonicalIntent(**canonical)
             result = exec_canonical(canonical_intent, debug=False)
 
-            # Build response preserving all fields from result (especially 'data' with capabilities)
+            # Centralized: Add capabilities_ref based on canonical intent
+            from server.api.cap_utils import add_capabilities_ref
+            result = add_capabilities_ref(result, canonical)
+
+            # Build response preserving all fields from result (especially capabilities_ref)
             response = {
                 "ok": result.get("ok", True),
+                "request_id": request_id,
                 "intent": intent,
                 "canonical": canonical,
             }
@@ -443,11 +515,11 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
             else:
                 response["summary"] = generate_summary_from_canonical(canonical)
 
-            # Explicitly preserve data field with capabilities if present
+            # Explicitly preserve data field (deprecated - for backward compat)
             if "data" in result:
                 response["data"] = result["data"]
 
-            # Add any other fields from result
+            # Add any other fields from result (including capabilities_ref)
             for key, value in result.items():
                 if key not in response:
                     response[key] = value

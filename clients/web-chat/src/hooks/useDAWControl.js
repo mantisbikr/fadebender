@@ -23,6 +23,16 @@ export function useDAWControl() {
   const [drawerInit, setDrawerInit] = useState({ group: null, param: null });
   const [typoCorrections, setTypoCorrections] = useState({});
 
+  // NEW: Track latest request_id to ignore stale responses during rapid-fire
+  const [latestRequestId, setLatestRequestId] = useState(null);
+
+  // NEW: Capabilities history (circular buffer of last 10)
+  const [capabilitiesHistory, setCapabilitiesHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // NEW: Pending capabilities reference (to fetch when drawer opens)
+  const [pendingCapabilitiesRef, setPendingCapabilitiesRef] = useState(null);
+
   // Load feature flags with retry logic
   useEffect(() => {
     let retryCount = 0;
@@ -79,6 +89,53 @@ export function useDAWControl() {
       }
     };
   }, []);
+
+  // NEW: Auto-fetch capabilities when drawer opens with pending reference
+  useEffect(() => {
+    if (capabilitiesDrawerOpen && pendingCapabilitiesRef) {
+      const { ref, requestId } = pendingCapabilitiesRef;
+
+      const fetchPending = async () => {
+        try {
+          let caps = null;
+
+          if (ref.domain === 'return_device') {
+            caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
+          } else if (ref.domain === 'track_device') {
+            // Backend returns 1-based track_index, API expects 0-based
+            caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+          } else if (ref.domain === 'track') {
+            // Backend returns 1-based track_index, API expects 0-based
+            caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
+          } else if (ref.domain === 'return') {
+            caps = await apiService.getReturnMixerCapabilities(ref.return_index);
+          } else if (ref.domain === 'master') {
+            caps = await apiService.getMasterMixerCapabilities();
+          }
+
+          if (caps && caps.ok) {
+            setCurrentCapabilities(caps.data);
+
+            // Update existing history entry with fetched capabilities
+            setCapabilitiesHistory(prev => {
+              return prev.map(entry =>
+                entry.request_id === requestId
+                  ? { ...entry, capabilities: caps.data }
+                  : entry
+              );
+            });
+          }
+
+          // Clear pending ref after fetching
+          setPendingCapabilitiesRef(null);
+        } catch (err) {
+          console.error('Failed to fetch pending capabilities:', err);
+        }
+      };
+
+      fetchPending();
+    }
+  }, [capabilitiesDrawerOpen, pendingCapabilitiesRef]);
 
   // Global event listener to open capabilities from anywhere (e.g., Sidebar list clicks)
   useEffect(() => {
@@ -583,24 +640,13 @@ export function useDAWControl() {
       } catch {}
 
       let result;
-      let deviceCapabilities = null; // Store device capabilities to include in success message
-      let mixerCapabilities = null;  // Store mixer capabilities to include in success message
+      // REMOVED: deviceCapabilities and mixerCapabilities - we use deferred loading now
       if (featureFlags.use_intents_for_chat && (parsed && parsed.ok) && parsed.intent) {
         // Execute canonical intent directly; on error surface message and stop
         try {
           result = await apiService.executeCanonicalIntent(parsed.intent);
-          // If server attached capabilities, use them when client-side fetch hasn't populated yet
-          try {
-            const caps = result && result.data && result.data.capabilities;
-            if (caps) {
-              // Heuristic: device caps include device_index; mixer caps include entity_type
-              if (typeof caps.device_index === 'number') {
-                deviceCapabilities = deviceCapabilities || caps;
-              } else {
-                mixerCapabilities = mixerCapabilities || caps;
-              }
-            }
-          } catch {}
+          // REMOVED: Eager capabilities loading from result.data
+          // We use deferred loading via capabilities_ref now
           // Update conversational focus for follow-ups (e.g., device questions)
           try {
             const ci = parsed.intent;
@@ -616,31 +662,9 @@ export function useDAWControl() {
             }
             // Keep last known focus if anything set
             if (Object.keys(ctx).length > 0) setConversationContext(ctx);
-            // If we have a device context, fetch capabilities to include in success message
-            if ((ctx.return_index !== undefined || ctx.return_ref) && ctx.device_index !== undefined) {
-              try {
-                const ri = typeof ctx.return_index === 'number' ? ctx.return_index : (typeof ctx.return_ref === 'string' ? (ctx.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)) : 0);
-                const caps = await apiService.getReturnDeviceCapabilities(ri, ctx.device_index);
-                if (caps && caps.ok) {
-                  deviceCapabilities = deviceCapabilities || caps.data; // Only use if not already set by backend
-                }
-              } catch {}
-            }
-            // If it's a mixer op, fetch mixer capabilities for the relevant entity
-            try {
-              if (ci.domain === 'track' && typeof ci.track_index === 'number' && ci.field) {
-                // Canonical track_index is 1-based; capabilities expect 0-based
-                const caps = await apiService.getTrackMixerCapabilities(Number(ci.track_index) - 1);
-                if (caps && caps.ok) mixerCapabilities = mixerCapabilities || caps.data;
-              } else if (ci.domain === 'return' && (typeof ci.return_index === 'number' || typeof ci.return_ref === 'string') && ci.field) {
-                const ri = typeof ci.return_index === 'number' ? Number(ci.return_index) : (ci.return_ref ? (ci.return_ref.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)) : 0);
-                const caps = await apiService.getReturnMixerCapabilities(ri);
-                if (caps && caps.ok) mixerCapabilities = mixerCapabilities || caps.data;
-              } else if (ci.domain === 'master' && ci.field) {
-                const caps = await apiService.getMasterMixerCapabilities();
-                if (caps && caps.ok) mixerCapabilities = mixerCapabilities || caps.data;
-              }
-            } catch {}
+            // REMOVED: Eager Firestore fetch for device/mixer capabilities
+            // We now use deferred loading via capabilities_ref
+            // This eliminates 300ms+ blocking on every command execution
           } catch {}
         } catch (e) {
           const msg = String(e && e.message || 'Intent execute failed');
@@ -995,21 +1019,149 @@ export function useDAWControl() {
         successData.canonical_intent = canonicalIntent;
         successData.raw_intent = rawIntent;
       }
-      if (deviceCapabilities) {
-        successData.capabilities = deviceCapabilities;
-      }
-      if (mixerCapabilities) {
-        successData.capabilities = mixerCapabilities;
-      }
-      // Also include capabilities from result.data if present (from /chat endpoint)
-      if (!successData.capabilities && result.data && result.data.capabilities) {
-        successData.capabilities = result.data.capabilities;
+      // REMOVED: Don't add device/mixer capabilities to successData
+      // We use deferred loading via capabilities_ref now
+      // This prevents the LEGACY code path from auto-opening the drawer
+
+      // NEW: Handle capabilities_ref (deferred loading)
+      if (result.capabilities_ref) {
+        // Track request_id to ignore stale responses during rapid-fire
+        const requestId = result.request_id;
+        if (requestId) {
+          setLatestRequestId(requestId);
+        }
+
+        const ref = result.capabilities_ref;
+
+        // Helper: Check if two capability refs target the same entity
+        const refsMatch = (ref1, ref2) => {
+          if (!ref1 || !ref2 || ref1.domain !== ref2.domain) return false;
+
+          // Compare indices based on domain
+          if (ref1.domain === 'track' || ref1.domain === 'track_device') {
+            if (ref1.track_index !== ref2.track_index) return false;
+          }
+          if (ref1.domain === 'return' || ref1.domain === 'return_device') {
+            if (ref1.return_index !== ref2.return_index) return false;
+          }
+          if (ref1.domain === 'track_device' || ref1.domain === 'return_device') {
+            if (ref1.device_index !== ref2.device_index) return false;
+          }
+
+          return true;
+        };
+
+        // Add to history IMMEDIATELY (lazy loading - fetch capabilities on-demand when navigating)
+        // Skip if the most recent entry targets the same entity (deduplication)
+        setCapabilitiesHistory(prev => {
+          // Check if most recent entry is for the same target
+          if (prev.length > 0 && refsMatch(prev[0].capabilities_ref, ref)) {
+            // Update existing entry: newer timestamp, summary, and clear cached capabilities
+            const updated = [...prev];
+            updated[0] = {
+              ...updated[0],
+              request_id: requestId,
+              summary: result.summary,
+              capabilities: null, // Clear cache to force fresh fetch
+              timestamp: Date.now()
+            };
+            return updated;
+          }
+
+          // Different target - add new entry
+          const newEntry = {
+            request_id: requestId,
+            summary: result.summary,
+            capabilities: null, // Will be fetched on-demand when needed
+            capabilities_ref: ref,
+            timestamp: Date.now()
+          };
+          const updated = [newEntry, ...prev].slice(0, 10);
+          return updated;
+        });
+        setHistoryIndex(0); // Reset to most recent
+
+        // Fetch full capabilities on-demand using the reference
+        const fetchCapabilities = async () => {
+          try {
+            let caps = null;
+
+            if (ref.domain === 'return_device') {
+              caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
+            } else if (ref.domain === 'track_device') {
+              // Backend returns 1-based track_index, API expects 0-based
+              caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+            } else if (ref.domain === 'track') {
+              // Backend returns 1-based track_index, API expects 0-based
+              caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
+            } else if (ref.domain === 'return') {
+              caps = await apiService.getReturnMixerCapabilities(ref.return_index);
+            } else if (ref.domain === 'master') {
+              caps = await apiService.getMasterMixerCapabilities();
+            }
+
+            // Only update if this is still the latest request (prevent race conditions)
+            if (!requestId || requestId === latestRequestId) {
+              if (caps && caps.ok) {
+                setCurrentCapabilities(caps.data);
+
+                // Update history entry with fetched capabilities
+                setCapabilitiesHistory(prev => {
+                  return prev.map(entry =>
+                    entry.request_id === requestId
+                      ? { ...entry, capabilities: caps.data }
+                      : entry
+                  );
+                });
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fetch capabilities:', err);
+          }
+        };
+
+        // Handle drawer opening based on command type and feature flags
+        // 1. Navigation commands (auto_open: true) - always auto-open
+        // 2. Regular commands - check auto_open_capabilities_for_all_commands flag
+        console.log('[useDAWControl] Drawer decision:', {
+          auto_open: result.auto_open,
+          sticky: featureFlags.sticky_capabilities_card,
+          auto_open_all: featureFlags.auto_open_capabilities_for_all_commands,
+          has_ref: !!result.capabilities_ref
+        });
+
+        if (result.auto_open) {
+          // Navigation command - auto-open and fetch immediately
+          console.log('[useDAWControl] Opening drawer: navigation command');
+          setCapabilitiesDrawerOpen(true);
+          fetchCapabilities();
+        } else if (featureFlags.sticky_capabilities_card && featureFlags.auto_open_capabilities_for_all_commands) {
+          // Regular parameter command + auto-open flag enabled - open drawer and fetch
+          console.log('[useDAWControl] Opening drawer: auto_open_all enabled');
+          setCapabilitiesDrawerOpen(true);
+          setPendingCapabilitiesRef({ ref: result.capabilities_ref, requestId, summary: result.summary });
+        } else if (featureFlags.sticky_capabilities_card) {
+          // Regular parameter command + auto-open disabled - just store ref
+          // User clicks "Show Controls" to open drawer, then fetch happens
+          console.log('[useDAWControl] NOT opening drawer: storing ref only');
+          setPendingCapabilitiesRef({ ref: result.capabilities_ref, requestId, summary: result.summary });
+        } else if (capabilitiesDrawerOpen) {
+          // Drawer already open - fetch to update current view
+          console.log('[useDAWControl] Drawer already open: fetching');
+          fetchCapabilities();
+        }
       }
 
-      // Update capabilities and auto-open drawer if feature is enabled
+      // LEGACY: Update capabilities if old format present
+      console.log('[useDAWControl] LEGACY check:', {
+        has_capabilities: !!successData.capabilities,
+        has_data_capabilities: !!(successData.data && successData.data.capabilities),
+        successData
+      });
       if (featureFlags.sticky_capabilities_card && successData.capabilities) {
+        console.log('[useDAWControl] LEGACY: Opening drawer because successData.capabilities exists!');
         setCurrentCapabilities(successData.capabilities);
-        setCapabilitiesDrawerOpen(true); // Auto-open drawer on successful command
+        setCapabilitiesDrawerOpen(true);
       }
 
       // Mark user message as successful
@@ -1043,8 +1195,11 @@ export function useDAWControl() {
     addMessage,
     conversationContext,
     featureFlags.use_intents_for_chat,
+    featureFlags.sticky_capabilities_card,
     modelPref,
-    confirmExecute
+    confirmExecute,
+    capabilitiesDrawerOpen,
+    latestRequestId
   ]);
 
   const processHelpQuery = useCallback(async (query) => {
@@ -1131,6 +1286,124 @@ export function useDAWControl() {
     })();
   }, []);
 
+  // Capabilities history navigation handlers
+  const navigateHistory = useCallback(async (direction) => {
+    const prevIndex = historyIndex;
+    const newIndex = direction === 'back' ? prevIndex + 1 : prevIndex - 1;
+
+    // Clamp to valid range
+    if (newIndex < 0 || newIndex >= capabilitiesHistory.length) {
+      return;
+    }
+
+    const entry = capabilitiesHistory[newIndex];
+    if (!entry) return;
+
+    // Update index immediately
+    setHistoryIndex(newIndex);
+
+    // If capabilities already loaded, use them
+    if (entry.capabilities) {
+      setCurrentCapabilities(entry.capabilities);
+      return;
+    }
+
+    // Otherwise, fetch capabilities on-demand
+    if (entry.capabilities_ref) {
+      try {
+        const ref = entry.capabilities_ref;
+        let caps = null;
+
+        if (ref.domain === 'return_device') {
+          caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
+        } else if (ref.domain === 'track_device') {
+          // Backend returns 1-based track_index, API expects 0-based
+          caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+        } else if (ref.domain === 'track') {
+          // Backend returns 1-based track_index, API expects 0-based
+          caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
+        } else if (ref.domain === 'return') {
+          caps = await apiService.getReturnMixerCapabilities(ref.return_index);
+        } else if (ref.domain === 'master') {
+          caps = await apiService.getMasterMixerCapabilities();
+        }
+
+        if (caps && caps.ok) {
+          setCurrentCapabilities(caps.data);
+
+          // Update history entry with fetched capabilities
+          setCapabilitiesHistory(prev => {
+            return prev.map(e =>
+              e.request_id === entry.request_id
+                ? { ...e, capabilities: caps.data }
+                : e
+            );
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch capabilities for history entry:', err);
+      }
+    }
+  }, [capabilitiesHistory, historyIndex, apiService]);
+
+  const handleHistoryBack = useCallback(() => {
+    navigateHistory('back');
+  }, [navigateHistory]);
+
+  const handleHistoryForward = useCallback(() => {
+    navigateHistory('forward');
+  }, [navigateHistory]);
+
+  const handleHistoryHome = useCallback(async () => {
+    if (historyIndex === 0) return; // Already at latest
+
+    const entry = capabilitiesHistory[0];
+    if (!entry) return;
+
+    setHistoryIndex(0);
+
+    // If capabilities already loaded, use them
+    if (entry.capabilities) {
+      setCurrentCapabilities(entry.capabilities);
+      return;
+    }
+
+    // Otherwise, fetch capabilities on-demand
+    if (entry.capabilities_ref) {
+      try {
+        const ref = entry.capabilities_ref;
+        let caps = null;
+
+        if (ref.domain === 'return_device') {
+          caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
+        } else if (ref.domain === 'track_device') {
+          caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+        } else if (ref.domain === 'track') {
+          caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
+        } else if (ref.domain === 'return') {
+          caps = await apiService.getReturnMixerCapabilities(ref.return_index);
+        } else if (ref.domain === 'master') {
+          caps = await apiService.getMasterMixerCapabilities();
+        }
+
+        if (caps && caps.ok) {
+          setCurrentCapabilities(caps.data);
+
+          // Update history entry with fetched capabilities
+          setCapabilitiesHistory(prev => {
+            return prev.map(e =>
+              e.request_id === entry.request_id
+                ? { ...e, capabilities: caps.data }
+                : e
+            );
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch capabilities for latest entry:', err);
+      }
+    }
+  }, [capabilitiesHistory, historyIndex, apiService]);
+
   return {
     messages,
     isProcessing,
@@ -1154,6 +1427,12 @@ export function useDAWControl() {
     capabilitiesDrawerPinned,
     setCapabilitiesDrawerPinned,
     typoCorrections,
-    drawerInit
+    drawerInit,
+    capabilitiesHistoryIndex: historyIndex,
+    capabilitiesHistoryLength: capabilitiesHistory.length,
+    onHistoryBack: handleHistoryBack,
+    onHistoryForward: handleHistoryForward,
+    onHistoryHome: handleHistoryHome,
+    pendingCapabilitiesRef
   };
 }

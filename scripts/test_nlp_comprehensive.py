@@ -304,14 +304,17 @@ def phase1_device_typo_correction() -> List[TestResult]:
 # =============================================================================
 
 def phase2_execution_and_capabilities() -> List[TestResult]:
-    """Test that correctly parsed intents execute in Live and return correct capabilities.
+    """Test that correctly parsed intents execute in Live and return correct capabilities_ref.
+
+    NOTE: Tests now validate capabilities_ref (lightweight reference) instead of full capabilities.
+    Full capabilities are fetched on-demand by the UI using the reference.
 
     Device Setup:
     - Return A: device 0 = reverb, device 1 = 4th bandpass (delay)
     - Return B: device 0 = Align Delay, device 1 = Screamer (amp)
     """
-    print_header("PHASE 2.1: Execution & Capabilities Sync")
-    print(color_text("Testing execution in Live and capabilities validation (REQUIRES LIVE RUNNING)\n", 'YELLOW'))
+    print_header("PHASE 2.1: Execution & Capabilities Reference Validation")
+    print(color_text("Testing execution in Live and capabilities_ref validation (REQUIRES LIVE RUNNING)\n", 'YELLOW'))
 
     tests = [
         {
@@ -374,43 +377,53 @@ def phase2_execution_and_capabilities() -> List[TestResult]:
             print(f"  {color_text('✗ FAIL', 'RED')} - Execution failed: {result.get('summary', result.get('error'))}\n")
             continue
 
-        caps = result.get("data", {}).get("capabilities")
-        if not caps:
-            results.append(TestResult(test["name"], False, "No capabilities returned"))
-            print(f"  {color_text('✗ FAIL', 'RED')} - No capabilities in response\n")
+        # NEW FORMAT: Check for capabilities_ref instead of data.capabilities
+        caps_ref = result.get("capabilities_ref")
+        if not caps_ref:
+            results.append(TestResult(test["name"], False, "No capabilities_ref returned"))
+            print(f"  {color_text('✗ FAIL', 'RED')} - No capabilities_ref in response\n")
             continue
 
         expected = test["expect_caps"]
         errors = []
 
-        # Validate capabilities type and fields
+        # Validate capabilities_ref fields (lightweight reference, not full data)
         if expected["type"] == "device":
-            if "device_index" not in caps or "device_name" not in caps:
-                errors.append("Missing device_index or device_name")
-            else:
-                device_name = str(caps.get("device_name", "")).lower()
-                expected_name = expected.get("device_name", "").lower()
-                if expected_name not in device_name:
-                    errors.append(f"device_name={caps.get('device_name')} (expected {expected.get('device_name')})")
+            # Device capabilities should have domain="return_device" or "track_device"
+            domain = caps_ref.get("domain", "")
+            if domain not in ("return_device", "track_device"):
+                errors.append(f"domain={domain} (expected return_device or track_device)")
 
-                if caps.get("device_index") != expected.get("device_index"):
-                    errors.append(f"device_index={caps.get('device_index')} (expected {expected.get('device_index')})")
+            # Validate device_index
+            if caps_ref.get("device_index") != expected.get("device_index"):
+                errors.append(f"device_index={caps_ref.get('device_index')} (expected {expected.get('device_index')})")
 
-                if caps.get("return_index") != expected.get("return_index"):
-                    errors.append(f"return_index={caps.get('return_index')} (expected {expected.get('return_index')})")
+            # Validate return_index if specified
+            if "return_index" in expected:
+                if caps_ref.get("return_index") != expected.get("return_index"):
+                    errors.append(f"return_index={caps_ref.get('return_index')} (expected {expected.get('return_index')})")
+
+            # Note: device_name is NOT in capabilities_ref (it's in full capabilities fetched later)
+            # We're just validating the reference structure here
 
         elif expected["type"] == "mixer":
-            if "entity_type" not in caps:
-                errors.append("Missing entity_type")
-            elif caps.get("entity_type") != expected.get("entity_type"):
-                errors.append(f"entity_type={caps.get('entity_type')} (expected {expected.get('entity_type')})")
+            # Mixer capabilities should have domain="track" or "return" or "master"
+            domain = caps_ref.get("domain", "")
+            expected_entity = expected.get("entity_type")
+
+            if expected_entity == "track" and domain != "track":
+                errors.append(f"domain={domain} (expected track)")
+            elif expected_entity == "return" and domain != "return":
+                errors.append(f"domain={domain} (expected return)")
+            elif expected_entity == "master" and domain != "master":
+                errors.append(f"domain={domain} (expected master)")
 
         if not errors:
-            results.append(TestResult(test["name"], True, "Executed successfully, capabilities match"))
-            print(f"  {color_text('✓ PASS', 'GREEN')} - Execution OK, capabilities match\n")
+            results.append(TestResult(test["name"], True, "Executed successfully, capabilities_ref is correct"))
+            print(f"  {color_text('✓ PASS', 'GREEN')} - Execution OK, capabilities_ref validated\n")
         else:
             msg = "; ".join(errors)
-            results.append(TestResult(test["name"], False, msg, caps))
+            results.append(TestResult(test["name"], False, msg, caps_ref))
             print(f"  {color_text('✗ FAIL', 'RED')} - {msg}\n")
 
     return results
