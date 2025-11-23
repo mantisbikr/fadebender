@@ -295,3 +295,18 @@ def jump_to_song_cue(body: JumpCueBody) -> Dict[str, Any]:
         return {"ok": False, "error": "no response"}
     data = resp.get("data") if isinstance(resp, dict) and "data" in resp else resp
     return {"ok": True, "data": data}
+
+
+class MoveCueBody(BaseModel):
+    cue_index: int
+    time_beats: float
+
+
+@router.post("/song/cue/move")
+def move_song_cue(body: MoveCueBody) -> Dict[str, Any]:
+    """Move an existing cue to a new time (in beats) by index."""
+    resp = request_op("set_cue_time", timeout=1.5, cue_index=int(body.cue_index), time_beats=float(body.time_beats))
+    if not resp:
+        return {"ok": False, "error": "no response"}
+    data = resp.get("data") if isinstance(resp, dict) and "data" in resp else resp
+    return {"ok": True, "data": data}

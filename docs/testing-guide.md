@@ -316,6 +316,74 @@ Expected results:
 
 ---
 
+### 7. Song-Level Helpers (Undo/Redo, Song Info, Cues)
+
+These endpoints are fully implemented and ready for manual testing via `curl`.  
+**NLP status:** intents for these are **not wired yet** – use HTTP directly for now.
+
+Live Set info (name, tempo, time signature):
+```bash
+curl -s http://127.0.0.1:8722/song/info | jq .
+```
+
+Undo/redo status and actions:
+```bash
+# Check if undo/redo are available
+curl -s http://127.0.0.1:8722/song/undo_status | jq .
+
+# Trigger global undo / redo (project history)
+curl -s -X POST http://127.0.0.1:8722/song/undo \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq .
+
+curl -s -X POST http://127.0.0.1:8722/song/redo \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq .
+```
+
+Arrangement cue points (locators):
+```bash
+# List cues
+curl -s http://127.0.0.1:8722/song/cues | jq .
+
+# Add a cue at current position
+curl -s -X POST http://127.0.0.1:8722/song/cue/add \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq .
+
+# Rename cue 2
+curl -s -X POST http://127.0.0.1:8722/song/cue/rename \
+  -H 'Content-Type: application/json' \
+  -d '{"cue_index":2,"name":"Bridge"}' | jq .
+
+# Delete cue 3
+curl -s -X POST http://127.0.0.1:8722/song/cue/delete \
+  -H 'Content-Type: application/json' \
+  -d '{"cue_index":3}' | jq .
+
+# Jump to cue by index
+curl -s -X POST http://127.0.0.1:8722/song/cue/jump \
+  -H 'Content-Type: application/json' \
+  -d '{"cue_index":1}' | jq .
+
+# Jump to cue by name (exact match)
+curl -s -X POST http://127.0.0.1:8722/song/cue/jump \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Chorus"}' | jq .
+```
+
+Expected results:
+- 200 OK with `{ ok: true, data: {...} }` for successful operations
+- Undo/redo operations affect Live's global history (regardless of whether changes came from Fadebender or manual edits)
+- Cue operations reflect in the Arrangement view's locators (names and positions) **for existing Live cues**
+- `/song/cue/add` and `/song/cue/delete` will report `live_cue_add_not_supported` / `live_cue_delete_not_supported`
+  because Live's Python API does not reliably support creating/deleting multiple locators via Remote Scripts.
+  Fadebender should rely on its own virtual cue system plus `/song/cue/jump` for flexible marker workflows.
+  Similarly, `/song/cue/move` will report `live_cue_move_not_supported` on this Live version; moving locators
+  should be modeled in Fadebender's virtual cues rather than via the Remote Script.
+
+---
+
 ## Learning Endpoints (Gated)
 
 Fast device learning endpoints are gated to avoid accidental runs during development. Enable them only when you're ready to test against a running Live set.

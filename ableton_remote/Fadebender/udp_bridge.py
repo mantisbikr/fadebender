@@ -450,6 +450,12 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 data_out = lom_ops.set_cue_name(live_ctx, cue_index, name)
                 resp = {"op": op, **(data_out or {"ok": False})}
+            elif op == "set_cue_time":
+                cue_index = int(msg.get("cue_index", 0))
+                time_beats = float(msg.get("time_beats", 0.0))
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.set_cue_time(live_ctx, cue_index, time_beats)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "delete_cue_point":
                 cue_index = int(msg.get("cue_index", 0))
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None

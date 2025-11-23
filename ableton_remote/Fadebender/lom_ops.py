@@ -2034,6 +2034,25 @@ def set_cue_name(live, cue_index: int, name: str) -> Dict[str, Any]:
     return {"ok": False, "error": "cue_out_of_range"}
 
 
+def set_cue_time(live, cue_index: int, time_beats: float) -> Dict[str, Any]:
+    """Move a cue point to a new time (in beats) by 1-based index.
+
+    Note: On the target Live build, CuePoint.time is read-only and cannot be
+    written from a Remote Script. We expose this helper only for stub/dev mode.
+    """
+    # Live does not support moving cues from Remote Scripts in this environment.
+    if live is not None:
+        return {"ok": False, "error": "live_cue_move_not_supported"}
+
+    # Stub (dev mode only)
+    cps = _STATE.setdefault("cue_points", [])
+    ci = int(cue_index)
+    if not (1 <= ci <= len(cps)):
+        return {"ok": False, "error": "cue_out_of_range"}
+    cps[ci - 1]["time"] = float(time_beats)
+    return {"ok": True, "index": ci, "time": float(time_beats)}
+
+
 def delete_cue_point(live, cue_index: int) -> Dict[str, Any]:
     """Delete a cue point by 1-based index."""
     try:
