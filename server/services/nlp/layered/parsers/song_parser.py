@@ -44,11 +44,25 @@ def parse_song_info(text: str) -> Optional[Dict[str, Any]]:
         "show song info"
         "what's the tempo"
     """
-    patterns = [
-        r"^(?:what'?s|show|get)\s+(?:the\s+)?song\s+(?:name|info)$",
-        r"^what'?s\s+(?:the\s+)?(?:tempo|song\s+name|time\s+signature)$"
+    # Specific song length queries (return just length)
+    length_patterns = [
+        r"^(?:what'?s|what\s+is|show|get)\s+(?:the\s+)?song\s+length$",
+        r"^(?:what'?s|what\s+is)\s+(?:the\s+)?(?:song\s+)?length$",
+        r"^how\s+long\s+is\s+(?:the\s+)?song$"
     ]
-    for pattern in patterns:
+    for pattern in length_patterns:
+        if re.match(pattern, text, re.IGNORECASE):
+            return {
+                "domain": "song",
+                "action": "get_song_length"
+            }
+
+    # General song info queries (name, tempo, time sig, etc.)
+    info_patterns = [
+        r"^(?:what'?s|what\s+is|show|get)\s+(?:the\s+)?song\s+(?:name|info)$",
+        r"^(?:what'?s|what\s+is)\s+(?:the\s+)?(?:tempo|song\s+name|time\s+signature)$"
+    ]
+    for pattern in info_patterns:
         if re.match(pattern, text, re.IGNORECASE):
             return {
                 "domain": "song",
@@ -119,6 +133,28 @@ def parse_list_locators(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def parse_playhead_position(text: str) -> Optional[Dict[str, Any]]:
+    """Parse playhead position query.
+
+    Examples:
+        "where is the playhead"
+        "what's the current position"
+        "where am I"
+        "what's the song position"
+    """
+    patterns = [
+        r"^(?:where\s+is|what'?s|what\s+is)\s+(?:the\s+)?(?:playhead|current\s+position|song\s+position)$",
+        r"^where\s+am\s+i(?:\s+in\s+(?:the\s+)?song)?$"
+    ]
+    for pattern in patterns:
+        if re.match(pattern, text, re.IGNORECASE):
+            return {
+                "domain": "song",
+                "action": "get_playhead_position"
+            }
+    return None
+
+
 def parse_song(text: str) -> Optional[Dict[str, Any]]:
     """Try all song-level parsers in order.
 
@@ -130,7 +166,8 @@ def parse_song(text: str) -> Optional[Dict[str, Any]]:
         parse_song_info,
         parse_jump_locator,
         parse_rename_locator,
-        parse_list_locators
+        parse_list_locators,
+        parse_playhead_position
     ]
 
     for parser in parsers:

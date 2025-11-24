@@ -586,7 +586,30 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
                 "resp": r,
             }
 
-        # Song info
+        # Song length (specific query)
+        if action == "get_song_length":
+            r = _req("get_song_info", timeout=1.0)
+            if not r:
+                return {"ok": False, "error": "no response"}
+            data = r.get("data") if isinstance(r, dict) else r
+            song_length = data.get("song_length") if isinstance(data, dict) else None
+
+            if song_length is None:
+                return {
+                    "ok": False,
+                    "summary": "Song length not available",
+                    "data": data,
+                    "resp": r,
+                }
+
+            return {
+                "ok": True,
+                "summary": f"Song length: {song_length} beats",
+                "data": data,
+                "resp": r,
+            }
+
+        # Song info (general query)
         if action == "get_info":
             r = _req("get_song_info", timeout=1.0)
             if not r:
@@ -597,7 +620,7 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             time_sig_num = data.get("time_signature_numerator") if isinstance(data, dict) else None
             time_sig_den = data.get("time_signature_denominator") if isinstance(data, dict) else None
 
-            # Build comprehensive summary
+            # Build comprehensive summary (no length - that's a separate query)
             parts = [f"Song: {song_name}"]
             if tempo is not None:
                 parts.append(f"Tempo: {tempo} BPM")
@@ -607,6 +630,30 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             return {
                 "ok": True,
                 "summary": " | ".join(parts),
+                "data": data,
+                "resp": r,
+            }
+
+        # Get playhead position
+        if action == "get_playhead_position":
+            from server.services.ableton_client import request_op as _req_transport
+            r = _req_transport("get_transport", timeout=1.0)
+            if not r:
+                return {"ok": False, "error": "no response"}
+            data = r.get("data") if isinstance(r, dict) else r
+            current_time = data.get("current_song_time") if isinstance(data, dict) else None
+
+            if current_time is None:
+                return {
+                    "ok": False,
+                    "summary": "Playhead position not available",
+                    "data": data,
+                    "resp": r,
+                }
+
+            return {
+                "ok": True,
+                "summary": f"Playhead at {current_time} beats",
                 "data": data,
                 "resp": r,
             }
