@@ -3,6 +3,79 @@ Fadebender User Guide
 Overview
 - Fadebender is a chat-first assistant for controlling your DAW (Ableton Live via Remote Script). You can ask for actions (set parameters) or information (get parameters/topology), and it presents context-aware controls in a capabilities drawer.
 
+Command Capabilities Summary
+This section provides a quick overview of all available commands to help you understand what Fadebender can do.
+
+**Command Categories (60+ command patterns):**
+- Mixer Control (12): volume, pan, mute, solo, sends (absolute + relative)
+- Device Control (8): device parameters on tracks/returns, device ordinals
+- Device Management (4): load devices, delete devices, with preset support
+- Navigation (4): open/view mixer or device controls
+- Transport (11): tempo, loop, time signature, playhead queries
+- Song Operations (9): undo/redo, song info, locators, song length
+- Track Management (7): create, delete, duplicate, arm/disarm, rename
+- Scene Operations (5): create, delete, duplicate, fire, stop
+- Clip Operations (5): create, delete, duplicate, fire, stop
+- Query Commands (15+): parameter values, state bundles, topology, routing, project overview
+- Naming (4): rename tracks, scenes, clips, devices
+- View Switching (2): session/arrangement
+
+**Supported Targets:**
+- Tracks: audio tracks, MIDI tracks (by index: 1, 2, 3...)
+- Returns: A, B, C, D... (by letter or index: 0, 1, 2...)
+- Master: master track
+- Devices: by name, index, or ordinal (first/second/1st/2nd)
+- Scenes: by index (1, 2, 3...)
+- Clips: by track + scene index (track 4, scene 2)
+- Locators: by index or name
+
+**Action Types:**
+- SET: absolute values (set track 1 volume to -6 dB)
+- RELATIVE: increase/decrease (increase track 1 volume by 3 dB)
+- TOGGLE: mute, solo, loop
+- CREATE: tracks, scenes, clips
+- DELETE: tracks, scenes, clips, devices
+- LOAD: devices with optional presets
+- DUPLICATE: tracks, scenes, clips
+- RENAME: tracks, scenes, clips, devices
+- QUERY: what is, show, tell, get, check (parameter values)
+- TOPOLOGY: list devices, who sends to, what affects
+
+**Parameter Types & Units:**
+- Volume: dB (-inf to +6 dB), percent (0-100%), normalized (0.0-1.0)
+- Pan: L/R notation (25L, 30R), percent, normalized, center
+- Sends: dB, percent, normalized
+- Device parameters: seconds (s), milliseconds (ms), hertz (Hz), kilohertz (kHz), dB, percent, normalized, display labels (High, Low, On, Off)
+- Tempo: BPM (40-999)
+- Time signature: numerator (1-99), denominator (1, 2, 4, 8, 16)
+- Loop: start/length in beats
+
+**Special Features:**
+- Device ordinals: control multiple devices of same type ("reverb 2", "second compressor")
+- Multi-word devices: "auto filter", "eq eight", "beat repeat"
+- Case-insensitive: commands, device names, parameter names
+- Fuzzy matching: typo correction, approximate parameter matching
+- Preset loading: explicit ("preset cathedral") or implicit ("gentle")
+- State bundles: get all mixer settings + routing in one query
+- Topology queries: understand signal flow and routing
+- Clarification prompts: system asks follow-up questions for ambiguous commands
+- Auto-correction: client-side and server-side typo fixing
+- Context-aware UI: capabilities drawer opens with relevant controls
+
+**Command Verb Variations:**
+- Navigation: "open", "view" (interchangeable)
+- Query: "what is", "show", "show me", "tell", "tell me", "get", "check" (interchangeable)
+- Scene playback: "fire", "launch" (interchangeable)
+- Device loading: "load", "add", "put", "insert" (interchangeable)
+- Device deletion: "delete", "remove" (interchangeable)
+- Tempo: "set tempo", "set bpm", "change tempo" (interchangeable)
+
+**Help System:**
+- Conceptual questions: "my vocals sound weak", "my mix sounds muddy"
+- Ableton questions: "what are sends and returns"
+- Usage questions: "how do I control reverb on return A"
+- Returns: grounded answers + suggested commands
+
 Quick Start
 - Start services (local dev):
   - `make venv` then `make install-nlp`
@@ -119,13 +192,29 @@ Project Overview Queries (counts and lists)
   - Click a “Track N (Name)” or “Return A (Name)” chip to open its capabilities drawer
 
 Transport
-- Reads:
+
+Transport Commands
+- Set tempo:
+  - `set tempo to 130`
+  - `set bpm to 120`
+  - `change tempo to 140`
+- Loop control:
+  - `loop on` / `loop off`
+  - `loop toggle`
+  - `set loop start to 4`
+  - `set loop length to 8`
+- Time signature:
+  - `set time signature numerator to 4`
+  - `set time signature denominator to 4`
+  - `set time sig numerator to 3`
+- Query commands:
   - `what is the tempo?`
   - `is the click on?`
-- Actions (if enabled in your build): play/stop/record/click toggles via the transport bar
- - UI polish:
-   - Playhead and loop fields display up to 2 decimal places
-   - Compact widths for tempo, time signature, playhead, loop start/length
+  - `what's the current tempo?`
+- UI controls (if enabled in your build):
+  - Play/stop/record/click toggles via the transport bar
+  - Playhead and loop fields display up to 2 decimal places
+  - Compact widths for tempo, time signature, playhead, loop start/length
 - After sending an intent, keyboard focus returns to the chat input automatically
 
 Song-Level Operations
