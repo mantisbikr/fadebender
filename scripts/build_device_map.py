@@ -64,25 +64,40 @@ def scan_device_folder(devices_path: Path, device_type: str) -> Dict[str, Any]:
 
         device_name = device_folder.name
 
-        # Look for default preset (.adg for audio, .adg for instruments, .adg for MIDI)
+        # Skip metadata folders
+        if device_name == "Ableton Folder Info":
+            continue
+
+        # Scan for all preset files (.adg and .adv)
+        preset_files = list(device_folder.rglob("*.adg")) + list(device_folder.rglob("*.adv"))
+
+        # Skip if no presets found at all
+        if not preset_files:
+            continue
+
+        # Build base path for device
+        device_path = [device_type, device_name]
+
+        # Look for default preset in root (preferred)
         default_preset = None
         for ext in [".adg", ".adv"]:
             candidate = device_folder / f"{device_name}{ext}"
             if candidate.exists():
                 default_preset = candidate
+                device_path = [device_type, device_name, f"{device_name}{ext}"]
                 break
 
-        if not default_preset:
-            # Skip if no default preset found
-            continue
+        # If no default preset in root, use first preset found
+        if not default_preset and preset_files:
+            default_preset = sorted(preset_files)[0]
+            # Build path to first preset
+            rel_parts = default_preset.relative_to(devices_path / folder_name).parts
+            device_path = [device_type] + list(rel_parts)
 
-        # Build path relative to browser roots
-        device_path = [device_type, device_name]
-
-        # Scan for preset subfolders
+        # Scan for all preset files and build preset map
         presets = {}
-        for item in device_folder.rglob("*.adv"):
-            # Build path from device folder to preset
+        for item in preset_files:
+            # Build path from device type to preset file
             rel_parts = item.relative_to(devices_path / folder_name).parts
             preset_name = item.stem
             preset_path = [device_type] + list(rel_parts)
