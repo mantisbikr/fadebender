@@ -563,6 +563,73 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         result["request_id"] = request_id
         return add_capabilities_ref(result, intent.model_dump())
 
+    # Device action operations (load, etc.)
+    if d == "device" and getattr(intent, "action", "") == "load":
+        from server.services.ableton_client import request_op as _req
+
+        device_name = getattr(intent, "device_name", None)
+        preset_name = getattr(intent, "preset_name", None)
+
+        if not device_name:
+            raise HTTPException(400, "missing_device_name")
+
+        # Determine target domain and index
+        target_domain = None
+        target_index = None
+
+        if intent.track_index is not None:
+            target_domain = "track"
+            target_index = intent.track_index
+        elif intent.return_index is not None:
+            target_domain = "return"
+            target_index = intent.return_index
+        elif intent.return_ref is not None:
+            # Convert return ref (A, B, C) to index
+            target_domain = "return"
+            try:
+                target_index = ord(intent.return_ref.upper()) - ord('A')
+            except:
+                raise HTTPException(400, f"invalid_return_ref: {intent.return_ref}")
+        else:
+            # Check if this is a master target (no index required)
+            # For now, assume track 1 if no target specified (fallback)
+            target_domain = "track"
+            target_index = 1
+
+        # Build request parameters
+        params: Dict[str, Any] = {
+            "device_name": device_name
+        }
+        if preset_name:
+            params["preset_name"] = preset_name
+
+        # Call appropriate operation based on target domain
+        if target_domain == "track":
+            params["track_index"] = target_index
+            op = "load_track_device"
+            target_desc = f"track {target_index}"
+        elif target_domain == "return":
+            params["return_index"] = target_index
+            op = "load_return_device"
+            return_letter = chr(ord('A') + target_index)
+            target_desc = f"return {return_letter}"
+        else:
+            raise HTTPException(400, f"unsupported_device_load_target: {target_domain}")
+
+        r = _req(op, timeout=5.0, **params)
+
+        # Build summary
+        if preset_name:
+            summary = f"Loaded {device_name} preset '{preset_name}' on {target_desc}"
+        else:
+            summary = f"Loaded {device_name} on {target_desc}"
+
+        return {
+            "ok": bool(r and r.get("ok", True)),
+            "summary": summary,
+            "resp": r,
+        }
+
     # Song-level operations (undo/redo, info, locators)
     if d == "song":
         from server.services.ableton_client import request_op as _req

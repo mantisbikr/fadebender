@@ -528,6 +528,12 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     if song_intent:
         return song_intent
 
+    # Try device action commands (load, etc.)
+    # These are complete commands that specify device operations
+    device_action_intent = _try_device_action_patterns(text_lower, text)
+    if device_action_intent:
+        return device_action_intent
+
     # Layer 1: Parse action/value/unit
     # Pass original text to preserve case in user-provided names
     action = parse_action(text_lower, original_text=text)
@@ -994,5 +1000,45 @@ def _try_song_patterns(text_lower: str, original_text: str) -> Optional[Dict[str
             "confidence": 0.98,
             "pipeline": "regex_song",
             "parsed_by": "song_parser"
+        }
+    }
+
+
+def _try_device_action_patterns(text_lower: str, original_text: str) -> Optional[Dict[str, Any]]:
+    """Try device action command patterns (load device, etc.).
+
+    These commands operate on devices (loading, removing, etc.) and bypass
+    the multi-layer parser for direct execution.
+
+    Examples:
+        "load reverb on track 2" → load device on track
+        "add compressor to return A" → load device on return
+        "load analog preset lush pad on track 3" → load device with preset
+    """
+    from server.services.nlp.layered.parsers.device_action_parser import parse_device_action
+
+    result = parse_device_action(original_text)
+    if not result:
+        return None
+
+    # Convert to raw_intent format expected by intent_mapper
+    domain = result.get("domain")
+    action = result.get("action")
+
+    return {
+        "intent": "device_action",
+        "domain": domain,
+        "action": action,
+        "device_name": result.get("device_name"),
+        "preset_name": result.get("preset_name"),
+        "target_domain": result.get("target_domain"),
+        "track_index": result.get("track_index"),
+        "return_index": result.get("return_index"),
+        "return_ref": result.get("return_ref"),
+        "meta": {
+            "utterance": original_text,
+            "confidence": 0.98,
+            "pipeline": "regex_device_action",
+            "parsed_by": "device_action_parser"
         }
     }

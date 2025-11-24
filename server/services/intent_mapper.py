@@ -117,6 +117,35 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             intent["new_name"] = str(llm_intent["new_name"])
         return intent, []
 
+    # Pass-through for device action intents (load, etc.)
+    if kind == "device_action":
+        action = (llm_intent or {}).get("action")
+        if not action:
+            errors.append("missing_device_action")
+            return None, errors
+        intent = {
+            "domain": "device",
+            "action": str(action),
+        }
+        # Add device loading fields
+        if llm_intent.get("device_name"):
+            intent["device_name"] = str(llm_intent["device_name"])
+        if llm_intent.get("preset_name"):
+            intent["preset_name"] = str(llm_intent["preset_name"])
+        # Add target fields
+        target_domain = llm_intent.get("target_domain")
+        if target_domain == "track":
+            intent["track_index"] = int(llm_intent["track_index"])
+        elif target_domain == "return":
+            if llm_intent.get("return_index") is not None:
+                intent["return_index"] = int(llm_intent["return_index"])
+            elif llm_intent.get("return_ref"):
+                intent["return_ref"] = str(llm_intent["return_ref"])
+        elif target_domain == "master":
+            # Master has no index
+            pass
+        return intent, []
+
     # Only map control intents here; questions/clarifications bubble up to caller
     if kind not in ("set_parameter", "relative_change"):
         errors.append(f"non_control_intent:{kind}")

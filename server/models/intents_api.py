@@ -41,6 +41,10 @@ class CanonicalIntent(BaseModel):
     locator_name: Optional[str] = None         # Locator name for jump/lookup
     new_name: Optional[str] = None             # New name for rename operations
 
+    # Device loading fields (for action="load")
+    device_name: Optional[str] = None          # Device name to load
+    preset_name: Optional[str] = None          # Optional preset name to load
+
     # Options
     dry_run: bool = False
     clamp: bool = True
