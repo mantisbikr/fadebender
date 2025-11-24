@@ -91,6 +91,23 @@ When doing exploratory testing, verify these scenarios:
 - [ ] Transport: "set tempo to 130", "loop on"
 - [ ] Navigation: "open track 1", "open return a"
 
+### Song-Level Operations
+- [ ] Undo/Redo: "undo", "redo", "undo last change"
+- [ ] Song info: "what's the song name", "show song info"
+- [ ] Song length: "what is the song length", "how long is the song"
+- [ ] Playhead: "where is the playhead", "where am I"
+- [ ] List locators: "list locators", "show locators"
+- [ ] Jump to locator: "jump to locator 2", "go to intro"
+- [ ] Rename locator: "rename locator 1 to intro", "call locator 2 verse"
+
+### Device Loading
+- [ ] Load device: "load reverb on track 2", "add compressor to track 1"
+- [ ] Load on return: "put limiter on return A", "insert delay on return B"
+- [ ] Load with preset (explicit): "load reverb preset cathedral on track 2"
+- [ ] Load with preset (implicit): "load analog lush pad on track 3"
+- [ ] Verify device appears in track/return device chain
+- [ ] Requires: device_map.json configured and Live browser accessible
+
 ### Typo Handling
 - [ ] Common typos work: "set track volum to -20" (volum → volume)
 - [ ] Multiple typos: "incrase track volumz by 5db"

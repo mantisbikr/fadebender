@@ -50,6 +50,20 @@ Device Control (returns and tracks)
 - Device ordinal (when multiple of same type):
   - `set return B reverb 2 decay to 1.5 s`
 
+Device Loading
+- Load devices onto tracks or returns:
+  - `load reverb on track 2`
+  - `add compressor to track 1`
+  - `put limiter on return A`
+  - `insert delay on track 3`
+- Load device with specific preset:
+  - `load reverb preset cathedral on track 2`
+  - `load analog preset lush pad on track 3`
+  - `add compressor gentle on return B` (implicit preset)
+- Supported verbs: load, add, put, insert
+- Supported targets: track N, return A/B/C (letter or number), master
+- Requires device_map.json to be configured (see installer guide)
+
 Get Parameter: Values and Topology
 - Value reads (multiple ways to ask):
   - `what is track 1 volume?`
@@ -90,8 +104,32 @@ Transport
    - Compact widths for tempo, time signature, playhead, loop start/length
 - After sending an intent, keyboard focus returns to the chat input automatically
 
-Undo/Redo
-- The header provides Undo/Redo for recent mixer/device adjustments
+Song-Level Operations
+
+Undo/Redo (Project-Level)
+- NLP commands:
+  - `undo` / `undo last change` → undoes last project change in Live
+  - `redo` / `redo that` → redoes last undone change
+- UI: Header icons provide quick undo/redo access
+- Note: This is Live's project-level undo (all operations), not Fadebender command history
+
+Song Information
+- Query song metadata:
+  - `what's the song name` / `show song info` → displays name, tempo, time signature
+  - `what is the song length` / `how long is the song` → returns song length in beats
+  - `what is the tempo` → shows current tempo
+  - `where is the playhead` / `where am I` → shows current playhead position in beats
+
+Locators (Arrangement Cue Points)
+- List all locators:
+  - `list locators` / `show locators` → displays all locators with positions
+- Jump to locator:
+  - `jump to locator 2` → jumps to locator by index
+  - `jump to intro` / `go to verse` → jumps to locator by name
+- Rename locator:
+  - `rename locator 1 to intro`
+  - `call locator 2 verse`
+- Note: Creating/deleting locators not supported due to Live API limitations
 
 Scenes, Clips, and Views
 - List scenes (names):
