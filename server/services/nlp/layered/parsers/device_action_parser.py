@@ -251,6 +251,124 @@ def _build_load_intent(
     return intent
 
 
+def parse_delete_device(text: str) -> Optional[Dict[str, Any]]:
+    """Parse device deletion commands.
+
+    Examples:
+        "delete reverb from track 2"
+        "remove compressor from track 1"
+        "delete device 0 from track 2" (by index)
+        "remove first reverb from track 2" (by ordinal)
+        "delete second compressor from return A" (by ordinal)
+        "remove the reverb from return B"
+    """
+    # Pattern: (delete|remove) [the] [first|second|1st|2nd] <device name|"device N"> (from|on) [the] (track|return) <index>
+
+    # Try with ordinal first (e.g., "delete first reverb from track 2")
+    m = re.match(
+        r"^(?:delete|remove)\s+(?:the\s+)?"
+        r"(first|second|third|1st|2nd|3rd|\d+(?:st|nd|rd|th))\s+"
+        r"(.+?)\s+"
+        r"(?:from|on)\s+(?:the\s+)?"
+        r"(track|return)\s+"
+        r"(\w+)$",
+        text,
+        re.IGNORECASE
+    )
+    if m:
+        ordinal_str = m.group(1).lower()
+        device_name = m.group(2).strip()
+        domain = m.group(3).lower()
+        index_str = m.group(4)
+
+        # Parse ordinal to number
+        ordinal_map = {
+            "first": 1, "1st": 1,
+            "second": 2, "2nd": 2,
+            "third": 3, "3rd": 3,
+        }
+        ordinal = ordinal_map.get(ordinal_str)
+        if ordinal is None:
+            # Try to parse numeric ordinal like "4th"
+            match = re.match(r"(\d+)(?:st|nd|rd|th)", ordinal_str)
+            if match:
+                ordinal = int(match.group(1))
+            else:
+                return None
+
+        return _build_delete_intent(domain, index_str, device_name=device_name, device_ordinal=ordinal)
+
+    # Try by device name (e.g., "delete reverb from track 2")
+    m = re.match(
+        r"^(?:delete|remove)\s+(?:the\s+)?"
+        r"(.+?)\s+"
+        r"(?:from|on)\s+(?:the\s+)?"
+        r"(track|return)\s+"
+        r"(\w+)$",
+        text,
+        re.IGNORECASE
+    )
+    if m:
+        device_name = m.group(1).strip()
+        domain = m.group(2).lower()
+        index_str = m.group(3)
+
+        # Check if it's "device N" format (by index)
+        device_match = re.match(r"^device\s+(\d+)$", device_name, re.IGNORECASE)
+        if device_match:
+            device_index = int(device_match.group(1))
+            return _build_delete_intent(domain, index_str, device_index=device_index)
+        else:
+            # By name
+            return _build_delete_intent(domain, index_str, device_name=device_name)
+
+    return None
+
+
+def _build_delete_intent(
+    domain: str,
+    index_str: Optional[str],
+    device_name: Optional[str] = None,
+    device_index: Optional[int] = None,
+    device_ordinal: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
+    """Build device delete intent from parsed components."""
+    intent = {
+        "domain": "device",
+        "action": "delete",
+    }
+
+    if device_name:
+        intent["device_name"] = device_name
+    if device_index is not None:
+        intent["device_index"] = device_index
+    if device_ordinal is not None:
+        intent["device_ordinal"] = device_ordinal
+
+    # Parse target
+    if domain == "track":
+        if not index_str:
+            return None  # Track requires index
+        try:
+            intent["target_domain"] = "track"
+            intent["track_index"] = int(index_str)
+        except ValueError:
+            return None
+    elif domain == "return":
+        if not index_str:
+            return None  # Return requires index
+        # Return can be number or letter
+        if index_str.isdigit():
+            intent["target_domain"] = "return"
+            intent["return_index"] = int(index_str)
+        else:
+            # Letter reference (A, B, C, etc.)
+            intent["target_domain"] = "return"
+            intent["return_ref"] = index_str.upper()
+
+    return intent
+
+
 def parse_device_action(text: str) -> Optional[Dict[str, Any]]:
     """Try all device action parsers in order.
 
@@ -258,6 +376,7 @@ def parse_device_action(text: str) -> Optional[Dict[str, Any]]:
     """
     parsers = [
         parse_load_device,
+        parse_delete_device,
     ]
 
     for parser in parsers:

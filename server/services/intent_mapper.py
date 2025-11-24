@@ -127,11 +127,15 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             "domain": "device",
             "action": str(action),
         }
-        # Add device loading fields
+        # Add device action fields (load/delete)
         if llm_intent.get("device_name"):
             intent["device_name"] = str(llm_intent["device_name"])
         if llm_intent.get("preset_name"):
             intent["preset_name"] = str(llm_intent["preset_name"])
+        if llm_intent.get("device_index") is not None:
+            intent["device_index"] = int(llm_intent["device_index"])
+        if llm_intent.get("device_ordinal") is not None:
+            intent["device_ordinal"] = int(llm_intent["device_ordinal"])
         # Add target fields
         target_domain = llm_intent.get("target_domain")
         if target_domain == "track":

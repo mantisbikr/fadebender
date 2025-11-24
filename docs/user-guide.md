@@ -60,9 +60,33 @@ Device Loading
   - `load reverb preset cathedral on track 2`
   - `load analog preset lush pad on track 3`
   - `add compressor gentle on return B` (implicit preset)
+- Multi-word devices work automatically:
+  - `load auto filter on track 3`
+  - `add eq eight to track 1`
+  - `load beat repeat on track 2`
+- Case-insensitive: `load reverb` / `load REVERB` / `load Reverb`
 - Supported verbs: load, add, put, insert
 - Supported targets: track N, return A/B/C (letter or number), master
 - Requires device_map.json to be configured (see installer guide)
+
+Device Deletion
+- Delete devices from tracks or returns:
+  - `delete reverb from track 2` (deletes first match)
+  - `remove compressor from track 1`
+  - `delete delay from return A`
+- Delete by device index:
+  - `delete device 0 from track 2`
+  - `remove device 1 from return A`
+- Delete by ordinal (when multiple devices with same name):
+  - `delete first reverb from track 2`
+  - `remove second compressor from track 1`
+  - `delete 2nd eq eight from track 3`
+- With optional "the" keyword:
+  - `remove the reverb from return B`
+  - `delete the limiter from track 1`
+- Case-insensitive device matching
+- Supported verbs: delete, remove
+- Note: Uses exact device index after resolution, so safe even with multiple devices
 
 Get Parameter: Values and Topology
 - Value reads (multiple ways to ask):

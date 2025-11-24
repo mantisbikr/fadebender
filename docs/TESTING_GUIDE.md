@@ -105,8 +105,20 @@ When doing exploratory testing, verify these scenarios:
 - [ ] Load on return: "put limiter on return A", "insert delay on return B"
 - [ ] Load with preset (explicit): "load reverb preset cathedral on track 2"
 - [ ] Load with preset (implicit): "load analog lush pad on track 3"
+- [ ] Multi-word devices: "load auto filter on track 3", "add eq eight to track 1"
+- [ ] Case-insensitive: "load reverb" / "load REVERB" / "load Reverb"
 - [ ] Verify device appears in track/return device chain
 - [ ] Requires: device_map.json configured and Live browser accessible
+
+### Device Deletion
+- [ ] Delete by name: "delete reverb from track 2", "remove compressor from track 1"
+- [ ] Delete by index: "delete device 0 from track 2"
+- [ ] Delete by ordinal: "delete first reverb from track 2", "remove second compressor from track 1"
+- [ ] Delete from return: "delete reverb from return A", "remove delay from return B"
+- [ ] Case-insensitive matching: "delete REVERB from track 2"
+- [ ] Verify device is removed from device chain
+- [ ] Error handling: "delete nonexistent from track 2" (should fail gracefully)
+- [ ] Multiple devices: Load 2 reverbs, then "delete first reverb from track 2" (should keep second)
 
 ### Typo Handling
 - [ ] Common typos work: "set track volum to -20" (volum → volume)

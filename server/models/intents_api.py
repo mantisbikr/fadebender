@@ -41,9 +41,10 @@ class CanonicalIntent(BaseModel):
     locator_name: Optional[str] = None         # Locator name for jump/lookup
     new_name: Optional[str] = None             # New name for rename operations
 
-    # Device loading fields (for action="load")
-    device_name: Optional[str] = None          # Device name to load
+    # Device action fields (for action="load" or "delete")
+    device_name: Optional[str] = None          # Device name to load/delete
     preset_name: Optional[str] = None          # Optional preset name to load
+    device_ordinal: Optional[int] = None       # Device ordinal (1-based) for deletion (e.g., "first reverb", "second compressor")
 
     # Options
     dry_run: bool = False

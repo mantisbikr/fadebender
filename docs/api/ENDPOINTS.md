@@ -114,6 +114,54 @@ Track & Master Devices (basic)
 - Master: list devices: `curl -sS http://127.0.0.1:8722/master/devices | jq .data`
 - Master: params for device 0: `curl -sS "http://127.0.0.1:8722/master/device/params?device=0" | jq .data.params`
 
+Device Loading
+- Load device onto track (via intent API):
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/intent/execute \
+      -H 'Content-Type: application/json' \
+      -d '{"domain":"device","action":"load","track_index":1,"device_name":"reverb"}' | jq .
+    ```
+- Load device with preset:
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/intent/execute \
+      -H 'Content-Type: application/json' \
+      -d '{"domain":"device","action":"load","track_index":1,"device_name":"reverb","preset_name":"cathedral"}' | jq .
+    ```
+- Load device onto return:
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/intent/execute \
+      -H 'Content-Type: application/json' \
+      -d '{"domain":"device","action":"load","return_index":0,"device_name":"compressor"}' | jq .
+    ```
+- Note: Requires device_map.json configured. Device names are case-insensitive. Multi-word devices supported (e.g., "auto filter", "eq eight").
+
+Device Deletion
+- Delete device from track by index:
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/track/device/delete \
+      -H 'Content-Type: application/json' \
+      -d '{"track_index":1,"device_index":0}' | jq .
+    ```
+- Delete device from return by index:
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/return/device/delete \
+      -H 'Content-Type: application/json' \
+      -d '{"return_index":0,"device_index":0}' | jq .
+    ```
+- Delete via intent API (with device name resolution):
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/intent/execute \
+      -H 'Content-Type: application/json' \
+      -d '{"domain":"device","action":"delete","track_index":1,"device_name":"reverb"}' | jq .
+    ```
+- Delete with ordinal (when multiple devices with same name):
+  - ```bash
+    curl -sS -X POST http://127.0.0.1:8722/intent/execute \
+      -H 'Content-Type: application/json' \
+      -d '{"domain":"device","action":"delete","track_index":1,"device_name":"reverb","device_ordinal":2}' | jq .
+    ```
+- Note: Device name matching is case-insensitive. Ordinal is 1-based (first, second, etc.).
+
 Mixer (quick)
 - Set track mixer: `curl -sS -X POST http://127.0.0.1:8722/op/mixer -H 'Content-Type: application/json' -d '{"track_index":1,"field":"volume","value":0.8}' | jq .`
 - Set return mixer (volume/pan/mute/solo): `curl -sS -X POST http://127.0.0.1:8722/op/return/mixer -H 'Content-Type: application/json' -d '{"return_index":0,"field":"volume","value":0.6}' | jq .`
