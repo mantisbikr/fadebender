@@ -79,6 +79,7 @@ from server.api.returns import router as returns_router
 from server.api.ops import router as ops_router
 from server.api.device_mapping import router as device_mapping_router
 from server.api.presets import router as presets_router
+from server.api.devices import router as devices_router
 from server.api.intents import router as intents_router
 from server.api.nlp import router as nlp_router
 from server.api.overview import router as overview_router
@@ -141,6 +142,7 @@ app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(system_router)
 app.include_router(learn_router)
+app.include_router(devices_router)
 
 
 # Transport routes moved to server.api.transport

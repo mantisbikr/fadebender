@@ -10,6 +10,7 @@ from typing import Dict, Any, Callable, List, Tuple, Optional
 import os
 import time
 import threading
+import json
 
 
 _STATE: Dict[str, Any] = {
@@ -71,6 +72,7 @@ _LISTENERS: List[Tuple[Any, Callable[[], None]]] = []
 _LAST_MASTER_VALUES: Dict[str, float] = {}  # Cache to prevent duplicate master events
 _LAST_TRANSPORT_VALUES: Dict[str, Any] = {}  # Cache to prevent duplicate transport events
 _APP_VIEW_GETTER: Optional[Callable[[], Any]] = None  # Application.view accessor
+_DEVICE_MAP_CACHE: Optional[Dict[str, Any]] = None  # Lazy-loaded device mapping
 
 
 def set_notifier(fn: Callable[[Dict[str, Any]], None]) -> None:
@@ -88,6 +90,90 @@ def set_app_view_getter(getter: Callable[[], Any]) -> None:
     """Inject Application.view getter (for view switching)."""
     global _APP_VIEW_GETTER
     _APP_VIEW_GETTER = getter
+
+
+def _load_device_mapping() -> Dict[str, Any]:
+    """Load device mapping from ~/.fadebender/device_map.json (best-effort, cached)."""
+    global _DEVICE_MAP_CACHE
+    if _DEVICE_MAP_CACHE is not None:
+        return _DEVICE_MAP_CACHE
+    try:
+        config_path = os.path.expanduser("~/.fadebender/device_map.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                _DEVICE_MAP_CACHE = json.load(f) or {}
+                return _DEVICE_MAP_CACHE
+    except Exception:
+        pass
+    _DEVICE_MAP_CACHE = {}
+    return _DEVICE_MAP_CACHE
+
+
+def _get_browser_from_live(live) -> Any:
+    """Best-effort helper to obtain Live's Application.browser from a Song.
+
+    Tries multiple strategies to maximize compatibility across Live versions.
+    """
+    app = None
+    # 1) song.app if available
+    try:
+        app = getattr(live, "app", None)
+    except Exception:
+        app = None
+    # 2) Application.view's canonical parent (often Application)
+    if app is None and _APP_VIEW_GETTER is not None:
+        try:
+            view = _APP_VIEW_GETTER()
+            if view is not None:
+                app = getattr(view, "canonical_parent", None) or getattr(view, "app", None)
+        except Exception:
+            app = None
+    # 3) Live.Application.get_application()
+    if app is None:
+        try:
+            import Live  # type: ignore
+
+            app = Live.Application.get_application()
+        except Exception:
+            app = None
+    if app is None:
+        return None
+    try:
+        return getattr(app, "browser", None)
+    except Exception:
+        return None
+
+
+def _navigate_browser_path(browser, path: List[str]):
+    """Navigate a Live browser tree using a simple path list.
+
+    path examples: ['audio_effects', 'Reverb'], ['midi_effects', 'Chord'], etc.
+    """
+    if not path:
+        return None
+    root = path[0]
+    try:
+        if root == "audio_effects":
+            current = getattr(browser, "audio_effects", None)
+        elif root == "midi_effects":
+            current = getattr(browser, "midi_effects", None)
+        elif root == "plugins":
+            current = getattr(browser, "plugins", None)
+        elif root == "samples":
+            current = getattr(browser, "samples", None)
+        else:
+            return None
+    except Exception:
+        return None
+    for name in path[1:]:
+        try:
+            children = list(getattr(current, "iter_children", []) or [])
+            current = next((item for item in children if str(getattr(item, "name", "")) == str(name)), None)
+        except Exception:
+            return None
+        if current is None:
+            return None
+    return current
 
 
 def _run_on_main(fn: Callable[[], Any]) -> Any:
@@ -1821,7 +1907,7 @@ def song_redo(live) -> Dict[str, Any]:
 
 
 def get_song_info(live) -> Dict[str, Any]:
-    """Return basic Live Set metadata (name, tempo, time signature)."""
+    """Return basic Live Set metadata (name, tempo, time signature, song length)."""
     if live is not None:
         try:
             song = live
@@ -1844,11 +1930,16 @@ def get_song_info(live) -> Dict[str, Any]:
                 den = int(getattr(song, "signature_denominator", 4))
             except Exception:
                 den = 4
+            try:
+                song_length = float(getattr(song, "song_length", 0.0))
+            except Exception:
+                song_length = 0.0
             return {
                 "name": name,
                 "tempo": tempo,
                 "time_signature_numerator": num,
                 "time_signature_denominator": den,
+                "song_length": song_length,
             }
         except Exception:
             pass
@@ -1859,6 +1950,7 @@ def get_song_info(live) -> Dict[str, Any]:
         "tempo": float(tr.get("tempo", 120.0)),
         "time_signature_numerator": int(tr.get("time_signature_numerator", 4)),
         "time_signature_denominator": int(tr.get("time_signature_denominator", 4)),
+        "song_length": float(tr.get("song_length", 0.0)),
     }
 
 
@@ -2800,6 +2892,175 @@ def delete_track_device(live, track_index: int, device_index: int) -> bool:
                 return True
             return False
     return False
+
+
+def load_device_on_return(live, return_index: int, device_name: str, preset_name: Optional[str] = None) -> Dict[str, Any]:
+    """Load a device (optionally preset) onto a return track.
+
+    Uses a simple device mapping at ~/.fadebender/device_map.json and Live's browser API.
+    This is best-effort and may not be supported on all Live versions.
+    """
+    try:
+        ri = int(return_index)
+        if live is not None:
+            browser = _get_browser_from_live(live)
+            if browser is None:
+                return {"ok": False, "error": "browser_not_available"}
+            mapping = _load_device_mapping()
+            info = mapping.get(str(device_name)) or mapping.get(device_name)
+            if not info:
+                return {"ok": False, "error": f"device_not_found:{device_name}"}
+
+            # Choose path: preset-specific if available, else default path
+            path = None
+            if preset_name:
+                presets = info.get("presets") or {}
+                path = presets.get(preset_name)
+            if path is None:
+                path = info.get("path")
+            if not isinstance(path, list) or not path:
+                return {"ok": False, "error": "invalid_device_path"}
+
+            item = _navigate_browser_path(browser, path)
+            if item is None:
+                return {"ok": False, "error": "browser_item_not_found"}
+            try:
+                if not bool(getattr(item, "is_loadable", True)):
+                    return {"ok": False, "error": "item_not_loadable"}
+            except Exception:
+                pass
+
+            returns = list(getattr(live, "return_tracks", []) or [])
+            if not (0 <= ri < len(returns)):
+                return {"ok": False, "error": "return_index_out_of_range"}
+            rt = returns[ri]
+            song = live
+
+            def _do_load():
+                try:
+                    if hasattr(song, "begin_undo_step"):
+                        song.begin_undo_step()
+                    # Prefer explicit target, fall back to default load_item signature
+                    try:
+                        browser.load_item(item, rt)
+                    except TypeError:
+                        browser.load_item(item)
+                    # Inspect devices after load
+                    devs = list(getattr(rt, "devices", []) or [])
+                    if devs:
+                        dv = devs[-1]
+                        return {
+                            "ok": True,
+                            "return_index": ri,
+                            "device_index": len(devs) - 1,
+                            "device_name": str(getattr(dv, "name", device_name)),
+                        }
+                    return {"ok": True, "return_index": ri, "device_index": None}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+                finally:
+                    try:
+                        if hasattr(song, "end_undo_step"):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+
+            res = _run_on_main(_do_load)
+            return res or {"ok": False, "error": "load_failed"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: append a fake device to return track in _STATE
+    returns = _STATE.setdefault("returns", [])
+    for r in returns:
+        if r.get("index") == int(return_index):
+            devs = r.setdefault("devices", [])
+            new_index = len(devs)
+            devs.append({"index": new_index, "name": str(device_name)})
+            _emit({"event": "return_device_loaded", "return": int(return_index), "device_index": new_index, "name": str(device_name)})
+            return {"ok": True, "return_index": int(return_index), "device_index": new_index, "device_name": str(device_name)}
+    return {"ok": False, "error": "return_not_found_stub"}
+
+
+def load_device_on_track(live, track_index: int, device_name: str, preset_name: Optional[str] = None) -> Dict[str, Any]:
+    """Load a device (optionally preset) onto a regular track."""
+    try:
+        ti = int(track_index)
+        if live is not None:
+            browser = _get_browser_from_live(live)
+            if browser is None:
+                return {"ok": False, "error": "browser_not_available"}
+            mapping = _load_device_mapping()
+            info = mapping.get(str(device_name)) or mapping.get(device_name)
+            if not info:
+                return {"ok": False, "error": f"device_not_found:{device_name}"}
+
+            path = None
+            if preset_name:
+                presets = info.get("presets") or {}
+                path = presets.get(preset_name)
+            if path is None:
+                path = info.get("path")
+            if not isinstance(path, list) or not path:
+                return {"ok": False, "error": "invalid_device_path"}
+
+            item = _navigate_browser_path(browser, path)
+            if item is None:
+                return {"ok": False, "error": "browser_item_not_found"}
+            try:
+                if not bool(getattr(item, "is_loadable", True)):
+                    return {"ok": False, "error": "item_not_loadable"}
+            except Exception:
+                pass
+
+            tracks = list(getattr(live, "tracks", []) or [])
+            if not (1 <= ti <= len(tracks)):
+                return {"ok": False, "error": "track_index_out_of_range"}
+            tr = tracks[ti - 1]
+            song = live
+
+            def _do_load():
+                try:
+                    if hasattr(song, "begin_undo_step"):
+                        song.begin_undo_step()
+                    try:
+                        browser.load_item(item, tr)
+                    except TypeError:
+                        browser.load_item(item)
+                    devs = list(getattr(tr, "devices", []) or [])
+                    if devs:
+                        dv = devs[-1]
+                        return {
+                            "ok": True,
+                            "track_index": ti,
+                            "device_index": len(devs) - 1,
+                            "device_name": str(getattr(dv, "name", device_name)),
+                        }
+                    return {"ok": True, "track_index": ti, "device_index": None}
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+                finally:
+                    try:
+                        if hasattr(song, "end_undo_step"):
+                            song.end_undo_step()
+                    except Exception:
+                        pass
+
+            res = _run_on_main(_do_load)
+            return res or {"ok": False, "error": "load_failed"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    # Stub: append a fake device to track in _STATE
+    tracks = _STATE.setdefault("tracks", [])
+    for t in tracks:
+        if t.get("index") == int(track_index):
+            devs = t.setdefault("devices", [])
+            new_index = len(devs)
+            devs.append({"index": new_index, "name": str(device_name)})
+            _emit({"event": "track_device_loaded", "track": int(track_index), "device_index": new_index, "name": str(device_name)})
+            return {"ok": True, "track_index": int(track_index), "device_index": new_index, "device_name": str(device_name)}
+    return {"ok": False, "error": "track_not_found_stub"}
 
 
 def reorder_track_device(live, track_index: int, old_index: int, new_index: int) -> bool:

@@ -184,6 +184,14 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.delete_return_device(live_ctx, return_index, device_index)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "load_return_device":
+                return_index = int(msg.get("return_index", 0))
+                device_name = str(msg.get("device_name", "")).strip()
+                preset_name = msg.get("preset_name")
+                preset = str(preset_name).strip() if isinstance(preset_name, str) and preset_name.strip() else None
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.load_device_on_return(live_ctx, return_index, device_name, preset)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "reorder_return_device":
                 return_index = int(msg.get("return_index", 0))
                 old_index = int(msg.get("old_index", 0))
@@ -219,6 +227,14 @@ def start_udp_server():  # pragma: no cover
                 live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
                 ok = lom_ops.delete_track_device(live_ctx, track_index, device_index)
                 resp = {"ok": bool(ok), "op": op}
+            elif op == "load_track_device":
+                track_index = int(msg.get("track_index", 0))
+                device_name = str(msg.get("device_name", "")).strip()
+                preset_name = msg.get("preset_name")
+                preset = str(preset_name).strip() if isinstance(preset_name, str) and preset_name.strip() else None
+                live_ctx = _LIVE_ACCESSOR() if _LIVE_ACCESSOR else None
+                data_out = lom_ops.load_device_on_track(live_ctx, track_index, device_name, preset)
+                resp = {"op": op, **(data_out or {"ok": False})}
             elif op == "reorder_track_device":
                 track_index = int(msg.get("track_index", 0))
                 old_index = int(msg.get("old_index", 0))

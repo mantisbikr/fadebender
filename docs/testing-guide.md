@@ -316,15 +316,20 @@ Expected results:
 
 ---
 
-### 7. Song-Level Helpers (Undo/Redo, Song Info, Cues)
+### 7. Song-Level Helpers (Undo/Redo, Song Info, Cues, Device Load)
 
 These endpoints are fully implemented and ready for manual testing via `curl`.  
 **NLP status:** intents for these are **not wired yet** – use HTTP directly for now.
 
-Live Set info (name, tempo, time signature):
+Live Set info (name, tempo, time signature, song length):
 ```bash
 curl -s http://127.0.0.1:8722/song/info | jq .
 ```
+Look for:
+- `data.name` – Live Set name
+- `data.tempo` – BPM
+- `data.time_signature_numerator` / `data.time_signature_denominator`
+- `data.song_length` – song length in beats
 
 Undo/redo status and actions:
 ```bash
@@ -381,6 +386,33 @@ Expected results:
   Fadebender should rely on its own virtual cue system plus `/song/cue/jump` for flexible marker workflows.
   Similarly, `/song/cue/move` will report `live_cue_move_not_supported` on this Live version; moving locators
   should be modeled in Fadebender's virtual cues rather than via the Remote Script.
+
+Device loading (experimental, requires device_map.json):
+```bash
+# Load built-in Reverb on track 2 (1-based)
+curl -s -X POST "http://127.0.0.1:8722/device/load?domain=track&index=2&device_name=Reverb" | jq .
+
+# Load Cathedral preset on Return A (return index 0)
+curl -s -X POST "http://127.0.0.1:8722/device/load?domain=return&index=0&device_name=Reverb&preset_name=Cathedral" | jq .
+```
+
+Requirements:
+- Remote Script updated and loaded in Live (with UDP bridge enabled).
+- Device mapping file present at `~/.fadebender/device_map.json`, for example:
+  ```json
+  {
+    "Reverb": {
+      "path": ["audio_effects", "Reverb"],
+      "presets": {
+        "Cathedral": ["audio_effects", "Reverb", "Hall", "Cathedral.adv"]
+      }
+    }
+  }
+  ```
+
+Expected results for device load:
+- On success: Live inserts the device at the end of the track/return chain and the API returns `{ ok: true, ... }` with `track_index`/`return_index` and `device_index`.
+- On failure: useful errors like `device_not_found:<name>`, `browser_not_available`, `invalid_device_path`, or `browser_item_not_found`.
 
 ---
 
