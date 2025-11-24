@@ -618,14 +618,29 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
 
         r = _req(op, timeout=5.0, **params)
 
-        # Build summary
-        if preset_name:
-            summary = f"Loaded {device_name} preset '{preset_name}' on {target_desc}"
+        # Check if operation succeeded
+        ok = bool(r and r.get("ok", False))
+
+        # Build summary based on result
+        if ok:
+            if preset_name:
+                summary = f"Loaded {device_name} preset '{preset_name}' on {target_desc}"
+            else:
+                summary = f"Loaded {device_name} on {target_desc}"
         else:
-            summary = f"Loaded {device_name} on {target_desc}"
+            # Extract error details
+            error = r.get("error", "unknown_error") if r else "no_response"
+            if "device_not_found" in str(error):
+                summary = f"Device '{device_name}' not found in device map"
+            elif "browser_not_available" in str(error):
+                summary = f"Live browser not available"
+            elif "browser_item_not_found" in str(error):
+                summary = f"Could not locate {device_name} in Live's browser"
+            else:
+                summary = f"Failed to load {device_name}: {error}"
 
         return {
-            "ok": bool(r and r.get("ok", True)),
+            "ok": ok,
             "summary": summary,
             "resp": r,
         }

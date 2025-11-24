@@ -2907,7 +2907,13 @@ def load_device_on_return(live, return_index: int, device_name: str, preset_name
             if browser is None:
                 return {"ok": False, "error": "browser_not_available"}
             mapping = _load_device_mapping()
-            info = mapping.get(str(device_name)) or mapping.get(device_name)
+            # Case-insensitive device lookup
+            info = None
+            device_name_lower = str(device_name).lower()
+            for key, val in mapping.items():
+                if str(key).lower() == device_name_lower:
+                    info = val
+                    break
             if not info:
                 return {"ok": False, "error": f"device_not_found:{device_name}"}
 
@@ -2991,7 +2997,13 @@ def load_device_on_track(live, track_index: int, device_name: str, preset_name: 
             if browser is None:
                 return {"ok": False, "error": "browser_not_available"}
             mapping = _load_device_mapping()
-            info = mapping.get(str(device_name)) or mapping.get(device_name)
+            # Case-insensitive device lookup
+            info = None
+            device_name_lower = str(device_name).lower()
+            for key, val in mapping.items():
+                if str(key).lower() == device_name_lower:
+                    info = val
+                    break
             if not info:
                 return {"ok": False, "error": f"device_not_found:{device_name}"}
 

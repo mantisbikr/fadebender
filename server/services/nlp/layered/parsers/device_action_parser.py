@@ -1,7 +1,151 @@
 """Parse device action commands (load, etc.)."""
 
+import os
+import json
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Set
+
+
+# Cache for device_map.json
+_DEVICE_MAP_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _load_device_map() -> Dict[str, Any]:
+    """Load device mapping from ~/.fadebender/device_map.json (cached).
+
+    Returns device map dict, or empty dict if not found.
+    """
+    global _DEVICE_MAP_CACHE
+    if _DEVICE_MAP_CACHE is not None:
+        return _DEVICE_MAP_CACHE
+
+    try:
+        config_path = os.path.expanduser("~/.fadebender/device_map.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                _DEVICE_MAP_CACHE = json.load(f) or {}
+                return _DEVICE_MAP_CACHE
+    except Exception:
+        pass
+
+    _DEVICE_MAP_CACHE = {}
+    return _DEVICE_MAP_CACHE
+
+
+def _get_device_names() -> Set[str]:
+    """Get all device names from device_map (case-insensitive set)."""
+    device_map = _load_device_map()
+    return {name.lower() for name in device_map.keys()}
+
+
+def _fuzzy_match_device(text: str, device_names: Set[str], max_distance: int = 2) -> Optional[str]:
+    """Fuzzy match text against device names (case-insensitive).
+
+    Args:
+        text: Text to match (e.g., "reverb", "auto filter")
+        device_names: Set of lowercase device names from device_map
+        max_distance: Maximum edit distance for fuzzy matching
+
+    Returns:
+        Matched device name (lowercase) or None
+    """
+    text_lower = text.lower()
+
+    # Exact match first
+    if text_lower in device_names:
+        return text_lower
+
+    # Fuzzy match using simple edit distance
+    # For now, just check for single-character typos
+    if max_distance > 0:
+        for device_name in device_names:
+            if _simple_edit_distance(text_lower, device_name) <= max_distance:
+                return device_name
+
+    return None
+
+
+def _simple_edit_distance(a: str, b: str) -> int:
+    """Calculate simple Levenshtein distance between two strings."""
+    if len(a) < len(b):
+        return _simple_edit_distance(b, a)
+
+    if len(b) == 0:
+        return len(a)
+
+    previous_row = range(len(b) + 1)
+    for i, ca in enumerate(a):
+        current_row = [i + 1]
+        for j, cb in enumerate(b):
+            # j+1 instead of j since previous_row and current_row are one character longer
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (ca != cb)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+def _split_device_preset(text: str) -> tuple[str, Optional[str]]:
+    """Split text into device name and optional preset name using device_map vocabulary.
+
+    Strategy:
+    1. Load device_map.json to get available device names
+    2. Try progressively longer word combinations (1 word, 2 words, 3 words, etc.)
+    3. Check if any combination matches a device in device_map (with fuzzy matching)
+    4. Use the longest matching device name, rest is preset
+
+    Examples:
+        "reverb cathedral" → ("reverb", "cathedral")
+        "auto filter" → ("auto filter", None)
+        "auto filter band pass" → ("auto filter", "band pass")
+        "compressor gentle" → ("compressor", "gentle")
+        "eq eight" → ("eq eight", None)
+
+    Args:
+        text: Device + preset text (e.g., "auto filter band pass")
+
+    Returns:
+        (device_name, preset_name) tuple
+    """
+    device_names = _get_device_names()
+    words = text.split()
+
+    if len(words) == 0:
+        return "", None
+
+    if len(words) == 1:
+        # Single word - must be device name
+        return words[0], None
+
+    # Try progressively longer combinations, starting from longest
+    # This ensures we match "Auto Filter" before just "Auto"
+    best_device = None
+    best_device_word_count = 0
+
+    for num_words in range(min(len(words), 4), 0, -1):  # Try up to 4 words
+        candidate = " ".join(words[:num_words])
+        matched_device = _fuzzy_match_device(candidate, device_names, max_distance=1)
+
+        if matched_device:
+            best_device = candidate
+            best_device_word_count = num_words
+            break
+
+    if best_device:
+        # Found a matching device
+        if best_device_word_count < len(words):
+            # Remaining words are the preset
+            preset = " ".join(words[best_device_word_count:])
+            return best_device, preset
+        else:
+            # All words are the device name
+            return best_device, None
+    else:
+        # No device match found - default to first word as device
+        # This allows fallback for devices not in device_map
+        return words[0], " ".join(words[1:]) if len(words) > 1 else None
 
 
 def parse_load_device(text: str) -> Optional[Dict[str, Any]]:
@@ -14,6 +158,8 @@ def parse_load_device(text: str) -> Optional[Dict[str, Any]]:
         "put reverb cathedral on return A"
         "load limiter on the master"
         "add arpeggiator to return B"
+        "load auto filter on track 3"
+        "load eq eight on track 1"
     """
     # Pattern: (load|add|put|insert) <device> [preset <preset_name>|<preset_name>] (on|to) [the] (track|return|master) <index>
 
@@ -21,7 +167,7 @@ def parse_load_device(text: str) -> Optional[Dict[str, Any]]:
     # e.g., "load analog preset lush pad on track 3"
     m = re.match(
         r"^(?:load|add|put|insert)\s+"
-        r"(\w+(?:\s+\w+)?)\s+"  # device name (1-2 words)
+        r"(.+?)\s+"  # device name (variable length, non-greedy)
         r"preset\s+"
         r"(.+?)\s+"  # preset name (greedy until target)
         r"(?:on|to)\s+(?:the\s+)?"
@@ -40,11 +186,10 @@ def parse_load_device(text: str) -> Optional[Dict[str, Any]]:
 
     # Try without "preset" keyword but with preset name
     # e.g., "load reverb cathedral on track 2"
-    # This is harder - we need to distinguish device name from preset name
-    # Strategy: capture everything between verb and target, then split
+    # e.g., "load auto filter on track 3"
     m = re.match(
         r"^(?:load|add|put|insert)\s+"
-        r"(.+?)\s+"  # device + optional preset (greedy)
+        r"(.+?)\s+"  # device + optional preset (non-greedy)
         r"(?:on|to)\s+(?:the\s+)?"
         r"(track|return|master)\s*"
         r"(\w+)?$",  # optional index
@@ -56,52 +201,12 @@ def parse_load_device(text: str) -> Optional[Dict[str, Any]]:
         domain = m.group(2).lower()
         index_str = m.group(3)
 
-        # Split device_and_preset into device and optional preset
-        # Common devices are 1-2 words, presets can be multiple words
-        # Strategy: Check if device_map knows the first 1-2 words as a device
+        # Split device_and_preset using device_map vocabulary
         device_name, preset_name = _split_device_preset(device_and_preset)
 
         return _build_load_intent(domain, index_str, device_name, preset_name)
 
     return None
-
-
-def _split_device_preset(text: str) -> tuple[str, Optional[str]]:
-    """Split text into device name and optional preset name.
-
-    Strategy:
-    - First word is always device name
-    - If second word exists and first word is a known single-word device, include second word in preset
-    - Otherwise second word is part of device name (for multi-word devices like "Auto Filter")
-
-    For now, use simple heuristic: first 1-2 words are device, rest is preset.
-    """
-    words = text.split()
-
-    if len(words) == 1:
-        # Just device name
-        return words[0], None
-
-    if len(words) == 2:
-        # Could be "Reverb Cathedral" or "Auto Filter"
-        # Check if first word is a complete device name
-        # For simplicity: assume it's device + preset
-        return words[0], words[1]
-
-    # 3+ words: try device as 1 word first, then 2 words
-    # Common multi-word devices: Auto Filter, Auto Pan, Channel EQ, Drum Buss, etc.
-    # Strategy: if second word is "Filter", "Pan", "EQ", "Buss", "Rack", etc., it's part of device
-    second_word_lower = words[1].lower()
-    if second_word_lower in ["filter", "pan", "eq", "buss", "rack", "delay", "reverb"]:
-        # Multi-word device
-        device_name = f"{words[0]} {words[1]}"
-        preset_name = " ".join(words[2:]) if len(words) > 2 else None
-    else:
-        # Single-word device
-        device_name = words[0]
-        preset_name = " ".join(words[1:])
-
-    return device_name, preset_name
 
 
 def _build_load_intent(
