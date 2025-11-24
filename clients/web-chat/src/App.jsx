@@ -54,6 +54,7 @@ function App() {
     undoLast,
     redoLast,
     historyState,
+    songInfo,
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,
@@ -164,7 +165,7 @@ function App() {
         />
 
         {/* Transport controls - full width */}
-        <TransportBar />
+        <TransportBar songInfo={songInfo} />
 
         {/* Content area: sidebar + main chat */}
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex' }}>

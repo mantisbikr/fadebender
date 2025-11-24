@@ -15,6 +15,7 @@ export function useDAWControl() {
   const [modelPref, setModelPref] = useState('gemini-2.5-flash');
   const [confirmExecute, setConfirmExecute] = useState(true);
   const [historyState, setHistoryState] = useState({ undo_available: false, redo_available: false });
+  const [songInfo, setSongInfo] = useState(null);
   const [featureFlags, setFeatureFlags] = useState({ use_intents_for_chat: false, sticky_capabilities_card: false });
   const [liveSnapshot, setLiveSnapshot] = useState(null);
   const [currentCapabilities, setCurrentCapabilities] = useState(null);
@@ -1281,11 +1282,40 @@ export function useDAWControl() {
     }
   }, [addMessage]);
 
-  // Initialize history state once
+  // Poll undo/redo status from Live (every 3 seconds)
   useEffect(() => {
-    (async () => {
-      try { const hs = await apiService.getHistoryState(); setHistoryState(hs); } catch {}
-    })();
+    const pollUndoStatus = async () => {
+      try {
+        const hs = await apiService.getHistoryState();
+        setHistoryState(hs);
+      } catch (err) {
+        console.error('Failed to poll undo status:', err);
+      }
+    };
+
+    // Initial fetch
+    pollUndoStatus();
+
+    // Poll every 3 seconds
+    const interval = setInterval(pollUndoStatus, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch song info on mount
+  useEffect(() => {
+    const fetchSongInfo = async () => {
+      try {
+        const info = await apiService.getSongInfo();
+        if (info.ok && info.data) {
+          setSongInfo(info.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch song info:', err);
+      }
+    };
+
+    fetchSongInfo();
   }, []);
 
   // Capabilities history navigation handlers
@@ -1418,6 +1448,7 @@ export function useDAWControl() {
     undoLast,
     redoLast,
     historyState,
+    songInfo,
     processControlCommand,
     processHelpQuery,
     checkSystemHealth,

@@ -451,24 +451,40 @@ class ApiService {
   }
 
   async undoLast() {
-    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/undo_last`, {
-      method: 'POST'
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/song/undo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
     });
     if (!response.ok) throw new Error(`Undo failed: ${response.statusText}`);
     return response.json();
   }
 
   async redoLast() {
-    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/redo_last`, {
-      method: 'POST'
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/song/redo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
     });
     if (!response.ok) throw new Error(`Redo failed: ${response.statusText}`);
     return response.json();
   }
 
   async getHistoryState() {
-    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/op/history_state`);
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/song/undo_status`);
     if (!response.ok) throw new Error(`History state failed: ${response.statusText}`);
+    const data = await response.json();
+    // Map to existing format for backward compat
+    return {
+      ok: data.ok,
+      undo_available: data.data?.can_undo || false,
+      redo_available: data.data?.can_redo || false
+    };
+  }
+
+  async getSongInfo() {
+    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/song/info`);
+    if (!response.ok) throw new Error(`Get song info failed: ${response.statusText}`);
     return response.json();
   }
 

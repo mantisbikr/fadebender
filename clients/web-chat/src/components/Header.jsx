@@ -15,7 +15,8 @@ import {
   Button,
   IconButton,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Tooltip
 } from '@mui/material';
 import {
   DarkMode as DarkModeIcon,
@@ -70,43 +71,51 @@ function Header({
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           {/* Moved Execute/Model/System to Settings modal */}
 
-          <IconButton
-            onClick={undoLast}
-            color="inherit"
-            title="Undo last change"
-            disabled={!historyState?.undo_available}
-            size="small"
-          >
-            <UndoIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Undo last change" placement="bottom">
+            <span>
+              <IconButton
+                onClick={undoLast}
+                color="inherit"
+                disabled={!historyState?.undo_available}
+                size="small"
+              >
+                <UndoIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
 
-          <IconButton
-            onClick={redoLast}
-            color="inherit"
-            title="Redo last change"
-            disabled={!historyState?.redo_available}
-            size="small"
-          >
-            <RedoIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Redo last change" placement="bottom">
+            <span>
+              <IconButton
+                onClick={redoLast}
+                color="inherit"
+                disabled={!historyState?.redo_available}
+                size="small"
+              >
+                <RedoIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
 
-          <IconButton
-            onClick={() => setDarkMode(!darkMode)}
-            color="inherit"
-            title="Toggle theme"
-            size="small"
-          >
-            {darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
-          </IconButton>
+          <Tooltip title={darkMode ? "Switch to light mode" : "Switch to dark mode"} placement="bottom">
+            <IconButton
+              onClick={() => setDarkMode(!darkMode)}
+              color="inherit"
+              size="small"
+            >
+              {darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
 
-          <IconButton
-            onClick={() => setSettingsOpen(true)}
-            color="inherit"
-            title="Settings"
-            size="small"
-          >
-            <SettingsIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Settings" placement="bottom">
+            <IconButton
+              onClick={() => setSettingsOpen(true)}
+              color="inherit"
+              size="small"
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Toolbar>
       <SettingsModal

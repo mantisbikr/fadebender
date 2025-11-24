@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, IconButton, TextField, Tooltip, InputAdornment, MenuItem, Select } from '@mui/material';
+import { Box, IconButton, TextField, Tooltip, InputAdornment, MenuItem, Select, Typography } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
   Stop as StopIcon,
@@ -11,7 +11,7 @@ import {
 } from '@mui/icons-material';
 import { apiService } from '../services/api.js';
 
-export default function TransportBar() {
+export default function TransportBar({ songInfo }) {
   const [state, setState] = useState({
     is_playing: false,
     is_recording: false,
@@ -207,6 +207,26 @@ export default function TransportBar() {
           />
         </Tooltip>
       </Box>
+
+      {/* Song name - far right */}
+      {songInfo && (
+        <Box sx={{ ml: 'auto', mr: 1, display: 'flex', alignItems: 'center' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 'bold',
+              fontSize: '0.85rem',
+              color: 'text.primary',
+              maxWidth: '250px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {songInfo.name}
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }
