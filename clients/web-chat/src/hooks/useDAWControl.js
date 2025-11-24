@@ -1167,8 +1167,10 @@ export function useDAWControl() {
       // Mark user message as successful
       updateMessageStatus(userMessageId, 'success');
 
-      // Only show success message card if sticky capabilities feature is disabled
-      if (!featureFlags.sticky_capabilities_card) {
+      // Show success message card if:
+      // 1. Sticky capabilities feature is disabled (backward compat), OR
+      // 2. Command has no capabilities (e.g., undo/redo/song info)
+      if (!featureFlags.sticky_capabilities_card || !result.capabilities_ref) {
         addMessage({
           type: 'success',
           content: result.summary || (deviceCapabilities

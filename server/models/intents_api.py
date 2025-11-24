@@ -6,11 +6,11 @@ from pydantic import BaseModel, Field
 
 
 # Shared domain for canonical intents handled by API
-Domain = Literal["track", "return", "master", "device", "transport"]
+Domain = Literal["track", "return", "master", "device", "transport", "song"]
 
 
 class CanonicalIntent(BaseModel):
-    domain: Domain = Field(..., description="Scope: track|return|master|device|transport")
+    domain: Domain = Field(..., description="Scope: track|return|master|device|transport|song")
     # Allow transport-specific actions to pass through
     action: str = "set"
 
@@ -36,6 +36,11 @@ class CanonicalIntent(BaseModel):
     # For device params: accept display strings (e.g., "245 ms", "5.0 kHz", "High")
     display: Optional[str] = None
 
+    # Song-level fields (for domain="song")
+    locator_index: Optional[int] = None        # Locator index (1-based)
+    locator_name: Optional[str] = None         # Locator name for jump/lookup
+    new_name: Optional[str] = None             # New name for rename operations
+
     # Options
     dry_run: bool = False
     clamp: bool = True
@@ -44,7 +49,7 @@ class CanonicalIntent(BaseModel):
 
 
 class ReadIntent(BaseModel):
-    domain: Domain = Field(..., description="Scope: track|return|master|device|transport")
+    domain: Domain = Field(..., description="Scope: track|return|master|device|transport|song")
     # Targets (one of):
     track_index: Optional[int] = None
     return_index: Optional[int] = None

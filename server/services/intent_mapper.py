@@ -98,6 +98,25 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             return None, errors
         return {"domain": "transport", "action": str(action), "value": value}, []
 
+    # Pass-through for song-level intents (undo/redo/locators/info)
+    if kind == "song_command":
+        action = (llm_intent or {}).get("action")
+        if not action:
+            errors.append("missing_song_action")
+            return None, errors
+        intent = {
+            "domain": "song",
+            "action": str(action),
+        }
+        # Add optional locator fields
+        if llm_intent.get("locator_index") is not None:
+            intent["locator_index"] = int(llm_intent["locator_index"])
+        if llm_intent.get("locator_name"):
+            intent["locator_name"] = str(llm_intent["locator_name"])
+        if llm_intent.get("new_name"):
+            intent["new_name"] = str(llm_intent["new_name"])
+        return intent, []
+
     # Only map control intents here; questions/clarifications bubble up to caller
     if kind not in ("set_parameter", "relative_change"):
         errors.append(f"non_control_intent:{kind}")

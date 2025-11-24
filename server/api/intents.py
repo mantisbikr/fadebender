@@ -563,6 +563,122 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         result["request_id"] = request_id
         return add_capabilities_ref(result, intent.model_dump())
 
+    # Song-level operations (undo/redo, info, locators)
+    if d == "song":
+        from server.services.ableton_client import request_op as _req
+        action = getattr(intent, "action", "")
+
+        # Undo
+        if action == "undo":
+            r = _req("song_undo", timeout=1.5)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": "Undo last change",
+                "resp": r,
+            }
+
+        # Redo
+        if action == "redo":
+            r = _req("song_redo", timeout=1.5)
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": "Redo last change",
+                "resp": r,
+            }
+
+        # Song info
+        if action == "get_info":
+            r = _req("get_song_info", timeout=1.0)
+            if not r:
+                return {"ok": False, "error": "no response"}
+            data = r.get("data") if isinstance(r, dict) else r
+            song_name = data.get("name", "Unknown") if isinstance(data, dict) else "Unknown"
+            tempo = data.get("tempo") if isinstance(data, dict) else None
+            time_sig_num = data.get("time_signature_numerator") if isinstance(data, dict) else None
+            time_sig_den = data.get("time_signature_denominator") if isinstance(data, dict) else None
+
+            # Build comprehensive summary
+            parts = [f"Song: {song_name}"]
+            if tempo is not None:
+                parts.append(f"Tempo: {tempo} BPM")
+            if time_sig_num is not None and time_sig_den is not None:
+                parts.append(f"Time signature: {time_sig_num}/{time_sig_den}")
+
+            return {
+                "ok": True,
+                "summary": " | ".join(parts),
+                "data": data,
+                "resp": r,
+            }
+
+        # List locators
+        if action == "list_locators":
+            r = _req("get_cue_points", timeout=1.0)
+            if not r:
+                return {"ok": False, "error": "no response"}
+            data = r.get("data") if isinstance(r, dict) else r
+            cues = data.get("cue_points", []) if isinstance(data, dict) else []
+            count = len(cues)
+
+            # Build formatted list
+            if count == 0:
+                summary = "No locators found"
+            else:
+                header = f"Found {count} locator{'s' if count != 1 else ''}:"
+                locator_lines = []
+                for cue in cues:
+                    idx = cue.get("index", "?")
+                    name = cue.get("name", "Untitled")
+                    time = cue.get("time", 0)
+                    locator_lines.append(f"  {idx}. {name} @ {time} beats")
+                summary = header + "\n" + "\n".join(locator_lines)
+
+            return {
+                "ok": True,
+                "summary": summary,
+                "data": data,
+                "resp": r,
+            }
+
+        # Jump to locator
+        if action == "jump_locator":
+            params: Dict[str, Any] = {}
+            if intent.locator_index is not None:
+                params["cue_index"] = int(intent.locator_index)
+            if intent.locator_name is not None:
+                params["name"] = str(intent.locator_name)
+
+            if not params:
+                raise HTTPException(400, "missing_locator_target")
+
+            r = _req("jump_to_cue", timeout=1.5, **params)
+            target = f"locator {intent.locator_index}" if intent.locator_index else f'"{intent.locator_name}"'
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f"Jumped to {target}",
+                "resp": r,
+            }
+
+        # Rename locator
+        if action == "rename_locator":
+            if intent.locator_index is None or not intent.new_name:
+                raise HTTPException(400, "missing_rename_params")
+
+            r = _req(
+                "set_cue_name",
+                timeout=1.0,
+                cue_index=int(intent.locator_index),
+                name=str(intent.new_name)
+            )
+            return {
+                "ok": bool(r and r.get("ok", True)),
+                "summary": f'Renamed locator {intent.locator_index} to "{intent.new_name}"',
+                "resp": r,
+            }
+
+        # Unknown song action
+        raise HTTPException(400, f"unsupported_song_action: {action}")
+
     # If we reach here, the intent is unsupported
     raise HTTPException(400, "unsupported_intent")
 

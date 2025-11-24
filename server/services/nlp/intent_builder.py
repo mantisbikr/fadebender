@@ -522,6 +522,12 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     if special:
         return special
 
+    # Try song-level commands (undo/redo, locators, song info)
+    # These are complete commands that don't need multi-layer parsing
+    song_intent = _try_song_patterns(text_lower, text)
+    if song_intent:
+        return song_intent
+
     # Layer 1: Parse action/value/unit
     # Pass original text to preserve case in user-provided names
     action = parse_action(text_lower, original_text=text)
@@ -953,3 +959,40 @@ def _try_special_get_patterns(text_lower: str, original_text: str) -> Optional[D
 
     # No special pattern matched
     return None
+
+
+def _try_song_patterns(text_lower: str, original_text: str) -> Optional[Dict[str, Any]]:
+    """Try song-level command patterns (undo/redo, locators, song info).
+
+    These commands operate at the song/project level rather than on specific
+    tracks/devices, so they bypass the multi-layer parser.
+
+    Examples:
+        "undo" → song undo
+        "list locators" → list arrangement cue points
+        "jump to intro" → jump to locator by name
+    """
+    from server.services.nlp.layered.parsers.song_parser import parse_song
+
+    result = parse_song(original_text)
+    if not result:
+        return None
+
+    # Convert to raw_intent format expected by intent_mapper
+    domain = result.get("domain")
+    action = result.get("action")
+
+    return {
+        "intent": "song_command",
+        "domain": domain,
+        "action": action,
+        "locator_index": result.get("locator_index"),
+        "locator_name": result.get("locator_name"),
+        "new_name": result.get("new_name"),
+        "meta": {
+            "utterance": original_text,
+            "confidence": 0.98,
+            "pipeline": "regex_song",
+            "parsed_by": "song_parser"
+        }
+    }
