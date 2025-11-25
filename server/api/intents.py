@@ -551,19 +551,8 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         result["request_id"] = request_id
         return add_capabilities_ref(result, intent.model_dump())
 
-    # Device parameters (track/return)
-    if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
-        from server.services.intents.param_service import set_return_device_param
-        result = set_return_device_param(intent, debug=debug)
-        result["request_id"] = request_id
-        return add_capabilities_ref(result, intent.model_dump())
-    if d == "device" and intent.track_index is not None and intent.device_index is not None:
-        from server.services.intents.param_service import set_track_device_param
-        result = set_track_device_param(intent, debug=debug)
-        result["request_id"] = request_id
-        return add_capabilities_ref(result, intent.model_dump())
-
-    # Device action operations (load, etc.)
+    # Device action operations (load, delete) - check these BEFORE device parameters
+    # so that explicit actions are handled first
     if d == "device" and getattr(intent, "action", "") == "load":
         from server.services.ableton_client import request_op as _req
 
@@ -639,11 +628,20 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             else:
                 summary = f"Failed to load {device_name}: {error}"
 
-        return {
+        result = {
             "ok": ok,
             "summary": summary,
             "resp": r,
         }
+        result["request_id"] = request_id
+
+        # Add capabilities_ref so UI opens the drawer
+        if target_domain == "track":
+            return add_capabilities_ref(result, {"domain": "track", "track_index": target_index})
+        elif target_domain == "return":
+            return add_capabilities_ref(result, {"domain": "return", "return_index": target_index})
+
+        return result
 
     # Device deletion operations (delete, remove)
     if d == "device" and getattr(intent, "action", "") == "delete":
@@ -688,11 +686,36 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
 
             devices = r.get("data", {}).get("devices", [])
 
-            # Find matching devices (case-insensitive)
+            # Enrich devices with device_type from device_map.json
+            try:
+                import os
+                import json
+                config_path = os.path.expanduser("~/.fadebender/device_map.json")
+                if os.path.exists(config_path):
+                    with open(config_path, "r") as f:
+                        device_map = json.load(f)
+                        # Build reverse lookup: preset_name -> device_type
+                        preset_to_type = {}
+                        for device_type, device_info in device_map.items():
+                            if "presets" in device_info:
+                                for preset_name in device_info["presets"].keys():
+                                    preset_to_type[preset_name.lower()] = device_type.lower()
+
+                        # Enrich each device with device_type
+                        for d in devices:
+                            device_name = d.get("name", "")
+                            device_name_lower = device_name.lower()
+                            if device_name_lower in preset_to_type:
+                                d["device_type"] = preset_to_type[device_name_lower]
+            except Exception:
+                pass  # Continue without enrichment if device_map unavailable
+
+            # Find matching devices (case-insensitive, check both name and device_type)
             device_name_lower = device_name.lower()
             matching_devices = [
                 d for d in devices
-                if device_name_lower in d.get("name", "").lower()
+                if (device_name_lower in d.get("name", "").lower() or
+                    device_name_lower in d.get("device_type", "").lower())
             ]
 
             if not matching_devices:
@@ -747,11 +770,33 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
             error = r.get("error", "unknown_error") if r else "no_response"
             summary = f"Failed to delete device: {error}"
 
-        return {
+        result = {
             "ok": ok,
             "summary": summary,
             "resp": r,
         }
+        result["request_id"] = request_id
+
+        # Add capabilities_ref so UI opens the drawer
+        if target_domain == "track":
+            return add_capabilities_ref(result, {"domain": "track", "track_index": target_index})
+        elif target_domain == "return":
+            return add_capabilities_ref(result, {"domain": "return", "return_index": target_index})
+
+        return result
+
+    # Device parameters (track/return) - check these AFTER device actions
+    # so that actions like load/delete are handled first
+    if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:
+        from server.services.intents.param_service import set_return_device_param
+        result = set_return_device_param(intent, debug=debug)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
+    if d == "device" and intent.track_index is not None and intent.device_index is not None:
+        from server.services.intents.param_service import set_track_device_param
+        result = set_track_device_param(intent, debug=debug)
+        result["request_id"] = request_id
+        return add_capabilities_ref(result, intent.model_dump())
 
     # Song-level operations (undo/redo, info, locators)
     if d == "song":

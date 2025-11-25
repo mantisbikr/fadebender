@@ -2921,7 +2921,12 @@ def load_device_on_return(live, return_index: int, device_name: str, preset_name
             path = None
             if preset_name:
                 presets = info.get("presets") or {}
-                path = presets.get(preset_name)
+                # Case-insensitive preset lookup
+                preset_name_lower = str(preset_name).lower()
+                for key, val in presets.items():
+                    if str(key).lower() == preset_name_lower:
+                        path = val
+                        break
             if path is None:
                 path = info.get("path")
             if not isinstance(path, list) or not path:
@@ -3010,7 +3015,12 @@ def load_device_on_track(live, track_index: int, device_name: str, preset_name: 
             path = None
             if preset_name:
                 presets = info.get("presets") or {}
-                path = presets.get(preset_name)
+                # Case-insensitive preset lookup
+                preset_name_lower = str(preset_name).lower()
+                for key, val in presets.items():
+                    if str(key).lower() == preset_name_lower:
+                        path = val
+                        break
             if path is None:
                 path = info.get("path")
             if not isinstance(path, list) or not path:

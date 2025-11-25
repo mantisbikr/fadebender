@@ -298,6 +298,57 @@ def parse_delete_device(text: str) -> Optional[Dict[str, Any]]:
 
         return _build_delete_intent(domain, index_str, device_name=device_name, device_ordinal=ordinal)
 
+    # Try reversed pattern: "delete return C device 2" or "remove track 2 reverb"
+    m = re.match(
+        r"^(?:delete|remove)\s+(?:the\s+)?"
+        r"(track|return)\s+"  # domain first
+        r"(\w+)\s+"            # index
+        r"(?:device\s+)?(.+?)$",  # optional "device" keyword, then device spec
+        text,
+        re.IGNORECASE
+    )
+    if m:
+        domain = m.group(1).lower()
+        index_str = m.group(2)
+        device_spec = m.group(3).strip()
+
+        # Check if device_spec is "device N" or just "N" (by index)
+        device_match = re.match(r"^(?:device\s+)?(\d+)$", device_spec, re.IGNORECASE)
+        if device_match:
+            device_index = int(device_match.group(1))
+            return _build_delete_intent(domain, index_str, device_index=device_index)
+
+        # Check if device_spec has ordinal: "first reverb", "second compressor"
+        ordinal_match = re.match(
+            r"^(first|second|third|1st|2nd|3rd|\d+(?:st|nd|rd|th))\s+(.+)$",
+            device_spec,
+            re.IGNORECASE
+        )
+        if ordinal_match:
+            ordinal_str = ordinal_match.group(1).lower()
+            device_name = ordinal_match.group(2).strip()
+
+            # Parse ordinal to number
+            ordinal_map = {
+                "first": 1, "1st": 1,
+                "second": 2, "2nd": 2,
+                "third": 3, "3rd": 3,
+            }
+            ordinal = ordinal_map.get(ordinal_str)
+            if ordinal is None:
+                # Try to parse numeric ordinal like "4th"
+                match = re.match(r"(\d+)(?:st|nd|rd|th)", ordinal_str)
+                if match:
+                    ordinal = int(match.group(1))
+                else:
+                    ordinal = None
+
+            if ordinal:
+                return _build_delete_intent(domain, index_str, device_name=device_name, device_ordinal=ordinal)
+
+        # Otherwise it's just a device name
+        return _build_delete_intent(domain, index_str, device_name=device_spec)
+
     # Try by device name (e.g., "delete reverb from track 2")
     m = re.match(
         r"^(?:delete|remove)\s+(?:the\s+)?"

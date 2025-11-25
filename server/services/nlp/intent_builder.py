@@ -1031,6 +1031,8 @@ def _try_device_action_patterns(text_lower: str, original_text: str) -> Optional
         "action": action,
         "device_name": result.get("device_name"),
         "preset_name": result.get("preset_name"),
+        "device_index": result.get("device_index"),
+        "device_ordinal": result.get("device_ordinal"),
         "target_domain": result.get("target_domain"),
         "track_index": result.get("track_index"),
         "return_index": result.get("return_index"),
