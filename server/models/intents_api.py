@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 # Shared domain for canonical intents handled by API
-Domain = Literal["track", "return", "master", "device", "transport", "song"]
+Domain = Literal["track", "return", "master", "device", "transport", "song", "device_browser"]
 
 
 class CanonicalIntent(BaseModel):
@@ -45,6 +45,9 @@ class CanonicalIntent(BaseModel):
     device_name: Optional[str] = None          # Device name to load/delete
     preset_name: Optional[str] = None          # Optional preset name to load
     device_ordinal: Optional[int] = None       # Device ordinal (1-based) for deletion (e.g., "first reverb", "second compressor")
+
+    # Device browser fields (for domain="device_browser")
+    category: Optional[str] = None             # Device category: all|audio_effects|midi_effects|instruments
 
     # Options
     dry_run: bool = False

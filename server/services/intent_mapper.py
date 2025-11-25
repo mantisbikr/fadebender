@@ -150,6 +150,19 @@ def map_llm_to_canonical(llm_intent: Dict[str, Any]) -> Tuple[Optional[Dict[str,
             pass
         return intent, []
 
+    # Pass-through for device browser intents (list devices, etc.)
+    if kind == "device_browser":
+        category = (llm_intent or {}).get("category")
+        if not category:
+            errors.append("missing_device_category")
+            return None, errors
+        intent = {
+            "domain": "device_browser",
+            "action": "list",
+            "category": str(category),
+        }
+        return intent, []
+
     # Only map control intents here; questions/clarifications bubble up to caller
     if kind not in ("set_parameter", "relative_change"):
         errors.append(f"non_control_intent:{kind}")

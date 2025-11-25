@@ -124,23 +124,35 @@ Device Control (returns and tracks)
   - `set return B reverb 2 decay to 1.5 s`
 
 Device Loading
-- Load devices onto tracks or returns:
+- **Audio Effects** - Load audio processing devices:
   - `load reverb on track 2`
   - `add compressor to track 1`
   - `put limiter on return A`
   - `insert delay on track 3`
-- Load device with specific preset:
-  - `load reverb preset cathedral on track 2`
-  - `load analog preset lush pad on track 3`
-  - `add compressor gentle on return B` (implicit preset)
-- Multi-word devices work automatically:
-  - `load auto filter on track 3`
+  - `load auto filter on track 5`
   - `add eq eight to track 1`
   - `load beat repeat on track 2`
+- **MIDI Effects** - Load MIDI processing devices:
+  - `load arpeggiator on track 3`
+  - `add chord to track 2`
+  - `load note echo on track 4`
+  - `add scale on track 1`
+- **Instruments** - Load synthesizers and samplers:
+  - `load analog on track 5`
+  - `add wavetable to track 3`
+  - `load impulse on track 2`
+  - `add sampler to track 4`
+  - `load drum rack on track 1`
+- **With Presets** - Load device with specific preset:
+  - `load reverb preset cathedral on track 2`
+  - `load analog preset lush pad on track 3`
+  - `add delay 4th bandpass on return C` (implicit preset)
+  - `add compressor gentle on return B` (implicit preset)
+- Multi-word devices work automatically (auto filter, eq eight, beat repeat, drum rack)
 - Case-insensitive: `load reverb` / `load REVERB` / `load Reverb`
 - Supported verbs: load, add, put, insert
-- Supported targets: track N, return A/B/C (letter or number), master
-- Requires device_map.json to be configured (see installer guide)
+- Supported targets: track N, return A-L (letter or number), master
+- Requires device_map.json to be configured (auto-generated during installation)
 
 Device Deletion
 - Delete devices from tracks or returns:

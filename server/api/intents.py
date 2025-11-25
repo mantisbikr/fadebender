@@ -785,6 +785,90 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
 
         return result
 
+    # Device browser (list devices, show presets)
+    if d == "device_browser":
+        import os
+        import json
+
+        category = getattr(intent, "category", "all")
+
+        # Load device_map.json
+        device_map_path = os.path.expanduser("~/.fadebender/device_map.json")
+        if not os.path.exists(device_map_path):
+            return {
+                "ok": False,
+                "summary": "Device map not found. Please generate it first.",
+                "request_id": request_id,
+            }
+
+        with open(device_map_path, "r") as f:
+            device_map = json.load(f)
+
+        # Organize devices by category
+        devices_by_category = {
+            "audio_effects": {},
+            "midi_effects": {},
+            "instruments": {},
+        }
+
+        for device_name, device_info in device_map.items():
+            device_type = device_info.get("type")
+            if device_type in devices_by_category:
+                devices_by_category[device_type][device_name] = {
+                    "presets": list(device_info.get("presets", {}).keys()) if device_info.get("presets") else [],
+                    "default_path": device_info.get("path", []),
+                }
+
+        # Filter by category if specified
+        if category == "all":
+            result_data = {
+                "categories": {
+                    "Audio Effects": {
+                        "count": len(devices_by_category["audio_effects"]),
+                        "devices": devices_by_category["audio_effects"],
+                    },
+                    "MIDI Effects": {
+                        "count": len(devices_by_category["midi_effects"]),
+                        "devices": devices_by_category["midi_effects"],
+                    },
+                    "Instruments": {
+                        "count": len(devices_by_category["instruments"]),
+                        "devices": devices_by_category["instruments"],
+                    },
+                }
+            }
+            summary = f"Found {len(device_map)} devices across 3 categories"
+        else:
+            # Single category
+            category_display = {
+                "audio_effects": "Audio Effects",
+                "midi_effects": "MIDI Effects",
+                "instruments": "Instruments",
+            }.get(category, category)
+
+            devices = devices_by_category.get(category, {})
+            result_data = {
+                "category": category_display,
+                "devices": devices,
+            }
+            summary = f"Found {len(devices)} devices in {category_display}"
+
+        result = {
+            "ok": True,
+            "summary": summary,
+            "data": result_data,
+            "request_id": request_id,
+        }
+
+        # Add capabilities_ref to open device browser drawer
+        result["capabilities_ref"] = {
+            "available": True,
+            "domain": "device_browser",
+            "category": category,
+        }
+
+        return result
+
     # Device parameters (track/return) - check these AFTER device actions
     # so that actions like load/delete are handled first
     if d == "device" and (intent.return_index is not None or intent.return_ref is not None) and intent.device_index is not None:

@@ -147,7 +147,7 @@ def _get_browser_from_live(live) -> Any:
 def _navigate_browser_path(browser, path: List[str]):
     """Navigate a Live browser tree using a simple path list.
 
-    path examples: ['audio_effects', 'Reverb'], ['midi_effects', 'Chord'], etc.
+    path examples: ['audio_effects', 'Reverb'], ['midi_effects', 'Chord'], ['instruments', 'Analog'], etc.
     """
     if not path:
         return None
@@ -157,10 +157,16 @@ def _navigate_browser_path(browser, path: List[str]):
             current = getattr(browser, "audio_effects", None)
         elif root == "midi_effects":
             current = getattr(browser, "midi_effects", None)
+        elif root == "instruments":
+            current = getattr(browser, "instruments", None)
         elif root == "plugins":
             current = getattr(browser, "plugins", None)
         elif root == "samples":
             current = getattr(browser, "samples", None)
+        elif root == "clips":
+            current = getattr(browser, "clips", None)
+        elif root == "drums":
+            current = getattr(browser, "drums", None)
         else:
             return None
     except Exception:

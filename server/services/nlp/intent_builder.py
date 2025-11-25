@@ -534,6 +534,12 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     if device_action_intent:
         return device_action_intent
 
+    # Try device browser commands (list devices, etc.)
+    # These commands display available devices for user selection
+    device_browser_intent = _try_device_browser_patterns(text_lower, text)
+    if device_browser_intent:
+        return device_browser_intent
+
     # Layer 1: Parse action/value/unit
     # Pass original text to preserve case in user-provided names
     action = parse_action(text_lower, original_text=text)
@@ -1042,5 +1048,35 @@ def _try_device_action_patterns(text_lower: str, original_text: str) -> Optional
             "confidence": 0.98,
             "pipeline": "regex_device_action",
             "parsed_by": "device_action_parser"
+        }
+    }
+
+
+def _try_device_browser_patterns(text_lower: str, original_text: str) -> Optional[Dict[str, Any]]:
+    """Try device browser command patterns (list devices, etc.).
+
+    These commands display available devices and presets for user selection.
+
+    Examples:
+        "list devices" → show all device categories
+        "show audio effects" → show audio effects devices
+        "list instruments" → show instrument devices
+    """
+    from server.services.nlp.layered.parsers.device_browser_parser import parse_device_browser
+
+    result = parse_device_browser(original_text)
+    if not result:
+        return None
+
+    return {
+        "intent": "device_browser",
+        "domain": result.get("domain"),
+        "action": result.get("action"),
+        "category": result.get("category"),
+        "meta": {
+            "utterance": original_text,
+            "confidence": 0.98,
+            "pipeline": "regex_device_browser",
+            "parsed_by": "device_browser_parser"
         }
     }
