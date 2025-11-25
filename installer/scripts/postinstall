@@ -22,6 +22,16 @@ REPO_DIR_DEFAULT="$USER_HOME/ai-projects/fadebender"
 # Install Remote Script to User Library
 unzip -o "$SRC_ROOT/resources/remote_script.zip" -d "$REMOTE_DST" >/dev/null
 
+# Generate device_map.json from user's Live installation
+# This scans Live's Core Library and builds a map of all devices and presets
+if [ -f "$SRC_ROOT/resources/build_device_map_standalone.py" ]; then
+    echo "Generating device map from Ableton Live library..."
+    python3 "$SRC_ROOT/resources/build_device_map_standalone.py" "$APP_DIR/device_map.json" 2>/dev/null || {
+        echo "Warning: Could not generate device map. Device loading/deletion by type may not work."
+        echo "You can generate it later by running: python3 scripts/build_device_map.py"
+    }
+fi
+
 # Write LaunchAgent plist
 PLIST="$LAUNCHD_DIR/com.fadebender.agent.plist"
 cat > "$PLIST" <<PL

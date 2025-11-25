@@ -14,8 +14,6 @@ for admin rights if copying into /Applications.
 from __future__ import annotations
 
 import argparse
-import glob
-import os
 import shutil
 from pathlib import Path
 
@@ -24,11 +22,26 @@ SRC = ROOT / "ableton_remote" / "Fadebender"
 
 
 def find_live_paths() -> list[Path]:
+    """Find all Ableton Live installations in /Applications."""
     paths: list[Path] = []
-    for pattern in ["/Applications/Ableton Live *.app", "/Applications/Ableton Live*.app"]:
-        for p in glob.glob(pattern):
-            paths.append(Path(p))
-    return paths
+    apps_dir = Path("/Applications")
+
+    if not apps_dir.exists():
+        return paths
+
+    # Search for Live installations with specific version and edition patterns
+    for version in ["12", "11", "10", "9"]:
+        for edition in ["Suite", "Standard", "Intro", "Lite"]:
+            app = apps_dir / f"Ableton Live {version} {edition}.app"
+            if app.exists() and app.is_dir():
+                paths.append(app)
+
+    # Also check for generic "Ableton Live.app" or "Ableton Live X.app" patterns
+    for item in apps_dir.glob("Ableton Live*.app"):
+        if item.is_dir() and item not in paths:
+            paths.append(item)
+
+    return sorted(paths, reverse=True)  # Sort newest first
 
 
 def install(dst_root: Path, dry_run: bool = False) -> None:

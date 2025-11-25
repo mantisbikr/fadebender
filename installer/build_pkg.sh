@@ -22,7 +22,11 @@ if [[ ! -d "$RS_SRC" ]]; then
 fi
 (cd "$RS_SRC/.." && zip -r "$ROOT_DIR/$RESOURCES/remote_script.zip" "Fadebender" >/dev/null)
 
-# 2) Provide a run_server.sh template with a placeholder for REPO_DIR
+# 2) Copy device map builder script
+cp "$ROOT_DIR/installer/resources/build_device_map_standalone.py" "$RESOURCES/"
+chmod +x "$RESOURCES/build_device_map_standalone.py"
+
+# 3) Provide a run_server.sh template with a placeholder for REPO_DIR
 cat > "$RESOURCES/run_server.sh" <<'SH'
 #!/bin/bash
 exec >> /tmp/fadebender.log 2>> /tmp/fadebender-error.log
@@ -34,10 +38,10 @@ cd "$REPO_DIR"
 SH
 chmod +x "$RESOURCES/run_server.sh"
 
-# 3) Ensure postinstall script is executable
+# 4) Ensure postinstall script is executable
 chmod +x "$SCRIPTS/postinstall"
 
-# 4) Build pkg with payload targeting /usr/local/share/fadebender
+# 5) Build pkg with payload targeting /usr/local/share/fadebender
 pkgbuild \
   --root "$PAYLOAD" \
   --identifier "$IDENT" \
