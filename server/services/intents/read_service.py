@@ -25,6 +25,13 @@ def read_intent(intent: ReadIntent) -> Dict[str, Any]:
     Returns current values with display formatting.
     """
     domain = intent.domain
+
+    # Convert composite domains to base domains for processing
+    # track_device and return_device are capabilities drawer domains, but
+    # the read logic treats them as "device" with track/return context
+    if domain == "track_device" or domain == "return_device":
+        domain = "device"
+
     field = (intent.field or "").strip()
 
     # Detect "Send A/B/C" pattern and convert to field="send", send_ref="A/B/C"

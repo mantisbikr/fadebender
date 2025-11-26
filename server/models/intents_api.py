@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 # Shared domain for canonical intents handled by API
 Domain = Literal["track", "return", "master", "device", "transport", "song", "device_browser"]
 
+# Domain for read intents (includes composite domains for capabilities drawer)
+ReadDomain = Literal["track", "return", "master", "device", "track_device", "return_device", "transport", "song", "device_browser"]
+
 
 class CanonicalIntent(BaseModel):
     domain: Domain = Field(..., description="Scope: track|return|master|device|transport|song")
@@ -57,7 +60,7 @@ class CanonicalIntent(BaseModel):
 
 
 class ReadIntent(BaseModel):
-    domain: Domain = Field(..., description="Scope: track|return|master|device|transport|song")
+    domain: ReadDomain = Field(..., description="Scope: track|return|master|device|track_device|return_device|transport|song")
     # Targets (one of):
     track_index: Optional[int] = None
     return_index: Optional[int] = None

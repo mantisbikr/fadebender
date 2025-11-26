@@ -141,6 +141,10 @@ def ensure_capabilities(resp: Dict[str, Any], *, domain: str,
         elif domain == "master":
             from server.api.master import get_master_mixer_capabilities  # type: ignore
             caps = get_master_mixer_capabilities()
+        elif domain == "track_device" and track_index is not None and device_index is not None:
+            from server.api.tracks import get_track_device_capabilities  # type: ignore
+            # track_device uses 1-based track_index (same as REST API), pass directly
+            caps = get_track_device_capabilities(index=int(track_index), device=int(device_index))
         elif domain == "return_device" and return_index is not None and device_index is not None:
             from server.api.returns import get_return_device_capabilities  # type: ignore
             caps = get_return_device_capabilities(index=int(return_index), device=int(device_index))

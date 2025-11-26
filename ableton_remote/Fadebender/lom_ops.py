@@ -2957,6 +2957,11 @@ def load_device_on_return(live, return_index: int, device_name: str, preset_name
                 try:
                     if hasattr(song, "begin_undo_step"):
                         song.begin_undo_step()
+                    # Select the target return track before loading to ensure correct placement
+                    try:
+                        song.view.selected_track = rt
+                    except Exception:
+                        pass
                     # Prefer explicit target, fall back to default load_item signature
                     try:
                         browser.load_item(item, rt)
@@ -3051,6 +3056,11 @@ def load_device_on_track(live, track_index: int, device_name: str, preset_name: 
                 try:
                     if hasattr(song, "begin_undo_step"):
                         song.begin_undo_step()
+                    # Select the target track before loading to ensure correct placement
+                    try:
+                        song.view.selected_track = tr
+                    except Exception:
+                        pass
                     try:
                         browser.load_item(item, tr)
                     except TypeError:

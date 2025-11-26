@@ -635,7 +635,35 @@ def execute_intent(intent: CanonicalIntent, debug: bool = False) -> Dict[str, An
         }
         result["request_id"] = request_id
 
-        # Add capabilities_ref so UI opens the drawer
+        # Add capabilities_ref to open the device's parameters (not just mixer)
+        if ok and r:
+            device_index = r.get("device_index")
+            if device_index is not None:
+                # Open the specific device that was just loaded
+                # NOTE: For track_device, frontend expects 0-based indices (REST API format)
+                # Regular track mixer still uses 1-based (converted in add_capabilities_ref)
+                if target_domain == "track":
+                    # Keep 1-based (REST API also uses 1-based for tracks)
+                    return result | {
+                        "capabilities_ref": {
+                            "available": True,
+                            "domain": "track_device",
+                            "track_index": target_index,  # Keep 1-based
+                            "device_index": device_index
+                        }
+                    }
+                elif target_domain == "return":
+                    return result | {
+                        "capabilities_ref": {
+                            "available": True,
+                            "domain": "return_device",
+                            "return_index": target_index,  # Already 0-based
+                            "device_index": device_index
+                        }
+                    }
+
+        # Fallback to mixer view if device_index not available
+        # Keep 1-based for tracks (converted in add_capabilities_ref), 0-based for returns
         if target_domain == "track":
             return add_capabilities_ref(result, {"domain": "track", "track_index": target_index})
         elif target_domain == "return":
