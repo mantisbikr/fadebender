@@ -103,10 +103,10 @@ export function useDAWControl() {
           if (ref.domain === 'return_device') {
             caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
           } else if (ref.domain === 'track_device') {
-            // Backend returns 1-based track_index, API expects 0-based
-            caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+            // Backend returns 1-based, REST API /track/device/capabilities also expects 1-based (no conversion)
+            caps = await apiService.getTrackDeviceCapabilities(ref.track_index, ref.device_index);
           } else if (ref.domain === 'track') {
-            // Backend returns 1-based track_index, API expects 0-based
+            // Backend returns 1-based, REST API /track/mixer/capabilities expects 0-based (converts)
             caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
           } else if (ref.domain === 'return') {
             caps = await apiService.getReturnMixerCapabilities(ref.return_index);
@@ -531,6 +531,55 @@ export function useDAWControl() {
             }
             // Open capabilities
             const caps = await apiService.getReturnDeviceCapabilities(ri, Number(di));
+            if (caps && caps.ok) {
+              setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true);
+              // Optional focus: if param_hint present, set drawerInit
+              setDrawerInit({ group: null, param: (t.param_hint || null) });
+            }
+            return;
+          }
+          if (type === 'device' && t.scope === 'track') {
+            const ti = typeof t.track_index === 'number' ? Number(t.track_index) : null;
+            if (ti == null) throw new Error('Missing track index');
+            let di = t.device_index;
+            if (typeof di !== 'number' && t.device_name_hint) {
+              // Resolve by name
+              try {
+                // Prefer /track/devices (has device_type for matching), fall back to snapshot
+                let list = [];
+                try {
+                  // Note: /track/devices uses 1-based indexing (same as device capabilities)
+                  const devs = await apiService.getTrackDevices(ti);
+                  list = (devs && devs.data && Array.isArray(devs.data.devices)) ? devs.data.devices : [];
+                } catch {}
+                if (!list.length) {
+                  // Note: snapshot/devices uses 0-based indexing and lacks device_type
+                  const snap = await apiService.getSnapshotDevices('track', ti - 1);
+                  list = (snap && snap.data && Array.isArray(snap.data.devices)) ? snap.data.devices : [];
+                }
+                const name = String(t.device_name_hint).toLowerCase();
+                const matches = list.filter(d => {
+                  const dn = String(d.name || '').toLowerCase();
+                  const dt = String(d.device_type || '').toLowerCase();
+                  return dn.includes(name) || (dt && (dt === name || dt.includes(name)));
+                });
+                if (matches.length === 1) di = Number(matches[0].index);
+                if (matches.length > 1 && typeof t.device_ordinal_hint === 'number') {
+                  const ord = Math.max(1, Number(t.device_ordinal_hint));
+                  di = Number(matches[ord - 1]?.index);
+                }
+                if (typeof di !== 'number') {
+                  const suggestions = matches.slice(0, 6).map(d => ({ label: `${d.name}${d.device_type ? ' • '+d.device_type : ''}`, value: `open track ${ti} ${d.name}` }));
+                  addMessage({ type: 'question', content: 'Which device?', data: { suggested_intents: suggestions } });
+                  return;
+                }
+              } catch (e) {
+                addMessage({ type: 'error', content: `Unable to resolve device: ${e.message}` });
+                return;
+              }
+            }
+            // Open capabilities - track device endpoints use 1-based indexing (unlike mixer endpoints)
+            const caps = await apiService.getTrackDeviceCapabilities(ti, Number(di));
             if (caps && caps.ok) {
               setCurrentCapabilities(caps.data); setCapabilitiesDrawerOpen(true);
               // Optional focus: if param_hint present, set drawerInit
@@ -1090,10 +1139,10 @@ export function useDAWControl() {
             if (ref.domain === 'return_device') {
               caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
             } else if (ref.domain === 'track_device') {
-              // Backend returns 1-based track_index, API expects 0-based
-              caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+              // Backend returns 1-based, REST API /track/device/capabilities also expects 1-based (no conversion)
+              caps = await apiService.getTrackDeviceCapabilities(ref.track_index, ref.device_index);
             } else if (ref.domain === 'track') {
-              // Backend returns 1-based track_index, API expects 0-based
+              // Backend returns 1-based, REST API /track/mixer/capabilities expects 0-based (converts)
               caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
             } else if (ref.domain === 'return') {
               caps = await apiService.getReturnMixerCapabilities(ref.return_index);
@@ -1349,10 +1398,10 @@ export function useDAWControl() {
         if (ref.domain === 'return_device') {
           caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
         } else if (ref.domain === 'track_device') {
-          // Backend returns 1-based track_index, API expects 0-based
-          caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+          // Backend returns 1-based, REST API /track/device/capabilities also expects 1-based (no conversion)
+          caps = await apiService.getTrackDeviceCapabilities(ref.track_index, ref.device_index);
         } else if (ref.domain === 'track') {
-          // Backend returns 1-based track_index, API expects 0-based
+          // Backend returns 1-based, REST API /track/mixer/capabilities expects 0-based (converts)
           caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
         } else if (ref.domain === 'return') {
           caps = await apiService.getReturnMixerCapabilities(ref.return_index);
@@ -1409,8 +1458,10 @@ export function useDAWControl() {
         if (ref.domain === 'return_device') {
           caps = await apiService.getReturnDeviceCapabilities(ref.return_index, ref.device_index);
         } else if (ref.domain === 'track_device') {
-          caps = await apiService.getTrackDeviceCapabilities(ref.track_index - 1, ref.device_index);
+          // Backend returns 1-based, REST API /track/device/capabilities also expects 1-based (no conversion)
+          caps = await apiService.getTrackDeviceCapabilities(ref.track_index, ref.device_index);
         } else if (ref.domain === 'track') {
+          // Backend returns 1-based, REST API /track/mixer/capabilities expects 0-based (converts)
           caps = await apiService.getTrackMixerCapabilities(ref.track_index - 1);
         } else if (ref.domain === 'return') {
           caps = await apiService.getReturnMixerCapabilities(ref.return_index);

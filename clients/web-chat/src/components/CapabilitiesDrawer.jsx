@@ -206,8 +206,8 @@ export default function CapabilitiesDrawer({
     const returnIndex = liveCapabilities.return_index;
 
     if (trackIndex !== undefined) {
-      // Track device: "Track 1 Device 0, Reverb"
-      title = `Track ${trackIndex + 1} Device ${deviceIndex}, ${deviceName}`;
+      // Track device: track_index from backend is already 1-based (matches REST API /track/device/capabilities)
+      title = `Track ${trackIndex} Device ${deviceIndex}, ${deviceName}`;
     } else if (returnIndex !== undefined) {
       // Return device: "Return A Device 0, Reverb"
       const returnLetter = String.fromCharCode(65 + returnIndex); // 0 -> A, 1 -> B, etc.

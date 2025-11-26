@@ -583,6 +583,32 @@ def _try_open_navigation_patterns(text_lower: str, original_text: str) -> Option
             "meta": {"utterance": original_text, "parsed_by": "regex_open"}
         }
 
+    # Device on track by index
+    m = _re.search(r"^\s*open\s+track\s+(\d+)\s+device\s+(\d+)(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
+    if m:
+        ti = int(m.group(1)); di = int(m.group(2)); ph = (m.group(3) or "").strip() or None
+        payload: Dict[str, Any] = {"type": "device", "scope": "track", "track_index": ti, "device_index": di}
+        if ph:
+            payload["param_hint"] = ph
+        return {"intent": "open_capabilities", "target": payload, "meta": {"utterance": original_text, "parsed_by": "regex_open"}}
+
+    # Device on track by name (+ optional ordinal)
+    m = _re.search(r"^\s*open\s+track\s+(\d+)\s+([a-z0-9 ][a-z0-9 \-]+?)(?:\s+(\d+))?(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
+    if m:
+        ti = int(m.group(1))
+        name = m.group(2).strip()
+        ords = m.group(3)
+        ph = (m.group(4) or "").strip() or None
+        payload: Dict[str, Any] = {"type": "device", "scope": "track", "track_index": ti, "device_name_hint": name}
+        if ords:
+            try:
+                payload["device_ordinal_hint"] = int(ords)
+            except Exception:
+                pass
+        if ph:
+            payload["param_hint"] = ph
+        return {"intent": "open_capabilities", "target": payload, "meta": {"utterance": original_text, "parsed_by": "regex_open"}}
+
     # Device on return by index
     m = _re.search(r"^\s*open\s+return\s+([a-l])\s+device\s+(\d+)(?:\s+([a-z0-9][a-z0-9 /%\.-]+))?\s*$", qs)
     if m:

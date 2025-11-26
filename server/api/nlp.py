@@ -861,7 +861,51 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         # Navigation intents (open_capabilities, list_capabilities) are valid UI intents
         # They don't go to the remote script, but should return ok=True for the UI to handle
         if raw_intent and raw_intent.get("intent") in ("open_capabilities", "list_capabilities"):
-            return {"ok": True, "intent": raw_intent, "raw_intent": raw_intent}
+            # Build capabilities_ref for device targets
+            target = raw_intent.get("target", {})
+            capabilities_ref = None
+
+            if target.get("type") == "device":
+                scope = target.get("scope")
+                if scope == "track" and target.get("track_index") is not None and target.get("device_index") is not None:
+                    capabilities_ref = {
+                        "available": True,
+                        "domain": "track_device",
+                        "track_index": target["track_index"],
+                        "device_index": target["device_index"]
+                    }
+                elif scope == "return" and target.get("return_ref") is not None and target.get("device_index") is not None:
+                    # Convert return letter to index (A=0, B=1, etc.)
+                    return_index = ord(target["return_ref"].upper()) - ord('A')
+                    capabilities_ref = {
+                        "available": True,
+                        "domain": "return_device",
+                        "return_index": return_index,
+                        "device_index": target["device_index"]
+                    }
+            elif target.get("type") == "mixer":
+                entity = target.get("entity")
+                if entity == "track" and target.get("track_index") is not None:
+                    capabilities_ref = {
+                        "available": True,
+                        "domain": "track",
+                        "track_index": target["track_index"]
+                    }
+                elif entity == "return" and target.get("return_ref") is not None:
+                    # Convert return letter to index
+                    return_index = ord(target["return_ref"].upper()) - ord('A')
+                    capabilities_ref = {
+                        "available": True,
+                        "domain": "return",
+                        "return_index": return_index
+                    }
+                elif entity == "master":
+                    capabilities_ref = {
+                        "available": True,
+                        "domain": "master"
+                    }
+
+            return {"ok": True, "intent": raw_intent, "raw_intent": raw_intent, "capabilities_ref": capabilities_ref}
 
         # Help/question intents should route to /help endpoint with ok=True
         if raw_intent and raw_intent.get("intent") == "question_response":

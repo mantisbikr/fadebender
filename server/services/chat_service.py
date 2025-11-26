@@ -380,6 +380,16 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
                         device_index=0
                     )
                     summary = f"Opening Return {return_ref} {device_name_hint} controls"
+                elif scope == "track":
+                    track_index = target.get("track_index", 1)
+                    device_index = target.get("device_index", 0)
+                    device_name_hint = target.get("device_name_hint", "")
+                    capabilities_ref = build_capabilities_ref(
+                        domain="track_device",
+                        track_index=track_index,
+                        device_index=device_index
+                    )
+                    summary = f"Opening Track {track_index} Device {device_index} {device_name_hint} controls".strip()
 
         except Exception:
             pass
