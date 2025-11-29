@@ -26,11 +26,21 @@ const server = new Server(
 // Helper to ensure browser is running
 async function ensureBrowser() {
   if (!browser) {
-    browser = await puppeteer.launch({
-      headless: false, // Visible for debugging/demo
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    try {
+      // Try to connect to an existing browser instance first
+      browser = await puppeteer.connect({
+        browserURL: "http://127.0.0.1:9222",
+      });
+      // console.error("Connected to existing browser.");
+    } catch (err) {
+      // console.error("Could not connect to existing browser, launching new one:", err);
+      browser = await puppeteer.launch({
+        headless: false, // Visible for debugging/demo
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+    }
     const pages = await browser.pages();
+    // Prefer the first page, or create a new one if none exist
     page = pages[0] || (await browser.newPage());
   }
   return { browser, page: page! };

@@ -940,79 +940,97 @@ def get_track_status(live, track_index: int) -> dict:
 
 
 def set_mixer(live, track_index: int, field: str, value: float) -> bool:
-    try:
-        if live is not None:
-            idx = int(track_index)
-            if 1 <= idx <= len(live.tracks):
-                tr = live.tracks[idx - 1]
-                mix = getattr(tr, "mixer_device", None)
-                if field == "volume" and hasattr(mix, "volume"):
+    """Set track mixer parameter (volume, pan, mute, solo).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                idx = int(track_index)
+                if 1 <= idx <= len(live.tracks):
+                    tr = live.tracks[idx - 1]
+                    mix = getattr(tr, "mixer_device", None)
+                    if field == "volume" and hasattr(mix, "volume"):
+                        val = max(0.0, min(1.0, float(value)))
+                        mix.volume.value = val
+                        _emit({"event": "mixer_changed", "track": idx, "field": "volume", "value": float(val)})
+                        return True
+                    if field == "pan" and hasattr(mix, "panning"):
+                        val = max(-1.0, min(1.0, float(value)))
+                        mix.panning.value = val
+                        _emit({"event": "mixer_changed", "track": idx, "field": "pan", "value": float(val)})
+                        return True
+                    if field == "mute" and hasattr(mix, "track_activator"):
+                        # Set activator: 1 = active(unmuted), 0 = muted
+                        mix.track_activator.value = 0 if bool(value) else 1
+                        _emit({"event": "mixer_changed", "track": idx, "field": "mute", "value": bool(value)})
+                        return True
+                    if field == "solo" and hasattr(tr, "solo"):
+                        tr.solo = bool(value)
+                        _emit({"event": "mixer_changed", "track": idx, "field": "solo", "value": bool(value)})
+                        return True
+                    return False
+        except Exception:
+            pass
+        for t in _STATE["tracks"]:
+            if t["index"] == int(track_index):
+                if field == "volume":
                     val = max(0.0, min(1.0, float(value)))
-                    mix.volume.value = val
-                    _emit({"event": "mixer_changed", "track": idx, "field": "volume", "value": float(val)})
+                    t["mixer"]["volume"] = val
+                    _emit({"event": "mixer_changed", "track": int(track_index), "field": "volume", "value": float(val)})
                     return True
-                if field == "pan" and hasattr(mix, "panning"):
+                if field == "pan":
                     val = max(-1.0, min(1.0, float(value)))
-                    mix.panning.value = val
-                    _emit({"event": "mixer_changed", "track": idx, "field": "pan", "value": float(val)})
+                    t["mixer"]["pan"] = val
+                    _emit({"event": "mixer_changed", "track": int(track_index), "field": "pan", "value": float(val)})
                     return True
-                if field == "mute" and hasattr(mix, "track_activator"):
-                    # Set activator: 1 = active(unmuted), 0 = muted
-                    mix.track_activator.value = 0 if bool(value) else 1
-                    _emit({"event": "mixer_changed", "track": idx, "field": "mute", "value": bool(value)})
+                if field == "mute":
+                    t["mute"] = bool(value)
+                    _emit({"event": "mixer_changed", "track": int(track_index), "field": "mute", "value": bool(value)})
                     return True
-                if field == "solo" and hasattr(tr, "solo"):
-                    tr.solo = bool(value)
-                    _emit({"event": "mixer_changed", "track": idx, "field": "solo", "value": bool(value)})
+                if field == "solo":
+                    t["solo"] = bool(value)
+                    _emit({"event": "mixer_changed", "track": int(track_index), "field": "solo", "value": bool(value)})
                     return True
                 return False
-    except Exception:
-        pass
-    for t in _STATE["tracks"]:
-        if t["index"] == int(track_index):
-            if field == "volume":
-                val = max(0.0, min(1.0, float(value)))
-                t["mixer"]["volume"] = val
-                _emit({"event": "mixer_changed", "track": int(track_index), "field": "volume", "value": float(val)})
-                return True
-            if field == "pan":
-                val = max(-1.0, min(1.0, float(value)))
-                t["mixer"]["pan"] = val
-                _emit({"event": "mixer_changed", "track": int(track_index), "field": "pan", "value": float(val)})
-                return True
-            if field == "mute":
-                t["mute"] = bool(value)
-                _emit({"event": "mixer_changed", "track": int(track_index), "field": "mute", "value": bool(value)})
-                return True
-            if field == "solo":
-                t["solo"] = bool(value)
-                _emit({"event": "mixer_changed", "track": int(track_index), "field": "solo", "value": bool(value)})
-                return True
-            return False
-    return False
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 def set_send(live, track_index: int, send_index: int, value: float) -> bool:  # noqa: ARG001
-    try:
-        if live is not None:
-            idx = int(track_index)
-            if 1 <= idx <= len(live.tracks):
-                tr = live.tracks[idx - 1]
-                mix = getattr(tr, "mixer_device", None)
-                sends = getattr(mix, "sends", None)
-                if sends is not None and 0 <= int(send_index) < len(sends):
-                    sends[int(send_index)].value = max(0.0, min(1.0, float(value)))
+    """Set track send level.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                idx = int(track_index)
+                if 1 <= idx <= len(live.tracks):
+                    tr = live.tracks[idx - 1]
+                    mix = getattr(tr, "mixer_device", None)
+                    sends = getattr(mix, "sends", None)
+                    if sends is not None and 0 <= int(send_index) < len(sends):
+                        sends[int(send_index)].value = max(0.0, min(1.0, float(value)))
+                        return True
+        except Exception:
+            pass
+        for t in _STATE["tracks"]:
+            if t["index"] == int(track_index):
+                arr = t.setdefault("sends", [0.0, 0.0])
+                si = int(send_index)
+                if 0 <= si < len(arr):
+                    arr[si] = max(0.0, min(1.0, float(value)))
                     return True
-    except Exception:
-        pass
-    for t in _STATE["tracks"]:
-        if t["index"] == int(track_index):
-            arr = t.setdefault("sends", [0.0, 0.0])
-            si = int(send_index)
-            if 0 <= si < len(arr):
-                arr[si] = max(0.0, min(1.0, float(value)))
-                return True
-    return False
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 def get_track_sends(live, track_index: int) -> dict:
     """Return a list of sends for a track: [{index, name, value, db?}]"""
@@ -1145,28 +1163,37 @@ def get_return_sends(live, return_index: int) -> dict:
 
 
 def set_return_send(live, return_index: int, send_index: int, value: float) -> bool:
-    try:
-        if live is not None:
-            ri = int(return_index)
-            si = int(send_index)
-            returns = getattr(live, "return_tracks", []) or []
-            if 0 <= ri < len(returns):
-                rt = returns[ri]
-                sends = getattr(getattr(rt, "mixer_device", None), "sends", []) or []
-                if 0 <= si < len(sends):
-                    sends[si].value = max(0.0, min(1.0, float(value)))
+    """Set return send level.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                ri = int(return_index)
+                si = int(send_index)
+                returns = getattr(live, "return_tracks", []) or []
+                if 0 <= ri < len(returns):
+                    rt = returns[ri]
+                    sends = getattr(getattr(rt, "mixer_device", None), "sends", []) or []
+                    if 0 <= si < len(sends):
+                        sends[si].value = max(0.0, min(1.0, float(value)))
+                        return True
+        except Exception:
+            pass
+        # Stub
+        for r in _STATE.get("returns", []):
+            if r["index"] == int(return_index):
+                arr = r.setdefault("sends", [0.0, 0.0])
+                si = int(send_index)
+                if 0 <= si < len(arr):
+                    arr[si] = max(0.0, min(1.0, float(value)))
                     return True
-    except Exception:
-        pass
-    # Stub
-    for r in _STATE.get("returns", []):
-        if r["index"] == int(return_index):
-            arr = r.setdefault("sends", [0.0, 0.0])
-            si = int(send_index)
-            if 0 <= si < len(arr):
-                arr[si] = max(0.0, min(1.0, float(value)))
-                return True
-    return False
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 # ---------- Track Devices ----------
@@ -1232,6 +1259,7 @@ def get_track_devices(live, track_index: int) -> Dict[str, Any]:
         for di, d in enumerate(devs):
             try:
                 name = str(getattr(d, 'name', f'Device {di}'))
+                class_name = str(getattr(d, 'class_display_name', '') or '')
                 k = prelim_kinds[di]
                 if k == 'unknown':
                     if not is_midi:
@@ -1246,7 +1274,10 @@ def get_track_devices(live, track_index: int) -> Dict[str, Any]:
                     is_on = bool(getattr(d, 'is_enabled', getattr(d, 'is_active', True)))
                 except Exception:
                     is_on = True
-                out.append({"index": di, "name": name, "isOn": is_on, "kind": k})
+                device_info = {"index": di, "name": name, "isOn": is_on, "kind": k}
+                if class_name:
+                    device_info["class_name"] = class_name
+                out.append(device_info)
             except Exception:
                 continue
         return {"index": idx_int, "devices": out}
@@ -1336,28 +1367,37 @@ def get_master_device_params(live, device_index: int) -> Dict[str, Any]:
 
 
 def set_master_device_param(live, device_index: int, param_index: int, value: float) -> bool:
-    try:
-        if live is not None:
-            mt = getattr(live, 'master_track', None)
-            if mt is None:
-                return False
-            di = int(device_index)
-            pi = int(param_index)
-            devs = getattr(mt, 'devices', []) or []
-            d = devs[di] if 0 <= di < len(devs) else None
-            if d is None:
-                return False
-            params = getattr(d, 'parameters', []) or []
-            p = params[pi] if 0 <= pi < len(params) else None
-            if p is None:
-                return False
-            v = float(value)
-            setattr(p, 'value', v)
-            _emit({"event": "master_device_param_changed", "device_index": di, "param_index": pi, "value": v})
-            return True
-    except Exception:
-        pass
-    return False
+    """Set master device parameter.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                mt = getattr(live, 'master_track', None)
+                if mt is None:
+                    return False
+                di = int(device_index)
+                pi = int(param_index)
+                devs = getattr(mt, 'devices', []) or []
+                d = devs[di] if 0 <= di < len(devs) else None
+                if d is None:
+                    return False
+                params = getattr(d, 'parameters', []) or []
+                p = params[pi] if 0 <= pi < len(params) else None
+                if p is None:
+                    return False
+                v = float(value)
+                setattr(p, 'value', v)
+                _emit({"event": "master_device_param_changed", "device_index": di, "param_index": pi, "value": v})
+                return True
+        except Exception:
+            pass
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 def get_return_devices(live, return_index: int) -> dict:
@@ -1369,7 +1409,11 @@ def get_return_devices(live, return_index: int) -> dict:
                 devs = getattr(returns[ri], "devices", []) or []
                 out = []
                 for di, dv in enumerate(devs):
-                    out.append({"index": di, "name": str(getattr(dv, "name", f"Device {di}"))})
+                    device_info = {"index": di, "name": str(getattr(dv, "name", f"Device {di}"))}
+                    class_name = str(getattr(dv, 'class_display_name', '') or '')
+                    if class_name:
+                        device_info["class_name"] = class_name
+                    out.append(device_info)
                 return {"index": ri, "devices": out}
     except Exception:
         pass
@@ -1428,97 +1472,123 @@ def get_return_device_params(live, return_index: int, device_index: int) -> dict
 
 
 def set_return_device_param(live, return_index: int, device_index: int, param_index: int, value: float) -> bool:
-    try:
-        if live is not None:
-            ri = int(return_index)
-            di = int(device_index)
-            pi = int(param_index)
-            returns = getattr(live, "return_tracks", []) or []
-            if 0 <= ri < len(returns):
-                devs = getattr(returns[ri], "devices", []) or []
-                if 0 <= di < len(devs):
-                    params = getattr(devs[di], "parameters", []) or []
-                    if 0 <= pi < len(params):
-                        params[pi].value = float(value)
-                        return True
-    except Exception:
-        pass
-    for r in _STATE.get("returns", []):
-        if r["index"] == int(return_index):
-            for d in r.get("devices", []):
-                if d["index"] == int(device_index):
-                    for p in d.get("params", []):
-                        if p["index"] == int(param_index):
-                            p["value"] = max(p.get("min", 0.0), min(p.get("max", 1.0), float(value)))
+    """Set return device parameter.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                ri = int(return_index)
+                di = int(device_index)
+                pi = int(param_index)
+                returns = getattr(live, "return_tracks", []) or []
+                if 0 <= ri < len(returns):
+                    devs = getattr(returns[ri], "devices", []) or []
+                    if 0 <= di < len(devs):
+                        params = getattr(devs[di], "parameters", []) or []
+                        if 0 <= pi < len(params):
+                            params[pi].value = float(value)
                             return True
-    return False
+        except Exception:
+            pass
+        for r in _STATE.get("returns", []):
+            if r["index"] == int(return_index):
+                for d in r.get("devices", []):
+                    if d["index"] == int(device_index):
+                        for p in d.get("params", []):
+                            if p["index"] == int(param_index):
+                                p["value"] = max(p.get("min", 0.0), min(p.get("max", 1.0), float(value)))
+                                return True
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 def set_return_mixer(live, return_index: int, field: str, value: float) -> bool:
-    """Set return track mixer fields: volume [0..1], pan [-1..1], mute/solo (bool)."""
-    try:
-        if live is not None:
-            ri = int(return_index)
-            if 0 <= ri < len(getattr(live, "return_tracks", [])):
-                tr = live.return_tracks[ri]
-                mix = getattr(tr, "mixer_device", None)
-                if field == "volume" and hasattr(mix, "volume"):
+    """Set return track mixer fields: volume [0..1], pan [-1..1], mute/solo (bool).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                ri = int(return_index)
+                if 0 <= ri < len(getattr(live, "return_tracks", [])):
+                    tr = live.return_tracks[ri]
+                    mix = getattr(tr, "mixer_device", None)
+                    if field == "volume" and hasattr(mix, "volume"):
+                        val = max(0.0, min(1.0, float(value)))
+                        mix.volume.value = val
+                        _emit({"event": "return_mixer_changed", "return": ri, "field": "volume", "value": float(val)})
+                        return True
+                    if field == "pan" and hasattr(mix, "panning"):
+                        val = max(-1.0, min(1.0, float(value)))
+                        mix.panning.value = val
+                        _emit({"event": "return_mixer_changed", "return": ri, "field": "pan", "value": float(val)})
+                        return True
+                    if field == "mute":
+                        # Return tracks typically use Track.mute directly
+                        if hasattr(tr, "mute"):
+                            setattr(tr, "mute", bool(value))
+                            _emit({"event": "return_mixer_changed", "return": ri, "field": "mute", "value": bool(value)})
+                        return True
+                    if field == "solo":
+                        if hasattr(tr, "solo"):
+                            setattr(tr, "solo", bool(value))
+                            _emit({"event": "return_mixer_changed", "return": ri, "field": "solo", "value": bool(value)})
+                            return True
+                    return False
+        except Exception:
+            pass
+        # Stub fallback
+        for r in _STATE.get("returns", []):
+            if r["index"] == int(return_index):
+                if field == "volume":
                     val = max(0.0, min(1.0, float(value)))
-                    mix.volume.value = val
-                    _emit({"event": "return_mixer_changed", "return": ri, "field": "volume", "value": float(val)})
+                    r.setdefault("mixer", {}).update({"volume": val})
+                    _emit({"event": "return_mixer_changed", "return": int(return_index), "field": "volume", "value": float(val)})
                     return True
-                if field == "pan" and hasattr(mix, "panning"):
+                if field == "pan":
                     val = max(-1.0, min(1.0, float(value)))
-                    mix.panning.value = val
-                    _emit({"event": "return_mixer_changed", "return": ri, "field": "pan", "value": float(val)})
+                    r.setdefault("mixer", {}).update({"pan": val})
+                    _emit({"event": "return_mixer_changed", "return": int(return_index), "field": "pan", "value": float(val)})
                     return True
-                if field == "mute":
-                    # Return tracks typically use Track.mute directly
-                    if hasattr(tr, "mute"):
-                        setattr(tr, "mute", bool(value))
-                        _emit({"event": "return_mixer_changed", "return": ri, "field": "mute", "value": bool(value)})
-                        return True
-                if field == "solo":
-                    if hasattr(tr, "solo"):
-                        setattr(tr, "solo", bool(value))
-                        _emit({"event": "return_mixer_changed", "return": ri, "field": "solo", "value": bool(value)})
-                        return True
+                if field in ("mute", "solo"):
+                    r[field] = bool(value)
+                    _emit({"event": "return_mixer_changed", "return": int(return_index), "field": field, "value": bool(value)})
+                    return True
                 return False
-    except Exception:
-        pass
-    # Stub fallback
-    for r in _STATE.get("returns", []):
-        if r["index"] == int(return_index):
-            if field == "volume":
-                val = max(0.0, min(1.0, float(value)))
-                r.setdefault("mixer", {}).update({"volume": val})
-                _emit({"event": "return_mixer_changed", "return": int(return_index), "field": "volume", "value": float(val)})
-                return True
-            if field == "pan":
-                val = max(-1.0, min(1.0, float(value)))
-                r.setdefault("mixer", {}).update({"pan": val})
-                _emit({"event": "return_mixer_changed", "return": int(return_index), "field": "pan", "value": float(val)})
-                return True
-            if field in ("mute", "solo"):
-                r[field] = bool(value)
-                _emit({"event": "return_mixer_changed", "return": int(return_index), "field": field, "value": bool(value)})
-                return True
-            return False
-    return False
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 def select_track(live, track_index: int) -> bool:
-    try:
-        if live is not None:
-            idx = int(track_index)
-            if 1 <= idx <= len(live.tracks):
-                live.view.selected_track = live.tracks[idx - 1]
-                return True
-        # Stub selection
-        _STATE["selected_track"] = int(track_index)
-        return True
-    except Exception:
-        return False
+    """Select a track by index (1-based).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_select() -> bool:
+        try:
+            if live is not None:
+                idx = int(track_index)
+                if 1 <= idx <= len(live.tracks):
+                    live.view.selected_track = live.tracks[idx - 1]  # Direct modification on main thread
+                    return True
+            # Stub selection
+            _STATE["selected_track"] = int(track_index)
+            return True
+        except Exception:
+            return False
+
+    if live is not None:
+        return _run_on_main(_do_select) or False
+    return _do_select()
 
 
 def _parse_db(display_value) -> float | None:
@@ -1613,46 +1683,63 @@ def get_transport(live) -> Dict[str, Any]:
 
 
 def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]:
+    """Set transport parameters (play, stop, record, tempo, loop, etc.).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
     ok = False
     try:
         if live is not None:
             song = live
             a = str(action or "").lower()
             if a == "play":
-                try:
+                def _do_play():
                     if hasattr(song, "start_playing"):
                         song.start_playing()
-                        ok = True
+                        return True
+                    return False
+                try:
+                    ok = _run_on_main(_do_play) or False
                 except Exception:
                     ok = False
             elif a == "stop":
-                try:
+                def _do_stop():
                     if hasattr(song, "stop_playing"):
                         song.stop_playing()
-                        ok = True
+                        return True
+                    return False
+                try:
+                    ok = _run_on_main(_do_stop) or False
                 except Exception:
                     ok = False
             elif a == "record":
-                try:
+                def _do_record():
                     # Prefer session_record toggle (common in Session view)
                     if hasattr(song, "session_record"):
                         song.session_record = not bool(getattr(song, "session_record", False))
-                        ok = True
+                        return True
                     elif hasattr(song, "record_mode"):
                         song.record_mode = not bool(getattr(song, "record_mode", False))
-                        ok = True
+                        return True
+                    return False
+                try:
+                    ok = _run_on_main(_do_record) or False
                 except Exception:
                     ok = False
             elif a == "metronome":
-                try:
+                def _do_metronome():
                     song.metronome = not bool(getattr(song, "metronome", False))
-                    ok = True
+                    return True
+                try:
+                    ok = _run_on_main(_do_metronome) or False
                 except Exception:
                     ok = False
             elif a == "tempo" and value is not None:
-                try:
+                def _do_tempo():
                     song.tempo = float(value)
-                    ok = True
+                    return True
+                try:
+                    ok = _run_on_main(_do_tempo) or False
                 except Exception:
                     ok = False
             elif a in ("loop", "loop_on"):
@@ -1726,17 +1813,21 @@ def set_transport(live, action: str, value: Any | None = None) -> Dict[str, Any]
                     ok = False
             elif a in ("position", "locate") and value is not None:
                 # Set absolute playhead position (in beats) via current_song_time
-                try:
+                def _do_position():
                     song.current_song_time = float(value)
-                    ok = True
+                    return True
+                try:
+                    ok = _run_on_main(_do_position) or False
                 except Exception:
                     ok = False
             elif a == "nudge" and value is not None:
                 # Relative move of playhead (in beats); positive or negative
-                try:
+                def _do_nudge():
                     cur = float(getattr(song, "current_song_time", 0.0))
                     song.current_song_time = float(cur + float(value))
-                    ok = True
+                    return True
+                try:
+                    ok = _run_on_main(_do_nudge) or False
                 except Exception:
                     ok = False
             elif a == "loop_region" and isinstance(value, dict):
@@ -2282,48 +2373,57 @@ def get_master_status(live) -> Dict[str, Any]:
 
 
 def set_master_mixer(live, field: str, value: float) -> bool:
-    try:
-        if live is not None:
-            mt = getattr(live, "master_track", None)
-            if mt is None:
+    """Set master mixer parameter (volume, pan, cue).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                mt = getattr(live, "master_track", None)
+                if mt is None:
+                    return False
+                mix = getattr(mt, "mixer_device", None)
+                if field == "volume" and hasattr(mix, "volume"):
+                    val = max(0.0, min(1.0, float(value)))
+                    mix.volume.value = val
+                    _emit({"event": "master_mixer_changed", "field": "volume", "value": float(val)})
+                    return True
+                if field == "pan" and hasattr(mix, "panning"):
+                    val = max(-1.0, min(1.0, float(value)))
+                    mix.panning.value = val
+                    _emit({"event": "master_mixer_changed", "field": "pan", "value": float(val)})
+                    return True
+                if field == "cue" and hasattr(mix, "cue_volume"):
+                    val = max(0.0, min(1.0, float(value)))
+                    mix.cue_volume.value = val
+                    _emit({"event": "master_mixer_changed", "field": "cue", "value": float(val)})
+                    return True
                 return False
-            mix = getattr(mt, "mixer_device", None)
-            if field == "volume" and hasattr(mix, "volume"):
-                val = max(0.0, min(1.0, float(value)))
-                mix.volume.value = val
-                _emit({"event": "master_mixer_changed", "field": "volume", "value": float(val)})
-                return True
-            if field == "pan" and hasattr(mix, "panning"):
-                val = max(-1.0, min(1.0, float(value)))
-                mix.panning.value = val
-                _emit({"event": "master_mixer_changed", "field": "pan", "value": float(val)})
-                return True
-            if field == "cue" and hasattr(mix, "cue_volume"):
-                val = max(0.0, min(1.0, float(value)))
-                mix.cue_volume.value = val
-                _emit({"event": "master_mixer_changed", "field": "cue", "value": float(val)})
-                return True
-            return False
-    except Exception:
-        pass
-    # stub: update in-memory
-    mt = _STATE.setdefault("master", {"mixer": {"volume": 0.8, "pan": 0.0}, "mute": False, "solo": False})
-    if field == "volume":
-        val = max(0.0, min(1.0, float(value)))
-        mt.setdefault("mixer", {}).update({"volume": val})
-        _emit({"event": "master_mixer_changed", "field": "volume", "value": float(val)})
-        return True
-    if field == "pan":
-        val = max(-1.0, min(1.0, float(value)))
-        mt.setdefault("mixer", {}).update({"pan": val})
-        _emit({"event": "master_mixer_changed", "field": "pan", "value": float(val)})
-        return True
-    if field == "cue":
-        val = max(0.0, min(1.0, float(value)))
-        mt.setdefault("mixer", {}).update({"cue": val})
-        _emit({"event": "master_mixer_changed", "field": "cue", "value": float(val)})
-        return True
-    return False
+        except Exception:
+            pass
+        # stub: update in-memory
+        mt = _STATE.setdefault("master", {"mixer": {"volume": 0.8, "pan": 0.0}, "mute": False, "solo": False})
+        if field == "volume":
+            val = max(0.0, min(1.0, float(value)))
+            mt.setdefault("mixer", {}).update({"volume": val})
+            _emit({"event": "master_mixer_changed", "field": "volume", "value": float(val)})
+            return True
+        if field == "pan":
+            val = max(-1.0, min(1.0, float(value)))
+            mt.setdefault("mixer", {}).update({"pan": val})
+            _emit({"event": "master_mixer_changed", "field": "pan", "value": float(val)})
+            return True
+        if field == "cue":
+            val = max(0.0, min(1.0, float(value)))
+            mt.setdefault("mixer", {}).update({"cue": val})
+            _emit({"event": "master_mixer_changed", "field": "cue", "value": float(val)})
+            return True
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 # ---------------- Routing & Monitoring ----------------
@@ -2428,66 +2528,75 @@ def get_track_routing(live, track_index: int) -> Dict[str, Any]:
 
 
 def set_track_routing(live, track_index: int, **kwargs) -> bool:
+    """Set track routing (monitor, audio/MIDI input/output).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
     # kwargs: monitor_state, audio_from_type, audio_from_channel, audio_to_type, audio_to_channel,
     #         midi_from_type, midi_from_channel, midi_to_type, midi_to_channel
-    try:
-        if live is not None:
-            idx = int(track_index)
-            tr = live.tracks[idx - 1] if 1 <= idx <= len(live.tracks) else None
-            if tr is None:
-                return False
-            # Monitor
-            mon = kwargs.get("monitor_state")
-            if mon is not None and hasattr(tr, "current_monitoring_state"):
-                m = str(mon).lower()
-                val = {"off": 0, "auto": 1, "in": 2}.get(m)
-                if val is not None:
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                idx = int(track_index)
+                tr = live.tracks[idx - 1] if 1 <= idx <= len(live.tracks) else None
+                if tr is None:
+                    return False
+                # Monitor
+                mon = kwargs.get("monitor_state")
+                if mon is not None and hasattr(tr, "current_monitoring_state"):
+                    m = str(mon).lower()
+                    val = {"off": 0, "auto": 1, "in": 2}.get(m)
+                    if val is not None:
+                        try:
+                            tr.current_monitoring_state = int(val)
+                        except Exception:
+                            pass
+                # Helper to set routing by matching display_name
+                def _assign(name_list, attr_name, chosen):
+                    if chosen is None:
+                        return
                     try:
-                        tr.current_monitoring_state = int(val)
+                        avail = getattr(tr, name_list, [])
+                        for o in avail:
+                            nm = str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o))
+                            if nm == str(chosen):
+                                setattr(tr, attr_name, o)
+                                return
                     except Exception:
-                        pass
-            # Helper to set routing by matching display_name
-            def _assign(name_list, attr_name, chosen):
-                if chosen is None:
-                    return
-                try:
-                    avail = getattr(tr, name_list, [])
-                    for o in avail:
-                        nm = str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o))
-                        if nm == str(chosen):
-                            setattr(tr, attr_name, o)
-                            return
-                except Exception:
-                    return
-            _assign("available_input_routing_types", "input_routing_type", kwargs.get("audio_from_type"))
-            _assign("available_input_routing_channels", "input_routing_channel", kwargs.get("audio_from_channel"))
-            _assign("available_output_routing_types", "output_routing_type", kwargs.get("audio_to_type"))
-            _assign("available_output_routing_channels", "output_routing_channel", kwargs.get("audio_to_channel"))
-            # MIDI (best-effort using same available lists)
-            _assign("available_input_routing_types", "midi_input_routing_type", kwargs.get("midi_from_type"))
-            _assign("available_input_routing_channels", "midi_input_routing_channel", kwargs.get("midi_from_channel"))
-            _assign("available_output_routing_types", "midi_output_routing_type", kwargs.get("midi_to_type"))
-            _assign("available_output_routing_channels", "midi_output_routing_channel", kwargs.get("midi_to_channel"))
-            return True
-    except Exception:
-        pass
-    # Stub state update
-    for t in _STATE["tracks"]:
-        if t["index"] == int(track_index):
-            r = t.setdefault("routing", {"monitor_state": "auto", "audio_from": {"type": "Ext. In", "channel": "1"}, "audio_to": {"type": "Master", "channel": "1/2"}})
-            if kwargs.get("monitor_state"):
-                r["monitor_state"] = str(kwargs["monitor_state"]).lower()
-            if kwargs.get("audio_from_type"):
-                r.setdefault("audio_from", {}).update({"type": kwargs.get("audio_from_type")})
-            if kwargs.get("audio_from_channel"):
-                r.setdefault("audio_from", {}).update({"channel": kwargs.get("audio_from_channel")})
-            if kwargs.get("audio_to_type"):
-                r.setdefault("audio_to", {}).update({"type": kwargs.get("audio_to_type")})
-            if kwargs.get("audio_to_channel"):
-                r.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
-            # MIDI ignored in stub unless present
-            return True
-    return False
+                        return
+                _assign("available_input_routing_types", "input_routing_type", kwargs.get("audio_from_type"))
+                _assign("available_input_routing_channels", "input_routing_channel", kwargs.get("audio_from_channel"))
+                _assign("available_output_routing_types", "output_routing_type", kwargs.get("audio_to_type"))
+                _assign("available_output_routing_channels", "output_routing_channel", kwargs.get("audio_to_channel"))
+                # MIDI (best-effort using same available lists)
+                _assign("available_input_routing_types", "midi_input_routing_type", kwargs.get("midi_from_type"))
+                _assign("available_input_routing_channels", "midi_input_routing_channel", kwargs.get("midi_from_channel"))
+                _assign("available_output_routing_types", "midi_output_routing_type", kwargs.get("midi_to_type"))
+                _assign("available_output_routing_channels", "midi_output_routing_channel", kwargs.get("midi_to_channel"))
+                return True
+        except Exception:
+            pass
+        # Stub state update
+        for t in _STATE["tracks"]:
+            if t["index"] == int(track_index):
+                r = t.setdefault("routing", {"monitor_state": "auto", "audio_from": {"type": "Ext. In", "channel": "1"}, "audio_to": {"type": "Master", "channel": "1/2"}})
+                if kwargs.get("monitor_state"):
+                    r["monitor_state"] = str(kwargs["monitor_state"]).lower()
+                if kwargs.get("audio_from_type"):
+                    r.setdefault("audio_from", {}).update({"type": kwargs.get("audio_from_type")})
+                if kwargs.get("audio_from_channel"):
+                    r.setdefault("audio_from", {}).update({"channel": kwargs.get("audio_from_channel")})
+                if kwargs.get("audio_to_type"):
+                    r.setdefault("audio_to", {}).update({"type": kwargs.get("audio_to_type")})
+                if kwargs.get("audio_to_channel"):
+                    r.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
+                # MIDI ignored in stub unless present
+                return True
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 
 def set_track_arm(live, track_index: int, arm: bool) -> bool:
@@ -2574,48 +2683,57 @@ def get_return_routing(live, return_index: int) -> Dict[str, Any]:
 
 
 def set_return_routing(live, return_index: int, **kwargs) -> bool:
+    """Set return track routing (audio output type/channel, sends mode).
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
     # kwargs: audio_to_type, audio_to_channel, sends_mode
-    try:
-        if live is not None:
-            ri = int(return_index)
-            returns = getattr(live, "return_tracks", []) or []
-            if 0 <= ri < len(returns):
-                rt = returns[ri]
-                def _assign(obj, list_attr, target_attr, chosen):
-                    if chosen is None:
-                        return
-                    try:
-                        avail = getattr(obj, list_attr, [])
-                        for o in avail:
-                            nm = str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o))
-                            if nm == str(chosen):
-                                setattr(obj, target_attr, o)
-                                return
-                    except Exception:
-                        return
-                _assign(rt, "available_output_routing_types", "output_routing_type", kwargs.get("audio_to_type"))
-                _assign(rt, "available_output_routing_channels", "output_routing_channel", kwargs.get("audio_to_channel"))
-                sm = kwargs.get("sends_mode")
-                if sm is not None and hasattr(rt, "sends_are_pre"):
-                    try:
-                        rt.sends_are_pre = (str(sm).lower() == "pre")
-                    except Exception:
-                        pass
+    def _do_set() -> bool:
+        try:
+            if live is not None:
+                ri = int(return_index)
+                returns = getattr(live, "return_tracks", []) or []
+                if 0 <= ri < len(returns):
+                    rt = returns[ri]
+                    def _assign(obj, list_attr, target_attr, chosen):
+                        if chosen is None:
+                            return
+                        try:
+                            avail = getattr(obj, list_attr, [])
+                            for o in avail:
+                                nm = str(getattr(o, "display_name", None) or getattr(o, "to_string", lambda: None)() or str(o))
+                                if nm == str(chosen):
+                                    setattr(obj, target_attr, o)  # Direct modification on main thread
+                                    return
+                        except Exception:
+                            return
+                    _assign(rt, "available_output_routing_types", "output_routing_type", kwargs.get("audio_to_type"))
+                    _assign(rt, "available_output_routing_channels", "output_routing_channel", kwargs.get("audio_to_channel"))
+                    sm = kwargs.get("sends_mode")
+                    if sm is not None and hasattr(rt, "sends_are_pre"):
+                        try:
+                            rt.sends_are_pre = (str(sm).lower() == "pre")  # Direct modification on main thread
+                        except Exception:
+                            pass
+                    return True
+        except Exception:
+            pass
+        # Stub fallback
+        for r in _STATE.get("returns", []):
+            if r["index"] == int(return_index):
+                rr = r.setdefault("routing", {"audio_to": {"type": "Master", "channel": "1/2"}, "sends_mode": "post"})
+                if kwargs.get("audio_to_type"):
+                    rr.setdefault("audio_to", {}).update({"type": kwargs.get("audio_to_type")})
+                if kwargs.get("audio_to_channel"):
+                    rr.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
+                if kwargs.get("sends_mode"):
+                    rr["sends_mode"] = str(kwargs.get("sends_mode")).lower()
                 return True
-    except Exception:
-        pass
-    # Stub
-    for r in _STATE.get("returns", []):
-        if r["index"] == int(return_index):
-            rr = r.setdefault("routing", {"audio_to": {"type": "Master", "channel": "1/2"}, "sends_mode": "post"})
-            if kwargs.get("audio_to_type"):
-                rr.setdefault("audio_to", {}).update({"type": kwargs.get("audio_to_type")})
-            if kwargs.get("audio_to_channel"):
-                rr.setdefault("audio_to", {}).update({"channel": kwargs.get("audio_to_channel")})
-            if kwargs.get("sends_mode"):
-                rr["sends_mode"] = str(kwargs.get("sends_mode")).lower()
-            return True
-    return False
+        return False
+
+    if live is not None:
+        return _run_on_main(_do_set) or False
+    return _do_set()
 
 # ---------------- Renaming & Device Order Ops ----------------
 
@@ -3438,147 +3556,186 @@ def capture_and_insert_scene(live) -> Dict[str, Any]:
 def set_view_mode(live, mode: str) -> Dict[str, Any]:
     """Switch between Session and Arrangement views when possible.
 
+    Live 12.3+ requires this to run on main thread via scheduler.
+
     mode: 'session' | 'arrangement'
     """
     m = (mode or '').strip().lower()
     target = 'Session' if m.startswith('sess') else 'Arranger'
-    try:
-        if _APP_VIEW_GETTER is not None:
-            view = _APP_VIEW_GETTER()
-            if view is not None and hasattr(view, 'show_view'):
-                # Optional: avoid redundant calls
-                try:
-                    is_vis = None
-                    if hasattr(view, 'is_view_visible'):
-                        is_vis = bool(view.is_view_visible(target))
-                    if not is_vis:
-                        view.show_view(target)
-                except Exception:
-                    view.show_view(target)
-                _emit({"event": "view_changed", "mode": target})
-                return {"ok": True, "mode": target}
-        return {"ok": False, "error": "app_view_unavailable"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+
+    def _do_switch() -> Dict[str, Any]:
+        try:
+            if _APP_VIEW_GETTER is not None:
+                view = _APP_VIEW_GETTER()
+                if view is not None and hasattr(view, 'show_view'):
+                    # Optional: avoid redundant calls
+                    try:
+                        is_vis = None
+                        if hasattr(view, 'is_view_visible'):
+                            is_vis = bool(view.is_view_visible(target))
+                        if not is_vis:
+                            view.show_view(target)  # Direct modification on main thread
+                    except Exception:
+                        view.show_view(target)  # Direct modification on main thread
+                    _emit({"event": "view_changed", "mode": target})
+                    return {"ok": True, "mode": target}
+            return {"ok": False, "error": "app_view_unavailable"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    if _APP_VIEW_GETTER is not None:
+        return _run_on_main(_do_switch) or {"ok": False}
+    return _do_switch()
 
 
 def fire_scene(live, scene_index: int, select: bool = True) -> Dict[str, Any]:
-    """Launch a scene by index (1-based). Optionally select it first."""
-    try:
-        si = int(scene_index)
-        if live is not None:
-            scenes = getattr(live, 'scenes', []) or []
-            if not (1 <= si <= len(scenes)):
-                return {"ok": False, "error": "scene_out_of_range"}
-            sc = scenes[si - 1]
-            try:
-                if select and hasattr(getattr(live, 'view', None), 'selected_scene'):
-                    live.view.selected_scene = sc
-            except Exception:
-                pass
-            sc.fire()
-            _emit({"event": "scene_fired", "scene": si})
-            return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    # Stub
-    _emit({"event": "scene_fired", "scene": int(scene_index)})
-    return {"ok": True}
+    """Launch a scene by index (1-based). Optionally select it first.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_fire() -> Dict[str, Any]:
+        try:
+            si = int(scene_index)
+            if live is not None:
+                scenes = getattr(live, 'scenes', []) or []
+                if not (1 <= si <= len(scenes)):
+                    return {"ok": False, "error": "scene_out_of_range"}
+                sc = scenes[si - 1]
+                try:
+                    if select and hasattr(getattr(live, 'view', None), 'selected_scene'):
+                        live.view.selected_scene = sc  # Direct modification on main thread
+                except Exception:
+                    pass
+                sc.fire()  # Direct modification on main thread
+                _emit({"event": "scene_fired", "scene": si})
+                return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        # Stub
+        _emit({"event": "scene_fired", "scene": int(scene_index)})
+        return {"ok": True}
+
+    if live is not None:
+        return _run_on_main(_do_fire) or {"ok": False}
+    return _do_fire()
 
 
 def stop_scene(live, scene_index: int) -> Dict[str, Any]:
-    """Stop all clips in a scene by stopping each track's clip slot at that scene index."""
-    try:
-        si = int(scene_index)
-        if live is not None:
-            tracks = getattr(live, 'tracks', []) or []
-            if not tracks:
+    """Stop all clips in a scene by stopping each track's clip slot at that scene index.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_stop() -> Dict[str, Any]:
+        try:
+            si = int(scene_index)
+            if live is not None:
+                tracks = getattr(live, 'tracks', []) or []
+                if not tracks:
+                    return {"ok": True}
+                for tr in tracks:
+                    slots = getattr(tr, 'clip_slots', []) or []
+                    if 1 <= si <= len(slots):
+                        try:
+                            slots[si - 1].stop()  # Direct modification on main thread
+                        except Exception:
+                            pass
+                _emit({"event": "scene_stopped", "scene": si})
                 return {"ok": True}
-            for tr in tracks:
-                slots = getattr(tr, 'clip_slots', []) or []
-                if 1 <= si <= len(slots):
-                    try:
-                        slots[si - 1].stop()
-                    except Exception:
-                        pass
-            _emit({"event": "scene_stopped", "scene": si})
-            return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    # Stub
-    _emit({"event": "scene_stopped", "scene": int(scene_index)})
-    return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        # Stub
+        _emit({"event": "scene_stopped", "scene": int(scene_index)})
+        return {"ok": True}
+
+    if live is not None:
+        return _run_on_main(_do_stop) or {"ok": False}
+    return _do_stop()
 
 
 def fire_clip(live, track_index: int, scene_index: int, select: bool = True) -> Dict[str, Any]:
     """Launch a clip in a given clip slot [track, scene] (1-based track, 1-based scene).
 
     Optionally select the slot first.
+
+    Live 12.3+ requires this to run on main thread via scheduler.
     """
-    try:
-        ti = int(track_index)
-        si = int(scene_index)
-        if live is not None:
-            tracks = getattr(live, "tracks", []) or []
-            if not (1 <= ti <= len(tracks)):
-                return {"ok": False, "error": "track_out_of_range"}
-            tr = tracks[ti - 1]
-            slots = getattr(tr, "clip_slots", []) or []
-            if not (1 <= si <= len(slots)):
-                return {"ok": False, "error": "scene_out_of_range"}
-            slot = slots[si - 1]
-            try:
-                if select and hasattr(getattr(live, "view", None), "selected_scene"):
-                    # Best-effort: select scene and track so UI follows
-                    try:
-                        live.view.selected_scene = getattr(live, "scenes", [None])[si - 1]
-                    except Exception:
-                        pass
-                    try:
-                        live.view.selected_track = tr
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            try:
-                slot.fire()
-            except Exception as e:
-                return {"ok": False, "error": str(e)}
-            _emit({"event": "clip_fired", "track": ti, "scene": si})
-            return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    # Stub: mark clip as "playing" in state
-    key = (int(track_index), int(scene_index))
-    _STATE.setdefault("clips", {})[key] = _STATE.get("clips", {}).get(key) or f"Clip {track_index}:{scene_index}"
-    _emit({"event": "clip_fired", "track": int(track_index), "scene": int(scene_index)})
-    return {"ok": True}
+    def _do_fire() -> Dict[str, Any]:
+        try:
+            ti = int(track_index)
+            si = int(scene_index)
+            if live is not None:
+                tracks = getattr(live, "tracks", []) or []
+                if not (1 <= ti <= len(tracks)):
+                    return {"ok": False, "error": "track_out_of_range"}
+                tr = tracks[ti - 1]
+                slots = getattr(tr, "clip_slots", []) or []
+                if not (1 <= si <= len(slots)):
+                    return {"ok": False, "error": "scene_out_of_range"}
+                slot = slots[si - 1]
+                try:
+                    if select and hasattr(getattr(live, "view", None), "selected_scene"):
+                        # Best-effort: select scene and track so UI follows
+                        try:
+                            live.view.selected_scene = getattr(live, "scenes", [None])[si - 1]  # Direct modification on main thread
+                        except Exception:
+                            pass
+                        try:
+                            live.view.selected_track = tr  # Direct modification on main thread
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    slot.fire()  # Direct modification on main thread
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+                _emit({"event": "clip_fired", "track": ti, "scene": si})
+                return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        # Stub: mark clip as "playing" in state
+        key = (int(track_index), int(scene_index))
+        _STATE.setdefault("clips", {})[key] = _STATE.get("clips", {}).get(key) or f"Clip {track_index}:{scene_index}"
+        _emit({"event": "clip_fired", "track": int(track_index), "scene": int(scene_index)})
+        return {"ok": True}
+
+    if live is not None:
+        return _run_on_main(_do_fire) or {"ok": False}
+    return _do_fire()
 
 
 def stop_clip(live, track_index: int, scene_index: int) -> Dict[str, Any]:
-    """Stop a single clip by stopping its clip slot at [track, scene]."""
-    try:
-        ti = int(track_index)
-        si = int(scene_index)
-        if live is not None:
-            tracks = getattr(live, "tracks", []) or []
-            if not (1 <= ti <= len(tracks)):
-                return {"ok": False, "error": "track_out_of_range"}
-            tr = tracks[ti - 1]
-            slots = getattr(tr, "clip_slots", []) or []
-            if not (1 <= si <= len(slots)):
-                return {"ok": False, "error": "scene_out_of_range"}
-            try:
-                slots[si - 1].stop()
-            except Exception:
-                pass
-            _emit({"event": "clip_stopped", "track": ti, "scene": si})
-            return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    # Stub
-    _emit({"event": "clip_stopped", "track": int(track_index), "scene": int(scene_index)})
-    return {"ok": True}
+    """Stop a single clip by stopping its clip slot at [track, scene].
+
+    Live 12.3+ requires this to run on main thread via scheduler.
+    """
+    def _do_stop() -> Dict[str, Any]:
+        try:
+            ti = int(track_index)
+            si = int(scene_index)
+            if live is not None:
+                tracks = getattr(live, "tracks", []) or []
+                if not (1 <= ti <= len(tracks)):
+                    return {"ok": False, "error": "track_out_of_range"}
+                tr = tracks[ti - 1]
+                slots = getattr(tr, "clip_slots", []) or []
+                if not (1 <= si <= len(slots)):
+                    return {"ok": False, "error": "scene_out_of_range"}
+                try:
+                    slots[si - 1].stop()  # Direct modification on main thread
+                except Exception:
+                    pass
+                _emit({"event": "clip_stopped", "track": ti, "scene": si})
+                return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        # Stub
+        _emit({"event": "clip_stopped", "track": int(track_index), "scene": int(scene_index)})
+        return {"ok": True}
+
+    if live is not None:
+        return _run_on_main(_do_stop) or {"ok": False}
+    return _do_stop()
 
 
 def delete_return_device(live, return_index: int, device_index: int) -> bool:

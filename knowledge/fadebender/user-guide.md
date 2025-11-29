@@ -1,7 +1,42 @@
 Fadebender User Guide
 
-Overview
-- Fadebender is a chat-first assistant for controlling your DAW (Ableton Live via Remote Script). You can ask for actions (set parameters) or information (get parameters/topology), and it presents context-aware controls in a capabilities drawer.
+What is Fadebender?
+Fadebender is your AI-powered mixing and production assistant for Ableton Live. It combines three powerful capabilities:
+
+1. **DAW Control**: Control Ableton Live using natural language commands - "set track 1 volume to -6 dB", "load reverb on return A", "open track 2 compressor"
+
+2. **Audio Engineering Guidance**: Get expert advice on mixing and production - "my vocals sound weak", "how to make my kick punch through", "my mix sounds muddy"
+
+3. **Context-Aware Help**: Fadebender understands your current Live set and provides specific advice tailored to your project - "how can I improve my mix", "what's the best way to use my return tracks", "help me balance my drums"
+
+It learns from professional audio engineering knowledge, the complete Ableton Live manual, and understands your project's routing and signal flow to give you relevant, actionable guidance.
+
+Getting Started
+When you first open Fadebender:
+
+1. **Look around the interface:**
+   - **Sidebar (left)**: Shows your tracks, returns, and master
+   - **Chat input (bottom)**: Where you type commands and questions
+   - **Transport bar (top)**: Play, record, tempo, and loop controls
+   - **Capabilities drawer (right)**: Opens automatically when you run commands
+
+2. **Try your first interactions:**
+   - **Control commands**: Type `set track 1 volume to -6 dB` - Changes the volume and shows mixer controls
+   - **Navigation**: Type `open track 1` - The capabilities drawer opens with track 1's mixer controls
+   - **Query information**: Type `what is track 1 volume` - Shows the current volume value
+   - **Audio advice**: Type `my vocals sound weak` - Get expert mixing advice
+   - **Ableton questions**: Type `what are sends and returns` - Learn from the Ableton manual
+   - **Context-aware help**: Type `how can I improve my mix` - Get advice specific to your Live set
+
+3. **Explore the capabilities drawer:**
+   - After running a command, scroll through the drawer to see all available controls
+   - Click the pin icon to keep it open while you work
+   - Use sliders, toggles, and dropdowns to adjust parameters visually
+
+4. **Ask questions:**
+   - "what are track 2 devices" - See what's on a track
+   - "who sends to return A" - Understand your routing
+   - "list audio tracks" - Get an overview of your project
 
 Command Capabilities Summary
 This section provides a quick overview of all available commands to help you understand what Fadebender can do.
@@ -53,13 +88,12 @@ This section provides a quick overview of all available commands to help you und
 **Special Features:**
 - Device ordinals: control multiple devices of same type ("reverb 2", "second compressor")
 - Multi-word devices: "auto filter", "eq eight", "beat repeat"
-- Case-insensitive: commands, device names, parameter names
-- Fuzzy matching: typo correction, approximate parameter matching
+- Case-insensitive: commands, device names, parameter names work in any case
+- Typo correction: automatically fixes common typos as you type
 - Preset loading: explicit ("preset cathedral") or implicit ("gentle")
 - State bundles: get all mixer settings + routing in one query
 - Topology queries: understand signal flow and routing
 - Clarification prompts: system asks follow-up questions for ambiguous commands
-- Auto-correction: client-side and server-side typo fixing
 - Context-aware UI: capabilities drawer opens with relevant controls
 
 **Command Verb Variations:**
@@ -71,31 +105,104 @@ This section provides a quick overview of all available commands to help you und
 - Tempo: "set tempo", "set bpm", "change tempo" (interchangeable)
 
 **Help System:**
-- Conceptual questions: "my vocals sound weak", "my mix sounds muddy"
-- Ableton questions: "what are sends and returns"
-- Usage questions: "how do I control reverb on return A"
-- Returns: grounded answers + suggested commands
+Fadebender provides three types of help:
 
-Quick Start
-- Start services (local dev):
-  - `make venv` then `make install-nlp`
-  - `make run-all3` (starts NLP :8000, Server :8722, Chat :3000)
-- Open the web UI at http://127.0.0.1:3000
-- Optional: `make status` to verify health (NLP, Server, Chat)
+1. **Audio Engineering Advice**: Get expert guidance on mixing, production, and sound design
+   - "my vocals sound weak" - Advice on EQ, compression, presence
+   - "my mix sounds muddy" - Tips on frequency management and clarity
+   - "how to make my kick punch through" - Techniques for drum presence
+   - "what's the best reverb settings for vocals" - Parameter recommendations
+
+2. **Ableton Live Knowledge**: Learn from the complete Ableton manual
+   - "what are sends and returns" - Routing concepts explained
+   - "how does sidechaining work in Ableton" - Feature tutorials
+   - "explain the compressor parameters" - Device documentation
+   - "what's the difference between audio and MIDI tracks" - DAW fundamentals
+
+3. **Context-Aware Project Help**: Get advice specific to your current Live set
+   - "how can I improve my mix" - Analysis based on your tracks and routing
+   - "what's the best way to organize my returns" - Recommendations for your project
+   - "help me balance my drums" - Advice considering your drum tracks
+   - "which tracks should I sidechain" - Suggestions based on your signal flow
+
+All responses include relevant command suggestions to implement the advice immediately.
 
 Chat Basics
 - Type natural language commands, press Enter to send
-- Autocorrect on space/tab: common typos are fixed client-side (e.g., `trac` → `track`), and merged with server typo corrections from `configs/app_config.json`
+- Autocorrect: common typos are fixed automatically as you type (e.g., `trac` → `track`)
 - Clarification: when the intent is ambiguous, the UI asks a follow‑up question and shows suggested commands
-- Help: conceptual questions route to help; operational questions route to control or query flows
+- Help: ask conceptual questions ("my vocals sound weak") or operational questions ("what is track 1 volume")
+
+Understanding the Interface
+
+**Sidebar (Left Side):**
+- Shows your project structure: tracks, returns, and master
+- Each track shows: number, name, and type (AUDIO/MIDI)
+- Return tracks labeled by letter (A, B, C...)
+- Click track names to view details (doesn't auto-open drawer - use `open` commands instead)
+- Scroll to see all tracks in large projects
+
+**Chat Input (Bottom Center):**
+- Type your commands and questions here
+- Press Enter to send
+- Previous messages show above with timestamps
+- AI responses appear with suggested follow-up actions
+- "Clear Chat" button removes conversation history
+
+**Transport Bar (Top):**
+- Play/Stop/Record buttons
+- Metronome toggle
+- Tempo display and controls (BPM)
+- Time signature controls
+- Playhead position
+- Loop controls (start/length)
+- Undo/Redo buttons
+- Settings and view mode toggles
+
+**Capabilities Drawer (Right Side):**
+- Opens automatically when you run commands
+- Shows context-relevant controls (mixer or device parameters)
+- Stays updated in real-time with Live
+- Pin/unpin and close buttons in top-right corner
+- Scroll to see all available parameters
 
 Capabilities Drawer
-- Auto‑opens with context when you run a command or ask a supported "get" query
-- Device drawer: shows grouped device parameters with inline editors
-- Mixer drawer: shows mixer parameters for tracks/returns/master (volume, pan, mute, solo, sends)
-- Pin to keep it visible; unpin to auto‑close when switching context
- - Type badge: shows AUDIO / MIDI on track contexts and RETURN on return contexts
- - Sidebar clicks no longer auto‑open the drawer; use list chips (see below) or explicit commands
+The capabilities drawer is Fadebender's context-aware control panel that automatically displays relevant controls when you interact with your project.
+
+**When It Opens:**
+- Auto-opens when you run any command (set, increase, decrease, mute, solo, etc.)
+- Auto-opens when you ask "get" queries (what is, show, tell me, check)
+- Auto-opens when you use navigation commands (open, view)
+- Auto-opens when you click list chips from query responses (list audio tracks, list returns)
+- Does NOT open when clicking sidebar items (use explicit "open" commands instead)
+
+**Drawer Types:**
+1. **Device Drawer** - Shows when controlling device parameters:
+   - Displays all parameters for the selected device (reverb, delay, compressor, etc.)
+   - Parameters grouped by section (General, Early Reflections, Diffusion, etc.)
+   - Each parameter shows: name, current value, range, unit
+   - Inline controls: sliders for continuous values, toggles for on/off, dropdowns for discrete choices
+
+2. **Mixer Drawer** - Shows when controlling mixer parameters:
+   - Displays volume, pan, mute, solo controls
+   - Shows all send levels (Send A, Send B, etc.)
+   - Type badge indicates: AUDIO / MIDI (for tracks) or RETURN (for return tracks)
+   - Includes cue volume for master
+
+**How to Navigate:**
+- Scroll within the drawer to see all parameters
+- Parameters are organized by section with clear headings
+- Pin icon (top right): Click to keep drawer open when switching context
+- Close icon (top right): Click to close drawer
+- Pinned drawers stay open until you close them manually
+- Unpinned drawers auto-close when you switch to a different track/return/device
+
+**Using Controls:**
+- **Sliders**: Drag to adjust, or click the value to type a number
+- **Toggles**: Click to switch on/off (Device On, Mute, Solo, etc.)
+- **Dropdowns**: Click to see and select from available options
+- All changes are sent to Ableton Live in real-time
+- Current values update automatically when changed in Live or via commands
 
 Opening Controls (Navigation)
 - Multiple ways to open the capabilities drawer:
@@ -257,113 +364,93 @@ Locators (Arrangement Cue Points)
 - Note: Creating/deleting locators not supported due to Live API limitations
 
 Scenes, Clips, and Views
-- List scenes (names):
-  - HTTP: GET `/scenes`
 - Create / delete / duplicate scenes:
-  - HTTP: POST `/scene/create` { "index": N? } (omit index to append at end)
-  - HTTP: POST `/scene/delete` { "scene_index": N }
-  - HTTP: POST `/scene/duplicate` { "scene_index": N }
- - NLP examples (when `use_intents_for_chat` is enabled):
    - `create scene`
    - `create scene at 3`
    - `delete scene 2`
    - `duplicate scene 1`
 - Fire/stop a scene:
-  - HTTP: POST `/scene/fire` { "scene_index": N, "select": true }
-  - HTTP: POST `/scene/stop` { "scene_index": N }
- - NLP examples (chat or `/intent/parse` when `use_intents_for_chat` is enabled):
    - `fire scene 3`
    - `launch scene 5`
    - `stop scene 2`
-- Capture and insert a new scene from currently playing clips:
-  - HTTP: POST `/scene/capture_insert` {}
-- Create an empty MIDI clip in Session view:
-  - HTTP: POST `/clip/create` { "track_index": T, "scene_index": S, "length_beats": 4 }
-  - Notes: Only works on MIDI tracks; slot must be empty.
-- Fire/stop a single clip in Session view:
-  - HTTP: POST `/clip/fire` { "track_index": T, "scene_index": S, "select": true }
-  - HTTP: POST `/clip/stop` { "track_index": T, "scene_index": S }
- - Create/delete/duplicate clips (NLP + API):
-   - NLP (when `use_intents_for_chat` is enabled):
-     - `create clip 4 3` (creates a MIDI clip of default length at Track 4, Scene 3)
-     - `create clip 4 3 8` (explicit length in beats)
-     - `delete clip 4 3`
-     - `duplicate clip 4 3` (duplicates to Track 4, Scene 4 if empty)
-     - `duplicate clip 4 3 to 4 5`
-   - API:
-     - POST `/clip/delete` { "track_index": T, "scene_index": S }
-     - POST `/clip/duplicate` { "track_index": T, "scene_index": S, "target_track_index"?: T2, "target_scene_index"?: S2 }
-- Switch between Session and Arrangement views:
-  - HTTP: POST `/view` { "mode": "session" | "arrangement" }
+- Create/delete/duplicate clips:
+   - `create clip 4 3` (creates a MIDI clip of default length at Track 4, Scene 3)
+   - `create clip 4 3 8` (explicit length in beats)
+   - `delete clip 4 3`
+   - `duplicate clip 4 3` (duplicates to Track 4, Scene 4 if empty)
+   - `duplicate clip 4 3 to 4 5`
+   - Note: Clip creation only works on MIDI tracks with empty slots
+- Fire/stop a single clip:
+   - `fire clip 4 2`
+   - `stop clip 4 2`
 
-Naming and Device Order
-- Rename items:
-  - Track: POST `/track/name` { "track_index": T, "name": "Guitars" }
-  - Scene: POST `/scene/name` { "scene_index": S, "name": "Chorus" }
-  - Clip: POST `/clip/name` { "track_index": T, "scene_index": S, "name": "Hook" }
- - NLP examples (when `use_intents_for_chat` is enabled):
+Naming
+- Rename items using natural language:
    - `rename track 3 to Pianos`
    - `rename scene 1 to Intro`
    - `rename clip 4 2 to Beatbox`
-- Devices:
-  - Track device: POST `/track/device/name` { "track_index": T, "device_index": D, "name": "Glue Comp" }
-  - Return device: POST `/return/device/name` { "return_index": R, "device_index": D, "name": "Main Reverb" }
-- Track devices:
-  - Delete: POST `/track/device/delete` { "track_index": T, "device_index": D }
-  - Reorder: POST `/track/device/reorder` { "track_index": T, "old_index": D1, "new_index": D2 }
-- Return devices:
-  - Delete: POST `/return/device/delete` { "return_index": R, "device_index": D }
-  - Reorder: POST `/return/device/reorder` { "return_index": R, "old_index": D1, "new_index": D2 }
 
-Track Arm and Monitoring
-- Arm/disarm a track:
-  - HTTP: POST `/track/arm` { "track_index": T, "arm": true|false }
-  - NLP (when `use_intents_for_chat` is enabled):
+Track Arm
+- Arm/disarm a track for recording:
     - `arm track 3`
     - `disarm track 3`
-- Set monitoring/routing:
-  - HTTP: POST `/track/routing` { "track_index": T, "monitor_state": "in" | "auto" | "off", ... }
 
 Track Creation and Management
 - Create tracks:
-  - HTTP: POST `/track/create_audio` { "index": N? } (omit index to append)
-  - HTTP: POST `/track/create_midi` { "index": N? } (omit index to append)
-  - NLP (when `use_intents_for_chat` is enabled):
     - `create audio track`
     - `create audio track at 3`
     - `create midi track`
     - `create midi track at 4`
 - Delete / duplicate tracks:
-  - HTTP: POST `/track/delete` { "track_index": T }
-  - HTTP: POST `/track/duplicate` { "track_index": T }
-  - NLP:
     - `delete track 3`
     - `duplicate track 2`
 
+Common Workflows
+
+**Setting up a reverb send:**
+1. Type `load reverb on return A` - Adds reverb to return track A
+2. Type `open return A reverb` - Opens the reverb controls
+3. Adjust reverb parameters in the drawer (decay, wet/dry, etc.)
+4. Type `set track 1 send A to -12 dB` - Send track 1 to the reverb
+5. Repeat step 4 for other tracks that need reverb
+
+**Controlling multiple devices of the same type:**
+1. If you have two reverbs on return A
+2. Type `set return A reverb 1 decay to 2s` - Controls the first reverb
+3. Type `set return A reverb 2 decay to 4s` - Controls the second reverb
+4. Or use ordinals: `set return A second reverb decay to 4s`
+
+**Exploring your project structure:**
+1. Type `list audio tracks` - See all audio tracks with clickable chips
+2. Click any track chip to open its mixer controls
+3. Type `what are track 2 devices` - See all devices on track 2
+4. Type `who sends to return A` - Find which tracks are using return A
+5. Type `what is return A state` - Get complete mixer settings for return A
+
+**Loading a device with a preset:**
+1. Type `load reverb preset cathedral on track 2` - Loads reverb with cathedral preset
+2. Type `open track 2 reverb` - View the reverb settings
+3. Adjust parameters as needed using the drawer controls
+
+**Working with the capabilities drawer:**
+1. Type `open track 1` - Opens mixer controls
+2. Click the pin icon to keep it open
+3. Type `open track 2` - Drawer switches to track 2 but stays open (because pinned)
+4. Type `set track 2 volume to -3 dB` - Adjust while viewing controls
+5. Click the close icon when done
+
+**Quick mixing adjustments:**
+1. Type `increase track 1 volume by 3 dB` - Relative adjustment
+2. Type `decrease track 2 send B by 5%` - Another relative change
+3. Type `mute track 3` - Toggle mute
+4. Type `solo track 1` - Solo a track
+5. Type `set track 1 pan to 25R` - Pan right
+
 Troubleshooting
-- Param not found / ambiguous: UI shows suggestions and (for devices) a parameter list in the drawer
-- Send/device topology shows empty:
-  - The system fetches information on‑demand; re‑ask the query after performing any mixer action if needed
-- Autocorrect didn’t trigger:
-  - Add typos to `configs/app_config.json -> nlp.typo_corrections`; the client merges these at load
-- Audio/MIDI type not showing in outline or badges:
-   - Track type comes from the Ableton Remote outline. After updating the Remote, restart Live or toggle the Control Surface in Live’s Preferences to reload the script.
-   - Verify with: `curl -s http://127.0.0.1:8722/project/outline | jq '.data.tracks'`
-   - Expect each track: `{ index, name, type: "audio"|"midi" }`
- - Scene/view actions not working:
-   - Ensure the Remote Script UDP bridge is enabled in Live: set `FADEBENDER_UDP_ENABLE=1` before launching Live.
-   - Clip creation works only on MIDI tracks and empty slots.
-
-Configuration Tips
-- `configs/app_config.json`:
-  - `features`: enable sticky capabilities card (`sticky_capabilities_card: true`), intents for chat (`use_intents_for_chat: true`)
-  - `nlp.mode`: `regex_first` (fast patterns with LLM fallback)
-  - `nlp.typo_corrections`: single source of truth for typo map shared with the client
-
-Known Limitations
-- Device discovery and parameter names depend on Ableton’s current set and mappings
-- Some routing fields may be unavailable depending on track type (MIDI vs audio)
- - Additive percentage adjustments are not yet working (e.g., relative +% on some parameters) and need follow‑up
+- **Parameter not found**: UI shows suggestions and (for devices) a parameter list in the drawer
+- **Send/device topology shows empty**: Re-ask the query after performing any mixer action
+- **Clip creation not working**: Clip creation only works on MIDI tracks with empty slots
+- **Audio/MIDI type badge missing**: Restart Ableton Live or toggle the Control Surface in Live's Preferences
 
 Appendix: Handy Examples
 - SET commands:
@@ -383,17 +470,3 @@ Appendix: Handy Examples
   - `fire scene 3`
   - `stop scene 3`
   - `fire clip 4 2` / `stop clip 4 2`
-  - (API) POST `/clip/fire` { "track_index": 4, "scene_index": 2, "select": true }
-  - (API) POST `/clip/stop` { "track_index": 4, "scene_index": 2 }
-
-Change Log (high‑level)
-- 2025‑11:
-  - Transport/UI: 2‑decimal playhead/loop, compact fields, auto‑refocus chat input
-  - Capabilities: type badges (AUDIO/MIDI/RETURN); Sidebar no longer auto‑opens drawer
-  - NLP/Queries: "how many/list audio/midi/returns" with clickable chips to open controls
-  - NLP/Action Words: Enhanced vocabulary with fuzzy matching
-    - GET queries: added "show", "tell", "get", "check" (in addition to "what is", "how many", "list")
-    - NAVIGATION: added "view" (in addition to "open")
-    - All action words support typo correction via fuzzy matching
-    - Fixed relative_change intent type for "increase"/"decrease" commands
-  - Outline: more robust track type detection in the Ableton Remote (may require Live restart)

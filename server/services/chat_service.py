@@ -48,6 +48,93 @@ USE_LAYERED_CHAT = os.getenv("USE_LAYERED_CHAT", "").lower() in ("1", "true", "y
 _PARSE_INDEX: Optional[Dict[str, Any]] = None
 
 
+def _find_device_index_by_hint(device_hint: str, devices: list[Dict[str, Any]]) -> Optional[int]:
+    """Find device index matching a hint using device_map fuzzy matching.
+
+    Args:
+        device_hint: Device name hint (e.g., "reverb", "comp", "eq")
+        devices: List of device dicts from Live (each with "name" and optionally "class_name" fields)
+
+    Returns:
+        Device index (0-based) or None if not found
+    """
+    if not device_hint or not devices:
+        return None
+
+    try:
+        from server.services.nlp.layered.parsers.device_action_parser import (
+            _get_device_names,
+            _fuzzy_match_device,
+            _load_device_map
+        )
+
+        # Get canonical device names from device_map
+        device_names = _get_device_names()
+
+        # Fuzzy match the hint to get canonical name (lowercase)
+        canonical_name_lower = _fuzzy_match_device(device_hint, device_names, max_distance=2)
+
+        if not canonical_name_lower:
+            # No match in device_map, fall back to direct substring matching
+            hint_lower = device_hint.lower()
+            for idx, dev in enumerate(devices):
+                dev_name = dev.get("name", "").lower()
+                dev_class = dev.get("class_name", "").lower()
+                if hint_lower in dev_name or dev_name in hint_lower:
+                    return idx
+                if dev_class and (hint_lower in dev_class or dev_class in hint_lower):
+                    return idx
+            return None
+
+        # Get the properly-cased device name from device_map
+        device_map = _load_device_map()
+        canonical_name = None
+        for key in device_map.keys():
+            if key.lower() == canonical_name_lower:
+                canonical_name = key
+                break
+
+        if not canonical_name:
+            canonical_name = canonical_name_lower
+
+        # Match against actual devices from Live (case-insensitive)
+        # Check both "name" (preset name like "Ambience Medium") and "class_name" (device type like "Reverb")
+        canonical_lower = canonical_name.lower()
+        for idx, dev in enumerate(devices):
+            dev_name = dev.get("name", "")
+            dev_class = dev.get("class_name", "")
+
+            # Exact match on class_name (preferred)
+            if dev_class.lower() == canonical_lower:
+                return idx
+
+            # Exact match on name
+            if dev_name.lower() == canonical_lower:
+                return idx
+
+            # Substring match on class_name
+            if dev_class and (canonical_lower in dev_class.lower() or dev_class.lower() in canonical_lower):
+                return idx
+
+            # Substring match on name (least preferred)
+            if canonical_lower in dev_name.lower() or dev_name.lower() in canonical_lower:
+                return idx
+
+        return None
+
+    except Exception:
+        # Fallback to simple substring matching on error
+        hint_lower = device_hint.lower()
+        for idx, dev in enumerate(devices):
+            dev_name = dev.get("name", "").lower()
+            dev_class = dev.get("class_name", "").lower()
+            if hint_lower in dev_name or dev_name in hint_lower:
+                return idx
+            if dev_class and (hint_lower in dev_class or dev_class in hint_lower):
+                return idx
+        return None
+
+
 def _get_parse_index() -> Dict[str, Any]:
     """Get or build parse index for layered parser.
 
@@ -372,18 +459,41 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
                     return_ref = target.get("return_ref", "A")
                     return_index = ord(return_ref.upper()) - ord('A') if return_ref else 0
                     device_name_hint = target.get("device_name_hint", "")
-                    # For now, assume device_index=0 (first device)
-                    # TODO: Could use device resolver to find exact device index from hint
+                    device_index = target.get("device_index")
+
+                    # If device_index not provided but device_name_hint is, find the device
+                    if device_index is None and device_name_hint:
+                        from server.services.device_readers import read_return_devices
+                        devices_data = read_return_devices(return_index)
+                        devices = devices_data.get("devices", [])
+                        device_index = _find_device_index_by_hint(device_name_hint, devices)
+
+                    # Default to 0 if still not found
+                    if device_index is None:
+                        device_index = 0
+
                     capabilities_ref = build_capabilities_ref(
                         domain="return_device",
                         return_index=return_index,
-                        device_index=0
+                        device_index=device_index
                     )
                     summary = f"Opening Return {return_ref} {device_name_hint} controls"
                 elif scope == "track":
                     track_index = target.get("track_index", 1)
-                    device_index = target.get("device_index", 0)
                     device_name_hint = target.get("device_name_hint", "")
+                    device_index = target.get("device_index")
+
+                    # If device_index not provided but device_name_hint is, find the device
+                    if device_index is None and device_name_hint:
+                        from server.services.device_readers import read_track_devices
+                        devices_data = read_track_devices(track_index)
+                        devices = devices_data.get("devices", [])
+                        device_index = _find_device_index_by_hint(device_name_hint, devices)
+
+                    # Default to 0 if still not found
+                    if device_index is None:
+                        device_index = 0
+
                     capabilities_ref = build_capabilities_ref(
                         domain="track_device",
                         track_index=track_index,
