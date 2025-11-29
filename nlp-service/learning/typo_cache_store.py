@@ -17,7 +17,7 @@ _FIRESTORE_CLIENT = None
 _FIRESTORE_ENABLED = False
 
 # Configuration
-TTL_SECONDS = 30  # Refresh from Firestore every 30 seconds
+TTL_SECONDS = 1800  # Refresh from Firestore every 30 minutes (typo corrections rarely change)
 
 
 def _init_firestore():

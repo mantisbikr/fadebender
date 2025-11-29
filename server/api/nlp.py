@@ -208,11 +208,20 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     original_text = str(context.get("original_text") or body.text or "")
 
     # Normalize clip coordinates so \"clip 4,2\" and \"clip 4 2\" behave the same.
+    # Also normalize coordinates after "to" for duplicate commands.
     # This makes client-side punctuation differences harmless.
     try:
+        # Normalize "clip X,Y" → "clip X Y"
         text = re.sub(
             r"\bclip\s+(\d+)\s*,\s*(\d+)\b",
             r"clip \1 \2",
+            text,
+            flags=re.IGNORECASE,
+        )
+        # Normalize "to X,Y" → "to X Y" (for duplicate clip commands)
+        text = re.sub(
+            r"\bto\s+(\d+)\s*,\s*(\d+)\b",
+            r"to \1 \2",
             text,
             flags=re.IGNORECASE,
         )
@@ -299,7 +308,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     raw_intent: Dict[str, Any] | None = None
 
     # Fast path: scene fire/stop commands (no need for full NLP or canonical mapper)
-    scene_fire_match = re.search(r"\b(fire|launch)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
+    scene_fire_match = re.search(r"\b(fire|launch|play)\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
     scene_stop_match = re.search(r"\bstop\s+scene\s+(\d+)\b", text, flags=re.IGNORECASE)
     if scene_fire_match:
         scene_idx = int(scene_fire_match.group(2))
@@ -430,14 +439,18 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         flags=re.IGNORECASE,
     )
     if m_dup_clip:
+        print(f"[DUPLICATE DEBUG] Matched text: '{text}'")
+        print(f"[DUPLICATE DEBUG] Groups: {m_dup_clip.groups()}")
         ti = int(m_dup_clip.group(2))
         si = int(m_dup_clip.group(3))
         if m_dup_clip.group(4) and m_dup_clip.group(5):
             tti = int(m_dup_clip.group(4))
             tsi = int(m_dup_clip.group(5))
+            print(f"[DUPLICATE DEBUG] Target specified: track={tti}, scene={tsi}")
         else:
             tti = ti
             tsi = si + 1
+            print(f"[DUPLICATE DEBUG] Target defaulted: track={tti}, scene={tsi}")
 
         # Optional new name (preserve casing via original_text):
         #   "duplicate clip 4 2 to 4 5 as Bongos"
@@ -477,13 +490,13 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
     #   name scene 2 \"Chorus\"
     #   rename clip 4 2 to Hook
     m_rename_track = re.search(
-        r"\b(rename|name)\s+track\s+(\d+)\s+(?:to\s+)?(.+)$", text, flags=re.IGNORECASE
+        r"\b(rename|name)\s+track\s+(\d+)\s+(?:(?:to|as)\s+)?(.+)$", text, flags=re.IGNORECASE
     )
     if m_rename_track:
         ti = int(m_rename_track.group(2))
         # Re-extract name portion from original_text to preserve casing
         m_orig = re.search(
-            r"\b(rename|name)\s+track\s+(\d+)\s+(?:to\s+)?(.+)$",
+            r"\b(rename|name)\s+track\s+(\d+)\s+(?:(?:to|as)\s+)?(.+)$",
             original_text,
             flags=re.IGNORECASE,
         )
@@ -505,12 +518,12 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         return {"ok": True, "intent": canonical, "raw_intent": raw_intent}
 
     m_rename_scene = re.search(
-        r"\b(rename|name)\s+scene\s+(\d+)\s+(?:to\s+)?(.+)$", text, flags=re.IGNORECASE
+        r"\b(rename|name)\s+scene\s+(\d+)\s+(?:(?:to|as)\s+)?(.+)$", text, flags=re.IGNORECASE
     )
     if m_rename_scene:
         si = int(m_rename_scene.group(2))
         m_orig = re.search(
-            r"\b(rename|name)\s+scene\s+(\d+)\s+(?:to\s+)?(.+)$",
+            r"\b(rename|name)\s+scene\s+(\d+)\s+(?:(?:to|as)\s+)?(.+)$",
             original_text,
             flags=re.IGNORECASE,
         )
@@ -533,7 +546,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
 
     # Clip rename supports both \"clip 4 1\" and \"clip 4,1\" forms
     m_rename_clip = re.search(
-        r"\b(rename|name)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\s+(?:to\s+)?(.+)$",
+        r"\b(rename|name)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\s+(?:(?:to|as)\s+)?(.+)$",
         text,
         flags=re.IGNORECASE,
     )
@@ -541,7 +554,7 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         ti = int(m_rename_clip.group(2))
         si = int(m_rename_clip.group(3))
         m_orig = re.search(
-            r"\b(rename|name)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\s+(?:to\s+)?(.+)$",
+            r"\b(rename|name)\s+clip\s+(\d+)\s*(?:,|\s)\s*(\d+)\s+(?:(?:to|as)\s+)?(.+)$",
             original_text,
             flags=re.IGNORECASE,
         )

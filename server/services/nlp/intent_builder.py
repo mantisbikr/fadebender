@@ -543,15 +543,19 @@ def parse_command_layered(text: str, parse_index: Dict) -> Optional[Dict[str, An
     # Layer 1: Parse action/value/unit
     # Pass original text to preserve case in user-provided names
     action = parse_action(text_lower, original_text=text)
+    print(f"[LAYERED DEBUG] Action: {action}")
 
     # Layer 2: Parse track/return/master
     track = parse_track(text_lower)
+    print(f"[LAYERED DEBUG] Track: {track}")
 
     # Layer 3: Parse device/parameter
     device_param = parse_device_param(text_lower, parse_index)
+    print(f"[LAYERED DEBUG] Device/Param: {device_param}")
 
     # Layer 4: Build intent from layer outputs
     raw_intent = build_raw_intent(text, action, track, device_param)
+    print(f"[LAYERED DEBUG] Raw intent: {raw_intent}")
 
     # If layered approach succeeded, return it
     if raw_intent:

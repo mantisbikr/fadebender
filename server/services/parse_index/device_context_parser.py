@@ -232,6 +232,8 @@ class DeviceContextParser:
                 device_names.append(a)
 
         self.device_vocab = device_names
+        print(f"[DEVICE_CONTEXT DEBUG] devices_in_set: {[d['name'] for d in parse_index['devices_in_set']]}")
+        print(f"[DEVICE_CONTEXT DEBUG] device_vocab: {device_names}")
         self.DEVICE_RE = re.compile(build_alt(device_names)) if device_names else None
 
         # Build device type vocabulary (for excluding from parameter matches)
@@ -346,6 +348,11 @@ class DeviceContextParser:
         Returns:
             (matched_string, (start_idx, end_idx), score) or None if no match
         """
+        if exclude_device_words:
+            print(f"[FUZZY DEBUG] exclude_device_words=True, device_words exist: {hasattr(self, 'device_words')}")
+            if hasattr(self, 'device_words'):
+                print(f"[FUZZY DEBUG] device_words sample: {list(self.device_words)[:20]}")
+
         start, end = (0, len(text)) if not limit_region else limit_region
         snippet = text[start:end]
 
@@ -368,15 +375,23 @@ class DeviceContextParser:
 
                         if not non_device_words:
                             # All words are device words, skip entire span
+                            print(f"[FUZZY DEBUG] Skipping span (all device words): {span_words}")
                             continue
 
                         if len(non_device_words) < len(span_words):
                             # Some device words filtered out, use remaining words
+                            original_span = span_text
                             span_text = " ".join(non_device_words)
+                            print(f"[FUZZY DEBUG] Filtered span: '{original_span}' -> '{span_text}'")
 
                     # Try space-normalized variations of the span
                     # This handles typos like "mixgel" vs "mix gel" or "8 dot ball" vs "8dotball"
                     span_variations = generate_phrase_space_variations(span_text)
+
+                    # DEBUG: Show candidate being tested against filtered span (only for candidates with "decay")
+                    if exclude_device_words and span_text.lower() in ["decay", "pre delay", "predelay"] and 'decay' in cand.lower():
+                        print(f"[FUZZY MATCH DEBUG] Testing span '{span_text}' against candidate '{cand}'")
+                        print(f"[FUZZY MATCH DEBUG] Variations: {span_variations}")
 
                     # Try matching each variation
                     best_variation_score = None
@@ -387,6 +402,10 @@ class DeviceContextParser:
 
                     # Use the best score from all variations
                     sc = best_variation_score
+
+                    # DEBUG: Show score result (only for candidates with "decay")
+                    if exclude_device_words and span_text.lower() in ["decay", "pre delay", "predelay"] and 'decay' in cand.lower():
+                        print(f"[FUZZY MATCH DEBUG] Best score for '{span_text}' vs '{cand}': {sc:.3f} (threshold: 0.34)")
 
                     # Accept if score is good enough (< 0.34 = ~66% match quality)
                     if sc <= 0.34:
@@ -449,6 +468,7 @@ class DeviceContextParser:
                 param_span = prm_m.span()
                 confidence += 0.5
                 method = "exact"
+                print(f"[PARSE_INTERNAL DEBUG] Step 1 exact match: param='{param}'")
             else:
                 # Try fuzzy parameter match - exclude spans containing device/type words
                 # This prevents "reverb decay" from matching as single parameter
@@ -459,12 +479,21 @@ class DeviceContextParser:
                     for vs in spec.get("aliases", {}).values():
                         vocab.update(vs)
 
+                print(f"[PARSE_INTERNAL DEBUG] Step 1 fuzzy: text='{text}', vocab size={len(vocab)}")
+                print(f"[PARSE_INTERNAL DEBUG] Sample vocab: {list(vocab)[:20]}")
+
+                # DEBUG: Check if Decay-related params are in vocab
+                decay_params = [v for v in vocab if 'decay' in v.lower()]
+                print(f"[PARSE_INTERNAL DEBUG] Decay-related params in vocab: {decay_params}")
+
                 best = self.fuzzy_best(text, list(vocab), want="rightmost", exclude_device_words=True)
+                print(f"[PARSE_INTERNAL DEBUG] Fuzzy best result: {best}")
                 if best:
                     param = self.param_canonical.get(best[0].lower(), best[0])
                     param_span = best[1]
                     confidence += 0.35
                     method = "fuzzy_param"
+                    print(f"[PARSE_INTERNAL DEBUG] Step 1 fuzzy match: param='{param}'")
         else:
             return DeviceParamMatch(None, None, None, None, 0.0, "no_params")
 
