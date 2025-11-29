@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>user-guide</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: 0 auto; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        h1, h2, h3, h4 { color: #333; margin-top: 1.5em; }
+        ul, ol { margin: 1em 0; padding-left: 2em; }
+    </style>
+</head>
+<body>
+<p>Fadebender User Guide</p>
+<p>What is Fadebender?<br />
+Fadebender is your AI-powered mixing and production assistant for Ableton Live. It combines three powerful capabilities:</p>
+<ol>
+<li>
+<p><strong>DAW Control</strong>: Control Ableton Live using natural language commands - "set track 1 volume to -6 dB", "load reverb on return A", "open track 2 compressor"</p>
+</li>
+<li>
+<p><strong>Audio Engineering Guidance</strong>: Get expert advice on mixing and production - "my vocals sound weak", "how to make my kick punch through", "my mix sounds muddy"</p>
+</li>
+<li>
+<p><strong>Context-Aware Help</strong>: Fadebender understands your current Live set and provides specific advice tailored to your project - "how can I improve my mix", "what's the best way to use my return tracks", "help me balance my drums"</p>
+</li>
+</ol>
+<p>It learns from professional audio engineering knowledge, the complete Ableton Live manual, and understands your project's routing and signal flow to give you relevant, actionable guidance.</p>
+<p>Getting Started<br />
+When you first open Fadebender:</p>
+<ol>
+<li><strong>Look around the interface:</strong></li>
+<li><strong>Sidebar (left)</strong>: Shows your tracks, returns, and master</li>
+<li><strong>Chat input (bottom)</strong>: Where you type commands and questions</li>
+<li><strong>Transport bar (top)</strong>: Play, record, tempo, and loop controls</li>
+<li>
+<p><strong>Capabilities drawer (right)</strong>: Opens automatically when you run commands</p>
+</li>
+<li>
+<p><strong>Try your first interactions:</strong></p>
+</li>
+<li><strong>Control commands</strong>: Type <code>set track 1 volume to -6 dB</code> - Changes the volume and shows mixer controls</li>
+<li><strong>Navigation</strong>: Type <code>open track 1</code> - The capabilities drawer opens with track 1's mixer controls</li>
+<li><strong>Query information</strong>: Type <code>what is track 1 volume</code> - Shows the current volume value</li>
+<li><strong>Audio advice</strong>: Type <code>my vocals sound weak</code> - Get expert mixing advice</li>
+<li><strong>Ableton questions</strong>: Type <code>what are sends and returns</code> - Learn from the Ableton manual</li>
+<li>
+<p><strong>Context-aware help</strong>: Type <code>how can I improve my mix</code> - Get advice specific to your Live set</p>
+</li>
+<li>
+<p><strong>Explore the capabilities drawer:</strong></p>
+</li>
+<li>After running a command, scroll through the drawer to see all available controls</li>
+<li>Click the pin icon to keep it open while you work</li>
+<li>
+<p>Use sliders, toggles, and dropdowns to adjust parameters visually</p>
+</li>
+<li>
+<p><strong>Ask questions:</strong></p>
+</li>
+<li>"what are track 2 devices" - See what's on a track</li>
+<li>"who sends to return A" - Understand your routing</li>
+<li>"list audio tracks" - Get an overview of your project</li>
+</ol>
+<p>Command Capabilities Summary<br />
+This section provides a quick overview of all available commands to help you understand what Fadebender can do.</p>
+<p><strong>Command Categories (60+ command patterns):</strong><br />
+- Mixer Control (12): volume, pan, mute, solo, sends (absolute + relative)<br />
+- Device Control (8): device parameters on tracks/returns, device ordinals<br />
+- Device Management (4): load devices, delete devices, with preset support<br />
+- Navigation (4): open/view mixer or device controls<br />
+- Transport (11): tempo, loop, time signature, playhead queries<br />
+- Song Operations (9): undo/redo, song info, locators, song length<br />
+- Track Management (7): create, delete, duplicate, arm/disarm, rename<br />
+- Scene Operations (5): create, delete, duplicate, fire, stop<br />
+- Clip Operations (5): create, delete, duplicate, fire, stop<br />
+- Query Commands (15+): parameter values, state bundles, topology, routing, project overview<br />
+- Naming (4): rename tracks, scenes, clips, devices<br />
+- View Switching (2): session/arrangement</p>
+<p><strong>Supported Targets:</strong><br />
+- Tracks: audio tracks, MIDI tracks (by index: 1, 2, 3...)<br />
+- Returns: A, B, C, D... (by letter or index: 0, 1, 2...)<br />
+- Master: master track<br />
+- Devices: by name, index, or ordinal (first/second/1st/2nd)<br />
+- Scenes: by index (1, 2, 3...)<br />
+- Clips: by track + scene index (track 4, scene 2)<br />
+- Locators: by index or name</p>
+<p><strong>Action Types:</strong><br />
+- SET: absolute values (set track 1 volume to -6 dB)<br />
+- RELATIVE: increase/decrease (increase track 1 volume by 3 dB)<br />
+- TOGGLE: mute, solo, loop<br />
+- CREATE: tracks, scenes, clips<br />
+- DELETE: tracks, scenes, clips, devices<br />
+- LOAD: devices with optional presets<br />
+- DUPLICATE: tracks, scenes, clips<br />
+- RENAME: tracks, scenes, clips, devices<br />
+- QUERY: what is, show, tell, get, check (parameter values)<br />
+- TOPOLOGY: list devices, who sends to, what affects</p>
+<p><strong>Parameter Types &amp; Units:</strong><br />
+- Volume: dB (-inf to +6 dB), percent (0-100%), normalized (0.0-1.0)<br />
+- Pan: L/R notation (25L, 30R), percent, normalized, center<br />
+- Sends: dB, percent, normalized<br />
+- Device parameters: seconds (s), milliseconds (ms), hertz (Hz), kilohertz (kHz), dB, percent, normalized, display labels (High, Low, On, Off)<br />
+- Tempo: BPM (40-999)<br />
+- Time signature: numerator (1-99), denominator (1, 2, 4, 8, 16)<br />
+- Loop: start/length in beats</p>
+<p><strong>Special Features:</strong><br />
+- Device ordinals: control multiple devices of same type ("reverb 2", "second compressor")<br />
+- Multi-word devices: "auto filter", "eq eight", "beat repeat"<br />
+- Case-insensitive: commands, device names, parameter names work in any case<br />
+- Typo correction: automatically fixes common typos as you type<br />
+- Preset loading: explicit ("preset cathedral") or implicit ("gentle")<br />
+- State bundles: get all mixer settings + routing in one query<br />
+- Topology queries: understand signal flow and routing<br />
+- Clarification prompts: system asks follow-up questions for ambiguous commands<br />
+- Context-aware UI: capabilities drawer opens with relevant controls</p>
+<p><strong>Command Verb Variations:</strong><br />
+- Navigation: "open", "view" (interchangeable)<br />
+- Query: "what is", "show", "show me", "tell", "tell me", "get", "check" (interchangeable)<br />
+- Scene playback: "fire", "launch" (interchangeable)<br />
+- Device loading: "load", "add", "put", "insert" (interchangeable)<br />
+- Device deletion: "delete", "remove" (interchangeable)<br />
+- Tempo: "set tempo", "set bpm", "change tempo" (interchangeable)</p>
+<p><strong>Help System:</strong><br />
+Fadebender provides three types of help:</p>
+<ol>
+<li><strong>Audio Engineering Advice</strong>: Get expert guidance on mixing, production, and sound design</li>
+<li>"my vocals sound weak" - Advice on EQ, compression, presence</li>
+<li>"my mix sounds muddy" - Tips on frequency management and clarity</li>
+<li>"how to make my kick punch through" - Techniques for drum presence</li>
+<li>
+<p>"what's the best reverb settings for vocals" - Parameter recommendations</p>
+</li>
+<li>
+<p><strong>Ableton Live Knowledge</strong>: Learn from the complete Ableton manual</p>
+</li>
+<li>"what are sends and returns" - Routing concepts explained</li>
+<li>"how does sidechaining work in Ableton" - Feature tutorials</li>
+<li>"explain the compressor parameters" - Device documentation</li>
+<li>
+<p>"what's the difference between audio and MIDI tracks" - DAW fundamentals</p>
+</li>
+<li>
+<p><strong>Context-Aware Project Help</strong>: Get advice specific to your current Live set</p>
+</li>
+<li>"how can I improve my mix" - Analysis based on your tracks and routing</li>
+<li>"what's the best way to organize my returns" - Recommendations for your project</li>
+<li>"help me balance my drums" - Advice considering your drum tracks</li>
+<li>"which tracks should I sidechain" - Suggestions based on your signal flow</li>
+</ol>
+<p>All responses include relevant command suggestions to implement the advice immediately.</p>
+<p>Chat Basics<br />
+- Type natural language commands, press Enter to send<br />
+- Autocorrect: common typos are fixed automatically as you type (e.g., <code>trac</code> → <code>track</code>)<br />
+- Clarification: when the intent is ambiguous, the UI asks a follow‑up question and shows suggested commands<br />
+- Help: ask conceptual questions ("my vocals sound weak") or operational questions ("what is track 1 volume")</p>
+<p>Understanding the Interface</p>
+<p><strong>Sidebar (Left Side):</strong><br />
+- Shows your project structure: tracks, returns, and master<br />
+- Each track shows: number, name, and type (AUDIO/MIDI)<br />
+- Return tracks labeled by letter (A, B, C...)<br />
+- Click track names to view details (doesn't auto-open drawer - use <code>open</code> commands instead)<br />
+- Scroll to see all tracks in large projects</p>
+<p><strong>Chat Input (Bottom Center):</strong><br />
+- Type your commands and questions here<br />
+- Press Enter to send<br />
+- Previous messages show above with timestamps<br />
+- AI responses appear with suggested follow-up actions<br />
+- "Clear Chat" button removes conversation history</p>
+<p><strong>Transport Bar (Top):</strong><br />
+- Play/Stop/Record buttons<br />
+- Metronome toggle<br />
+- Tempo display and controls (BPM)<br />
+- Time signature controls<br />
+- Playhead position<br />
+- Loop controls (start/length)<br />
+- Undo/Redo buttons<br />
+- Settings and view mode toggles</p>
+<p><strong>Capabilities Drawer (Right Side):</strong><br />
+- Opens automatically when you run commands<br />
+- Shows context-relevant controls (mixer or device parameters)<br />
+- Stays updated in real-time with Live<br />
+- Pin/unpin and close buttons in top-right corner<br />
+- Scroll to see all available parameters</p>
+<p>Capabilities Drawer<br />
+The capabilities drawer is Fadebender's context-aware control panel that automatically displays relevant controls when you interact with your project.</p>
+<p><strong>When It Opens:</strong><br />
+- Auto-opens when you run any command (set, increase, decrease, mute, solo, etc.)<br />
+- Auto-opens when you ask "get" queries (what is, show, tell me, check)<br />
+- Auto-opens when you use navigation commands (open, view)<br />
+- Auto-opens when you click list chips from query responses (list audio tracks, list returns)<br />
+- Does NOT open when clicking sidebar items (use explicit "open" commands instead)</p>
+<p><strong>Drawer Types:</strong><br />
+1. <strong>Device Drawer</strong> - Shows when controlling device parameters:<br />
+   - Displays all parameters for the selected device (reverb, delay, compressor, etc.)<br />
+   - Parameters grouped by section (General, Early Reflections, Diffusion, etc.)<br />
+   - Each parameter shows: name, current value, range, unit<br />
+   - Inline controls: sliders for continuous values, toggles for on/off, dropdowns for discrete choices</p>
+<ol>
+<li><strong>Mixer Drawer</strong> - Shows when controlling mixer parameters:</li>
+<li>Displays volume, pan, mute, solo controls</li>
+<li>Shows all send levels (Send A, Send B, etc.)</li>
+<li>Type badge indicates: AUDIO / MIDI (for tracks) or RETURN (for return tracks)</li>
+<li>Includes cue volume for master</li>
+</ol>
+<p><strong>How to Navigate:</strong><br />
+- Scroll within the drawer to see all parameters<br />
+- Parameters are organized by section with clear headings<br />
+- Pin icon (top right): Click to keep drawer open when switching context<br />
+- Close icon (top right): Click to close drawer<br />
+- Pinned drawers stay open until you close them manually<br />
+- Unpinned drawers auto-close when you switch to a different track/return/device</p>
+<p><strong>Using Controls:</strong><br />
+- <strong>Sliders</strong>: Drag to adjust, or click the value to type a number<br />
+- <strong>Toggles</strong>: Click to switch on/off (Device On, Mute, Solo, etc.)<br />
+- <strong>Dropdowns</strong>: Click to see and select from available options<br />
+- All changes are sent to Ableton Live in real-time<br />
+- Current values update automatically when changed in Live or via commands</p>
+<p>Opening Controls (Navigation)<br />
+- Multiple ways to open the capabilities drawer:<br />
+  - <code>open track 1</code> / <code>view track 1</code> → opens mixer controls for Track 1<br />
+  - <code>open return A</code> / <code>view return A</code> → opens mixer controls for Return A<br />
+  - <code>open return A reverb</code> / <code>view return A reverb</code> → opens device controls for reverb on Return A<br />
+  - <code>open track 2 delay</code> / <code>view track 2 delay</code> → opens device controls for delay on Track 2<br />
+- Both "open" and "view" work identically for navigation commands</p>
+<p>Core Mixer Commands (examples)<br />
+- Absolute:<br />
+  - <code>set track 1 volume to -6 dB</code><br />
+  - <code>set track 2 pan to 25R</code> (compact: 25R = +25, 30L = −30)<br />
+  - <code>mute track 3</code> / <code>solo track 1</code><br />
+  - <code>set track 1 send A to 20%</code> or <code>-12 dB</code><br />
+- Relative:<br />
+  - <code>increase track 1 volume by 3 dB</code><br />
+  - <code>decrease track 2 send B by 5%</code></p>
+<p>Device Control (returns and tracks)<br />
+- Return device parameters:<br />
+  - <code>set return A reverb decay to 2 s</code><br />
+  - <code>set return B delay feedback to 35%</code><br />
+  - <code>what is return A reverb decay?</code><br />
+- Device ordinal (when multiple of same type):<br />
+  - <code>set return B reverb 2 decay to 1.5 s</code></p>
+<p>Device Loading<br />
+- <strong>Audio Effects</strong> - Load audio processing devices:<br />
+  - <code>load reverb on track 2</code><br />
+  - <code>add compressor to track 1</code><br />
+  - <code>put limiter on return A</code><br />
+  - <code>insert delay on track 3</code><br />
+  - <code>load auto filter on track 5</code><br />
+  - <code>add eq eight to track 1</code><br />
+  - <code>load beat repeat on track 2</code><br />
+- <strong>MIDI Effects</strong> - Load MIDI processing devices:<br />
+  - <code>load arpeggiator on track 3</code><br />
+  - <code>add chord to track 2</code><br />
+  - <code>load note echo on track 4</code><br />
+  - <code>add scale on track 1</code><br />
+- <strong>Instruments</strong> - Load synthesizers and samplers:<br />
+  - <code>load analog on track 5</code><br />
+  - <code>add wavetable to track 3</code><br />
+  - <code>load impulse on track 2</code><br />
+  - <code>add sampler to track 4</code><br />
+  - <code>load drum rack on track 1</code><br />
+- <strong>With Presets</strong> - Load device with specific preset:<br />
+  - <code>load reverb preset cathedral on track 2</code><br />
+  - <code>load analog preset lush pad on track 3</code><br />
+  - <code>add delay 4th bandpass on return C</code> (implicit preset)<br />
+  - <code>add compressor gentle on return B</code> (implicit preset)<br />
+- Multi-word devices work automatically (auto filter, eq eight, beat repeat, drum rack)<br />
+- Case-insensitive: <code>load reverb</code> / <code>load REVERB</code> / <code>load Reverb</code><br />
+- Supported verbs: load, add, put, insert<br />
+- Supported targets: track N, return A-L (letter or number), master<br />
+- Requires device_map.json to be configured (auto-generated during installation)</p>
+<p>Device Deletion<br />
+- Delete devices from tracks or returns:<br />
+  - <code>delete reverb from track 2</code> (deletes first match)<br />
+  - <code>remove compressor from track 1</code><br />
+  - <code>delete delay from return A</code><br />
+- Delete by device index:<br />
+  - <code>delete device 0 from track 2</code><br />
+  - <code>remove device 1 from return A</code><br />
+- Delete by ordinal (when multiple devices with same name):<br />
+  - <code>delete first reverb from track 2</code><br />
+  - <code>remove second compressor from track 1</code><br />
+  - <code>delete 2nd eq eight from track 3</code><br />
+- With optional "the" keyword:<br />
+  - <code>remove the reverb from return B</code><br />
+  - <code>delete the limiter from track 1</code><br />
+- Case-insensitive device matching<br />
+- Supported verbs: delete, remove<br />
+- Note: Uses exact device index after resolution, so safe even with multiple devices</p>
+<p>Get Parameter: Values and Topology<br />
+- Value reads (multiple ways to ask):<br />
+  - <code>what is track 1 volume?</code><br />
+  - <code>show me track 1 volume</code> / <code>show track 1 pan</code><br />
+  - <code>tell me return A pan</code> / <code>tell track 1 volume</code><br />
+  - <code>get track 2 volume</code> / <code>check track 1 mute</code><br />
+  - <code>what's the current tempo?</code> / <code>is the metronome on?</code><br />
+- State bundles (volume, pan, mute, solo + routing summary):<br />
+  - <code>what is track 1 state</code><br />
+  - <code>what is return A state</code><br />
+  - <code>what is master state</code><br />
+- Topology:<br />
+  - <code>what are return A devices</code> → ordered list of devices on Return A<br />
+  - <code>what are track 1 devices</code> → ordered list of devices on the track<br />
+  - <code>who sends to return A</code> / <code>which tracks send to return A</code> → tracks with non‑zero sends to A<br />
+- <code>what does track 1 send A affect</code> → lists devices on the destination return<br />
+- Drawer behavior: these queries open the relevant mixer/device drawer when possible</p>
+<p>Project Overview Queries (counts and lists)<br />
+- Counts:<br />
+  - <code>how many audio tracks</code><br />
+  - <code>how many midi tracks</code><br />
+  - <code>how many return tracks</code><br />
+  - <code>track count</code><br />
+- Lists (response includes clickable chips to open controls):<br />
+  - <code>list audio tracks</code><br />
+  - <code>list midi tracks</code><br />
+  - <code>list returns</code><br />
+  - Click a “Track N (Name)” or “Return A (Name)” chip to open its capabilities drawer</p>
+<p>Transport</p>
+<p>Transport Commands<br />
+- Set tempo:<br />
+  - <code>set tempo to 130</code><br />
+  - <code>set bpm to 120</code><br />
+  - <code>change tempo to 140</code><br />
+- Loop control:<br />
+  - <code>loop on</code> / <code>loop off</code><br />
+  - <code>loop toggle</code><br />
+  - <code>set loop start to 4</code><br />
+  - <code>set loop length to 8</code><br />
+- Time signature:<br />
+  - <code>set time signature numerator to 4</code><br />
+  - <code>set time signature denominator to 4</code><br />
+  - <code>set time sig numerator to 3</code><br />
+- Query commands:<br />
+  - <code>what is the tempo?</code><br />
+  - <code>is the click on?</code><br />
+  - <code>what's the current tempo?</code><br />
+- UI controls (if enabled in your build):<br />
+  - Play/stop/record/click toggles via the transport bar<br />
+  - Playhead and loop fields display up to 2 decimal places<br />
+  - Compact widths for tempo, time signature, playhead, loop start/length<br />
+- After sending an intent, keyboard focus returns to the chat input automatically</p>
+<p>Song-Level Operations</p>
+<p>Undo/Redo (Project-Level)<br />
+- NLP commands:<br />
+  - <code>undo</code> / <code>undo last change</code> → undoes last project change in Live<br />
+  - <code>redo</code> / <code>redo that</code> → redoes last undone change<br />
+- UI: Header icons provide quick undo/redo access<br />
+- Note: This is Live's project-level undo (all operations), not Fadebender command history</p>
+<p>Song Information<br />
+- Query song metadata:<br />
+  - <code>what's the song name</code> / <code>show song info</code> → displays name, tempo, time signature<br />
+  - <code>what is the song length</code> / <code>how long is the song</code> → returns song length in beats<br />
+  - <code>what is the tempo</code> → shows current tempo<br />
+  - <code>where is the playhead</code> / <code>where am I</code> → shows current playhead position in beats</p>
+<p>Locators (Arrangement Cue Points)<br />
+- List all locators:<br />
+  - <code>list locators</code> / <code>show locators</code> → displays all locators with positions<br />
+- Jump to locator:<br />
+  - <code>jump to locator 2</code> → jumps to locator by index<br />
+  - <code>jump to intro</code> / <code>go to verse</code> → jumps to locator by name<br />
+- Rename locator:<br />
+  - <code>rename locator 1 to intro</code><br />
+  - <code>call locator 2 verse</code><br />
+- Note: Creating/deleting locators not supported due to Live API limitations</p>
+<p>Scenes, Clips, and Views<br />
+- Create / delete / duplicate scenes:<br />
+   - <code>create scene</code><br />
+   - <code>create scene at 3</code><br />
+   - <code>delete scene 2</code><br />
+   - <code>duplicate scene 1</code><br />
+- Fire/stop a scene:<br />
+   - <code>fire scene 3</code><br />
+   - <code>launch scene 5</code><br />
+   - <code>stop scene 2</code><br />
+- Create/delete/duplicate clips:<br />
+   - <code>create clip 4 3</code> (creates a MIDI clip of default length at Track 4, Scene 3)<br />
+   - <code>create clip 4 3 8</code> (explicit length in beats)<br />
+   - <code>delete clip 4 3</code><br />
+   - <code>duplicate clip 4 3</code> (duplicates to Track 4, Scene 4 if empty)<br />
+   - <code>duplicate clip 4 3 to 4 5</code><br />
+   - Note: Clip creation only works on MIDI tracks with empty slots<br />
+- Fire/stop a single clip:<br />
+   - <code>fire clip 4 2</code><br />
+   - <code>stop clip 4 2</code></p>
+<p>Naming<br />
+- Rename items using natural language:<br />
+   - <code>rename track 3 to Pianos</code><br />
+   - <code>rename scene 1 to Intro</code><br />
+   - <code>rename clip 4 2 to Beatbox</code></p>
+<p>Track Arm<br />
+- Arm/disarm a track for recording:<br />
+    - <code>arm track 3</code><br />
+    - <code>disarm track 3</code></p>
+<p>Track Creation and Management<br />
+- Create tracks:<br />
+    - <code>create audio track</code><br />
+    - <code>create audio track at 3</code><br />
+    - <code>create midi track</code><br />
+    - <code>create midi track at 4</code><br />
+- Delete / duplicate tracks:<br />
+    - <code>delete track 3</code><br />
+    - <code>duplicate track 2</code></p>
+<p>Common Workflows</p>
+<p><strong>Setting up a reverb send:</strong><br />
+1. Type <code>load reverb on return A</code> - Adds reverb to return track A<br />
+2. Type <code>open return A reverb</code> - Opens the reverb controls<br />
+3. Adjust reverb parameters in the drawer (decay, wet/dry, etc.)<br />
+4. Type <code>set track 1 send A to -12 dB</code> - Send track 1 to the reverb<br />
+5. Repeat step 4 for other tracks that need reverb</p>
+<p><strong>Controlling multiple devices of the same type:</strong><br />
+1. If you have two reverbs on return A<br />
+2. Type <code>set return A reverb 1 decay to 2s</code> - Controls the first reverb<br />
+3. Type <code>set return A reverb 2 decay to 4s</code> - Controls the second reverb<br />
+4. Or use ordinals: <code>set return A second reverb decay to 4s</code></p>
+<p><strong>Exploring your project structure:</strong><br />
+1. Type <code>list audio tracks</code> - See all audio tracks with clickable chips<br />
+2. Click any track chip to open its mixer controls<br />
+3. Type <code>what are track 2 devices</code> - See all devices on track 2<br />
+4. Type <code>who sends to return A</code> - Find which tracks are using return A<br />
+5. Type <code>what is return A state</code> - Get complete mixer settings for return A</p>
+<p><strong>Loading a device with a preset:</strong><br />
+1. Type <code>load reverb preset cathedral on track 2</code> - Loads reverb with cathedral preset<br />
+2. Type <code>open track 2 reverb</code> - View the reverb settings<br />
+3. Adjust parameters as needed using the drawer controls</p>
+<p><strong>Working with the capabilities drawer:</strong><br />
+1. Type <code>open track 1</code> - Opens mixer controls<br />
+2. Click the pin icon to keep it open<br />
+3. Type <code>open track 2</code> - Drawer switches to track 2 but stays open (because pinned)<br />
+4. Type <code>set track 2 volume to -3 dB</code> - Adjust while viewing controls<br />
+5. Click the close icon when done</p>
+<p><strong>Quick mixing adjustments:</strong><br />
+1. Type <code>increase track 1 volume by 3 dB</code> - Relative adjustment<br />
+2. Type <code>decrease track 2 send B by 5%</code> - Another relative change<br />
+3. Type <code>mute track 3</code> - Toggle mute<br />
+4. Type <code>solo track 1</code> - Solo a track<br />
+5. Type <code>set track 1 pan to 25R</code> - Pan right</p>
+<p>Troubleshooting<br />
+- <strong>Parameter not found</strong>: UI shows suggestions and (for devices) a parameter list in the drawer<br />
+- <strong>Send/device topology shows empty</strong>: Re-ask the query after performing any mixer action<br />
+- <strong>Clip creation not working</strong>: Clip creation only works on MIDI tracks with empty slots<br />
+- <strong>Audio/MIDI type badge missing</strong>: Restart Ableton Live or toggle the Control Surface in Live's Preferences</p>
+<p>Appendix: Handy Examples<br />
+- SET commands:<br />
+  - <code>set track 1 send A to -12 dB</code><br />
+  - <code>increase return B volume by 2 dB</code><br />
+  - <code>set return A reverb wet to 15%</code><br />
+- GET queries (multiple phrasings):<br />
+  - <code>what are track 2 devices</code> / <code>show me track 2 devices</code><br />
+  - <code>who sends to return B</code> / <code>check return B senders</code><br />
+  - <code>what is return A state</code> / <code>tell me return A state</code><br />
+  - <code>what is track 1 volume</code> / <code>get track 1 volume</code><br />
+- NAVIGATION:<br />
+  - <code>open track 1</code> / <code>view track 1</code><br />
+  - <code>open return A reverb</code> / <code>view return A reverb</code></p>
+<ul>
+<li>SCENES &amp; CLIPS:</li>
+<li><code>fire scene 3</code></li>
+<li><code>stop scene 3</code></li>
+<li><code>fire clip 4 2</code> / <code>stop clip 4 2</code></li>
+</ul>
+</body>
+</html>

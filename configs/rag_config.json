@@ -44,14 +44,24 @@
 
     "device_signatures": {
       "description": "Device signatures enabled for RAG (incremental addition)",
-      "enabled_for_rag": [],
+      "enabled_for_rag": [
+        "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+        "9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1",
+        "82da8ccee34e85facb2a264e3110618dc199938e",
+        "d554752f4be9eee62197c37b45b1c22237842c37",
+        "9e906e0ab3f18c4688107553744914f9ef6b9ee7"
+      ],
+      "device_names": {
+        "64ccfc236b79371d0b45e913f81bf0f3a55c6db9": "Reverb",
+        "9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1": "Delay",
+        "82da8ccee34e85facb2a264e3110618dc199938e": "Align Delay",
+        "d554752f4be9eee62197c37b45b1c22237842c37": "Amp",
+        "9e906e0ab3f18c4688107553744914f9ef6b9ee7": "Compressor"
+      },
       "in_progress": [],
       "planned": [
-        "AudioEffectGroupDevice:Reverb",
-        "AudioEffectGroupDevice:Compressor",
         "AudioEffectGroupDevice:EQ Eight",
-        "AudioEffectGroupDevice:Glue Compressor",
-        "AudioEffectGroupDevice:Delay"
+        "AudioEffectGroupDevice:Glue Compressor"
       ],
       "excluded": [
         "MidiEffectGroupDevice:*"
@@ -60,11 +70,15 @@
 
     "structure_signatures": {
       "description": "Preset structure signatures enabled for RAG (incremental addition)",
-      "enabled_for_rag": [],
+      "enabled_for_rag": [
+        "64ccfc236b79371d0b45e913f81bf0f3a55c6db9",
+        "9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1",
+        "82da8ccee34e85facb2a264e3110618dc199938e",
+        "d554752f4be9eee62197c37b45b1c22237842c37",
+        "9e906e0ab3f18c4688107553744914f9ef6b9ee7"
+      ],
       "in_progress": [],
       "planned": [
-        "reverb_v1",
-        "compressor_v1",
         "eq_eight_v1"
       ]
     },
