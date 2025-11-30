@@ -9,7 +9,7 @@
  */
 
 import * as logger from 'firebase-functions/logger';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { searchVertexAIEnhanced, SearchResponse } from './vertex-search-enhanced';
 
 export interface ConversationTurn {
@@ -137,8 +137,13 @@ export function generatePreamble(
       break;
   }
 
-  // Always include citation instruction
-  preamble += '\n\nALWAYS cite your sources at the end of your answer.';
+  // Always include formatting and citation instructions
+  preamble += '\n\nFormatting requirements:';
+  preamble += '\n- Use markdown formatting for better readability';
+  preamble += '\n- Use **bold** for parameter names and important terms';
+  preamble += '\n- Use bullet points for lists';
+  preamble += '\n- Include specific numeric ranges WITH units (e.g., "0.5 to 250 ms" not "0 to 100 ms")';
+  preamble += '\n- ALWAYS cite your sources at the end';
 
   return preamble;
 }
@@ -187,7 +192,7 @@ export async function saveConversationTurn(
   const sessionRef = db.collection('help_conversations').doc(sessionId);
 
   await sessionRef.update({
-    turns: getFirestore().FieldValue.arrayUnion(turn),
+    turns: FieldValue.arrayUnion(turn),
     updatedAt: Date.now(),
     ...(projectContext && { projectContext }),
   });

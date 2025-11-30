@@ -89,11 +89,28 @@ export function loadRagConfig(): RagConfig {
     return cachedRagConfig;
   }
 
-  // In Cloud Functions, config is in parent directory
-  const configPath = path.join(__dirname, '../../configs/rag_config.json');
+  // Try multiple possible paths
+  const possiblePaths = [
+    path.join(__dirname, '../../configs/rag_config.json'),  // Local development
+    path.join(__dirname, '../configs/rag_config.json'),     // Cloud Functions build
+    path.join(process.cwd(), 'configs/rag_config.json'),    // Process working directory
+    '/workspace/configs/rag_config.json',                    // Cloud Functions workspace
+  ];
 
-  if (!fs.existsSync(configPath)) {
-    throw new Error(`RAG config not found at ${configPath}`);
+  let configPath: string | null = null;
+  for (const testPath of possiblePaths) {
+    if (fs.existsSync(testPath)) {
+      configPath = testPath;
+      break;
+    }
+  }
+
+  if (!configPath) {
+    throw new Error(
+      `RAG config not found. Tried paths:\n${possiblePaths.join('\n')}\n` +
+      `__dirname: ${__dirname}\n` +
+      `process.cwd(): ${process.cwd()}`
+    );
   }
 
   const configData = fs.readFileSync(configPath, 'utf-8');
@@ -110,10 +127,28 @@ export function loadAppConfig(): AppConfig {
     return cachedAppConfig;
   }
 
-  const configPath = path.join(__dirname, '../../configs/app_config.json');
+  // Try multiple possible paths
+  const possiblePaths = [
+    path.join(__dirname, '../../configs/app_config.json'),  // Local development
+    path.join(__dirname, '../configs/app_config.json'),     // Cloud Functions build
+    path.join(process.cwd(), 'configs/app_config.json'),    // Process working directory
+    '/workspace/configs/app_config.json',                    // Cloud Functions workspace
+  ];
 
-  if (!fs.existsSync(configPath)) {
-    throw new Error(`App config not found at ${configPath}`);
+  let configPath: string | null = null;
+  for (const testPath of possiblePaths) {
+    if (fs.existsSync(testPath)) {
+      configPath = testPath;
+      break;
+    }
+  }
+
+  if (!configPath) {
+    throw new Error(
+      `App config not found. Tried paths:\n${possiblePaths.join('\n')}\n` +
+      `__dirname: ${__dirname}\n` +
+      `process.cwd(): ${process.cwd()}`
+    );
   }
 
   const configData = fs.readFileSync(configPath, 'utf-8');

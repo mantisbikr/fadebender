@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import pathlib
 import re
 import sys
 import time
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -1483,8 +1486,8 @@ def handle_chat_legacy(body: ChatBody) -> Dict[str, Any]:
 
 
 
-def handle_help(body: HelpBody) -> Dict[str, Any]:
-    """Return grounded help snippets from local knowledge notes.
+def handle_help_local(body: HelpBody) -> Dict[str, Any]:
+    """Fallback: Return grounded help snippets from local knowledge notes.
 
     Uses Gemini 2.5 Flash Lite to generate concise, formatted responses.
 
@@ -1541,3 +1544,132 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
     answer = generate_help_response(body.query, matches, suggested)
 
     return {"ok": True, "answer": answer, "sources": sources, "suggested_intents": suggested}
+
+
+# Session storage for conversational RAG
+_help_sessions: Dict[str, str] = {}  # user_id -> session_id
+
+
+def handle_help(body: HelpBody) -> Dict[str, Any]:
+    """Handle help requests using conversational RAG via Firebase Functions.
+
+    Falls back to local implementation if Firebase Functions unavailable.
+
+    Supports:
+    - Conversational context (multi-turn)
+    - Format control (brief/detailed/bulleted/step-by-step)
+    - Project context integration
+    """
+    import requests
+    import os
+
+    # Use deployed Cloud Functions (secure and fast)
+    functions_url = "https://us-central1-fadebender.cloudfunctions.net/help"
+
+    # Get API key from environment
+    api_key = os.getenv('FADEBENDER_API_KEY')
+    if not api_key:
+        logger.error("FADEBENDER_API_KEY not set in environment")
+        # Fall back to local help
+        return handle_help_local(body)
+
+    try:
+        # Get or create session for this user
+        user_id = getattr(body, 'user_id', None) or 'default_user'
+        session_id = _help_sessions.get(user_id)
+
+        # Build request payload
+        payload = {
+            "query": body.query,
+            "conversational": True,
+            "userId": user_id,
+        }
+
+        # Add session ID if we have one (for follow-up questions)
+        if session_id:
+            payload["sessionId"] = session_id
+
+        # Add project context if available
+        if hasattr(body, 'context') and body.context:
+            payload["projectContext"] = body.context
+
+        # Call deployed Cloud Functions with API key authentication
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": api_key,
+        }
+
+        response = requests.post(
+            functions_url,
+            json=payload,
+            headers=headers,
+            timeout=30
+        )
+
+        if response.ok:
+            result = response.json()
+
+            # Store session ID for follow-up questions
+            if 'sessionId' in result:
+                _help_sessions[user_id] = result['sessionId']
+
+            # Transform Firebase response to expected format
+            answer = result.get('response', '')
+
+            # Extract sources from Firebase response
+            sources = []
+            if 'sources' in result:
+                for source in result['sources']:
+                    if isinstance(source, dict):
+                        sources.append({
+                            "source": source.get('title', ''),
+                            "title": source.get('title', '')
+                        })
+                    else:
+                        # If it's just a string (URI)
+                        filename = source.split('/')[-1].replace('.html', '')
+                        sources.append({
+                            "source": filename,
+                            "title": filename
+                        })
+
+            # Build suggested intents (keep existing heuristics)
+            q = (body.query or "").lower()
+            suggested: list[str] = []
+            if any(k in q for k in ["vocal", "vocals", "singer", "voice", "weak", "soft", "quiet"]):
+                suggested.extend([
+                    "increase track 1 volume by 3 dB",
+                    "set track 1 volume to -6 dB",
+                    "load compressor preset gentle on track 1",
+                ])
+            if any(k in q for k in ["reverb", "space", "spacious", "hall", "room"]):
+                suggested.extend([
+                    "load reverb preset plate medium on return A",
+                    "set track 1 send A to -12 dB",
+                ])
+
+            return {
+                "ok": True,
+                "answer": answer,
+                "sources": sources,
+                "suggested_intents": suggested,
+                "session_id": result.get('sessionId'),
+                "format": result.get('format', 'default'),
+                "mode": "rag-conversational"
+            }
+        else:
+            # Firebase returned error, fall back to local
+            logger.warning(f"Firebase Functions help failed: {response.status_code}, falling back to local")
+            return handle_help_local(body)
+
+    except requests.exceptions.ConnectionError:
+        # Firebase Functions not available (emulator not running or network issue)
+        logger.info("Firebase Functions not available, using local help")
+        return handle_help_local(body)
+    except requests.exceptions.Timeout:
+        logger.warning("Firebase Functions timeout, falling back to local help")
+        return handle_help_local(body)
+    except Exception as e:
+        # Any other error, fall back to local
+        logger.error(f"Error calling Firebase Functions: {e}, falling back to local help")
+        return handle_help_local(body)

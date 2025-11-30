@@ -1,7 +1,8 @@
-import { onRequest } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 import { getFirestore } from 'firebase-admin/firestore';
 import { callPythonHelp } from './vertex-direct';
+import { createSecureEndpoint } from './middleware/secure-endpoint';
+import { sanitizeInput } from './middleware/auth';
 
 interface PresetRecommendationsRequest {
   device_type: string;
@@ -20,27 +21,23 @@ interface PresetRecommendationsResponse {
   recommendations: PresetRecommendation[];
 }
 
-export const presetRecommendations = onRequest(
-  {
-    cors: true,
-    timeoutSeconds: 60,
-    memory: '512MiB',
-  },
-  async (request, response) => {
-    try {
-      const body = request.body as PresetRecommendationsRequest;
-      const { device_type, goal } = body || {};
+export const presetRecommendations = createSecureEndpoint(async (request, response) => {
+  const body = request.body as PresetRecommendationsRequest;
+  const { device_type, goal } = body || {};
 
-      if (!device_type || typeof device_type !== 'string') {
-        response.status(400).json({ error: 'device_type is required and must be a string' });
-        return;
-      }
-      if (!goal || typeof goal !== 'string') {
-        response.status(400).json({ error: 'goal is required and must be a string' });
-        return;
-      }
+  if (!device_type || typeof device_type !== 'string') {
+    response.status(400).json({ error: 'device_type is required and must be a string' });
+    return;
+  }
+  if (!goal || typeof goal !== 'string') {
+    response.status(400).json({ error: 'goal is required and must be a string' });
+    return;
+  }
 
-      logger.info('Preset recommendations request', { device_type, goal });
+  // Sanitize inputs
+  const sanitizedGoal = sanitizeInput(goal);
+
+  logger.info('Preset recommendations request', { device_type, goal: sanitizedGoal });
 
       // Step 1: read candidate presets for the device_type.
       const db = getFirestore();
@@ -121,14 +118,6 @@ Task:
         }),
       );
 
-      const resp: PresetRecommendationsResponse = { recommendations };
-      response.json(resp);
-    } catch (error: any) {
-      logger.error('Preset recommendations error', { error: error.message });
-      response.status(500).json({
-        error: 'internal_error',
-        message: error.message,
-      });
-    }
-  },
-);
+  const resp: PresetRecommendationsResponse = { recommendations };
+  response.json(resp);
+});

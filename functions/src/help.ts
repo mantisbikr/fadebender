@@ -1,10 +1,11 @@
-import { onRequest } from 'firebase-functions/v2/https';
 import { getConfigValue, isRagEnabled } from './config';
 import { isVertexSearchEnabled } from './vertex-search';
 import { generateRAGHelp } from './help-rag';
 import { generateFallbackHelp, HelpResponse } from './help-fallback';
 import { generateHelpResponse, ResponseFormat } from './help-rag-conversational';
 import * as logger from 'firebase-functions/logger';
+import { sanitizeInput } from './middleware/auth';
+import { createSecureEndpoint } from './middleware/secure-endpoint';
 
 /**
  * Help Endpoint with Feature-Flagged RAG and Conversational Support
@@ -164,48 +165,47 @@ async function processHelpQuery(request: HelpRequest): Promise<HelpResponse> {
  *   }
  * }
  */
-export const help = onRequest(
-  {
-    cors: true,
-    timeoutSeconds: 60,
-    memory: '512MiB',
-  },
-  async (request, response) => {
-    try {
-      const {
-        query,
-        userId,
-        sessionId,
-        projectContext,
-        format,
-        conversational,
-      } = request.body;
+export const help = createSecureEndpoint(async (request, response) => {
+  // Extract and validate request
+  const {
+    query,
+    userId,
+    sessionId,
+    projectContext,
+    format,
+    conversational,
+  } = request.body;
 
-      if (!query || typeof query !== 'string') {
-        response.status(400).json({
-          error: 'Query is required and must be a string',
-        });
-        return;
-      }
-
-      const helpRequest: HelpRequest = {
-        query,
-        userId,
-        sessionId,
-        projectContext,
-        format,
-        conversational,
-      };
-
-      const result = await processHelpQuery(helpRequest);
-
-      response.json(result);
-    } catch (error: any) {
-      logger.error('Help endpoint error', error);
-      response.status(500).json({
-        error: 'Internal server error',
-        message: error.message,
-      });
-    }
+  if (!query || typeof query !== 'string') {
+    response.status(400).json({
+      error: 'Query is required and must be a string',
+    });
+    return;
   }
-);
+
+  // Sanitize input
+  let sanitizedQuery: string;
+  try {
+    sanitizedQuery = sanitizeInput(query);
+  } catch (error: any) {
+    response.status(400).json({
+      error: 'Invalid input',
+      message: error.message,
+    });
+    return;
+  }
+
+  // Process help query
+  const helpRequest: HelpRequest = {
+    query: sanitizedQuery,
+    userId,
+    sessionId,
+    projectContext,
+    format,
+    conversational,
+  };
+
+  const result = await processHelpQuery(helpRequest);
+
+  response.json(result);
+});

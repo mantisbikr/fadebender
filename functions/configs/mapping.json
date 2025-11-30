@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "mappings": [
+    {
+      "alias": "track1.volume",
+      "target": {"track": "Track 1", "parameter": "volume"},
+      "midi": {"cc": 20, "channel": 1},
+      "scale": {"type": "linear", "in_min": -60, "in_max": 6, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track3.pan",
+      "target": {"track": "Track 3", "parameter": "pan"},
+      "midi": {"cc": 62, "channel": 1},
+      "scale": {"type": "linear", "in_min": -100, "in_max": 100, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.volume",
+      "target": {"track": "Track 2", "parameter": "volume"},
+      "midi": {"cc": 21, "channel": 1},
+      "scale": {"type": "linear", "in_min": -60, "in_max": 6, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track3.volume",
+      "target": {"track": "Track 3", "parameter": "volume"},
+      "midi": {"cc": 22, "channel": 1},
+      "scale": {"type": "linear", "in_min": -60, "in_max": 6, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track1.reverb.wet",
+      "target": {"track": "Track 1", "plugin": "reverb", "parameter": "wet"},
+      "midi": {"cc": 30, "channel": 1},
+      "scale": {"type": "linear", "in_min": 0, "in_max": 100, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.reverb.wet",
+      "target": {"track": "Track 2", "plugin": "reverb", "parameter": "wet"},
+      "midi": {"cc": 31, "channel": 1},
+      "scale": {"type": "linear", "in_min": 0, "in_max": 100, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track3.reverb.wet",
+      "target": {"track": "Track 3", "plugin": "reverb", "parameter": "wet"},
+      "midi": {"cc": 32, "channel": 1},
+      "scale": {"type": "linear", "in_min": 0, "in_max": 100, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track4.volume",
+      "target": {"track": "Track 4", "parameter": "volume"},
+      "midi": {"cc": 23, "channel": 1},
+      "scale": {"type": "linear", "in_min": -60, "in_max": 6, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track1.eq.high",
+      "target": {"track": "Track 1", "plugin": "Channel EQ", "parameter": "high_gain"},
+      "midi": {"cc": 40, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.eq.high",
+      "target": {"track": "Track 2", "plugin": "Channel EQ", "parameter": "high_gain"},
+      "midi": {"cc": 41, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track1.eq.mid",
+      "target": {"track": "Track 1", "plugin": "Channel EQ", "parameter": "mid_gain"},
+      "midi": {"cc": 42, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.eq.mid",
+      "target": {"track": "Track 2", "plugin": "Channel EQ", "parameter": "mid_gain"},
+      "midi": {"cc": 43, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track1.compressor.ratio",
+      "target": {"track": "Track 1", "plugin": "Compressor", "parameter": "ratio"},
+      "midi": {"cc": 50, "channel": 1},
+      "scale": {"type": "linear", "in_min": 1, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.compressor.ratio",
+      "target": {"track": "Track 2", "plugin": "Compressor", "parameter": "ratio"},
+      "midi": {"cc": 51, "channel": 1},
+      "scale": {"type": "linear", "in_min": 1, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track1.pan",
+      "target": {"track": "Track 1", "parameter": "pan"},
+      "midi": {"cc": 60, "channel": 1},
+      "scale": {"type": "linear", "in_min": -100, "in_max": 100, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.pan",
+      "target": {"track": "Track 2", "parameter": "pan"},
+      "midi": {"cc": 61, "channel": 1},
+      "scale": {"type": "linear", "in_min": -100, "in_max": 100, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track1.eq.low",
+      "target": {"track": "Track 1", "plugin": "Channel EQ", "parameter": "low_gain"},
+      "midi": {"cc": 44, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track2.eq.low",
+      "target": {"track": "Track 2", "plugin": "Channel EQ", "parameter": "low_gain"},
+      "midi": {"cc": 45, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    },
+    {
+      "alias": "track3.eq.mid",
+      "target": {"track": "Track 3", "plugin": "Channel EQ", "parameter": "mid_gain"},
+      "midi": {"cc": 46, "channel": 1},
+      "scale": {"type": "linear", "in_min": -20, "in_max": 20, "out_min": 0, "out_max": 127},
+      "smoothing_ms": 150
+    }
+  ]
+}

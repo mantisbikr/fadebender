@@ -1,0 +1,315 @@
+{
+  "debug": {
+    "auto_capture": false,
+    "firestore": true,
+    "sse": false
+  },
+  "features": {
+    "auto_open_capabilities_on_navigation": true,
+    "auto_open_capabilities_for_all_commands": false,
+    "display_only_io": true,
+    "simple_device_resolver": true,
+    "sticky_capabilities_card": true,
+    "use_intents_for_chat": true
+  },
+  "models": {
+    "audio_analysis": "gemini-2.5-flash",
+    "context_analysis": "gemini-2.5-flash",
+    "default": "gemini-2.5-flash",
+    "help_assistant": "gemini-2.5-flash-lite",
+    "intent_parsing": "gemini-2.5-flash-lite"
+  },
+  "nlp": {
+    "mode": "regex_first",
+    "protected_words": [
+      "pan",
+      "mute",
+      "solo",
+      "volume",
+      "send",
+      "arm",
+      "monitor",
+      "cue",
+      "create",
+      "delete",
+      "duplicate",
+      "copy",
+      "remove",
+      "rename",
+      "fire",
+      "launch",
+      "trigger",
+      "list",
+      "clip",
+      "scene",
+      "track",
+      "return",
+      "master",
+      "device",
+      "mod"
+    ],
+    "percent_always_additive": [
+      "diffusion",
+      "dly < mod",
+      "dry/wet",
+      "feedback",
+      "filter < mod",
+      "l offset",
+      "pan",
+      "r offset",
+      "scale",
+      "S/C Mix"
+    ],
+    "relative_change_verbs": {
+      "decrease": [
+        "decrease",
+        "subtract",
+        "reduce",
+        "down",
+        "quieter"
+      ],
+      "increase": [
+        "increase",
+        "add",
+        "up",
+        "louder"
+      ]
+    },
+    "typo_corrections": {
+      "waht": "what",
+      "alin": "align",
+      "bandpas": "bandpass",
+      "dcay": "decay",
+      "dlay": "delay",
+      "drywet": "dry wet",
+      "gan": "gain",
+      "mut": "mute",
+      "paning": "pan",
+      "predlay": "predelay",
+      "retrun": "return",
+      "retun": "return",
+      "revebr": "reverb",
+      "reverbb": "reverb",
+      "reverv": "reverb",
+      "revreb": "reverb",
+      "screamr": "screamer",
+      "sennd": "send",
+      "slo": "solo",
+      "snd": "send",
+      "stere": "stereo",
+      "streo": "stereo",
+      "strereo": "stereo",
+      "tack": "track",
+      "testtypo": "testcorrect",
+      "trac": "track",
+      "trck": "track",
+      "stae": "state",
+      "vilme": "volume",
+      "volme": "volume",
+      "volumz": "volume"
+    }
+  },
+  "server": {
+    "device_qualifier_aliases": {
+      "amp": {
+        "bass": [
+          "bass"
+        ],
+        "clean": [
+          "clean"
+        ],
+        "crunch": [
+          "crunch"
+        ],
+        "lead": [
+          "lead"
+        ],
+        "screamer": [
+          "screamer"
+        ]
+      },
+      "delay": {
+        "grain": [
+          "grain",
+          "granular"
+        ],
+        "multi": [
+          "multi",
+          "multitap"
+        ],
+        "ping pong": [
+          "ping pong",
+          "ping-pong"
+        ],
+        "slapback": [
+          "slapback"
+        ],
+        "tape": [
+          "tape"
+        ]
+      },
+      "reverb": {
+        "ambience": [
+          "ambience",
+          "ambient"
+        ],
+        "big room": [
+          "big room",
+          "large room"
+        ],
+        "cathedral": [
+          "cathedral"
+        ],
+        "chamber": [
+          "chamber"
+        ],
+        "hall": [
+          "hall"
+        ],
+        "plate": [
+          "plate"
+        ],
+        "room": [
+          "room"
+        ],
+        "small room": [
+          "small room",
+          "tiny room"
+        ],
+        "spring": [
+          "spring"
+        ]
+      }
+    },
+    "device_type_aliases": {
+      "amp": [
+        "amp",
+        "screamer",
+        "overdrive",
+        "distortion",
+        "fuzz",
+        "saturator"
+      ],
+      "chorus": [
+        "chorus"
+      ],
+      "compressor": [
+        "compress",
+        "compressor"
+      ],
+      "delay": [
+        "delay",
+        "echo",
+        "slapback",
+        "pingpong",
+        "ping-pong"
+      ],
+      "eq": [
+        "eq",
+        "equalizer"
+      ],
+      "flanger": [
+        "flanger"
+      ],
+      "phaser": [
+        "phaser"
+      ],
+      "reverb": [
+        "reverb",
+        "hall",
+        "room",
+        "plate",
+        "space",
+        "ambience",
+        "ambient"
+      ]
+    },
+    "param_aliases": {
+      "device": {
+        "amt": "amount",
+        "bandwidth": "q",
+        "bw": "q",
+        "decay time": "decay",
+        "dry": "dry/wet",
+        "dry / wet": "dry/wet",
+        "dry wet": "dry/wet",
+        "drywet": "dry/wet",
+        "fbk": "feedback",
+        "feed back": "feedback",
+        "feedback amount": "feedback",
+        "filter freq": "in filter freq",
+        "hi cut": "high cut",
+        "hi shelf": "hi shelf",
+        "hicut": "high cut",
+        "high pass": "high cut",
+        "high-pass": "high cut",
+        "highcut": "high cut",
+        "hishelf": "hi shelf",
+        "hp": "high cut",
+        "hpf": "high cut",
+        "image": "stereo image",
+        "intensity": "depth",
+        "lo cut": "low cut",
+        "lo shelf": "low shelf",
+        "locut": "low cut",
+        "loshelf": "low shelf",
+        "low pass": "low cut",
+        "low-pass": "low cut",
+        "lowcut": "low cut",
+        "lp": "low cut",
+        "lpf": "low cut",
+        "mix": "dry/wet",
+        "pre delay": "predelay",
+        "pre-delay": "predelay",
+        "q factor": "q",
+        "q-factor": "q",
+        "res": "q",
+        "resonance": "q",
+        "speed": "rate",
+        "stereo width": "stereo image",
+        "wet": "dry/wet",
+        "width": "stereo image"
+      },
+      "mixer": {
+        "balance": "pan",
+        "gain": "volume",
+        "level": "volume",
+        "loudness": "volume",
+        "mute": "mute",
+        "pan": "pan",
+        "solo": "solo",
+        "unmute": "mute",
+        "unsolo": "solo",
+        "vol": "volume"
+      }
+    },
+    "send_aliases": {
+      "delay": 1,
+      "echo": 1,
+      "hall": 0,
+      "reverb": 0,
+      "room": 0,
+      "verb": 0
+    },
+    "unit_conversions": {
+      "ms_to_s": 0.001,
+      "s_to_ms": 1000.0,
+      "hz_to_khz": 0.001,
+      "khz_to_hz": 1000.0
+    },
+    "parameter_system": {
+      "binary_search_iterations": 8,
+      "always_use_fit_models": true
+    }
+  },
+  "ui": {
+    "default_sidebar_tab": "tracks",
+    "master_refresh_ms": 1000,
+    "refresh_ms": 30000,
+    "returns_refresh_ms": 3000,
+    "sends_open_refresh_ms": 800,
+    "sidebar_width_px": 370,
+    "sse_throttle_ms": 150,
+    "track_refresh_ms": 3000
+  }
+}

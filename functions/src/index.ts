@@ -9,6 +9,10 @@
  * Phase 4: Device/preset discovery + advisory tools
  */
 
+// Initialize Firebase Admin SDK
+import { initializeApp } from 'firebase-admin/app';
+initializeApp();
+
 import { help } from './help';
 import { mixAdvice } from './mix-advice';
 import { presetRecommendations } from './preset-recommendations';

@@ -13,7 +13,13 @@ export interface HelpResponse {
   response: string;
   model_used: string;
   sources?: Array<{ title: string; snippet: string }>;
-  mode: 'rag' | 'fallback';
+  mode: 'rag' | 'rag-conversational' | 'fallback';
+  sessionId?: string;
+  format?: string;
+  conversationContext?: {
+    turnCount: number;
+    previousQuery?: string;
+  };
 }
 
 /**

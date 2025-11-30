@@ -1,0 +1,27 @@
+{
+  "track": {
+    "volume": {
+      "kind": "mapped_db", 
+      "min_db": -60,
+      "max_db": 6,
+      "mapping_file": "docs/volume_map.csv",
+      "fallback": "heuristic_around_0db"
+    },
+    "pan": {
+      "kind": "linear_bipolar",
+      "min": -1.0,
+      "max": 1.0
+    }
+  },
+  "sends": {
+    "volume": {
+      "kind": "mapped_db",
+      "min_db": -60,
+      "max_db": 6,
+      "offset_db": 6,
+      "mapping_file": "docs/volume_map.csv",
+      "fallback": "heuristic_around_0db"
+    }
+  }
+}
+

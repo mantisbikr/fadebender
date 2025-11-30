@@ -1,7 +1,8 @@
-import { onRequest } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 import { getFirestore } from 'firebase-admin/firestore';
 import { callPythonHelp } from './vertex-direct';
+import { createSecureEndpoint } from './middleware/secure-endpoint';
+import { sanitizeInput } from './middleware/auth';
 
 interface DeviceLocation {
   domain: 'track' | 'return';
@@ -30,38 +31,34 @@ interface PresetTuningAdviceResponse {
   tweaks: TweakSuggestion[];
 }
 
-export const presetTuningAdvice = onRequest(
-  {
-    cors: true,
-    timeoutSeconds: 60,
-    memory: '512MiB',
-  },
-  async (request, response) => {
-    try {
-      const body = request.body as PresetTuningAdviceRequest;
-      const { device_type, goal, location, preset_id } = body || {};
+export const presetTuningAdvice = createSecureEndpoint(async (request, response) => {
+  const body = request.body as PresetTuningAdviceRequest;
+  const { device_type, goal, location, preset_id } = body || {};
 
-      if (!device_type || typeof device_type !== 'string') {
-        response.status(400).json({ error: 'device_type is required and must be a string' });
-        return;
-      }
-      if (!goal || typeof goal !== 'string') {
-        response.status(400).json({ error: 'goal is required and must be a string' });
-        return;
-      }
-      if (!location || typeof location !== 'object' || typeof location.device_index !== 'number') {
-        response.status(400).json({ error: 'location with device_index is required' });
-        return;
-      }
+  if (!device_type || typeof device_type !== 'string') {
+    response.status(400).json({ error: 'device_type is required and must be a string' });
+    return;
+  }
+  if (!goal || typeof goal !== 'string') {
+    response.status(400).json({ error: 'goal is required and must be a string' });
+    return;
+  }
+  if (!location || typeof location !== 'object' || typeof location.device_index !== 'number') {
+    response.status(400).json({ error: 'location with device_index is required' });
+    return;
+  }
 
-      logger.info('Preset tuning advice request', { device_type, goal, location });
+  // Sanitize input
+  const sanitizedGoal = sanitizeInput(goal);
 
-      const pythonServerUrl = process.env.PYTHON_SERVER_URL || 'http://localhost:8722';
-      const db = getFirestore();
+  logger.info('Preset tuning advice request', { device_type, goal: sanitizedGoal, location });
 
-      // Step 1: fetch capabilities for the specified device instance
-      let deviceSummary = '';
-      try {
+  const pythonServerUrl = process.env.PYTHON_SERVER_URL || 'http://localhost:8722';
+  const db = getFirestore();
+
+  // Step 1: fetch capabilities for the specified device instance
+  let deviceSummary = '';
+  try {
         const { domain, device_index } = location;
         const idx =
           domain === 'track' ? location.track_index ?? 1 : location.return_index ?? 0;
@@ -168,18 +165,10 @@ Task:
         }
       }
 
-      const resp: PresetTuningAdviceResponse = {
-        analysis,
-        tweaks,
-      };
+  const resp: PresetTuningAdviceResponse = {
+    analysis,
+    tweaks,
+  };
 
-      response.json(resp);
-    } catch (error: any) {
-      logger.error('presetTuningAdvice error', { error: error.message });
-      response.status(500).json({
-        error: 'internal_error',
-        message: error.message,
-      });
-    }
-  },
-);
+  response.json(resp);
+});
