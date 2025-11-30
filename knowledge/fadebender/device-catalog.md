@@ -1,514 +1,1987 @@
 # Fadebender Device Catalog
 
-**Generated**: 2025-11-26 17:39:04
+**Generated**: 2025-11-29 17:30:51
 **Source**: Firestore `dev-display-value` database
 **Devices**: 5
 
-This catalog contains detailed information about Ableton Live devices that Fadebender can control.
+This catalog contains comprehensive information about Ableton Live devices:
+- Parameter ranges with units (min/max display values)
+- Audio knowledge (sonic effects, use cases, typical values)
+- Sections and grouping
+- Master/dependent parameter relationships
+- Official Ableton manual descriptions
 
 ---
 
 ## Reverb
 
 **Device Signature**: `64ccfc236b79371d0b45e913f81bf0f3a55c6db9`
-**Status**: Captured → Fitted → Audio Knowledge
-
-**Type**: Unknown
+**Description**: Reverb is an audio effect that simulates the acoustic properties of audio as it echoes throughout a physical space.
+**Type**: reverb
+**Parameters**: 33
 
 ---
 
-### General
+### Chorus
 
-#### Device On
-- **Technical name**: `Device On`
-- **Description**: {'sonic_effect': {'decreasing': 'Bypasses all reverb processing; passes dry signal through unchanged', 'increasing': 'Enables reverb processing; adds spatial depth and ambience to signal'}, 'audio_function': 'Master bypass switch for entire reverb device', 'use_cases': ['Quick A/B comparison of dry vs processed signal', 'Automation for creative reverb drops', 'CPU conservation when reverb not needed'], 'typical_values': {'on': 'Active - full reverb processing', 'off': 'Bypass - no reverb processing'}}
+**Description**: The Chorus section adds a little modulation and motion to the diffusion.
+**Sonic Focus**: Movement and richness in the reverb tail
 
-#### Predelay
-- **Technical name**: `Predelay`
-- **Range**: 0.5 to 250 ms
-- **Description**: {'sonic_effect': {'decreasing': 'Immediate reverb onset; tighter coupling with source; can muddy transients in fast material', 'increasing': 'Longer gap between dry signal and reverb onset; preserves transient clarity; simulates larger distance to walls'}, 'technical_detail': 'Predelay simulates the time sound travels before hitting first reflective surface. Critical for separating direct sound from reverb tail.', 'audio_function': 'Time delay before sound reaches first reflective surface and reverb begins', 'use_cases': ['Preserve vocal/instrument attack transients (1-25ms typical)', 'Create sense of space and distance', 'Prevent muddiness in dense mixes', 'Sync reverb timing to tempo (calculated delays)'], 'typical_values': {'distant': '50-100ms+ for larger spaces or creative effects', 'natural': '10-25ms for realistic room simulation', 'tight': '0-10ms for intimate, close sound'}}
+**Technical Notes**:
+- You can control the modulation Amount and Rate, or deactivate it altogether
 
-#### In LowCut On
-- **Technical name**: `In LowCut On`
-- **Description**: {'sonic_effect': {'decreasing': 'Bypasses filter; allows full frequency spectrum into reverb including bass', 'increasing': 'Activates low frequency filtering; removes bass from reverb for cleaner, thinner character'}, 'audio_function': 'Enables high-pass filter on input signal before reverb processing', 'use_cases': ['Prevent muddy low-end buildup in reverb', 'Keep bass dry and focused', 'Create space in dense mixes', 'Save CPU when not needed'], 'typical_values': {'on': 'Use with In Filter Freq to control cutoff point', 'off': 'Full spectrum reverb'}}
-
-#### In HighCut On
-- **Technical name**: `In HighCut On`
-- **Description**: {'sonic_effect': {'decreasing': 'Bypasses filter; allows full frequency spectrum into reverb including highs', 'increasing': 'Activates high frequency filtering; removes treble/sparkle from reverb for darker, warmer character'}, 'audio_function': 'Enables low-pass filter on input signal before reverb processing', 'use_cases': ['Create darker, vintage-style reverb', 'Reduce harsh high-frequency reflections', 'Match reverb tone to source material', 'Save CPU when not needed'], 'typical_values': {'on': 'Use with In Filter Freq to control cutoff point', 'off': 'Bright, full-spectrum reverb'}}
-
-#### In Filter Freq
-- **Technical name**: `In Filter Freq`
-- **Range**: 50 to 18000 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Moves cutoff lower; with lowcut removes less bass, with highcut darkens more', 'increasing': 'Moves cutoff higher; with lowcut removes more bass, with highcut darkens less'}, 'technical_detail': 'Works in conjunction with In LowCut/HighCut switches. Single control serves both filters depending on which is active.', 'audio_function': 'Sets cutoff frequency for input high-pass or low-pass filter', 'use_cases': ['Tune reverb frequency response to source', 'Match reverb character to mix', 'Create frequency-specific spatial effects'], 'typical_values': {'lowcut': '100-300Hz to remove bass mud', 'highcut': '3-8kHz for natural darkening'}}
-
-#### In Filter Width
-- **Technical name**: `In Filter Width`
-- **Range**: 0.5 to 9 None
-- **Description**: {'sonic_effect': {'decreasing': 'Narrower, steeper slope; sharper frequency cutoff; more pronounced filtering effect', 'increasing': 'Wider, gentler slope; more gradual frequency transition; natural sound'}, 'technical_detail': 'Adjusts bandwidth/Q factor of input filters. Narrower width creates more resonant peak at cutoff frequency.', 'audio_function': 'Controls filter slope steepness (Q/resonance) for input filters', 'use_cases': ['Fine-tune filter character', 'Create resonant filter effects', 'Match filter slope to musical context'], 'typical_values': {'wide': 'Gentle, natural filtering', 'narrow': 'Sharp, resonant filtering with character'}}
-
-#### ER Spin On
-- **Technical name**: `ER Spin On`
-- **Description**: {'sonic_effect': {'decreasing': 'Disables modulation; early reflections remain static and unmodulated', 'increasing': 'Enables ER timing modulation; activates chorus-like movement in early reflections'}, 'audio_function': 'Master enable switch for early reflection modulation', 'use_cases': ['Add life and movement to early reflections', 'Prevent static, digital-sounding reflections', 'Create more natural, organic reverb character'], 'typical_values': {'on': 'Use with ER Spin Rate and Amount to control modulation', 'off': 'Static, precise early reflections'}}
-
-#### ER Spin Rate
-- **Technical name**: `ER Spin Rate`
-- **Range**: 0.07 to 1.3 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Less modulation; more static, distinct early reflections; cleaner but potentially more artificial sound', 'increasing': 'More timing variation in early reflections; stronger chorus/phasing effect; increased perceived complexity and diffusion'}, 'technical_detail': 'Low-frequency sine wave modulates ER delay timing (2-55ms depth at 0.07-1.3Hz rate). Inspired by Lexicon 480L reverb algorithm. Creates cyclic delay variations that prevent metallic, static early reflections.', 'audio_function': 'Modulates early reflection timing with a low-frequency sine wave to add chorus-like movement', 'use_cases': ['Add naturalness to algorithmic reverb', 'Prevent metallic, static early reflections', 'Create richer, more complex reverb character', 'Emulate natural room variations'], 'typical_values': {'subtle_movement': '0.07-0.2 Hz for barely perceptible modulation', 'pronounced_effect': '1.0-1.3 Hz, 20-55ms depth for obvious modulation', 'recommended': '~1.0 Hz, ~10ms depth for balanced natural sound'}}
-
-#### ER Spin Amount
-- **Technical name**: `ER Spin Amount`
-- **Range**: 2 to 55 None
-- **Description**: {'sonic_effect': {'decreasing': 'Shallower modulation; subtle movement; minimal pitch deviation', 'increasing': 'Deeper timing modulation; more pronounced chorus/phasing effect; wider pitch variations'}, 'technical_detail': 'Sets peak deviation in milliseconds for ER delay modulation. Works with ER Spin Rate to determine modulation character.', 'audio_function': 'Controls modulation depth (intensity) of early reflection timing variations', 'use_cases': ['Fine-tune modulation intensity', 'Balance naturalness vs effect strength', 'Match modulation depth to source material'], 'typical_values': {'subtle': 'Low values for barely audible movement', 'moderate': 'Medium values for natural complexity', 'extreme': 'High values for obvious, creative effects'}}
-
-#### ER Shape
-- **Technical name**: `ER Shape`
-- **Range**: 0 to 1 None
-- **Description**: {'sonic_effect': {'decreasing': 'Distinct separation between ER and tail; gap in reverb onset; more articulated early reflections; potentially less natural', 'increasing': 'Smoother transition from ER to tail; more cohesive, flowing reverb; less distinct early reflections'}, 'technical_detail': 'Adjusts crossfade timing and energy distribution between early reflection pattern and diffusion network.', 'audio_function': 'Controls blend between early reflections and diffuse reverb tail', 'use_cases': ['Create smooth, natural reverb decay', 'Emphasize or de-emphasize early reflections', 'Match reverb character to room type', 'Adjust reverb articulation'], 'typical_values': {'separated': 'Low values for distinct ER stage', 'blended': 'High values for smooth, continuous reverb'}}
-
-#### HiFilter On
-- **Technical name**: `HiFilter On`
-- **Description**: {'sonic_effect': {'decreasing': 'Bypasses filter; natural high-frequency decay', 'increasing': 'Activates treble control; allows shaping of high-frequency decay'}, 'audio_function': 'Enables high-frequency filtering in the diffusion network (reverb tail)', 'use_cases': ['Simulate absorptive materials (curtains, furniture)', 'Create darker, warmer reverb tails', 'Match reverb to room acoustic character', 'Save CPU when not needed'], 'typical_values': {'on': 'Use HiFilter Type, Freq, and Gain to shape highs', 'off': 'Natural, bright decay'}}
-
-#### HiFilter Type
-- **Technical name**: `HiFilter Type`
-- **Description**: {'sonic_effect': {'decreasing': 'Alternative filter type with different slope and character', 'increasing': 'Switches between filter types; different high-frequency decay characteristics'}, 'technical_detail': 'Offers different filter topologies for high-frequency attenuation in reverb tail. Shelf typically provides gentler slopes, cut provides sharper transitions.', 'audio_function': 'Selects high-frequency filter algorithm (shelf or cut)', 'use_cases': ['Match filter character to desired sound', 'Simulate different room absorption types', 'Fine-tune high-frequency decay curve'], 'typical_values': {'shelf': 'Gentle, natural high-frequency rolloff', 'cut': 'Sharper, more pronounced darkening'}}
-
-#### HiFilter Freq
-- **Technical name**: `HiFilter Freq`
-- **Range**: 20 to 16000 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Lower cutoff; filters more treble; darker, warmer reverb tail', 'increasing': 'Higher cutoff; filters less treble; brighter, more airy reverb tail'}, 'technical_detail': 'Determines frequency above which attenuation occurs. Simulates frequency-dependent absorption in real rooms.', 'audio_function': 'Sets frequency point where high-frequency filtering begins in reverb tail', 'use_cases': ['Simulate natural room absorption', 'Create vintage-style dark reverb', 'Match reverb brightness to source', 'Prevent harsh high-frequency buildup'], 'typical_values': {'bright': '10kHz+ for minimal darkening', 'natural': '5-8kHz for balanced decay', 'dark': '2-4kHz for warm, vintage character'}}
-
-#### HiShelf Gain
-- **Technical name**: `HiShelf Gain`
-- **Range**: 0.20000000298023224 to 1
-- **Description**: {'sonic_effect': {'decreasing': 'Less high-frequency energy; darker, more damped reverb tail', 'increasing': 'More high-frequency energy in tail; brighter, more sparkly reverb'}, 'technical_detail': 'Adjusts amplitude of frequencies above HiFilter Freq. Negative values attenuate (typical), positive values boost.', 'audio_function': 'Controls amount of high-frequency attenuation in reverb tail when using shelf filter', 'use_cases': ['Fine-tune reverb brightness', 'Simulate room absorption characteristics', 'Balance reverb tone in mix'], 'typical_values': {'damped': 'Negative values for natural darkening', 'neutral': '0dB for flat response', 'boosted': 'Positive values for enhanced highs (rare)'}}
-
-#### LowShelf On
-- **Technical name**: `LowShelf On`
-- **Description**: {'sonic_effect': {'decreasing': 'Bypasses filter; natural low-frequency decay', 'increasing': 'Activates bass control; allows shaping of low-frequency decay'}, 'audio_function': 'Enables low-frequency filtering in the diffusion network (reverb tail)', 'use_cases': ['Prevent muddy low-end buildup in reverb tail', 'Simulate bass absorption in rooms', 'Create tighter, cleaner reverb', 'Save CPU when not needed'], 'typical_values': {'on': 'Use LowShelf Freq and Gain to shape bass', 'off': 'Full-range reverb tail'}}
-
-#### LowShelf Freq
-- **Technical name**: `LowShelf Freq`
-- **Range**: 20 to 15000 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Lower cutoff; filters only deep bass; fuller, warmer reverb tail', 'increasing': 'Higher cutoff; filters more bass range; thinner, tighter reverb tail'}, 'technical_detail': 'Determines frequency below which attenuation occurs. Controls bass energy distribution in reverb decay.', 'audio_function': 'Sets frequency point where low-frequency filtering begins in reverb tail', 'use_cases': ['Prevent low-end mud in dense mixes', 'Match reverb weight to source', 'Create space in low-frequency range', 'Simulate room bass absorption'], 'typical_values': {'tight': '300-500Hz for thin, articulate reverb', 'balanced': '150-250Hz for natural low-end', 'full': 'Below 100Hz to preserve bass warmth'}}
-
-#### LowShelf Gain
-- **Technical name**: `LowShelf Gain`
-- **Range**: 0.20000000298023224 to 1
-- **Description**: {'sonic_effect': {'decreasing': 'Less low-frequency energy; tighter, cleaner, thinner reverb tail', 'increasing': 'More low-frequency energy in tail; warmer, fuller, potentially muddier reverb'}, 'technical_detail': 'Adjusts amplitude of frequencies below LowShelf Freq. Negative values attenuate (typical), positive values boost.', 'audio_function': 'Controls amount of low-frequency attenuation in reverb tail when using shelf filter', 'use_cases': ['Balance reverb warmth vs clarity', 'Prevent low-frequency buildup', 'Match reverb weight to mix context'], 'typical_values': {'warm': 'Slightly negative for controlled warmth', 'neutral': '0dB for flat response', 'tight': 'Negative values for clean, articulate reverb'}}
-
-#### Chorus On
-- **Technical name**: `Chorus On`
-- **Description**: {'sonic_effect': {'decreasing': 'Disables modulation; static, precise reverb tail', 'increasing': 'Enables pitch/timing modulation in reverb tail; adds shimmer and movement'}, 'audio_function': 'Master enable switch for diffusion network modulation', 'use_cases': ['Add richness and complexity to reverb tail', 'Create lush, evolving reverb character', 'Prevent static, digital-sounding diffusion', 'Emulate natural room variations'], 'typical_values': {'on': 'Use Chorus Rate and Amount to control modulation', 'off': 'Clean, static reverb tail'}}
-
-#### Chorus Rate
-- **Technical name**: `Chorus Rate`
-- **Range**: 0.01 to 8 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Slower modulation; subtle, gentle movement; more natural character', 'increasing': 'Faster modulation; more active, shimmering reverb tail; can sound unstable at extremes'}, 'technical_detail': 'LFO rate controlling pitch/delay modulation in diffusion network. Similar to ER Spin but affects tail instead of early reflections.', 'audio_function': 'Controls modulation speed of diffusion network (reverb tail)', 'use_cases': ['Add shimmer to reverb tail', 'Create evolving, organic reverb character', 'Match modulation speed to tempo or mood'], 'typical_values': {'subtle': 'Low Hz for barely perceptible movement', 'fast': 'High Hz for obvious shimmer effect', 'moderate': '0.5-2Hz for natural complexity'}}
+---
 
 #### Chorus Amount
-- **Technical name**: `Chorus Amount`
-- **Range**: 0.01 to 4 None
-- **Description**: {'sonic_effect': {'decreasing': 'Shallower modulation; subtle movement; cleaner, more focused tail', 'increasing': 'Deeper modulation; more pronounced shimmer and pitch variation; richer, more complex tail'}, 'technical_detail': 'Sets peak deviation for diffusion network modulation. Works with Chorus Rate to determine overall modulation character.', 'audio_function': 'Controls modulation depth (intensity) of diffusion network variations', 'use_cases': ['Fine-tune tail complexity', 'Balance naturalness vs special effect', 'Add depth without overwhelming signal'], 'typical_values': {'subtle': 'Low values for gentle enhancement', 'moderate': 'Medium values for noticeable richness', 'extreme': 'High values for pronounced shimmer'}}
 
-#### Decay Time
-- **Technical name**: `Decay Time`
-- **Range**: 200 to 60000 ms
-- **Description**: {'sonic_effect': {'decreasing': 'Shorter reverb tail; tighter, more controlled; smaller perceived space; cleaner in dense mixes', 'increasing': 'Longer reverb tail; more sustained ambience; larger perceived space; can muddy fast material'}, 'technical_detail': 'Fundamental reverb parameter setting RT60 (Reverberation Time). Critical for establishing space size and reverb density.', 'audio_function': 'Controls how long reverb tail takes to decay to -60dB (1/1000th of initial volume)', 'use_cases': ['Match reverb length to tempo and arrangement', 'Create intimate vs spacious character', 'Control reverb density and clarity', 'Simulate specific room types'], 'typical_values': {'long': '3-8s for large halls and dramatic effects', 'infinite': 'Maximum + Freeze for pad-like sustain', 'medium': '1.5-3s for natural room ambience', 'tight': '0.5-1.5s for intimate, controlled spaces'}}
+**Control Type**: continuous
+**Range**: 0.01 to 4
+
+**Function**: Controls modulation depth (intensity) of diffusion network variations
+**Increasing**: Deeper modulation; more pronounced shimmer and pitch variation; richer, more complex tail
+**Decreasing**: Shallower modulation; subtle movement; cleaner, more focused tail
+**Technical**: Sets peak deviation for diffusion network modulation. Works with Chorus Rate to determine overall modulation character.
+**Use Cases**:
+  - Fine-tune tail complexity
+  - Balance naturalness vs special effect
+  - Add depth without overwhelming signal
+**Typical Values**:
+  - subtle: Low values for gentle enhancement
+  - moderate: Medium values for noticeable richness
+  - extreme: High values for pronounced shimmer
+
+**Ableton Manual**: Controls the amount of modulation and motion added to the diffusion
+**Technical Spec**: Can be deactivated altogether
+**Acoustic Principle**: Adds movement and richness through pitch variation
+
+---
+
+#### Chorus Rate
+
+**Control Type**: continuous
+**Range**: 0.01 to 8 Hz
+
+**Function**: Controls modulation speed of diffusion network (reverb tail)
+**Increasing**: Faster modulation; more active, shimmering reverb tail; can sound unstable at extremes
+**Decreasing**: Slower modulation; subtle, gentle movement; more natural character
+**Technical**: LFO rate controlling pitch/delay modulation in diffusion network. Similar to ER Spin but affects tail instead of early reflections.
+**Use Cases**:
+  - Add shimmer to reverb tail
+  - Create evolving, organic reverb character
+  - Match modulation speed to tempo or mood
+**Typical Values**:
+  - subtle: Low Hz for barely perceptible movement
+  - fast: High Hz for obvious shimmer effect
+  - moderate: 0.5-2Hz for natural complexity
+
+**Ableton Manual**: Controls the rate of modulation and motion added to the diffusion
+**Technical Spec**: Can be deactivated altogether
+**Acoustic Principle**: Speed of pitch modulation in reverb tail
+
+---
+
+#### Chorus On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Master enable switch for diffusion network modulation
+**Increasing**: Enables pitch/timing modulation in reverb tail; adds shimmer and movement
+**Decreasing**: Disables modulation; static, precise reverb tail
+**Use Cases**:
+  - Add richness and complexity to reverb tail
+  - Create lush, evolving reverb character
+  - Prevent static, digital-sounding diffusion
+  - Emulate natural room variations
+**Typical Values**:
+  - on: Use Chorus Rate and Amount to control modulation
+  - off: Clean, static reverb tail
+
+---
+
+### Device
+
+**Description**: Device on/off control
+**Sonic Focus**: Enable or disable the entire effect
+
+---
+
+#### Device On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Master bypass switch for entire reverb device
+**Increasing**: Enables reverb processing; adds spatial depth and ambience to signal
+**Decreasing**: Bypasses all reverb processing; passes dry signal through unchanged
+**Use Cases**:
+  - Quick A/B comparison of dry vs processed signal
+  - Automation for creative reverb drops
+  - CPU conservation when reverb not needed
+**Typical Values**:
+  - on: Active - full reverb processing
+  - off: Bypass - no reverb processing
+
+---
+
+### Diffusion Network
+
+**Description**: The Diffusion Network creates the reverberant tail that follows the early reflections.
+**Sonic Focus**: Reverb tail texture and frequency response
+
+**Technical Notes**:
+- High and low shelving filters provide frequency-dependent reverberation decay
+- The high-frequency decay models the absorption of sound energy due to air, walls and other materials in the room (people, carpeting and so forth)
+- The low shelf provides a thinner decay
+- The Diffusion and Scale parameters provide additional control over the diffusion's density and coarseness
+- When the room size is extremely small, have a large impact on the coloration contributed by the diffusion
+
+---
 
 #### Diffusion
-- **Technical name**: `Diffusion`
-- **Range**: 0.10000000149011612 to 96 %
-- **Description**: {'sonic_effect': {'decreasing': 'Sparser, more distinct reflections; more granular texture; potential echo artifacts; less smooth', 'increasing': 'Denser, smoother reverb tail; more complex reflection pattern; less discrete echoes; silkier sound'}, 'technical_detail': 'Adjusts number and timing of reflections in diffusion algorithm. Higher values increase computation for smoother decay.', 'audio_function': 'Controls density and complexity of reflection pattern in diffusion network', 'use_cases': ['Create smooth, lush reverb character', 'Simulate different room types (smooth vs discrete)', 'Balance CPU usage vs quality', 'Control reverb texture and density'], 'typical_values': {'natural': '50-75% for balanced character', 'dense': '85-100% for smooth, lush reverb', 'sparse': 'Low % for discrete, rhythmic reflections'}}
+
+**Control Type**: continuous
+**Range**: 0.10000000149011612 to 96 %
+
+**Function**: Controls density and complexity of reflection pattern in diffusion network
+**Increasing**: Denser, smoother reverb tail; more complex reflection pattern; less discrete echoes; silkier sound
+**Decreasing**: Sparser, more distinct reflections; more granular texture; potential echo artifacts; less smooth
+**Technical**: Adjusts number and timing of reflections in diffusion algorithm. Higher values increase computation for smoother decay.
+**Use Cases**:
+  - Create smooth, lush reverb character
+  - Simulate different room types (smooth vs discrete)
+  - Balance CPU usage vs quality
+  - Control reverb texture and density
+**Typical Values**:
+  - natural: 50-75% for balanced character
+  - dense: 85-100% for smooth, lush reverb
+  - sparse: Low % for discrete, rhythmic reflections
+
+**Ableton Manual**: Provides control over the diffusion's density and coarseness
+**Technical Spec**: When the room size is extremely small, has a large impact on the coloration contributed by the diffusion
+**Acoustic Principle**: Simulates how many surfaces scatter sound and how evenly they do it
+
+---
 
 #### Scale
-- **Technical name**: `Scale`
-- **Range**: 5 to 100 %
-- **Description**: {'sonic_effect': {'decreasing': 'Fewer reflections; sparser, more open pattern; cleaner but potentially less realistic', 'increasing': 'More reflections at given size; denser, more complex pattern; can increase flutter at small sizes'}, 'technical_detail': 'Fine-tunes diffusion network complexity. Most noticeable with smaller room sizes. Can create flanger-like effects when automated with small sizes.', 'audio_function': 'Adjusts reflection density in conjunction with room size and diffusion', 'use_cases': ['Fine-tune reverb density', 'Create special effects (flanger-like)', 'Adjust complexity for different sources', 'Balance smoothness vs clarity'], 'typical_values': {'balanced': '50-70% for natural density', 'dense': 'High % for complex, rich reverb', 'sparse': 'Low % for open, spacious character'}}
 
-#### Freeze On
-- **Technical name**: `Freeze On`
-- **Description**: {'sonic_effect': {'decreasing': 'Normal operation; input processed; natural decay according to Decay Time parameter', 'increasing': 'Freezes reverb tail; creates infinite sustain; no new input processed; existing reverb sustains endlessly'}, 'technical_detail': 'Disables reverb input and sets internal feedback to 100%, creating infinite loop of diffusion network state. Use with Cut and Flat for control.', 'audio_function': 'Captures and sustains current diffusion network state indefinitely; disables input and sets decay to infinite', 'use_cases': ['Create ambient pads and textures', 'Build tension in arrangements', 'Isolate reverb tail for sound design', 'Create reverb swells and risers'], 'typical_values': {'on': 'Infinite sustain; use Cut/Flat for control', 'off': 'Normal reverb operation'}}
+**Control Type**: continuous
+**Range**: 5 to 100 %
 
-#### Flat On
-- **Technical name**: `Flat On`
-- **Description**: {'sonic_effect': {'decreasing': 'Frozen spectrum gradually loses energy according to filter settings; natural darkening over time', 'increasing': 'Frozen spectrum remains constant; all frequencies sustain equally; static tone color'}, 'technical_detail': 'Bypasses Hi/Low Shelf filters during freeze. When off, frozen reverb still undergoes frequency-dependent decay.', 'audio_function': 'When Freeze active, maintains frozen frequency balance vs allowing natural frequency decay', 'use_cases': ['Maintain exact tone color when frozen', 'Create evolving vs static freeze textures', 'Control frozen reverb character'], 'typical_values': {'on': 'Static frequency balance while frozen', 'off': 'Gradual frequency decay while frozen'}}
+**Function**: Adjusts reflection density in conjunction with room size and diffusion
+**Increasing**: More reflections at given size; denser, more complex pattern; can increase flutter at small sizes
+**Decreasing**: Fewer reflections; sparser, more open pattern; cleaner but potentially less realistic
+**Technical**: Fine-tunes diffusion network complexity. Most noticeable with smaller room sizes. Can create flanger-like effects when automated with small sizes.
+**Use Cases**:
+  - Fine-tune reverb density
+  - Create special effects (flanger-like)
+  - Adjust complexity for different sources
+  - Balance smoothness vs clarity
+**Typical Values**:
+  - balanced: 50-70% for natural density
+  - dense: High % for complex, rich reverb
+  - sparse: Low % for open, spacious character
 
-#### Cut On
-- **Technical name**: `Cut On`
-- **Description**: {'sonic_effect': {'decreasing': 'Allows multiple freeze captures to layer; accumulates reverb content with each freeze', 'increasing': 'Clears frozen reverb before capturing new freeze; prevents buildup'}, 'technical_detail': 'Determines whether diffusion network resets when entering freeze mode. Off allows additive freeze layering.', 'audio_function': 'When Freeze active, prevents new signal accumulation when unfreezing and re-freezing', 'use_cases': ['Create layered, complex freeze textures', 'Prevent freeze buildup and overload', 'Control freeze capture behavior'], 'typical_values': {'on': 'Clean freeze captures', 'off': 'Additive freeze layers'}}
+**Ableton Manual**: Provides additional control over the diffusion's density and coarseness
+**Technical Spec**: When the room size is extremely small, has a large impact on the coloration contributed by the diffusion
+**Acoustic Principle**: Adjusts the time spacing between early reflections
+
+---
+
+#### HiFilter Freq
+
+**Control Type**: continuous
+**Range**: 20 to 16000 Hz
+
+**Function**: Sets frequency point where high-frequency filtering begins in reverb tail
+**Increasing**: Higher cutoff; filters less treble; brighter, more airy reverb tail
+**Decreasing**: Lower cutoff; filters more treble; darker, warmer reverb tail
+**Technical**: Determines frequency above which attenuation occurs. Simulates frequency-dependent absorption in real rooms.
+**Use Cases**:
+  - Simulate natural room absorption
+  - Create vintage-style dark reverb
+  - Match reverb brightness to source
+  - Prevent harsh high-frequency buildup
+**Typical Values**:
+  - bright: 10kHz+ for minimal darkening
+  - natural: 5-8kHz for balanced decay
+  - dark: 2-4kHz for warm, vintage character
+
+**Ableton Manual**: High shelving filter for frequency-dependent reverberation decay
+**Technical Spec**: Models the absorption of sound energy due to air, walls and other materials in the room (people, carpeting and so forth)
+**Acoustic Principle**: In nature, high frequencies absorb faster than lows in most spaces
+
+---
+
+#### HiFilter Type
+
+**Control Type**: quantized
+
+**Function**: Selects high-frequency filter algorithm (shelf or cut)
+**Increasing**: Switches between filter types; different high-frequency decay characteristics
+**Decreasing**: Alternative filter type with different slope and character
+**Technical**: Offers different filter topologies for high-frequency attenuation in reverb tail. Shelf typically provides gentler slopes, cut provides sharper transitions.
+**Use Cases**:
+  - Match filter character to desired sound
+  - Simulate different room absorption types
+  - Fine-tune high-frequency decay curve
+**Typical Values**:
+  - shelf: Gentle, natural high-frequency rolloff
+  - cut: Sharper, more pronounced darkening
+
+---
+
+#### LowShelf Freq
+
+**Control Type**: continuous
+**Range**: 20 to 15000 Hz
+
+**Function**: Sets frequency point where low-frequency filtering begins in reverb tail
+**Increasing**: Higher cutoff; filters more bass range; thinner, tighter reverb tail
+**Decreasing**: Lower cutoff; filters only deep bass; fuller, warmer reverb tail
+**Technical**: Determines frequency below which attenuation occurs. Controls bass energy distribution in reverb decay.
+**Use Cases**:
+  - Prevent low-end mud in dense mixes
+  - Match reverb weight to source
+  - Create space in low-frequency range
+  - Simulate room bass absorption
+**Typical Values**:
+  - tight: 300-500Hz for thin, articulate reverb
+  - balanced: 150-250Hz for natural low-end
+  - full: Below 100Hz to preserve bass warmth
+
+**Ableton Manual**: Low shelving filter for frequency-dependent reverberation decay
+**Technical Spec**: Provides a thinner decay
+**Acoustic Principle**: Controls low frequency content to manage clarity vs warmth
+
+---
+
+#### LowShelf Gain
+
+**Control Type**: continuous
+**Range**: 0.20000000298023224 to 1
+
+**Function**: Controls amount of low-frequency attenuation in reverb tail when using shelf filter
+**Increasing**: More low-frequency energy in tail; warmer, fuller, potentially muddier reverb
+**Decreasing**: Less low-frequency energy; tighter, cleaner, thinner reverb tail
+**Technical**: Adjusts amplitude of frequencies below LowShelf Freq. Negative values attenuate (typical), positive values boost.
+**Use Cases**:
+  - Balance reverb warmth vs clarity
+  - Prevent low-frequency buildup
+  - Match reverb weight to mix context
+**Typical Values**:
+  - warm: Slightly negative for controlled warmth
+  - neutral: 0dB for flat response
+  - tight: Negative values for clean, articulate reverb
+
+---
+
+#### HiFilter On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Enables high-frequency filtering in the diffusion network (reverb tail)
+**Increasing**: Activates treble control; allows shaping of high-frequency decay
+**Decreasing**: Bypasses filter; natural high-frequency decay
+**Use Cases**:
+  - Simulate absorptive materials (curtains, furniture)
+  - Create darker, warmer reverb tails
+  - Match reverb to room acoustic character
+  - Save CPU when not needed
+**Typical Values**:
+  - on: Use HiFilter Type, Freq, and Gain to shape highs
+  - off: Natural, bright decay
+
+---
+
+#### HiShelf Gain
+
+**Control Type**: continuous
+**Range**: 0.20000000298023224 to 1
+
+**Function**: Controls amount of high-frequency attenuation in reverb tail when using shelf filter
+**Increasing**: More high-frequency energy in tail; brighter, more sparkly reverb
+**Decreasing**: Less high-frequency energy; darker, more damped reverb tail
+**Technical**: Adjusts amplitude of frequencies above HiFilter Freq. Negative values attenuate (typical), positive values boost.
+**Use Cases**:
+  - Fine-tune reverb brightness
+  - Simulate room absorption characteristics
+  - Balance reverb tone in mix
+**Typical Values**:
+  - damped: Negative values for natural darkening
+  - neutral: 0dB for flat response
+  - boosted: Positive values for enhanced highs (rare)
+
+---
+
+#### LowShelf On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Enables low-frequency filtering in the diffusion network (reverb tail)
+**Increasing**: Activates bass control; allows shaping of low-frequency decay
+**Decreasing**: Bypasses filter; natural low-frequency decay
+**Use Cases**:
+  - Prevent muddy low-end buildup in reverb tail
+  - Simulate bass absorption in rooms
+  - Create tighter, cleaner reverb
+  - Save CPU when not needed
+**Typical Values**:
+  - on: Use LowShelf Freq and Gain to shape bass
+  - off: Full-range reverb tail
+
+---
+
+### Early Reflections
+
+**Description**: These are the earliest echoes that you hear after they bounce off a room's walls, before the onset of the diffused reverberation tail. Their amplitude and distribution give an impression of the room's character.
+**Sonic Focus**: Room character and spatial definition
+
+**Technical Notes**:
+- Spin applies modulation to the early reflections
+- A higher Amount setting tends to provide a less-colored (more spectrally neutral) late diffusion response
+- If the modulation rate is too high, doppler frequency shifting of the source sound will occur, along with surreal panning effects
+- Shape control sculpts the prominence of the early reflections, as well as their overlap with the diffused sound
+- With small values, the reflections decay more gradually and the diffused sound occurs sooner
+- With large values, the reflections decay more rapidly and the diffused onset occurs later
+- A higher value can sometimes improve the source's intelligibility, while a lower value may give a smoother decay
+
+---
+
+#### ER Spin Amount
+
+**Control Type**: continuous
+**Range**: 2 to 55
+
+**Function**: Controls modulation depth (intensity) of early reflection timing variations
+**Increasing**: Deeper timing modulation; more pronounced chorus/phasing effect; wider pitch variations
+**Decreasing**: Shallower modulation; subtle movement; minimal pitch deviation
+**Technical**: Sets peak deviation in milliseconds for ER delay modulation. Works with ER Spin Rate to determine modulation character.
+**Use Cases**:
+  - Fine-tune modulation intensity
+  - Balance naturalness vs effect strength
+  - Match modulation depth to source material
+**Typical Values**:
+  - subtle: Low values for barely audible movement
+  - moderate: Medium values for natural complexity
+  - extreme: High values for obvious, creative effects
+
+**Ableton Manual**: Controls the amount of modulation applied to the early reflections
+**Technical Spec**: A higher Amount setting tends to provide a less-colored (more spectrally neutral) late diffusion response
+**Acoustic Principle**: Creates stereo movement by modulating the early reflection pattern
+
+---
+
+#### ER Spin Rate
+
+**Control Type**: continuous
+**Range**: 0.07 to 1.3 Hz
+
+**Function**: Modulates early reflection timing with a low-frequency sine wave to add chorus-like movement
+**Increasing**: More timing variation in early reflections; stronger chorus/phasing effect; increased perceived complexity and diffusion
+**Decreasing**: Less modulation; more static, distinct early reflections; cleaner but potentially more artificial sound
+**Technical**: Low-frequency sine wave modulates ER delay timing (2-55ms depth at 0.07-1.3Hz rate). Inspired by Lexicon 480L reverb algorithm. Creates cyclic delay variations that prevent metallic, static early reflections.
+**Use Cases**:
+  - Add naturalness to algorithmic reverb
+  - Prevent metallic, static early reflections
+  - Create richer, more complex reverb character
+  - Emulate natural room variations
+**Typical Values**:
+  - subtle_movement: 0.07-0.2 Hz for barely perceptible modulation
+  - pronounced_effect: 1.0-1.3 Hz, 20-55ms depth for obvious modulation
+  - recommended: ~1.0 Hz, ~10ms depth for balanced natural sound
+
+**Ableton Manual**: Controls the rate of modulation applied to the early reflections
+**Technical Spec**: If the modulation rate is too high, doppler frequency shifting of the source sound will occur, along with surreal panning effects
+**Acoustic Principle**: Speed of early reflection pattern rotation
+
+---
+
+#### ER Spin On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Master enable switch for early reflection modulation
+**Increasing**: Enables ER timing modulation; activates chorus-like movement in early reflections
+**Decreasing**: Disables modulation; early reflections remain static and unmodulated
+**Use Cases**:
+  - Add life and movement to early reflections
+  - Prevent static, digital-sounding reflections
+  - Create more natural, organic reverb character
+**Typical Values**:
+  - on: Use with ER Spin Rate and Amount to control modulation
+  - off: Static, precise early reflections
+
+---
+
+#### ER Shape
+
+**Control Type**: continuous
+**Range**: 0 to 1
+
+**Function**: Controls blend between early reflections and diffuse reverb tail
+**Increasing**: Smoother transition from ER to tail; more cohesive, flowing reverb; less distinct early reflections
+**Decreasing**: Distinct separation between ER and tail; gap in reverb onset; more articulated early reflections; potentially less natural
+**Technical**: Adjusts crossfade timing and energy distribution between early reflection pattern and diffusion network.
+**Use Cases**:
+  - Create smooth, natural reverb decay
+  - Emphasize or de-emphasize early reflections
+  - Match reverb character to room type
+  - Adjust reverb articulation
+**Typical Values**:
+  - separated: Low values for distinct ER stage
+  - blended: High values for smooth, continuous reverb
+
+**Ableton Manual**: Sculpts the prominence of the early reflections, as well as their overlap with the diffused sound
+**Technical Spec**: With small values, the reflections decay more gradually and the diffused sound occurs sooner. With large values, the reflections decay more rapidly and the diffused onset occurs later
+**Acoustic Principle**: A higher value can sometimes improve the source's intelligibility, while a lower value may give a smoother decay
+
+---
+
+### Global
+
+**Description**: Controls that affect the overall reverb character including size, decay, and special functions.
+**Sonic Focus**: Overall space character and special effects
+
+**Technical Notes**:
+- Predelay controls the delay time, in milliseconds, before the onset of the first early reflection
+- One's impression of the size of a real room depends partly on this delay
+- Typical values for natural sounds range from 1 ms to 25 ms
+- The Size parameter controls the room's volume
+- At one extreme, a very large size will lend a shifting, diffused delay effect to the reverb
+- The other extreme — a very small value — will give it a highly colored, metallic feel
+- The Decay control adjusts the time required for this reverb tail to drop to 1/1000th (-60 dB) of its initial amplitude
+- The Freeze control freezes the diffuse response of the input sound. When on, the reverberation will sustain almost endlessly
+- Flat bypasses the high and low shelf filters when Freeze is on
+- Cut modifies Freeze by preventing the input signal from adding to the frozen reverberation
+- The Stereo control determines the width of the output's stereo image
+- At the highest setting of 120 degrees, each ear receives a reverberant channel that is independent of the other (this is also a property of the diffusion in real rooms)
+- The Density chooser controls the tradeoff between reverb quality and performance. Sparse uses minimal CPU resources, while High delivers the richest reverberation
+
+---
+
+#### Predelay
+
+**Control Type**: continuous
+**Range**: 0.5 to 250 ms
+
+**Function**: Time delay before sound reaches first reflective surface and reverb begins
+**Increasing**: Longer gap between dry signal and reverb onset; preserves transient clarity; simulates larger distance to walls
+**Decreasing**: Immediate reverb onset; tighter coupling with source; can muddy transients in fast material
+**Technical**: Predelay simulates the time sound travels before hitting first reflective surface. Critical for separating direct sound from reverb tail.
+**Use Cases**:
+  - Preserve vocal/instrument attack transients (1-25ms typical)
+  - Create sense of space and distance
+  - Prevent muddiness in dense mixes
+  - Sync reverb timing to tempo (calculated delays)
+**Typical Values**:
+  - distant: 50-100ms+ for larger spaces or creative effects
+  - natural: 10-25ms for realistic room simulation
+  - tight: 0-10ms for intimate, close sound
+
+**Ableton Manual**: Controls the delay time, in milliseconds, before the onset of the first early reflection. This delays the reverberation relative to the input signal.
+**Technical Spec**: Typical values for natural sounds range from 1 ms to 25 ms
+**Acoustic Principle**: One's impression of the size of a real room depends partly on this delay
+
+---
 
 #### Room Size
-- **Technical name**: `Room Size`
-- **Range**: 0.22 to 500 None
-- **Description**: {'sonic_effect': {'decreasing': 'Smaller perceived space; tighter reflections; more intimate, focused character; can sound metallic at minimum', 'increasing': 'Larger perceived space; longer reflection spacing; more open, expansive character; potential for flutter at extremes'}, 'technical_detail': 'Adjusts all-pass filter delays in diffusion network. Affects reflection timing and spacing throughout algorithm.', 'audio_function': 'Controls perceived room volume/dimensions; fundamental space parameter', 'use_cases': ['Set fundamental room character', 'Match reverb to musical context', 'Create special effects via automation', 'Simulate specific room types'], 'typical_values': {'large': 'Expansive spaces; halls, cathedrals, canyons', 'medium': 'Natural room ambience; studios, living rooms', 'small': 'Tight, intimate spaces; vocal booths, small rooms'}}
 
-#### Size Smoothing
-- **Technical name**: `Size Smoothing`
-- **Description**: {'sonic_effect': {'decreasing': 'More artifacts during size changes; audible pitch shifts; lower CPU usage', 'increasing': 'Smoother room size transitions; reduced pitch artifacts; higher CPU usage'}, 'technical_detail': 'Adjusts algorithm used for interpolating all-pass delays during size changes. Higher quality prevents doppler-like pitch shifts.', 'audio_function': 'Controls interpolation quality when Room Size changes via automation or modulation', 'use_cases': ['Smooth automated room size changes', 'Create special effects (choose low quality for pitch artifacts)', 'Balance quality vs CPU load'], 'typical_values': {'smooth': 'Interpolated, minimal artifacts', 'basic': 'Fast switching, audible artifacts'}}
+**Control Type**: continuous
+**Range**: 0.22 to 500
+
+**Function**: Controls perceived room volume/dimensions; fundamental space parameter
+**Increasing**: Larger perceived space; longer reflection spacing; more open, expansive character; potential for flutter at extremes
+**Decreasing**: Smaller perceived space; tighter reflections; more intimate, focused character; can sound metallic at minimum
+**Technical**: Adjusts all-pass filter delays in diffusion network. Affects reflection timing and spacing throughout algorithm.
+**Use Cases**:
+  - Set fundamental room character
+  - Match reverb to musical context
+  - Create special effects via automation
+  - Simulate specific room types
+**Typical Values**:
+  - large: Expansive spaces; halls, cathedrals, canyons
+  - medium: Natural room ambience; studios, living rooms
+  - small: Tight, intimate spaces; vocal booths, small rooms
+
+**Ableton Manual**: Controls the room's volume
+**Technical Spec**: At one extreme, a very large size will lend a shifting, diffused delay effect. The other extreme — a very small value — will give it a highly colored, metallic feel
+**Acoustic Principle**: Defines the dimensions of the virtual acoustic space
+
+---
+
+#### Decay Time
+
+**Control Type**: continuous
+**Range**: 200 to 60000 ms
+
+**Function**: Controls how long reverb tail takes to decay to -60dB (1/1000th of initial volume)
+**Increasing**: Longer reverb tail; more sustained ambience; larger perceived space; can muddy fast material
+**Decreasing**: Shorter reverb tail; tighter, more controlled; smaller perceived space; cleaner in dense mixes
+**Technical**: Fundamental reverb parameter setting RT60 (Reverberation Time). Critical for establishing space size and reverb density.
+**Use Cases**:
+  - Match reverb length to tempo and arrangement
+  - Create intimate vs spacious character
+  - Control reverb density and clarity
+  - Simulate specific room types
+**Typical Values**:
+  - long: 3-8s for large halls and dramatic effects
+  - infinite: Maximum + Freeze for pad-like sustain
+  - medium: 1.5-3s for natural room ambience
+  - tight: 0.5-1.5s for intimate, controlled spaces
+
+**Ableton Manual**: Adjusts the time required for this reverb tail to drop to 1/1000th (-60 dB) of its initial amplitude
+**Technical Spec**: Decay time to -60 dB
+**Acoustic Principle**: Simulates how quickly sound energy dissipates in a space
+
+---
 
 #### Stereo Image
-- **Technical name**: `Stereo Image`
-- **Range**: 0 to 120 degrees
-- **Description**: {'sonic_effect': {'decreasing': 'Narrower stereo field; more focused, centered image; mono at minimum; artificial, unnatural character at very low settings', 'increasing': 'Wider stereo field; more spacious, immersive character; greater L/R separation; more realistic room simulation at high settings'}, 'technical_detail': 'Adjusts decorrelation between L/R channels and stereo width of diffusion network. 0% = mono, 100% = maximum width.', 'audio_function': 'Controls spatial width of stereo reverb field from mono to wide stereo', 'use_cases': ['Create immersive stereo ambience', 'Adjust reverb width to mix context', 'Prevent excessive stereo spreading', 'Match reverb width to source material'], 'typical_values': {'wide': '85-100% for expansive, immersive spaces', 'natural': '50-75% for realistic stereo imaging', 'mono': '0% for centered reverb'}}
+
+**Control Type**: continuous
+**Range**: 0 to 120 degrees
+
+**Function**: Controls spatial width of stereo reverb field from mono to wide stereo
+**Increasing**: Wider stereo field; more spacious, immersive character; greater L/R separation; more realistic room simulation at high settings
+**Decreasing**: Narrower stereo field; more focused, centered image; mono at minimum; artificial, unnatural character at very low settings
+**Technical**: Adjusts decorrelation between L/R channels and stereo width of diffusion network. 0% = mono, 100% = maximum width.
+**Use Cases**:
+  - Create immersive stereo ambience
+  - Adjust reverb width to mix context
+  - Prevent excessive stereo spreading
+  - Match reverb width to source material
+**Typical Values**:
+  - wide: 85-100% for expansive, immersive spaces
+  - natural: 50-75% for realistic stereo imaging
+  - mono: 0% for centered reverb
+
+**Ableton Manual**: Determines the width of the output's stereo image
+**Technical Spec**: At the highest setting of 120 degrees, each ear receives a reverberant channel that is independent of the other (this is also a property of the diffusion in real rooms). The lowest setting mixes the output signal to mono
+**Acoustic Principle**: Controls left-right spread without affecting front-back depth
+
+---
 
 #### Density
-- **Technical name**: `Density`
-- **Description**: {'sonic_effect': {'decreasing': 'Lower density preset; sparser reflections; more discrete, granular character', 'increasing': 'Higher density preset; more complex reflection patterns; smoother, more lush character'}, 'technical_detail': 'Quantized parameter selecting different diffusion network configurations. Works with Scale and Diffusion for fine control.', 'audio_function': 'Selects discrete algorithm preset affecting overall reflection pattern density', 'use_cases': ['Choose base diffusion complexity', 'Match reverb character to source', 'Balance smoothness vs articulation'], 'typical_values': {'low': 'Sparse, discrete reflections', 'high': 'Dense, smooth reverb character', 'medium': 'Balanced reflection density'}}
+
+**Control Type**: quantized
+
+**Function**: Selects discrete algorithm preset affecting overall reflection pattern density
+**Increasing**: Higher density preset; more complex reflection patterns; smoother, more lush character
+**Decreasing**: Lower density preset; sparser reflections; more discrete, granular character
+**Technical**: Quantized parameter selecting different diffusion network configurations. Works with Scale and Diffusion for fine control.
+**Use Cases**:
+  - Choose base diffusion complexity
+  - Match reverb character to source
+  - Balance smoothness vs articulation
+**Typical Values**:
+  - low: Sparse, discrete reflections
+  - high: Dense, smooth reverb character
+  - medium: Balanced reflection density
+
+**Ableton Manual**: Controls the tradeoff between reverb quality and performance
+**Technical Spec**: Sparse uses minimal CPU resources, while High delivers the richest reverberation
+**Acoustic Principle**: Simulates number of reflections happening in the space
+
+---
+
+#### Freeze On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Captures and sustains current diffusion network state indefinitely; disables input and sets decay to infinite
+**Increasing**: Freezes reverb tail; creates infinite sustain; no new input processed; existing reverb sustains endlessly
+**Decreasing**: Normal operation; input processed; natural decay according to Decay Time parameter
+**Technical**: Disables reverb input and sets internal feedback to 100%, creating infinite loop of diffusion network state. Use with Cut and Flat for control.
+**Use Cases**:
+  - Create ambient pads and textures
+  - Build tension in arrangements
+  - Isolate reverb tail for sound design
+  - Create reverb swells and risers
+**Typical Values**:
+  - on: Infinite sustain; use Cut/Flat for control
+  - off: Normal reverb operation
+
+**Ableton Manual**: Freezes the diffuse response of the input sound. When on, the reverberation will sustain almost endlessly
+**Technical Spec**: Flat bypasses the high and low shelf filters when Freeze is on. Cut modifies Freeze by preventing the input signal from adding to the frozen reverberation
+**Acoustic Principle**: Captures reverb tail and loops it for infinite sustain
+
+---
+
+#### Cut On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: When Freeze active, prevents new signal accumulation when unfreezing and re-freezing
+**Increasing**: Clears frozen reverb before capturing new freeze; prevents buildup
+**Decreasing**: Allows multiple freeze captures to layer; accumulates reverb content with each freeze
+**Technical**: Determines whether diffusion network resets when entering freeze mode. Off allows additive freeze layering.
+**Use Cases**:
+  - Create layered, complex freeze textures
+  - Prevent freeze buildup and overload
+  - Control freeze capture behavior
+**Typical Values**:
+  - on: Clean freeze captures
+  - off: Additive freeze layers
+
+---
+
+#### Flat On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: When Freeze active, maintains frozen frequency balance vs allowing natural frequency decay
+**Increasing**: Frozen spectrum remains constant; all frequencies sustain equally; static tone color
+**Decreasing**: Frozen spectrum gradually loses energy according to filter settings; natural darkening over time
+**Technical**: Bypasses Hi/Low Shelf filters during freeze. When off, frozen reverb still undergoes frequency-dependent decay.
+**Use Cases**:
+  - Maintain exact tone color when frozen
+  - Create evolving vs static freeze textures
+  - Control frozen reverb character
+**Typical Values**:
+  - on: Static frequency balance while frozen
+  - off: Gradual frequency decay while frozen
+
+---
+
+#### Size Smoothing
+
+**Control Type**: quantized
+
+**Function**: Controls interpolation quality when Room Size changes via automation or modulation
+**Increasing**: Smoother room size transitions; reduced pitch artifacts; higher CPU usage
+**Decreasing**: More artifacts during size changes; audible pitch shifts; lower CPU usage
+**Technical**: Adjusts algorithm used for interpolating all-pass delays during size changes. Higher quality prevents doppler-like pitch shifts.
+**Use Cases**:
+  - Smooth automated room size changes
+  - Create special effects (choose low quality for pitch artifacts)
+  - Balance quality vs CPU load
+**Typical Values**:
+  - smooth: Interpolated, minimal artifacts
+  - basic: Fast switching, audible artifacts
+
+---
+
+### Input Filter
+
+**Description**: The input signal passes first through low and high cut filters, whose X-Y controller allows changing the band's center frequency (X-axis) and bandwidth (Y-axis).
+**Sonic Focus**: Pre-filtering to shape what enters the reverb
+
+---
+
+#### In Filter Freq
+
+**Control Type**: continuous
+**Range**: 50 to 18000 Hz
+
+**Function**: Sets cutoff frequency for input high-pass or low-pass filter
+**Increasing**: Moves cutoff higher; with lowcut removes more bass, with highcut darkens less
+**Decreasing**: Moves cutoff lower; with lowcut removes less bass, with highcut darkens more
+**Technical**: Works in conjunction with In LowCut/HighCut switches. Single control serves both filters depending on which is active.
+**Use Cases**:
+  - Tune reverb frequency response to source
+  - Match reverb character to mix
+  - Create frequency-specific spatial effects
+**Typical Values**:
+  - lowcut: 100-300Hz to remove bass mud
+  - highcut: 3-8kHz for natural darkening
+
+---
+
+#### In Filter Width
+
+**Control Type**: continuous
+**Range**: 0.5 to 9
+
+**Function**: Controls filter slope steepness (Q/resonance) for input filters
+**Increasing**: Wider, gentler slope; more gradual frequency transition; natural sound
+**Decreasing**: Narrower, steeper slope; sharper frequency cutoff; more pronounced filtering effect
+**Technical**: Adjusts bandwidth/Q factor of input filters. Narrower width creates more resonant peak at cutoff frequency.
+**Use Cases**:
+  - Fine-tune filter character
+  - Create resonant filter effects
+  - Match filter slope to musical context
+**Typical Values**:
+  - wide: Gentle, natural filtering
+  - narrow: Sharp, resonant filtering with character
+
+---
+
+#### In LowCut On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Enables high-pass filter on input signal before reverb processing
+**Increasing**: Activates low frequency filtering; removes bass from reverb for cleaner, thinner character
+**Decreasing**: Bypasses filter; allows full frequency spectrum into reverb including bass
+**Use Cases**:
+  - Prevent muddy low-end buildup in reverb
+  - Keep bass dry and focused
+  - Create space in dense mixes
+  - Save CPU when not needed
+**Typical Values**:
+  - on: Use with In Filter Freq to control cutoff point
+  - off: Full spectrum reverb
+
+---
+
+#### In HighCut On
+
+**Control Type**: binary
+**Values**: off / on
+
+**Function**: Enables low-pass filter on input signal before reverb processing
+**Increasing**: Activates high frequency filtering; removes treble/sparkle from reverb for darker, warmer character
+**Decreasing**: Bypasses filter; allows full frequency spectrum into reverb including highs
+**Use Cases**:
+  - Create darker, vintage-style reverb
+  - Reduce harsh high-frequency reflections
+  - Match reverb tone to source material
+  - Save CPU when not needed
+**Typical Values**:
+  - on: Use with In Filter Freq to control cutoff point
+  - off: Bright, full-spectrum reverb
+
+---
+
+### Output
+
+**Description**: At the reverb output, you can vary the amplitude of reflections and diffusion with the Reflect and Diffuse controls and adjust the effect's overall Dry/Wet mix.
+**Sonic Focus**: Balance between early reflections, reverb tail, and dry signal
+
+---
 
 #### Reflect Level
-- **Technical name**: `Reflect Level`
-- **Range**: -30 to 6 dB
-- **Description**: {'sonic_effect': {'decreasing': 'Quieter early reflections; less room character; smoother blend with tail; potential loss of spatial definition', 'increasing': 'Louder early reflections; more emphasis on room geometry; stronger spatial cues; can overpower tail'}, 'technical_detail': 'Adjusts amplitude of early reflection stage relative to diffusion network. Critical balance for realistic room simulation.', 'audio_function': 'Controls output level of early reflections in dB', 'use_cases': ['Balance ER vs tail prominence', 'Emphasize or de-emphasize room character', 'Adjust spatial definition', 'Fine-tune reverb mix'], 'typical_values': {'subtle': '-20 to -10dB for smooth, tail-focused reverb', 'balanced': '-10 to 0dB for natural room character', 'prominent': '0 to +6dB for emphasized spatial cues'}}
+
+**Control Type**: continuous
+**Range**: -30 to 6 dB
+
+**Function**: Controls output level of early reflections in dB
+**Increasing**: Louder early reflections; more emphasis on room geometry; stronger spatial cues; can overpower tail
+**Decreasing**: Quieter early reflections; less room character; smoother blend with tail; potential loss of spatial definition
+**Technical**: Adjusts amplitude of early reflection stage relative to diffusion network. Critical balance for realistic room simulation.
+**Use Cases**:
+  - Balance ER vs tail prominence
+  - Emphasize or de-emphasize room character
+  - Adjust spatial definition
+  - Fine-tune reverb mix
+**Typical Values**:
+  - subtle: -20 to -10dB for smooth, tail-focused reverb
+  - balanced: -10 to 0dB for natural room character
+  - prominent: 0 to +6dB for emphasized spatial cues
+
+**Ableton Manual**: Controls the amplitude of reflections at the reverb output
+**Technical Spec**: Can be varied independently of diffusion level
+**Acoustic Principle**: Early reflections define room character
+
+---
 
 #### Diffuse Level
-- **Technical name**: `Diffuse Level`
-- **Range**: -30 to 6 dB
-- **Description**: {'sonic_effect': {'decreasing': 'Quieter reverb tail; less sustained ambience; emphasis on early reflections; cleaner, drier character', 'increasing': 'Louder reverb tail; more sustained ambience; denser, more present reverb; can overwhelm ER'}, 'technical_detail': 'Adjusts amplitude of diffusion network relative to early reflections. Essential for balancing reverb character.', 'audio_function': 'Controls output level of diffusion network (reverb tail) in dB', 'use_cases': ['Balance tail vs ER prominence', 'Control reverb density and sustain', 'Adjust ambience level', 'Fine-tune reverb mix'], 'typical_values': {'dry': '-20 to -10dB for room emphasis over tail', 'balanced': '-10 to 0dB for natural reverb character', 'lush': '0 to +6dB for prominent, sustaining ambience'}}
+
+**Control Type**: continuous
+**Range**: -30 to 6 dB
+
+**Function**: Controls output level of diffusion network (reverb tail) in dB
+**Increasing**: Louder reverb tail; more sustained ambience; denser, more present reverb; can overwhelm ER
+**Decreasing**: Quieter reverb tail; less sustained ambience; emphasis on early reflections; cleaner, drier character
+**Technical**: Adjusts amplitude of diffusion network relative to early reflections. Essential for balancing reverb character.
+**Use Cases**:
+  - Balance tail vs ER prominence
+  - Control reverb density and sustain
+  - Adjust ambience level
+  - Fine-tune reverb mix
+**Typical Values**:
+  - dry: -20 to -10dB for room emphasis over tail
+  - balanced: -10 to 0dB for natural reverb character
+  - lush: 0 to +6dB for prominent, sustaining ambience
+
+**Ableton Manual**: Controls the amplitude of diffusion at the reverb output
+**Technical Spec**: Can be varied independently of reflection level
+**Acoustic Principle**: Diffuse tail provides the 'wash' and sustain of reverb
+
+---
 
 #### Dry/Wet
-- **Technical name**: `Dry/Wet`
-- **Range**: 0 to 100 dB
-- **Description**: {'sonic_effect': {'decreasing': 'Less reverb in mix; more present, dry signal; tighter, more focused sound; no reverb at 0%', 'increasing': 'More reverb in mix; more spatial depth; can drown out dry signal; appropriate for send/return use at 100%'}, 'technical_detail': 'Standard wet/dry mix control. 0% = dry only, 100% = wet only. Use 100% wet on return tracks, variable on inserts.', 'audio_function': 'Controls mix balance between unprocessed (dry) signal and reverb (wet) signal', 'use_cases': ['Set at 100% for send/return reverb (standard)', 'Variable mix for insert reverb (less common)', 'Parallel processing techniques', 'Quick reverb amount adjustments'], 'typical_values': {'parallel': '100% wet with track level control', 'send': '100% wet (return track standard)', 'insert': '10-40% wet (insert use)'}}
+
+**Control Type**: continuous
+**Range**: 0 to 100 dB
+
+**Function**: Controls mix balance between unprocessed (dry) signal and reverb (wet) signal
+**Increasing**: More reverb in mix; more spatial depth; can drown out dry signal; appropriate for send/return use at 100%
+**Decreasing**: Less reverb in mix; more present, dry signal; tighter, more focused sound; no reverb at 0%
+**Technical**: Standard wet/dry mix control. 0% = dry only, 100% = wet only. Use 100% wet on return tracks, variable on inserts.
+**Use Cases**:
+  - Set at 100% for send/return reverb (standard)
+  - Variable mix for insert reverb (less common)
+  - Parallel processing techniques
+  - Quick reverb amount adjustments
+**Typical Values**:
+  - parallel: 100% wet with track level control
+  - send: 100% wet (return track standard)
+  - insert: 10-40% wet (insert use)
+
+**Ableton Manual**: Adjusts the effect's overall Dry/Wet mix
+**Technical Spec**: Standard effect mix control
+**Acoustic Principle**: Balance between original (dry) and reverb (wet) signal
+
+---
+
+### Parameter Relationships
+
+**Master Parameters** (control other parameters):
+- ER Spin On
+- Chorus On
+- LowShelf On
+- HiFilter On
+- Freeze On
+
+**Dependencies**:
+- **HiFilter Freq** controls: H, i, F, i, l, t, e, r,  , O, n
+- **LowShelf Gain** controls: L, o, w, S, h, e, l, f,  , O, n
+- **LowShelf Freq** controls: L, o, w, S, h, e, l, f,  , O, n
+- **ER Spin Amount** controls: E, R,  , S, p, i, n,  , O, n
+- **ER Spin Rate** controls: E, R,  , S, p, i, n,  , O, n
+- **HiShelf Gain** controls: H, i, F, i, l, t, e, r,  , O, n
+- **Chorus Amount** controls: C, h, o, r, u, s,  , O, n
+- **Chorus Rate** controls: C, h, o, r, u, s,  , O, n
 
 ---
 
 ## Delay
 
 **Device Signature**: `9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1`
-**Status**: Captured → Fitted → Audio Knowledge
-
-**Type**: Unknown
+**Type**: delay
+**Parameters**: 21
 
 ---
 
-### General
+### Device
+
+**Description**: Device on/off control
+**Sonic Focus**: Enable or disable the entire effect
+
+---
 
 #### Device On
-- **Technical name**: `Device On`
-- **Description**: {'typical_values': {'on': 'Active - full delay processing', 'off': 'Bypass - no delay processing'}, 'audio_function': 'Master bypass switch for entire delay device', 'use_cases': ['Quick A/B comparison of dry vs delayed signal', 'Automation for rhythmic delay drops', 'CPU conservation when delay not needed'], 'sonic_effect': {'decreasing': 'Bypasses all delay processing; passes dry signal through unchanged', 'increasing': 'Enables delay processing; adds echo, space, and rhythm to signal'}}
 
-#### Delay Mode
-- **Technical name**: `Delay Mode`
-- **Description**: {'sonic_effect': {'repitch': 'Pitch variation when changing time, like tape delay; smooth analog character', 'jump': 'Immediate jump to new time; audible click if delays are sounding; useful for glitch effects', 'fade': 'Crossfade between old and new times; time-stretch-like quality; safe for performance'}, 'use_cases': ['Repitch: Tape-style analog delay emulation, creative pitch effects', 'Fade: Performance-safe time changes, smooth transitions', 'Jump: Glitch effects, rhythmic stutters, aggressive sound design'], 'technical_detail': 'Determines how delay buffer responds to time changes. Repitch emulates tape mechanics with doppler shift, Fade uses crossfading to avoid artifacts, Jump is instant but can click.', 'audio_function': 'Transition mode when changing delay time while processing audio', 'typical_values': {'repitch': 'Default - tape-like pitch shifts (most musical)', 'jump': 'Instant - clicks present (special effects)', 'fade': 'Smooth - no artifacts (best for automation)'}, 'relationships': ['Interact with Time modulation - different modes respond differently to Dly < Mod', 'Repitch mode creates pitch effects when Time is modulated']}
+**Control Type**: binary
+**Values**: Off / On
 
-#### Link
-- **Technical name**: `Link`
-- **Description**: {'sonic_effect': {'decreasing': 'Independent L/R timing; wide stereo image; complex rhythmic patterns', 'increasing': 'Locks both channels to same timing; mono-like delay behavior; centered image'}, 'use_cases': ['Simplify control when identical L/R delays desired', 'Create centered, mono-style delay effects', 'Quick rhythmic delay setup with single time control'], 'audio_function': "Stereo link - applies left channel's Sync and Time settings to right channel", 'typical_values': {'on': 'Linked - centered mono delay', 'off': 'Independent L/R - stereo width'}, 'relationships': ['When engaged, changing L Sync/Time automatically updates R Sync/Time', 'Overrides R Time and R Sync settings']}
+**Function**: Master bypass switch for entire delay device
+**Increasing**: Enables delay processing; adds echo, space, and rhythm to signal
+**Decreasing**: Bypasses all delay processing; passes dry signal through unchanged
+**Use Cases**:
+  - Quick A/B comparison of dry vs delayed signal
+  - Automation for rhythmic delay drops
+  - CPU conservation when delay not needed
+**Typical Values**:
+  - on: Active - full delay processing
+  - off: Bypass - no delay processing
 
-#### Ping Pong
-- **Technical name**: `Ping Pong`
-- **Description**: {'sonic_effect': {'decreasing': 'Normal stereo delay; static positioning; L and R independent', 'increasing': 'Signal bounces L→R→L; wide stereo field; rhythmic spatial movement'}, 'use_cases': ['Wide stereo delay effects', 'Dub-style spatial movement', 'Rhythmic call-and-response patterns', 'Maximize stereo width with medium-high feedback'], 'technical_detail': 'Internally cross-feeds delay lines - left output feeds right delay input and vice versa, creating bouncing effect.', 'audio_function': 'Alternates delayed signal between left and right outputs', 'typical_values': {'on': 'Bouncing stereo (use with tempo sync for rhythmic bounce)', 'off': 'Standard stereo delay'}, 'relationships': ['Most effective with different L/R delay times', 'Interacts with Feedback - higher feedback = more bounces']}
+---
 
-#### L Sync
-- **Technical name**: `L Sync`
-- **Description**: {'sonic_effect': {'decreasing': 'Free time in milliseconds; independent of tempo; smooth time sweeps', 'increasing': 'Beat-synced delay (16th note divisions); locked to tempo; rhythmic precision'}, 'use_cases': ['On: Rhythmic delays locked to song tempo', 'Off: Slapback, doubling, creative time-based effects', 'Off: Smooth delay time automation without rhythmic jumps'], 'audio_function': 'Toggles left channel between tempo-synced beat divisions and free milliseconds', 'typical_values': {'on': 'Tempo sync - use L 16th divisions', 'off': 'Free time (1-5000ms) - use L Time knob'}, 'relationships': ['When On, enables L 16th parameter', 'When Off, enables L Time parameter']}
+### Feedback
 
-#### R Sync
-- **Technical name**: `R Sync`
-- **Description**: {'sonic_effect': {'decreasing': 'Free time in milliseconds; independent of tempo; smooth time sweeps', 'increasing': 'Beat-synced delay (16th note divisions); locked to tempo; rhythmic precision'}, 'use_cases': ['On: Rhythmic delays locked to song tempo', 'Off: Slapback, doubling, creative time-based effects', 'Mix: L synced + R free for complex polyrhythmic patterns'], 'audio_function': 'Toggles right channel between tempo-synced beat divisions and free milliseconds', 'typical_values': {'on': 'Tempo sync - use R 16th divisions', 'off': 'Free time (1-5000ms) - use R Time knob'}, 'relationships': ['When On, enables R 16th parameter', 'When Off, enables R Time parameter', 'Disabled when Link is active (follows L Sync)']}
+**Description**: Amount of output fed back into delay lines
+**Sonic Focus**: Control delay repetition and sustain
 
-#### L Time
-- **Technical name**: `L Time`
-- **Range**: 1.0 to 5000.0 ms
-- **Description**: {'sonic_effect': {'decreasing': 'Shorter delays; tight to source; slapback to doubling character; faster rhythm', 'increasing': 'Longer delays; increased space; more separation from source; rhythmic slowing'}, 'use_cases': ['1-15ms: Doubling, thickening, subtle width', '20-80ms: Slapback echo (classic vocal effect)', '100-300ms: Quarter note-ish delays at various tempos', '500-5000ms: Long atmospheric delays, special effects'], 'technical_detail': 'Exponential range 1-5000ms. Short times (1-50ms) create doubling/chorus, medium (50-500ms) slapback/echo, long (500-5000ms) rhythmic delays.', 'audio_function': 'Left channel delay time in milliseconds when Sync is off', 'typical_values': {'special_fx': '2000-5000ms', 'doubling': '5-15ms', 'long_delay': '400-2000ms', 'short_echo': '150-300ms', 'slapback': '50-120ms'}, 'relationships': ['Affected by Delay Mode - Repitch creates pitch shifts when changed', 'Can be modulated by Dly < Mod for chorus-like effects', 'Only active when L Sync is Off']}
+**Technical Notes**:
+- High feedback values produce infinite echoes
+- Freeze endlessly cycles audio in buffer, ignoring new input
 
-#### R Time
-- **Technical name**: `R Time`
-- **Range**: 1.0 to 5000.0 ms
-- **Description**: {'sonic_effect': {'decreasing': 'Shorter delays; tight to source; slapback to doubling character; faster rhythm', 'increasing': 'Longer delays; increased space; more separation from source; rhythmic slowing'}, 'use_cases': ['Match L Time for centered mono delay', 'Offset from L Time for wide stereo field', 'Create polyrhythmic patterns with different L/R times', 'Subtle offset (10-30ms) for stereo width without obvious delay'], 'technical_detail': 'Exponential range 1-5000ms. Different L/R times create stereo width and polyrhythmic patterns.', 'audio_function': 'Right channel delay time in milliseconds when Sync is off', 'typical_values': {'polyrhythm': 'Different rhythmic values from L', 'stereo_width': 'L Time ± 10-50ms', 'mono_match': 'Same as L Time'}, 'relationships': ['Works with L Time to create stereo field', 'Disabled when Link is active (follows L Time)', 'Only active when R Sync is Off']}
-
-#### L 16th
-- **Technical name**: `L 16th`
-- **Description**: {'sonic_effect': {'decreasing': 'Shorter divisions; faster rhythm; tighter rhythmic patterns', 'increasing': 'Longer beat divisions; slower rhythm; more space between repeats'}, 'use_cases': ['1-2: Very fast rhythmic delays (16th-8th notes)', '3-4: Standard rhythmic delays (dotted 8th, quarter)', '5-8: Slower delays (dotted quarter to half note)', '16: Whole note delays, long atmospheric'], 'technical_detail': 'Values 1, 2, 3, 4, 5, 6, 8, 16 represent multiples of 16th notes. 4 = quarter note, 8 = half note, 16 = whole note.', 'audio_function': 'Left channel tempo-synced delay time in 16th note divisions when Sync is on', 'typical_values': {'long': '16 (whole note)', 'slow': '6-8 (half note range)', 'groove': '3-4 (dotted 8th-quarter)', 'fast': '1-2 (16th-8th note)'}, 'relationships': ['Only active when L Sync is On', 'Automatically scales with project tempo', 'Common combinations: L=4, R=3 for dotted rhythm']}
-
-#### R 16th
-- **Technical name**: `R 16th`
-- **Description**: {'sonic_effect': {'decreasing': 'Shorter divisions; faster rhythm; tighter rhythmic patterns', 'increasing': 'Longer beat divisions; slower rhythm; more space between repeats'}, 'use_cases': ['Match L 16th for centered mono delay', 'Offset for polyrhythmic patterns (e.g., L=4, R=3)', 'Create complex rhythmic textures with Ping Pong', 'Dub-style delays with different L/R divisions'], 'technical_detail': 'Values 1, 2, 3, 4, 5, 6, 8, 16 represent multiples of 16th notes. Different L/R divisions create polyrhythmic patterns.', 'audio_function': 'Right channel tempo-synced delay time in 16th note divisions when Sync is on', 'typical_values': {'polyrhythm': 'Different divisions for complexity', 'dotted_rhythm': 'L=4, R=3 (quarter + dotted 8th)', 'mono_match': 'Same as L 16th'}, 'relationships': ['Only active when R Sync is On', 'Disabled when Link is active (follows L 16th)', 'Works with Ping Pong for bouncing rhythmic patterns']}
-
-#### L Offset
-- **Technical name**: `L Offset`
-- **Range**: -33.0 to 33.0 %
-- **Description**: {'sonic_effect': {'decreasing': 'Advances timing earlier (negative offset); pulls beat forward; rushed feel', 'increasing': 'Delays timing later (positive offset); pushes beat slightly behind; laid-back groove'}, 'use_cases': ['Create swing or shuffle feels in synced delays', 'Offset delays slightly behind beat for laid-back feel', 'Slight advancement for pushing energy', 'Humanize mechanical synced delays'], 'technical_detail': '±33% offset of selected beat division. At L 16th = 4 (quarter note), ±33% = ±33% of quarter note duration.', 'audio_function': 'Fine-tune left delay time offset as percentage when in Sync mode', 'typical_values': {'push': '-5 to -10% - ahead of beat energy', 'extreme': '±25 to ±33% - strong swing/rush', 'swing': '+10 to +20% - behind beat groove', 'centered': '0% - on the beat'}, 'relationships': ['Only active when L Sync is On', 'Percentage relative to L 16th division', 'Combines with R Offset for stereo timing variations']}
-
-#### R Offset
-- **Technical name**: `R Offset`
-- **Range**: -33.0 to 33.0 %
-- **Description**: {'sonic_effect': {'decreasing': 'Advances timing earlier (negative offset); pulls beat forward; rushed feel', 'increasing': 'Delays timing later (positive offset); pushes beat slightly behind; laid-back groove'}, 'use_cases': ['Match L Offset for centered timing adjustment', 'Offset differently from L for wide stereo field', 'Create subtle stereo movement with small L/R differences', 'Polyrhythmic patterns with different L/R offsets'], 'technical_detail': '±33% offset of selected beat division. Different L/R offsets create stereo timing variation and width.', 'audio_function': 'Fine-tune right delay time offset as percentage when in Sync mode', 'typical_values': {'stereo_wide': 'Opposite sign from L Offset', 'match_L': 'Same as L Offset for mono', 'stereo_subtle': 'L Offset ± 5-10%'}, 'relationships': ['Only active when R Sync is On', 'Disabled when Link is active (follows L Offset)', 'Percentage relative to R 16th division']}
+---
 
 #### Feedback
-- **Technical name**: `Feedback`
-- **Range**: 0.0 to 95.0 %
-- **Description**: {'sonic_effect': {'decreasing': 'Fewer repeats; quick decay; cleaner; single echo at 0%', 'increasing': 'More repeats; longer decay; builds density; approaches infinite at high values; can self-oscillate'}, 'use_cases': ['0-30%: Single slapback or doubling', '40-60%: Multiple distinct echoes', '70-85%: Dense, reverb-like delay cloud', '90-95%: Infinite-style delays, dub effects, watch levels!'], 'technical_detail': 'Internal feedback loop - each repeat is Feedback% of previous. At 0% = single delay, ~70-80% = noticeable decay, 95% = very long sustain approaching infinite.', 'audio_function': 'Amount of delay output fed back into input for repeating echoes', 'typical_values': {'reverb_like': '60-75%', 'single_echo': '0-20%', 'dub_delay': '75-90%', 'infinite': '90-95% (watch for buildup!)', 'short_tail': '30-50%'}, 'relationships': ['Interacts with Filter - high feedback needs filter to control frequency buildup', 'Works with Ping Pong for bouncing repeats', 'High feedback + modulation can create chorus/flanger effects']}
+
+**Control Type**: continuous
+**Range**: 0.0 to 95.0 %
+
+**Function**: Amount of delay output fed back into input for repeating echoes
+**Increasing**: More repeats; longer decay; builds density; approaches infinite at high values; can self-oscillate
+**Decreasing**: Fewer repeats; quick decay; cleaner; single echo at 0%
+**Technical**: Internal feedback loop - each repeat is Feedback% of previous. At 0% = single delay, ~70-80% = noticeable decay, 95% = very long sustain approaching infinite.
+**Use Cases**:
+  - 0-30%: Single slapback or doubling
+  - 40-60%: Multiple distinct echoes
+  - 70-85%: Dense, reverb-like delay cloud
+  - 90-95%: Infinite-style delays, dub effects, watch levels!
+**Typical Values**:
+  - reverb_like: 60-75%
+  - single_echo: 0-20%
+  - dub_delay: 75-90%
+  - infinite: 90-95% (watch for buildup!)
+  - short_tail: 30-50%
+
+---
 
 #### Freeze
-- **Technical name**: `Freeze`
-- **Description**: {'sonic_effect': {'decreasing': 'Normal delay operation; new input processed; natural decay according to Feedback', 'increasing': 'Freezes delay content; infinite sustain; no new input processed; creates pad-like textures'}, 'use_cases': ['Create ambient pads from delay tails', 'Freeze rhythmic patterns for layering', 'Build tension by sustaining delay content', 'Sound design - isolate and sustain delay artifacts'], 'technical_detail': 'Disables input and sets internal feedback to 100%, creating infinite loop. Current buffer content sustains unchanged until Freeze disabled.', 'audio_function': 'Captures and endlessly cycles current delay buffer, ignoring new input', 'typical_values': {'on': 'Frozen buffer - use for pads/textures', 'off': 'Normal delay operation'}, 'relationships': ['When On, disables Filter and Modulation sections', 'Combines with high Feedback for immediate infinite sustain', 'Audio in buffer when activated determines frozen sound']}
+
+**Control Type**: binary
+**Values**: Off / On
+
+**Function**: Captures and endlessly cycles current delay buffer, ignoring new input
+**Increasing**: Freezes delay content; infinite sustain; no new input processed; creates pad-like textures
+**Decreasing**: Normal delay operation; new input processed; natural decay according to Feedback
+**Technical**: Disables input and sets internal feedback to 100%, creating infinite loop. Current buffer content sustains unchanged until Freeze disabled.
+**Use Cases**:
+  - Create ambient pads from delay tails
+  - Freeze rhythmic patterns for layering
+  - Build tension by sustaining delay content
+  - Sound design - isolate and sustain delay artifacts
+**Typical Values**:
+  - on: Frozen buffer - use for pads/textures
+  - off: Normal delay operation
+
+---
+
+### Filter Section
+
+**Description**: Band-pass filter to shape delay repeats
+**Sonic Focus**: Tone shaping to prevent buildup of lows or harsh highs
+
+**Technical Notes**:
+- Filter frequency and width controlled via X-Y controller in Live
+- Disabled when Freeze is active
+
+---
 
 #### Filter On
-- **Technical name**: `Filter On`
-- **Description**: {'sonic_effect': {'decreasing': 'Bypasses filter; full-range repeats; natural decay; more hi-fi', 'increasing': 'Activates filter; shapes frequency content of repeats; prevents buildup; adds character'}, 'use_cases': ['Prevent muddy low-end buildup with high feedback', 'Create telephone/radio-style filtered delays', 'Dub-style frequency sweeps (automate Filter Freq)', 'Isolate specific frequency ranges in repeats'], 'technical_detail': 'Band-pass filter in feedback path - each repeat passes through filter, progressively shaping tone. Essential for controlling frequency buildup at high feedback.', 'audio_function': 'Enables band-pass filter in feedback loop to shape repeating echoes', 'typical_values': {'on': 'Use Filter Freq/Width to shape tone', 'off': 'Clean, full-range delays'}, 'relationships': ['Enables Filter Freq and Filter Width parameters', 'Disabled when Freeze is On', 'Critical for high-feedback delays to control buildup']}
+
+**Control Type**: binary
+**Values**: Off / On
+
+**Function**: Enables band-pass filter in feedback loop to shape repeating echoes
+**Increasing**: Activates filter; shapes frequency content of repeats; prevents buildup; adds character
+**Decreasing**: Bypasses filter; full-range repeats; natural decay; more hi-fi
+**Technical**: Band-pass filter in feedback path - each repeat passes through filter, progressively shaping tone. Essential for controlling frequency buildup at high feedback.
+**Use Cases**:
+  - Prevent muddy low-end buildup with high feedback
+  - Create telephone/radio-style filtered delays
+  - Dub-style frequency sweeps (automate Filter Freq)
+  - Isolate specific frequency ranges in repeats
+**Typical Values**:
+  - on: Use Filter Freq/Width to shape tone
+  - off: Clean, full-range delays
+
+---
 
 #### Filter Freq
-- **Technical name**: `Filter Freq`
-- **Range**: 50.0 to 18000.0 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Lower center frequency; darker, warmer repeats; more bass; can muddy at extremes', 'increasing': 'Higher center frequency; brighter, thinner repeats; less bass; telephone-like at extremes'}, 'use_cases': ['50-200Hz: Extreme lo-fi, bass-only delays', '300-800Hz: Telephone/radio character, vocal focus', '1000-3000Hz: Presence boost, cut lows and highs', '5000-12000Hz: Bright, airy delays, cut body', 'Automate for dub-style filter sweeps'], 'technical_detail': 'Exponential 50-18000Hz range. Sets center of bandpass - frequencies outside band are attenuated in feedback loop.', 'audio_function': 'Center frequency of band-pass filter shaping delay repeats', 'typical_values': {'bright': '5000-10000Hz', 'presence': '1500-3000Hz', 'bass': '100-300Hz', 'telephone': '500-1000Hz'}, 'relationships': ['Only active when Filter On is enabled and Freeze is Off', 'Works with Filter Width to define bandpass shape', 'Can be modulated by Filter < Mod for sweeping effects']}
+
+**Control Type**: continuous
+**Range**: 50.0 to 18000.0 Hz
+
+**Function**: Center frequency of band-pass filter shaping delay repeats
+**Increasing**: Higher center frequency; brighter, thinner repeats; less bass; telephone-like at extremes
+**Decreasing**: Lower center frequency; darker, warmer repeats; more bass; can muddy at extremes
+**Technical**: Exponential 50-18000Hz range. Sets center of bandpass - frequencies outside band are attenuated in feedback loop.
+**Use Cases**:
+  - 50-200Hz: Extreme lo-fi, bass-only delays
+  - 300-800Hz: Telephone/radio character, vocal focus
+  - 1000-3000Hz: Presence boost, cut lows and highs
+  - 5000-12000Hz: Bright, airy delays, cut body
+  - Automate for dub-style filter sweeps
+**Typical Values**:
+  - bright: 5000-10000Hz
+  - presence: 1500-3000Hz
+  - bass: 100-300Hz
+  - telephone: 500-1000Hz
+
+---
 
 #### Filter Width
-- **Technical name**: `Filter Width`
-- **Range**: 0.5 to 9.0
-- **Description**: {'sonic_effect': {'decreasing': 'Narrower bandwidth; fewer frequencies pass; thinner, more focused; stronger filtering', 'increasing': 'Wider bandwidth; more frequencies pass; fuller sound; less filtering effect'}, 'use_cases': ['0.5-2.0: Narrow, resonant filtering - isolate specific range', '2.5-5.0: Moderate filtering - shape without thinning too much', '6.0-9.0: Gentle filtering - subtle tone shaping'], 'technical_detail': 'Range 0.5-9.0 (unitless Q factor). Low values = narrow, resonant filter. High values = gentle, broad filter.', 'audio_function': 'Bandwidth of band-pass filter - controls how much frequency range passes through', 'typical_values': {'wide': '6.0-9.0 (subtle shaping)', 'moderate': '3.0-5.0 (balanced)', 'narrow': '0.5-2.0 (strong character)'}, 'relationships': ['Only active when Filter On is enabled and Freeze is Off', 'Works with Filter Freq - narrow width emphasizes Freq selection', 'Lower width can create resonant peaks for special effects']}
+
+**Control Type**: continuous
+**Range**: 0.5 to 9.0
+
+**Function**: Bandwidth of band-pass filter - controls how much frequency range passes through
+**Increasing**: Wider bandwidth; more frequencies pass; fuller sound; less filtering effect
+**Decreasing**: Narrower bandwidth; fewer frequencies pass; thinner, more focused; stronger filtering
+**Technical**: Range 0.5-9.0 (unitless Q factor). Low values = narrow, resonant filter. High values = gentle, broad filter.
+**Use Cases**:
+  - 0.5-2.0: Narrow, resonant filtering - isolate specific range
+  - 2.5-5.0: Moderate filtering - shape without thinning too much
+  - 6.0-9.0: Gentle filtering - subtle tone shaping
+**Typical Values**:
+  - wide: 6.0-9.0 (subtle shaping)
+  - moderate: 3.0-5.0 (balanced)
+  - narrow: 0.5-2.0 (strong character)
+
+---
+
+### Modulation
+
+**Description**: LFO modulation for analog/tape-style delay character
+**Sonic Focus**: Add movement and variation to delay times and filter
+
+**Technical Notes**:
+- Mod Freq sets LFO rate in Hertz
+- Time modulation affects delay time for chorus-like effects
+- Filter modulation adds movement to filter frequency
+- Disabled when Freeze is active
+
+---
 
 #### Mod Freq
-- **Technical name**: `Mod Freq`
-- **Range**: 0.01 to 40.0 Hz
-- **Description**: {'sonic_effect': {'decreasing': 'Slower modulation; gentle drift; subtle movement; more natural', 'increasing': 'Faster modulation; quicker wobble; chorus to vibrato; can sound unstable at extremes'}, 'use_cases': ['0.01-0.3Hz: Slow tape-like drift, subtle movement', '0.5-3Hz: Chorus-like modulation, analog warmth', '3-8Hz: Vibrato effects, obvious modulation', '10-40Hz: Extreme vibrato, ring mod-like artifacts'], 'technical_detail': 'Exponential 0.01-40Hz LFO. Low rates (0.01-0.5Hz) create slow drift, mid rates (0.5-5Hz) chorus-like, high rates (5-40Hz) vibrato to ring modulation effects.', 'audio_function': 'LFO rate in Hertz modulating delay time and/or filter frequency', 'typical_values': {'chorus': '0.5-2Hz', 'subtle': '0.05-0.2Hz', 'extreme': '10-40Hz', 'vibrato': '4-8Hz'}, 'relationships': ['Disabled when Freeze is On', 'Rate controls speed for both Dly < Mod and Filter < Mod', 'Interacts with Delay Mode - Repitch mode creates pitch effects']}
+
+**Control Type**: continuous
+**Range**: 0.01 to 40.0 Hz
+
+**Function**: LFO rate in Hertz modulating delay time and/or filter frequency
+**Increasing**: Faster modulation; quicker wobble; chorus to vibrato; can sound unstable at extremes
+**Decreasing**: Slower modulation; gentle drift; subtle movement; more natural
+**Technical**: Exponential 0.01-40Hz LFO. Low rates (0.01-0.5Hz) create slow drift, mid rates (0.5-5Hz) chorus-like, high rates (5-40Hz) vibrato to ring modulation effects.
+**Use Cases**:
+  - 0.01-0.3Hz: Slow tape-like drift, subtle movement
+  - 0.5-3Hz: Chorus-like modulation, analog warmth
+  - 3-8Hz: Vibrato effects, obvious modulation
+  - 10-40Hz: Extreme vibrato, ring mod-like artifacts
+**Typical Values**:
+  - chorus: 0.5-2Hz
+  - subtle: 0.05-0.2Hz
+  - extreme: 10-40Hz
+  - vibrato: 4-8Hz
+
+---
 
 #### Dly < Mod
-- **Technical name**: `Dly < Mod`
-- **Range**: 0.0 to 100.0 %
-- **Description**: {'sonic_effect': {'decreasing': 'Less variation; stable delay time; cleaner; subtle movement', 'increasing': 'More delay time variation; stronger chorus/vibrato; pitch warble; can be disorienting at extremes'}, 'use_cases': ['0-10%: Subtle analog warmth, tape-like drift', '10-30%: Light chorus effect, movement', '30-60%: Obvious chorus, BBD-style analog delay', '60-100%: Extreme pitch modulation, special effects', 'Combine with slow Mod Freq for tape wow/flutter emulation'], 'technical_detail': '0-100% modulation depth. With Repitch mode, creates pitch shifting like tape wow/flutter. With Fade mode, creates time-stretch-like effects without pitch change.', 'audio_function': 'Amount of LFO modulation applied to delay time', 'typical_values': {'chorus': '20-40% (chorus-like)', 'subtle': '5-15% (analog warmth)', 'extreme': '80-100% (special effects)', 'vibrato': '50-80% (obvious pitch)'}, 'relationships': ['Disabled when Freeze is On', 'Depth set by this param, rate set by Mod Freq', 'Delay Mode determines character: Repitch = pitch shift, Fade = time stretch', 'Creates chorus-like effects even with single delay']}
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 %
+
+**Function**: Amount of LFO modulation applied to delay time
+**Increasing**: More delay time variation; stronger chorus/vibrato; pitch warble; can be disorienting at extremes
+**Decreasing**: Less variation; stable delay time; cleaner; subtle movement
+**Technical**: 0-100% modulation depth. With Repitch mode, creates pitch shifting like tape wow/flutter. With Fade mode, creates time-stretch-like effects without pitch change.
+**Use Cases**:
+  - 0-10%: Subtle analog warmth, tape-like drift
+  - 10-30%: Light chorus effect, movement
+  - 30-60%: Obvious chorus, BBD-style analog delay
+  - 60-100%: Extreme pitch modulation, special effects
+  - Combine with slow Mod Freq for tape wow/flutter emulation
+**Typical Values**:
+  - chorus: 20-40% (chorus-like)
+  - subtle: 5-15% (analog warmth)
+  - extreme: 80-100% (special effects)
+  - vibrato: 50-80% (obvious pitch)
+
+---
 
 #### Filter < Mod
-- **Technical name**: `Filter < Mod`
-- **Range**: 0.0 to 100.0 %
-- **Description**: {'sonic_effect': {'decreasing': 'Less sweeping; static filter; cleaner; subtle movement', 'increasing': 'More frequency sweeping; wah-like movement; dynamic filtering; can overwhelm at extremes'}, 'use_cases': ['0-15%: Subtle filter animation, analog-style drift', '20-40%: Noticeable auto-wah character', '50-75%: Strong sweeping, phaser-like effects', '80-100%: Extreme frequency sweeps, special effects', 'Combine with narrow Filter Width for resonant sweeps'], 'technical_detail': '0-100% modulation depth applied to Filter Freq. Creates auto-wah or phaser-like sweeping of filter center frequency.', 'audio_function': 'Amount of LFO modulation applied to filter frequency', 'typical_values': {'subtle': '5-15% (gentle sweep)', 'strong': '60-85% (dramatic sweeps)', 'extreme': '90-100% (full range sweeps)', 'auto_wah': '25-50% (obvious movement)'}, 'relationships': ['Disabled when Freeze is On', 'Requires Filter On to be enabled', 'Depth set by this param, rate set by Mod Freq', 'Narrow Filter Width enhances resonant sweep effect']}
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 %
+
+**Function**: Amount of LFO modulation applied to filter frequency
+**Increasing**: More frequency sweeping; wah-like movement; dynamic filtering; can overwhelm at extremes
+**Decreasing**: Less sweeping; static filter; cleaner; subtle movement
+**Technical**: 0-100% modulation depth applied to Filter Freq. Creates auto-wah or phaser-like sweeping of filter center frequency.
+**Use Cases**:
+  - 0-15%: Subtle filter animation, analog-style drift
+  - 20-40%: Noticeable auto-wah character
+  - 50-75%: Strong sweeping, phaser-like effects
+  - 80-100%: Extreme frequency sweeps, special effects
+  - Combine with narrow Filter Width for resonant sweeps
+**Typical Values**:
+  - subtle: 5-15% (gentle sweep)
+  - strong: 60-85% (dramatic sweeps)
+  - extreme: 90-100% (full range sweeps)
+  - auto_wah: 25-50% (obvious movement)
+
+---
+
+### Output
+
+**Description**: Mix control between dry and wet signals
+**Sonic Focus**: Balance processed delay with original signal
+
+**Technical Notes**:
+- Set to 100% on return tracks
+
+---
 
 #### Dry/Wet
-- **Technical name**: `Dry/Wet`
-- **Range**: 0.0 to 100.0 %
-- **Description**: {'sonic_effect': {'decreasing': 'Less delay in mix; more dry signal; clearer; no delay at 0%', 'increasing': 'More delay in mix; more echo; can overwhelm dry signal; use 100% on return tracks'}, 'use_cases': ['0-20%: Subtle thickening, doubling effects', '20-40%: Clear delay presence, still dry-forward', '40-60%: Balanced wet/dry, obvious delay', '60-80%: Delay-forward, ambient', '100%: Return track use, parallel processing'], 'technical_detail': '0-100% wet mix. Insert use typically 10-40% wet. Return track use always 100% wet (dry signal already in mix). Equal-loudness toggle maintains perceived volume at 50/50.', 'audio_function': 'Mix balance between unprocessed (dry) signal and delayed (wet) signal', 'typical_values': {'return_track': '100% (always)', 'balanced_insert': '30-50%', 'subtle_insert': '10-25%', 'ambient': '60-80%'}, 'relationships': ['Set to 100% when used on return/send track', 'Lower values needed with high Feedback to avoid buildup', 'Equal-loudness option compensates for perceived volume changes']}
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 %
+
+**Function**: Mix balance between unprocessed (dry) signal and delayed (wet) signal
+**Increasing**: More delay in mix; more echo; can overwhelm dry signal; use 100% on return tracks
+**Decreasing**: Less delay in mix; more dry signal; clearer; no delay at 0%
+**Technical**: 0-100% wet mix. Insert use typically 10-40% wet. Return track use always 100% wet (dry signal already in mix). Equal-loudness toggle maintains perceived volume at 50/50.
+**Use Cases**:
+  - 0-20%: Subtle thickening, doubling effects
+  - 20-40%: Clear delay presence, still dry-forward
+  - 40-60%: Balanced wet/dry, obvious delay
+  - 60-80%: Delay-forward, ambient
+  - 100%: Return track use, parallel processing
+**Typical Values**:
+  - return_track: 100% (always)
+  - balanced_insert: 30-50%
+  - subtle_insert: 10-25%
+  - ambient: 60-80%
+
+---
+
+### Ping Pong
+
+**Description**: Stereo bouncing effect between left and right
+**Sonic Focus**: Create wide stereo delay bouncing
+
+**Technical Notes**:
+- Signal alternates between left and right output
+
+---
+
+#### Ping Pong
+
+**Control Type**: binary
+**Values**: Off / On
+
+**Function**: Alternates delayed signal between left and right outputs
+**Increasing**: Signal bounces L→R→L; wide stereo field; rhythmic spatial movement
+**Decreasing**: Normal stereo delay; static positioning; L and R independent
+**Technical**: Internally cross-feeds delay lines - left output feeds right delay input and vice versa, creating bouncing effect.
+**Use Cases**:
+  - Wide stereo delay effects
+  - Dub-style spatial movement
+  - Rhythmic call-and-response patterns
+  - Maximize stereo width with medium-high feedback
+**Typical Values**:
+  - on: Bouncing stereo (use with tempo sync for rhythmic bounce)
+  - off: Standard stereo delay
+
+---
+
+### Time & Sync
+
+**Description**: Delay time controls with tempo sync or free milliseconds
+**Sonic Focus**: Core delay timing and synchronization
+
+**Technical Notes**:
+- Sync switches toggle between beat divisions (16ths) and milliseconds
+- Link engages Stereo Link, applying left channel settings to right
+- Delay Mode: Repitch creates tape-style pitch shifts, Fade crossfades smoothly, Jump immediately changes time
+
+---
+
+#### Delay Mode
+
+**Control Type**: quantized
+
+**Function**: Transition mode when changing delay time while processing audio
+**Technical**: Determines how delay buffer responds to time changes. Repitch emulates tape mechanics with doppler shift, Fade uses crossfading to avoid artifacts, Jump is instant but can click.
+**Use Cases**:
+  - Repitch: Tape-style analog delay emulation, creative pitch effects
+  - Fade: Performance-safe time changes, smooth transitions
+  - Jump: Glitch effects, rhythmic stutters, aggressive sound design
+**Typical Values**:
+  - repitch: Default - tape-like pitch shifts (most musical)
+  - jump: Instant - clicks present (special effects)
+  - fade: Smooth - no artifacts (best for automation)
+
+---
+
+#### Link
+
+**Control Type**: binary
+**Values**: Off / On
+
+**Function**: Stereo link - applies left channel's Sync and Time settings to right channel
+**Increasing**: Locks both channels to same timing; mono-like delay behavior; centered image
+**Decreasing**: Independent L/R timing; wide stereo image; complex rhythmic patterns
+**Use Cases**:
+  - Simplify control when identical L/R delays desired
+  - Create centered, mono-style delay effects
+  - Quick rhythmic delay setup with single time control
+**Typical Values**:
+  - on: Linked - centered mono delay
+  - off: Independent L/R - stereo width
+
+---
+
+#### L Sync
+
+**Control Type**: binary
+**Values**: Off / On
+
+**Function**: Toggles left channel between tempo-synced beat divisions and free milliseconds
+**Increasing**: Beat-synced delay (16th note divisions); locked to tempo; rhythmic precision
+**Decreasing**: Free time in milliseconds; independent of tempo; smooth time sweeps
+**Use Cases**:
+  - On: Rhythmic delays locked to song tempo
+  - Off: Slapback, doubling, creative time-based effects
+  - Off: Smooth delay time automation without rhythmic jumps
+**Typical Values**:
+  - on: Tempo sync - use L 16th divisions
+  - off: Free time (1-5000ms) - use L Time knob
+
+---
+
+#### R Sync
+
+**Control Type**: binary
+**Values**: Off / On
+
+**Function**: Toggles right channel between tempo-synced beat divisions and free milliseconds
+**Increasing**: Beat-synced delay (16th note divisions); locked to tempo; rhythmic precision
+**Decreasing**: Free time in milliseconds; independent of tempo; smooth time sweeps
+**Use Cases**:
+  - On: Rhythmic delays locked to song tempo
+  - Off: Slapback, doubling, creative time-based effects
+  - Mix: L synced + R free for complex polyrhythmic patterns
+**Typical Values**:
+  - on: Tempo sync - use R 16th divisions
+  - off: Free time (1-5000ms) - use R Time knob
+
+---
+
+#### L Time
+
+**Control Type**: continuous
+**Range**: 1.0 to 5000.0 ms
+
+**Function**: Left channel delay time in milliseconds when Sync is off
+**Increasing**: Longer delays; increased space; more separation from source; rhythmic slowing
+**Decreasing**: Shorter delays; tight to source; slapback to doubling character; faster rhythm
+**Technical**: Exponential range 1-5000ms. Short times (1-50ms) create doubling/chorus, medium (50-500ms) slapback/echo, long (500-5000ms) rhythmic delays.
+**Use Cases**:
+  - 1-15ms: Doubling, thickening, subtle width
+  - 20-80ms: Slapback echo (classic vocal effect)
+  - 100-300ms: Quarter note-ish delays at various tempos
+  - 500-5000ms: Long atmospheric delays, special effects
+**Typical Values**:
+  - special_fx: 2000-5000ms
+  - doubling: 5-15ms
+  - long_delay: 400-2000ms
+  - short_echo: 150-300ms
+  - slapback: 50-120ms
+
+---
+
+#### R Time
+
+**Control Type**: continuous
+**Range**: 1.0 to 5000.0 ms
+
+**Function**: Right channel delay time in milliseconds when Sync is off
+**Increasing**: Longer delays; increased space; more separation from source; rhythmic slowing
+**Decreasing**: Shorter delays; tight to source; slapback to doubling character; faster rhythm
+**Technical**: Exponential range 1-5000ms. Different L/R times create stereo width and polyrhythmic patterns.
+**Use Cases**:
+  - Match L Time for centered mono delay
+  - Offset from L Time for wide stereo field
+  - Create polyrhythmic patterns with different L/R times
+  - Subtle offset (10-30ms) for stereo width without obvious delay
+**Typical Values**:
+  - polyrhythm: Different rhythmic values from L
+  - stereo_width: L Time ± 10-50ms
+  - mono_match: Same as L Time
+
+---
+
+#### L 16th
+
+**Control Type**: quantized
+
+**Function**: Left channel tempo-synced delay time in 16th note divisions when Sync is on
+**Increasing**: Longer beat divisions; slower rhythm; more space between repeats
+**Decreasing**: Shorter divisions; faster rhythm; tighter rhythmic patterns
+**Technical**: Values 1, 2, 3, 4, 5, 6, 8, 16 represent multiples of 16th notes. 4 = quarter note, 8 = half note, 16 = whole note.
+**Use Cases**:
+  - 1-2: Very fast rhythmic delays (16th-8th notes)
+  - 3-4: Standard rhythmic delays (dotted 8th, quarter)
+  - 5-8: Slower delays (dotted quarter to half note)
+  - 16: Whole note delays, long atmospheric
+**Typical Values**:
+  - long: 16 (whole note)
+  - slow: 6-8 (half note range)
+  - groove: 3-4 (dotted 8th-quarter)
+  - fast: 1-2 (16th-8th note)
+
+---
+
+#### R 16th
+
+**Control Type**: quantized
+
+**Function**: Right channel tempo-synced delay time in 16th note divisions when Sync is on
+**Increasing**: Longer beat divisions; slower rhythm; more space between repeats
+**Decreasing**: Shorter divisions; faster rhythm; tighter rhythmic patterns
+**Technical**: Values 1, 2, 3, 4, 5, 6, 8, 16 represent multiples of 16th notes. Different L/R divisions create polyrhythmic patterns.
+**Use Cases**:
+  - Match L 16th for centered mono delay
+  - Offset for polyrhythmic patterns (e.g., L=4, R=3)
+  - Create complex rhythmic textures with Ping Pong
+  - Dub-style delays with different L/R divisions
+**Typical Values**:
+  - polyrhythm: Different divisions for complexity
+  - dotted_rhythm: L=4, R=3 (quarter + dotted 8th)
+  - mono_match: Same as L 16th
+
+---
+
+#### L Offset
+
+**Control Type**: continuous
+**Range**: -33.0 to 33.0 %
+
+**Function**: Fine-tune left delay time offset as percentage when in Sync mode
+**Increasing**: Delays timing later (positive offset); pushes beat slightly behind; laid-back groove
+**Decreasing**: Advances timing earlier (negative offset); pulls beat forward; rushed feel
+**Technical**: ±33% offset of selected beat division. At L 16th = 4 (quarter note), ±33% = ±33% of quarter note duration.
+**Use Cases**:
+  - Create swing or shuffle feels in synced delays
+  - Offset delays slightly behind beat for laid-back feel
+  - Slight advancement for pushing energy
+  - Humanize mechanical synced delays
+**Typical Values**:
+  - push: -5 to -10% - ahead of beat energy
+  - extreme: ±25 to ±33% - strong swing/rush
+  - swing: +10 to +20% - behind beat groove
+  - centered: 0% - on the beat
+
+---
+
+#### R Offset
+
+**Control Type**: continuous
+**Range**: -33.0 to 33.0 %
+
+**Function**: Fine-tune right delay time offset as percentage when in Sync mode
+**Increasing**: Delays timing later (positive offset); pushes beat slightly behind; laid-back groove
+**Decreasing**: Advances timing earlier (negative offset); pulls beat forward; rushed feel
+**Technical**: ±33% offset of selected beat division. Different L/R offsets create stereo timing variation and width.
+**Use Cases**:
+  - Match L Offset for centered timing adjustment
+  - Offset differently from L for wide stereo field
+  - Create subtle stereo movement with small L/R differences
+  - Polyrhythmic patterns with different L/R offsets
+**Typical Values**:
+  - stereo_wide: Opposite sign from L Offset
+  - match_L: Same as L Offset for mono
+  - stereo_subtle: L Offset ± 5-10%
+
+---
+
+### Parameter Relationships
+
+**Master Parameters** (control other parameters):
+- L Sync
+- R Sync
+- Freeze
+- Filter On
+
+**Dependencies**:
+- **Dly < Mod** controls: F, r, e, e, z, e
+- **R 16th** controls: R,  , S, y, n, c
+- **Mod Freq** controls: F, r, e, e, z, e
+- **Filter Width** controls: F, i, l, t, e, r,  , O, n
+- **Filter < Mod** controls: F, r, e, e, z, e
+- **Filter Freq** controls: F, i, l, t, e, r,  , O, n
+- **L 16th** controls: L,  , S, y, n, c
 
 ---
 
 ## Align Delay
 
 **Device Signature**: `82da8ccee34e85facb2a264e3110618dc199938e`
-**Status**: Captured → Fitted
-
-**Type**: Unknown
+**Type**: utility
+**Parameters**: 15
 
 ---
 
-### General
+### Device
+
+**Description**: Device on/off control
+**Sonic Focus**: Enable or disable the delay alignment
+
+---
 
 #### Device On
-- **Technical name**: `Device On`
 
-#### Link L/R
-- **Technical name**: `Link L/R`
+**Control Type**: binary
+**Values**: off / on
 
-#### Mode
-- **Technical name**: `Mode`
+---
 
-#### DistUnit
-- **Technical name**: `DistUnit`
+### Distance Delay
 
-#### TempUnit
-- **Technical name**: `TempUnit`
+**Description**: Distance-based delay with temperature compensation (Mode=Distance)
+**Sonic Focus**: Calculate delays based on physical distance and speed of sound
 
-#### Left ms
-- **Technical name**: `Left ms`
-- **Range**: 0.0 to 100.0 ms
+**Technical Notes**:
+- Active only when Mode=Distance
+- Temperature affects speed of sound calculation
+- Can use Meters or Feet via DistUnit toggle
+- Can use Celsius or Fahrenheit via TempUnit toggle
 
-#### Right ms
-- **Technical name**: `Right ms`
-- **Range**: 0.0 to 100.0 ms
-
-#### Delay L Smp
-- **Technical name**: `Delay L Smp`
-- **Range**: 0.0 to 200.0 smp
-
-#### Delay R smp
-- **Technical name**: `Delay R smp`
-- **Range**: 0.0 to 200.0 smp
+---
 
 #### Left meter
-- **Technical name**: `Left meter`
-- **Range**: 0.0 to 100.0 m
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 m
+
+---
 
 #### Right meter
-- **Technical name**: `Right meter`
-- **Range**: 0.0 to 100.0 m
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 m
+
+---
 
 #### Left Feet
-- **Technical name**: `Left Feet`
-- **Range**: 0.0 to 328.08 ft
+
+**Control Type**: continuous
+**Range**: 0.0 to 328.08 ft
+
+---
 
 #### Right Feet
-- **Technical name**: `Right Feet`
-- **Range**: 0.0 to 328.08 ft
+
+**Control Type**: continuous
+**Range**: 0.0 to 328.08 ft
+
+---
 
 #### Celsius
-- **Technical name**: `Celsius`
-- **Range**: -20.0 to 60.0 °C
+
+**Control Type**: continuous
+**Range**: -20.0 to 60.0 °C
+
+---
 
 #### Fahrenheit
-- **Technical name**: `Fahrenheit`
-- **Range**: -4.0 to 140.0 °F
+
+**Control Type**: continuous
+**Range**: -4.0 to 140.0 °F
+
+---
+
+### Link
+
+**Description**: Synchronize left and right delays
+**Sonic Focus**: Lock left and right delay values together
+
+---
+
+#### Link L/R
+
+**Control Type**: binary
+**Values**: off / on
+
+---
+
+### Mode Selection
+
+**Description**: Choose delay measurement mode
+**Sonic Focus**: Time-based, sample-based, or distance-based delay
+
+**Technical Notes**:
+- Time mode: delays in milliseconds
+- Samples mode: delays in sample count
+- Distance mode: delays based on physical distance and temperature
+
+---
+
+#### Mode
+
+**Control Type**: quantized
+
+---
+
+### Sample Delay
+
+**Description**: Sample-based delay (Mode=Samples)
+**Sonic Focus**: Sample-accurate alignment up to 200 samples
+
+**Technical Notes**:
+- Active only when Mode=Samples
+
+---
+
+#### Delay L Smp
+
+**Control Type**: continuous
+**Range**: 0.0 to 200.0 smp
+
+---
+
+#### Delay R smp
+
+**Control Type**: continuous
+**Range**: 0.0 to 200.0 smp
+
+---
+
+### Time Delay
+
+**Description**: Time-based delay in milliseconds (Mode=Time)
+**Sonic Focus**: Precise timing alignment up to 100ms
+
+**Technical Notes**:
+- Active only when Mode=Time
+
+---
+
+#### Left ms
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 ms
+
+---
+
+#### Right ms
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 ms
+
+---
+
+### Unit Selection
+
+**Description**: Choose measurement units
+**Sonic Focus**: Toggle between Meters/Feet and Celsius/Fahrenheit
+
+---
+
+#### DistUnit
+
+**Control Type**: quantized
+
+---
+
+#### TempUnit
+
+**Control Type**: quantized
+
+---
+
+### Parameter Relationships
+
+**Master Parameters** (control other parameters):
+- Mode
 
 ---
 
 ## Amp
 
 **Device Signature**: `d554752f4be9eee62197c37b45b1c22237842c37`
-**Status**: Captured → Fitted → Audio Knowledge
-
-**Type**: Unknown
+**Type**: amp
+**Parameters**: 10
 
 ---
 
-### General
+### Amp Model
 
-#### Device On
-- **Technical name**: `Device On`
+**Description**: Amplifier selection
+**Sonic Focus**: Choose between seven classic amp models
+
+**Technical Notes**:
+- Each model has distinct tonal characteristics and distortion curves
+- Physical modeling technology emulates electrical characteristics
+
+---
 
 #### Amp Type
-- **Technical name**: `Amp Type`
 
-#### Bass
-- **Technical name**: `Bass`
-- **Range**: 0.0 to 10.0
+**Control Type**: quantized
 
-#### Middle
-- **Technical name**: `Middle`
-- **Range**: 0.0 to 10.0
+---
 
-#### Treble
-- **Technical name**: `Treble`
-- **Range**: 0.0 to 10.0
+### Device
 
-#### Presence
-- **Technical name**: `Presence`
-- **Range**: 0.0 to 10.0
+**Description**: Device on/off control
+**Sonic Focus**: Enable or disable the entire effect
+
+---
+
+#### Device On
+
+**Control Type**: binary
+**Values**: Off / On
+
+---
+
+### Drive & Output
+
+**Description**: Gain staging and output controls
+**Sonic Focus**: Control distortion amount and output level
+
+**Technical Notes**:
+- Gain: primary distortion control (preamp)
+- Volume: output level; adds power amp distortion on some models
+- Dual Mono: doubles CPU, creates stereo width
+
+---
 
 #### Gain
-- **Technical name**: `Gain`
-- **Range**: 0.0 to 10.0
+
+**Control Type**: continuous
+**Range**: 0.0 to 10.0
+
+---
 
 #### Volume
-- **Technical name**: `Volume`
-- **Range**: 0.0 to 10.0
+
+**Control Type**: continuous
+**Range**: 0.0 to 10.0
+
+---
 
 #### Dual Mono
-- **Technical name**: `Dual Mono`
+
+**Control Type**: binary
+**Values**: Mono / Dual
+
+---
 
 #### Dry/Wet
-- **Technical name**: `Dry/Wet`
-- **Range**: 0.0 to 100.0 %
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 %
+
+---
+
+### Tone Controls
+
+**Description**: EQ shaping in preamp and power amp stages
+**Sonic Focus**: Shape frequency response and tonal character
+
+**Technical Notes**:
+- Bass/Middle/Treble: preamp stage EQ
+- Presence: power amp stage high-frequency control
+- Controls interact non-linearly with each other and with gain
+
+---
+
+#### Bass
+
+**Control Type**: continuous
+**Range**: 0.0 to 10.0
+
+---
+
+#### Middle
+
+**Control Type**: continuous
+**Range**: 0.0 to 10.0
+
+---
+
+#### Treble
+
+**Control Type**: continuous
+**Range**: 0.0 to 10.0
+
+---
+
+#### Presence
+
+**Control Type**: continuous
+**Range**: 0.0 to 10.0
+
+---
+
+### Parameter Relationships
 
 ---
 
 ## Compressor
 
 **Device Signature**: `9e906e0ab3f18c4688107553744914f9ef6b9ee7`
-**Status**: Captured → Fitted → Audio Knowledge
-
-**Type**: Unknown
+**Type**: compressor
+**Parameters**: 22
 
 ---
 
-### General
+### Compression
 
-#### Device On
-- **Technical name**: `Device On`
-- **Description**: {'description': 'Enables or bypasses the entire compressor effect', 'common_uses': ['Quick bypass for comparing processed and dry signal', 'Automation to dynamically enable compression on specific sections'], 'sonic_impact': 'When off, audio passes through unprocessed. Essential for A/B comparison of compressed vs. uncompressed signal.', 'typical_ranges': {'Off': 'Signal passes through unprocessed', 'On': 'Compression is active'}, 'interaction_notes': 'When off, all other parameters have no effect on the signal'}
+**Description**: Core compression parameters
+**Sonic Focus**: Control threshold, ratio, and attack/release envelope
+
+**Technical Notes**:
+- Threshold: level above which compression begins
+- Ratio: amount of gain reduction applied above threshold
+- Attack: how quickly compression engages after signal exceeds threshold
+- Release: how quickly compression disengages after signal falls below threshold
+- Auto Release adapts release time based on input signal dynamics
+
+---
 
 #### Threshold
-- **Technical name**: `Threshold`
-- **Range**: -70.0 to 6.0 dB
-- **Description**: {'description': 'Sets the level (in dB) above which compression begins. Signals below threshold pass through unaffected.', 'common_uses': ['Vocals: -20 to -10 dB for consistent level', 'Drums: -15 to -5 dB to control transients', 'Bass: -20 to -12 dB for even low-end', 'Mix bus: -6 to 0 dB for gentle glue'], 'sonic_impact': 'Lower threshold = more of the signal is compressed (more consistent but potentially less dynamic). Higher threshold = only peaks are controlled (more natural dynamics).', 'typical_ranges': {'Gentle compression': '-20 to -15 dB', 'Aggressive compression': '-8 to 0 dB', 'Medium compression': '-15 to -8 dB'}, 'interaction_notes': 'Works closely with Ratio - lower threshold with lower ratio = gentle overall compression. Lower threshold with high ratio = aggressive limiting effect.'}
+
+**Control Type**: continuous
+**Range**: -70.0 to 6.0 dB
+
+
+
+---
 
 #### Ratio
-- **Technical name**: `Ratio`
-- **Range**: 1.0 to 100.0
-- **Description**: {'description': 'Determines compression strength. At 4:1, a 4dB increase above threshold becomes 1dB increase at output.', 'common_uses': ['Vocals: 3:1 to 6:1 for natural control', 'Drums (kick/snare): 4:1 to 8:1 for punch', 'Bass: 2:1 to 4:1 for consistency', 'Master bus: 2:1 to 3:1 for glue', 'Limiting: 10:1 to 20:1'], 'sonic_impact': 'Low ratios (2:1-3:1) sound transparent and musical. High ratios (8:1+) create obvious compression, useful for control or creative effects. 20:1+ acts as limiting.', 'typical_ranges': {'Gentle (transparent)': '1:1 to 3:1', 'Heavy (obvious)': '6:1 to 10:1', 'Medium (musical)': '3:1 to 6:1', 'Limiting': '10:1 to 20:1'}, 'interaction_notes': "Higher ratios require faster attack times to catch transients. With makeup gain, higher ratios can create aggressive 'pumping' effects."}
 
-#### Expansion Ratio
-- **Technical name**: `Expansion Ratio`
-- **Range**: 1.0 to 2.0
-- **Description**: {'description': 'Controls downward expansion - reduces level of signals BELOW threshold. Opposite of compression.', 'common_uses': ['Noise gate alternative (more musical than hard gating)', 'Reducing room noise between vocal phrases', 'Enhancing dynamic contrast in acoustic recordings', "Creating 'breathing' space in dense mixes"], 'sonic_impact': 'Increases dynamic range by making quiet parts quieter. Useful for noise reduction, creating space, or enhancing contrast between loud and soft passages.', 'typical_ranges': {'Strong expansion/gating': '3.0 to 10.0', 'Moderate expansion': '1.5 to 3.0', 'Subtle expansion': '1.0 to 1.5'}, 'interaction_notes': 'Works below threshold while compression works above it. Can be used simultaneously for full dynamic control.'}
+**Control Type**: continuous
+**Range**: 1.0 to 100.0
+
+
+
+---
 
 #### Attack
-- **Technical name**: `Attack`
-- **Range**: 0.01 to 100.0 ms
-- **Description**: {'description': 'Time (in milliseconds) for compression to engage after signal exceeds threshold. Critical for transient shaping.', 'common_uses': ['Vocals: 3-10ms for smooth, controlled sound', 'Drums (punch): 10-30ms to preserve crack/thwack', 'Drums (control): 0.1-2ms to tame peaks', 'Bass: 20-50ms to preserve note attack', 'De-essing: 0.1-1ms for fast sibilance control'], 'sonic_impact': 'Fast attack (< 5ms) = catches transients, can dull impact. Slow attack (> 20ms) = preserves punch, lets transients through before compression kicks in.', 'typical_ranges': {'Fast (transient control)': '1 to 5ms', 'Medium (balanced)': '5 to 15ms', 'Ultra-fast (peak control)': '0.01 to 1ms', 'Slow (preserve punch)': '15 to 100ms+'}, 'interaction_notes': 'Interacts closely with Release - fast attack + fast release = pumping. Fast attack + slow release = smooth leveling. Slow attack preserves transients that Ratio would otherwise reduce.'}
+
+**Control Type**: continuous
+**Range**: 0.01 to 100.0 ms
+
+
+
+---
 
 #### Release
-- **Technical name**: `Release`
-- **Range**: 1.0 to 3000.0 ms
-- **Description**: {'description': 'Time for compression to return to normal after signal drops below threshold. Affects naturalness and groove.', 'common_uses': ['Vocals: 40-150ms for natural response', 'Drums: 50-150ms for rhythmic pump', 'Bass: 100-300ms for smooth sustain', 'Bus compression: 0.3-0.6s for glue', 'Pumping effect: 20-80ms (timed to tempo)'], 'sonic_impact': 'Fast release (< 100ms) = transparent, follows dynamics closely, can sound pumpy. Slow release (> 300ms) = smooth, musical, can sound sluggish on fast material.', 'typical_ranges': {'Slow (smooth/glue)': '300 to 1000ms', 'Fast (transparent/pumpy)': '10 to 100ms', 'Medium (musical)': '100 to 300ms'}, 'interaction_notes': "Release time creates the compressor's 'character'. Too fast = unnatural pumping. Too slow = compression doesn't reset between transients. Should often match tempo for rhythmic material."}
+
+**Control Type**: continuous
+**Range**: 1.0 to 3000.0 ms
+
+
+
+---
 
 #### Auto Release On/Off
-- **Technical name**: `Auto Release On/Off`
-- **Description**: {'description': 'When enabled, release time adapts dynamically based on incoming signal. Program-dependent compression.', 'common_uses': ['Mixed program material (full mixes, complex sources)', "When you want 'set and forget' compression", 'Material with varying dynamics and rhythms', 'Quick compression without extensive tweaking'], 'sonic_impact': 'Creates more natural, transparent compression that responds intelligently to different material. Fast material gets faster release, sustained notes get slower release.', 'typical_ranges': {'Off': 'Manual release time (full control)', 'On': 'Adaptive release (automatic, program-dependent)'}, 'interaction_notes': 'When enabled, the manual Release control is overridden. Best for complex material; manual control better for specific sounds.'}
 
-#### Output Gain
-- **Technical name**: `Output Gain`
-- **Range**: -36.0 to 36.0 dB
-- **Description**: {'description': 'Manual output level adjustment in dB. Compensates for level reduction caused by compression.', 'common_uses': ['Gain compensation after heavy compression', 'Level matching for A/B comparison', 'Driving into subtle distortion/saturation', 'Parallel compression blend control'], 'sonic_impact': "Adds gain after compression. Essential for level matching when comparing compressed vs. uncompressed (louder often sounds 'better' but may not be).", 'typical_ranges': {'Heavy compression': '15 to 30 dB', 'Medium compression': '6 to 15 dB', 'Light compression': '0 to 6 dB'}, 'interaction_notes': 'Use with Makeup off for manual control. Amount needed depends on Threshold, Ratio, and input signal level. Watch for clipping at output.'}
+**Control Type**: binary
+**Values**: Off / On
 
-#### Makeup
-- **Technical name**: `Makeup`
-- **Description**: {'description': 'Automatic gain compensation. Analyzes gain reduction and adds back approximately the same amount.', 'common_uses': ['Quick setup without gain matching math', 'Maintaining consistent level during tweaking', 'Starting point (then fine-tune with Output Gain)'], 'sonic_impact': 'Convenient for maintaining consistent perceived loudness. However, automatic makeup may not always match your desired output level.', 'typical_ranges': {'Off': 'Manual control via Output Gain', 'On': 'Automatic compensation'}, 'interaction_notes': 'NOT available when using external sidechain (S/C On). When on, overrides Output Gain. For precise control, turn off and use Output Gain manually.'}
 
-#### Dry/Wet
-- **Technical name**: `Dry/Wet`
-- **Range**: 0.0 to 100.0 %
-- **Description**: {'description': 'Blend control between uncompressed (dry) and compressed (wet) signal. Enables parallel compression.', 'common_uses': ['Parallel drum compression: 30-50% wet (aggressive settings, heavy compression)', 'Vocal parallel compression: 20-40% wet', 'Mix bus parallel compression: 20-30% wet', 'Full wet: 100% for normal compression'], 'sonic_impact': 'Parallel compression (< 100% wet) retains natural dynamics while adding power and density. Classic technique for drums, vocals, and mix bus.', 'typical_ranges': {'Light parallel': '70-85% wet', 'Heavy parallel': '20-40% wet (with aggressive compression)', 'Medium parallel': '40-70% wet', 'Normal compression': '100% wet'}, 'interaction_notes': 'Lower wet % allows more aggressive compression settings (high ratio, low threshold) since dry signal preserves transients and dynamics.'}
 
-#### Model
-- **Technical name**: `Model`
-- **Description**: {'description': 'Compression algorithm type: Peak (RMS/peak hybrid), RMS (average level), or Expand (includes expansion below threshold).', 'common_uses': ['Peak: Drums, transient-rich material, precise control', 'RMS: Vocals, bass, mix bus, musical material', 'Expand: When you need both compression AND expansion (full dynamic control)'], 'sonic_impact': 'Peak = catches fast transients, sounds precise. RMS = smoother, more musical, responds to average level. Expand = includes downward expansion.', 'typical_ranges': {'RMS': 'Musical response, average level', 'Expand': 'Compression + expansion combined', 'Peak': 'Fast response, transient control'}, 'interaction_notes': 'RMS generally needs longer attack/release times than Peak for similar perceived compression. Expand mode enables Expansion Ratio parameter.'}
+---
 
 #### Knee
-- **Technical name**: `Knee`
-- **Range**: 0.0 to 18.0 dB
-- **Description**: {'description': 'Transition smoothness around threshold. Low knee = abrupt (hard knee), high knee = gradual (soft knee).', 'common_uses': ['Hard knee (0.0-0.3): Precise control, limiting, obvious effect', 'Medium knee (0.3-0.6): Balanced, versatile', 'Soft knee (0.6-1.0): Transparent, musical, vocals, mix bus'], 'sonic_impact': 'Hard knee (0.0) = obvious compression, can sound aggressive. Soft knee (1.0) = gentle, musical transition, less noticeable compression.', 'typical_ranges': {'Soft knee': '0.6 to 1.0', 'Hard knee': '0.0 to 0.3', 'Medium knee': '0.3 to 0.6'}, 'interaction_notes': 'Soft knee makes compression less obvious, good for high ratios. Hard knee more pronounced, good for creative effects and obvious control.'}
+
+**Control Type**: continuous
+**Range**: 0.0 to 18.0 dB
+
+
+
+---
+
+#### Model
+
+**Control Type**: quantized
+
+
+
+---
+
+### Device
+
+**Description**: Device on/off control
+**Sonic Focus**: Enable or disable the entire compressor effect
+
+---
+
+#### Device On
+
+**Control Type**: binary
+**Values**: Off / On
+
+
+
+---
+
+### Expansion
+
+**Description**: Downward expansion (opposite of compression)
+**Sonic Focus**: Reduce level of signals below threshold
+
+**Technical Notes**:
+- Expansion Ratio: amount of gain reduction for signals below threshold
+- Useful for reducing noise floor or creating gating effects
+
+---
+
+#### Expansion Ratio
+
+**Control Type**: continuous
+**Range**: 1.0 to 2.0
+
+
+
+---
+
+### Output
+
+**Description**: Output level and mixing controls
+**Sonic Focus**: Control output gain, makeup gain, and dry/wet balance
+
+**Technical Notes**:
+- Output Gain: manual output level adjustment
+- Makeup: automatic gain compensation (not available with external sidechain)
+- Dry/Wet: blend between compressed and uncompressed signal
+- LookAhead: analyze signal ahead of compression for more transparent results
+
+---
+
+#### Output Gain
+
+**Control Type**: continuous
+**Range**: -36.0 to 36.0 dB
+
+
+
+---
+
+#### Makeup
+
+**Control Type**: binary
+**Values**: Off / On
+
+
+
+---
+
+#### Dry/Wet
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 %
+
+
+
+---
 
 #### LookAhead
-- **Technical name**: `LookAhead`
-- **Description**: {'description': 'Analyzes incoming signal slightly ahead of processing. Prevents overshoots and improves transient handling.', 'common_uses': ['Mastering: maximum transparency', 'Transient-rich material that needs precise control', 'When you want most transparent possible compression', 'Preventing overshoots on peak-controlled material'], 'sonic_impact': 'More transparent compression, especially on fast transients. Catches peaks before they exceed threshold. Adds slight latency.', 'typical_ranges': {'Off': 'Zero latency, slightly less precise', 'On': 'Small latency, maximum precision and transparency'}, 'interaction_notes': 'Most beneficial with fast attack times and high ratios. Small latency may cause phase issues in parallel setups - compensate with delay.'}
 
-#### S/C Listen
-- **Technical name**: `S/C Listen`
-- **Description**: {'description': 'Monitors the sidechain signal (what triggers compression). Essential for tuning sidechain EQ.', 'common_uses': ['Tuning sidechain EQ to isolate kick drum in mixed drums', 'Verifying external sidechain input', 'Diagnosing frequency-specific compression issues', 'Setting up de-essing by isolating sibilant frequencies'], 'sonic_impact': "Doesn't affect output - diagnostic tool only. Lets you hear exactly what frequency content is triggering compression.", 'typical_ranges': {'Off': 'Normal operation (compressed output)', 'On': 'Monitor sidechain signal (diagnostic)'}, 'interaction_notes': 'Only audible when S/C EQ On or S/C On is enabled. Use to dial in EQ, then turn off for normal operation.'}
+**Control Type**: quantized
 
-#### S/C EQ On
-- **Technical name**: `S/C EQ On`
-- **Description**: {'description': 'Enables frequency-selective compression triggering. Compression responds only to specific frequencies.', 'common_uses': ['De-essing: highpass to isolate sibilance (4-8kHz)', 'Taming bass without dulling highs: lowpass around 200Hz', 'Kick-triggered ducking from mixed drums: lowpass around 80Hz', 'Controlling harsh mids: bandpass 2-4kHz'], 'sonic_impact': 'Create frequency-specific dynamics (de-essing, controlling bass without affecting highs, etc.). Powerful for surgical compression.', 'typical_ranges': {'Off': 'Compression responds to full frequency spectrum', 'On': 'Compression triggered by filtered signal'}, 'interaction_notes': 'Enables S/C EQ Type, Freq, Q, and Gain controls. Use S/C Listen to tune the filter. Only affects detection, not output processing.'}
 
-#### S/C EQ Type
-- **Technical name**: `S/C EQ Type`
-- **Description**: {'description': 'Sidechain filter type: Lowpass, Bandpass, Highpass, Notch, or Peak. Determines which frequencies trigger compression.', 'common_uses': ['Lowpass: Kick-triggered ducking, bass-specific compression', 'Highpass: De-essing, controlling sibilance', 'Bandpass: Vocal presence control, specific frequency range', 'Notch: Compression avoiding specific frequency', 'Peak: Precise frequency-specific triggering'], 'sonic_impact': 'Shapes detection signal for frequency-specific compression. Lowpass = bass-triggered, Highpass = treble-triggered, Bandpass/Peak = specific range.', 'typical_ranges': {'Peak': 'Emphasize specific frequency for detection', 'Notch': 'Remove specific frequency from detection', 'Highpass': 'Pass highs, trigger on sibilance/cymbals', 'Bandpass': 'Specific frequency range', 'Lowpass': 'Pass lows, trigger on bass/kick'}, 'interaction_notes': "Use with S/C Listen to visualize filter effect. Freq and Q control the filter's center/cutoff and width."}
 
-#### S/C EQ Freq
-- **Technical name**: `S/C EQ Freq`
-- **Range**: 30.0 to 15000.0 Hz
-- **Description**: {'description': 'Center/cutoff frequency for sidechain filter. Determines which frequency range triggers compression.', 'common_uses': ['De-essing: 4-8kHz (where sibilance lives)', 'Kick isolation: 60-100Hz', 'Bass control: 80-200Hz', 'Vocal presence: 2-5kHz'], 'sonic_impact': 'Critical for frequency-selective compression. Wrong frequency = compression triggered by wrong content.', 'typical_ranges': {'Bass/kick control': '60-150 Hz', 'De-essing': '4-10 kHz', 'Presence control': '2-5 kHz', 'Body control': '200-500 Hz', 'Sub-bass control': '40-80 Hz'}, 'interaction_notes': 'Use S/C Listen to hear filtered signal while adjusting. Combine with Q to narrow or widen affected range. Sweep frequency to find problem area.'}
+---
 
-#### S/C EQ Q
-- **Technical name**: `S/C EQ Q`
-- **Range**: 0.1 to 18.0
-- **Description**: {'description': 'Filter bandwidth/resonance. Low Q = wide, broad effect. High Q = narrow, surgical targeting.', 'common_uses': ['Broad control: Q = 0.7-2.0 (musical, natural)', 'Specific targeting: Q = 5-10 (surgical, precise)', 'De-essing: Q = 2-5 (catch sibilance range)', 'Kick isolation: Q = 1-3 (fundamental + harmonics)'], 'sonic_impact': 'Controls selectivity. High Q isolates specific frequencies. Low Q affects broader range more musically.', 'typical_ranges': {'Wide (musical)': '0.1 to 1.0', 'Medium (balanced)': '1.0 to 5.0', 'Narrow (surgical)': '5.0 to 18.0'}, 'interaction_notes': 'Higher Q = more precise but can sound unnatural. Lower Q = broader, more musical response. Use S/C Listen to find sweet spot.'}
+### Sidechain
 
-#### S/C EQ Gain
-- **Technical name**: `S/C EQ Gain`
-- **Range**: -15.0 to 15.0 dB
-- **Description**: {'description': 'Boost or cut for Peak filter type. Emphasizes or reduces specific frequency in detection signal.', 'common_uses': ['Boost: Emphasize kick fundamental for stronger ducking', 'Boost: Enhance sibilance detection for de-essing', 'Cut: Reduce unwanted frequency in detection', 'Fine-tuning: Adjust sensitivity at target frequency'], 'sonic_impact': 'Makes compression more or less sensitive to the filtered frequency. Boost = more triggering, Cut = less triggering at that frequency.', 'typical_ranges': {'Cut': '-15 to 0 dB (reduce sensitivity)', 'Flat': '0 dB (neutral)', 'Boost': '0 to +15 dB (increase sensitivity)'}, 'interaction_notes': 'Only active with Peak filter type. Use to fine-tune detection sensitivity without changing compression amount (Threshold does that).'}
+**Description**: External sidechain input controls
+**Sonic Focus**: Use external audio source to trigger compression
+
+**Technical Notes**:
+- S/C On: enable external sidechain input
+- S/C Gain: adjust sidechain input level
+- S/C Mix: blend between main input and sidechain (100% = full sidechain)
+- S/C Listen: monitor sidechain signal for setup
+
+---
 
 #### S/C On
-- **Technical name**: `S/C On`
-- **Description**: {'description': "Enables external sidechain input. Compression triggered by different audio source than what's being compressed.", 'common_uses': ['Kick-triggered bass ducking (dance music staple)', 'Voiceover ducking music (podcasts, narration)', 'Rhythmic pumping effects (trance, house)', 'Creative modulation (use any source to trigger compression)'], 'sonic_impact': "Classic 'ducking' effect. Bass ducks when kick hits, music ducks when voiceover speaks, creative rhythmic pumping.", 'typical_ranges': {'Off': 'Internal sidechain (compresses own signal)', 'On': 'External sidechain (choose external trigger)'}, 'interaction_notes': "When on, automatic Makeup is disabled (use Output Gain). Select external source in Live's routing. Combine with sidechain EQ for filtered detection."}
+
+**Control Type**: binary
+**Values**: Off / On
+
+
+
+---
 
 #### S/C Gain
-- **Technical name**: `S/C Gain`
-- **Range**: -70.0 to 24.0 dB
-- **Description**: {'description': 'Adjusts external sidechain input level. Controls how strongly external source triggers compression.', 'common_uses': ['Boosting weak sidechain trigger (0 to +12dB)', 'Reducing strong sidechain trigger (-12 to 0dB)', 'Fine-tuning ducking amount', 'Compensating for level differences between tracks'], 'sonic_impact': 'Higher gain = external source triggers compression more easily. Lower gain = requires stronger external signal to trigger compression.', 'typical_ranges': {'Neutral': '0 dB', 'Increase sensitivity': '+6 to +24 dB', 'Reduce sensitivity': '-24 to -6 dB'}, 'interaction_notes': 'Interact with Threshold to control overall compression amount. Higher S/C Gain = more compression for same Threshold setting.'}
+
+**Control Type**: continuous
+**Range**: -70.0 to 24.0 dB
+
+
+
+---
 
 #### S/C Mix
-- **Technical name**: `S/C Mix`
-- **Range**: 0.0 to 100.0 %
-- **Description**: {'description': 'Blend between internal (0%) and external (100%) sidechain source. Enables hybrid triggering.', 'common_uses': ['100%: Pure external ducking/sidechaining', '50-80%: Hybrid response (musical blend)', '0%: Bypass external sidechain (internal detection only)'], 'sonic_impact': '100% = pure external sidechain. Lower values blend internal signal, creating hybrid detection that responds to both sources.', 'typical_ranges': {'Blend': '20-80%', 'External only': '100%', 'Internal only': '0%'}, 'interaction_notes': 'Lower than 100% creates hybrid behavior - compression responds to both original and external signal. Useful for more musical, less obvious ducking.'}
+
+**Control Type**: continuous
+**Range**: 0.0 to 100.0 %
+
+
+
+---
+
+#### S/C Listen
+
+**Control Type**: binary
+**Values**: Off / On
+
+
+
+---
+
+### Sidechain EQ
+
+**Description**: Frequency-selective compression triggering
+**Sonic Focus**: Filter sidechain signal to make compressor respond to specific frequencies
+
+**Technical Notes**:
+- S/C EQ On: enable sidechain EQ filtering
+- Type: filter type (lowpass, bandpass, highpass, notch, peak)
+- Freq: center/cutoff frequency
+- Q: filter bandwidth/resonance
+- Gain: boost/cut for peak filter type
+
+---
+
+#### S/C EQ On
+
+**Control Type**: binary
+**Values**: Off / On
+
+
+
+---
+
+#### S/C EQ Type
+
+**Control Type**: quantized
+
+
+
+---
+
+#### S/C EQ Freq
+
+**Control Type**: continuous
+**Range**: 30.0 to 15000.0 Hz
+
+
+
+---
+
+#### S/C EQ Q
+
+**Control Type**: continuous
+**Range**: 0.1 to 18.0
+
+
+
+---
+
+#### S/C EQ Gain
+
+**Control Type**: continuous
+**Range**: -15.0 to 15.0 dB
+
+
+
+---
+
+### Parameter Relationships
+
+**Master Parameters** (control other parameters):
+- S/C On
+- S/C EQ On
+
+**Dependencies**:
+- **S/C EQ Freq** controls: S, /, C,  , E, Q,  , O, n
+- **S/C Mix** controls: S, /, C,  , O, n
+- **S/C EQ Q** controls: S, /, C,  , E, Q,  , O, n
+- **S/C Gain** controls: S, /, C,  , O, n
+- **S/C EQ Gain** controls: S, /, C,  , E, Q,  , O, n
+- **S/C EQ Type** controls: S, /, C,  , E, Q,  , O, n
+- **S/C Listen** controls: S, /, C,  , O, n
 
 ---

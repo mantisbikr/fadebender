@@ -364,6 +364,22 @@ export function useDAWControl() {
         return;
       }
 
+      // Check if this is an obvious informational/help query - route directly to help
+      const lowerInput = rawInput.toLowerCase();
+      const helpKeywords = ['what is', 'what are', 'how to', 'how do', 'how many', 'explain', 'tell me about', 'describe'];
+      const isHelpQuery = helpKeywords.some(kw => lowerInput.includes(kw));
+
+      if (isHelpQuery) {
+        try {
+          const help = await apiService.getHelp(processed.processed, conversationContext);
+          addMessage({ type: 'info', content: help.answer, data: help });
+        } catch (e) {
+          updateMessageStatus(userMessageId, 'error');
+          addMessage({ type: 'error', content: `Help error: ${e.message}` });
+        }
+        return;
+      }
+
       // First: parse to canonical intent for clear UI preview
       let parsed;
       try {

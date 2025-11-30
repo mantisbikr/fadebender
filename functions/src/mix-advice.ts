@@ -1,6 +1,6 @@
 import * as logger from 'firebase-functions/logger';
 import { getConfigValue } from './config';
-import { callPythonHelp } from './vertex-direct';
+import { callVertexSearch } from './vertex-direct';
 import { createSecureEndpoint } from './middleware/secure-endpoint';
 import { sanitizeInput } from './middleware/auth';
 
@@ -63,7 +63,7 @@ export const mixAdvice = createSecureEndpoint(async (request, response) => {
   }
   const helpQuery = helpQueryParts.join('');
 
-  const analysisText = await callPythonHelp({ query: helpQuery });
+  const analysisText = await callVertexSearch({ query: helpQuery });
 
   const resp: MixAdviceResponse = {
     analysis: analysisText,

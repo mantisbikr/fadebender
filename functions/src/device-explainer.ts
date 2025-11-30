@@ -1,6 +1,6 @@
 import * as logger from 'firebase-functions/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import { callPythonHelp } from './vertex-direct';
+import { callVertexSearch } from './vertex-direct';
 import { createSecureEndpoint } from './middleware/secure-endpoint';
 
 interface DeviceExplainerRequest {
@@ -51,7 +51,7 @@ Device mapping metadata (may be partial):
 ${JSON.stringify(mapping || {}, null, 2)}
 `;
 
-  const summary = await callPythonHelp({ query: prompt });
+  const summary = await callVertexSearch({ query: prompt });
 
   const resp: DeviceExplainerResponse = {
     summary,

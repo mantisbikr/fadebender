@@ -1,6 +1,6 @@
 import * as logger from 'firebase-functions/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import { callPythonHelp } from './vertex-direct';
+import { callVertexSearch } from './vertex-direct';
 import { createSecureEndpoint } from './middleware/secure-endpoint';
 import { sanitizeInput } from './middleware/auth';
 
@@ -146,7 +146,7 @@ Task:
       let tweaks: TweakSuggestion[] = [];
 
       try {
-        const raw = await callPythonHelp({ query: prompt });
+        const raw = await callVertexSearch({ query: prompt });
         const parsed = JSON.parse(raw) as PresetTuningAdviceResponse;
         analysis = parsed.analysis || '';
         tweaks = Array.isArray(parsed.tweaks) ? parsed.tweaks : [];
@@ -156,7 +156,7 @@ Task:
         });
         // Fallback: treat raw response as analysis only
         try {
-          const raw = await callPythonHelp({ query: prompt });
+          const raw = await callVertexSearch({ query: prompt });
           analysis = raw;
           tweaks = [];
         } catch (inner: any) {

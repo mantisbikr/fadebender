@@ -1,6 +1,6 @@
 import * as logger from 'firebase-functions/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import { callPythonHelp } from './vertex-direct';
+import { callVertexSearch } from './vertex-direct';
 import { createSecureEndpoint } from './middleware/secure-endpoint';
 import { sanitizeInput } from './middleware/auth';
 
@@ -94,7 +94,7 @@ Task:
 
       let ranked: PresetRecommendationsResponse = { recommendations: [] };
       try {
-        const raw = await callPythonHelp({ query: prompt });
+        const raw = await callVertexSearch({ query: prompt });
         ranked = JSON.parse(raw) as PresetRecommendationsResponse;
       } catch (e: any) {
         logger.warn('Preset ranking via LLM failed, falling back to simple list', {

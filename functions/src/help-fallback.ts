@@ -1,19 +1,18 @@
 /**
  * Fallback Help Response Generator
  *
- * Generates help responses without RAG using basic LLM prompting.
- * Used when RAG is disabled or as a fallback when RAG fails.
+ * Uses Vertex AI Search (standard edition) with LLM summaries.
+ * Returns AI-generated answers based on relevant documents.
  */
 
-import { getConfigValue } from './config';
-import { callPythonHelp } from './vertex-direct';
+import { callVertexSearch } from './vertex-direct';
 import * as logger from 'firebase-functions/logger';
 
 export interface HelpResponse {
   response: string;
   model_used: string;
   sources?: Array<{ title: string; snippet: string }>;
-  mode: 'rag' | 'rag-conversational' | 'fallback';
+  mode: 'rag' | 'rag-conversational' | 'fallback' | 'search-results';
   sessionId?: string;
   format?: string;
   conversationContext?: {
@@ -23,29 +22,28 @@ export interface HelpResponse {
 }
 
 /**
- * Generate help response using fallback (non-RAG) method
+ * Generate help response using Vertex AI Search with LLM summaries.
+ * Returns AI-generated answers based on relevant documents.
  */
 export async function generateFallbackHelp(query: string): Promise<HelpResponse> {
-  logger.info('Using fallback help generator (no RAG)', { query });
+  logger.info('Using Vertex AI Search with LLM summaries', { query });
 
-  const modelName = getConfigValue('models.help_assistant', 'gemini-1.5-flash');
-
-  // Call Python server /help endpoint without RAG context (fallback mode)
-  const responseText = await callPythonHelp({
+  // Call Vertex AI Search - returns AI-generated summary
+  const responseText = await callVertexSearch({
     query,
-    // No context = fallback mode
+    // Context can be added here in the future
   });
 
-  logger.info('Fallback help response generated', {
+  logger.info('Vertex Search AI summary received', {
     query,
     responseLength: responseText.length,
-    model: modelName,
+    model: 'vertex-ai-search-llm',
   });
 
   return {
     response: responseText,
-    model_used: modelName,
-    mode: 'fallback',
+    model_used: 'vertex-ai-search-llm',
+    mode: 'rag', // AI-generated answer from Vertex AI Search LLM
   };
 }
 

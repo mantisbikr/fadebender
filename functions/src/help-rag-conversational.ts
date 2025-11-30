@@ -10,7 +10,7 @@
 
 import * as logger from 'firebase-functions/logger';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { searchVertexAIEnhanced, SearchResponse } from './vertex-search-enhanced';
+import { callVertexSearch } from './vertex-direct';
 
 export interface ConversationTurn {
   query: string;
@@ -253,46 +253,25 @@ export async function generateHelpResponse(request: HelpRequest): Promise<HelpRe
       enhancedQuery = `${conversationContext}\n\n[New Question]\n${request.query}`;
     }
 
-    // Search with answer generation
-    const searchResponse: SearchResponse = await searchVertexAIEnhanced(enhancedQuery, {
-      maxResults: 5,
-
-      summarySpec: {
-        summaryResultCount: 5,
-        includeCitations: true,
-        ignoreAdversarialQuery: true,
-        ignoreNonSummarySeekingQuery: false,
-        modelPromptSpec: {
-          preamble,
-        },
-        languageCode: 'en',
-      },
-
-      extractiveContentSpec: {
-        maxExtractiveAnswerCount: 3,
-        maxExtractiveSegmentCount: 5,
-        returnExtractiveSegmentScore: true,
-      },
-
-      // Boost device/preset catalogs for specific recommendations
-      boostSpec: {
-        conditionBoostSpecs: [
-          { condition: 'document.uri:*device-catalog*', boost: 1.5 },
-          { condition: 'document.uri:*preset-catalog*', boost: 1.5 },
-        ],
+    // Search for relevant documents (NO LLM summary to stay within free quota)
+    // The Python server will generate answers using Gemini based on these results
+    const searchResults = await callVertexSearch({
+      query: enhancedQuery,
+      // Context includes preamble and conversation history
+      context: {
+        preamble,
+        conversationContext: conversationContext || undefined,
       },
     });
 
-    // Extract answer
-    const answer = searchResponse.summary?.summaryText ||
+    // callVertexSearch returns formatted markdown search results
+    // This is NOT an AI-generated answer, just search results
+    const answer = searchResults ||
                    'I could not find relevant information to answer your question. Please try rephrasing or asking something else.';
 
-    // Extract sources
-    const sources = searchResponse.results
-      .filter(r => r.uri)
-      .map(r => r.uri!)
-      .filter((uri, index, self) => self.indexOf(uri) === index) // Unique
-      .slice(0, 5);
+    // Note: No sources array since we're returning raw search results
+    // The formatted results already include source citations
+    const sources: string[] = [];
 
     // Save conversation turn
     const turn: ConversationTurn = {

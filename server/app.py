@@ -80,6 +80,7 @@ from server.api.ops import router as ops_router
 from server.api.device_mapping import router as device_mapping_router
 from server.api.presets import router as presets_router
 from server.api.devices import router as devices_router
+from server.api.workflow import router as workflow_router
 from server.api.intents import router as intents_router
 from server.api.nlp import router as nlp_router
 from server.api.overview import router as overview_router
@@ -143,6 +144,7 @@ app.include_router(chat_router)
 app.include_router(system_router)
 app.include_router(learn_router)
 app.include_router(devices_router)
+app.include_router(workflow_router, prefix="/workflow", tags=["workflow"])
 
 
 # Transport routes moved to server.api.transport

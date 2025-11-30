@@ -191,12 +191,28 @@ class ApiService {
     return response.json();
   }
 
-  async getHelp(query, context = null) {
-    // Route help to server which uses local knowledge base
-    const response = await fetch(`${API_CONFIG.SERVER_BASE_URL}/help`, {
+  async getHelp(query, context = null, sessionId = null) {
+    // Call Python server which proxies to deployed Cloud Functions
+    const HELP_URL = 'http://localhost:8722/help';
+
+    const payload = {
+      query,
+      conversational: true,
+      userId: 'web-user',
+    };
+
+    if (sessionId) {
+      payload.sessionId = sessionId;
+    }
+
+    if (context) {
+      payload.projectContext = context;
+    }
+
+    const response = await fetch(HELP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, context })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {

@@ -59,7 +59,7 @@ def format_preset(preset: Dict[str, Any], device_name: str) -> str:
     lines = []
 
     # Header
-    preset_name = preset.get('name', preset.get('id', 'Unknown'))
+    preset_name = preset.get('preset_name', preset.get('name', preset.get('id', 'Unknown')))
     lines.append(f"### {preset_name}")
     lines.append("")
 
@@ -69,9 +69,19 @@ def format_preset(preset: Dict[str, Any], device_name: str) -> str:
     preset_id = preset.get('id', 'Unknown')
     lines.append(f"**Preset ID**: `{preset_id}`")
 
+    # Description and character
     description = preset.get('description')
     if description:
         lines.append(f"**Description**: {description}")
+
+    character = preset.get('character')
+    if character:
+        lines.append(f"**Sonic Character**: {character}")
+
+    # Use cases
+    use_cases = preset.get('use_cases', [])
+    if use_cases:
+        lines.append(f"**Best For**: {', '.join(use_cases)}")
 
     tags = preset.get('tags', [])
     if tags:
@@ -83,23 +93,17 @@ def format_preset(preset: Dict[str, Any], device_name: str) -> str:
 
     lines.append("")
 
-    # Parameter values
-    params = preset.get('params', {})
-    if params:
+    # Parameter display values (human-readable)
+    param_display_values = preset.get('parameter_display_values', {})
+    if param_display_values:
         lines.append("**Parameter Settings**:")
         lines.append("")
 
-        # Group by section if available
-        param_list = []
-        for param_name, param_value in params.items():
-            param_list.append((param_name, param_value))
-
         # Sort alphabetically
-        param_list.sort(key=lambda x: x[0])
+        param_list = sorted(param_display_values.items(), key=lambda x: x[0])
 
         for param_name, param_value in param_list:
-            formatted_value = format_preset_parameter(param_name, param_value)
-            lines.append(f"- **{param_name}**: {formatted_value}")
+            lines.append(f"- **{param_name}**: {param_value}")
 
     lines.append("")
     return "\n".join(lines)

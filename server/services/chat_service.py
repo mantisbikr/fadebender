@@ -1579,17 +1579,17 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
         session_id = _help_sessions.get(user_id)
 
         # Build request payload
+        # Use traditional RAG mode (search-only) to avoid LLM quota consumption
         payload = {
             "query": body.query,
-            "conversational": True,
+            "conversational": False,  # Use search-only mode with content extraction
             "userId": user_id,
         }
 
-        # Add session ID if we have one (for follow-up questions)
-        if session_id:
-            payload["sessionId"] = session_id
+        # Session management and project context not used in search-only mode
+        # These features require conversational mode which consumes LLM quota
 
-        # Add project context if available
+        # Add project context if available (for future use)
         if hasattr(body, 'context') and body.context:
             payload["projectContext"] = body.context
 
@@ -1609,29 +1609,92 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
         if response.ok:
             result = response.json()
 
-            # Store session ID for follow-up questions
-            if 'sessionId' in result:
-                _help_sessions[user_id] = result['sessionId']
+            # Check if response/answer is a JSON string (from search-only mode)
+            response_text = result.get('response') or result.get('answer', '')
+            try:
+                # Try to parse as JSON (new document-based format)
+                parsed_response = json.loads(response_text)
+                if 'documents' in parsed_response and isinstance(parsed_response.get('documents'), list):
+                    result = parsed_response  # Use parsed JSON instead
+            except (json.JSONDecodeError, TypeError):
+                # Not JSON, treat as regular text response
+                pass
 
-            # Transform Firebase response to expected format
-            answer = result.get('response', '')
+            # Check if this is the new document-based format (search-only mode)
+            if 'documents' in result and isinstance(result.get('documents'), list):
+                # New format: {"query": "...", "documents": [{"title": "...", "content": "...", "source": "..."}]}
+                documents = result.get('documents', [])
 
-            # Extract sources from Firebase response
-            sources = []
-            if 'sources' in result:
-                for source in result['sources']:
-                    if isinstance(source, dict):
-                        sources.append({
-                            "source": source.get('title', ''),
-                            "title": source.get('title', '')
-                        })
-                    else:
-                        # If it's just a string (URI)
-                        filename = source.split('/')[-1].replace('.html', '')
-                        sources.append({
-                            "source": filename,
-                            "title": filename
-                        })
+                if not documents or all(not doc.get('content') for doc in documents):
+                    # No documents or no content found
+                    logger.warning(f"No document content found for query: {body.query}")
+                    return handle_help_local(body)
+
+                # Use Gemini to generate answer from document content
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+                    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+                    # Build context from documents
+                    context_parts = []
+                    sources = []
+                    for doc in documents:
+                        if doc.get('content'):
+                            title = doc.get('title', 'Untitled')
+                            content = doc.get('content', '')
+                            source = doc.get('source', '')
+
+                            context_parts.append(f"**{title}**\n{content}")
+
+                            # Extract readable source name
+                            source_name = source.split('/')[-1].replace('.html', '') if source else title
+                            sources.append({
+                                "source": source_name,
+                                "title": title
+                            })
+
+                    context = "\n\n---\n\n".join(context_parts)
+
+                    # Generate answer using Gemini
+                    prompt = f"""You are an expert audio engineer and Ableton Live instructor helping users understand audio production.
+
+Based on the following documentation excerpts, answer this question: {body.query}
+
+Documentation:
+{context}
+
+Provide a clear, concise answer that directly addresses the question. If the documentation doesn't contain enough information to fully answer the question, say so. Format your response in markdown."""
+
+                    gemini_response = model.generate_content(prompt)
+                    answer = gemini_response.text
+
+                    logger.info(f"Generated answer from {len(documents)} documents using Gemini")
+
+                except Exception as e:
+                    logger.error(f"Failed to generate answer with Gemini: {e}")
+                    # Fallback to local help
+                    return handle_help_local(body)
+
+            else:
+                # Old format: direct response text (legacy conversational mode)
+                answer = result.get('response', '')
+
+                # Extract sources from old format
+                sources = []
+                if 'sources' in result:
+                    for source in result['sources']:
+                        if isinstance(source, dict):
+                            sources.append({
+                                "source": source.get('title', ''),
+                                "title": source.get('title', '')
+                            })
+                        else:
+                            filename = source.split('/')[-1].replace('.html', '')
+                            sources.append({
+                                "source": filename,
+                                "title": filename
+                            })
 
             # Build suggested intents (keep existing heuristics)
             q = (body.query or "").lower()
@@ -1642,7 +1705,7 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
                     "set track 1 volume to -6 dB",
                     "load compressor preset gentle on track 1",
                 ])
-            if any(k in q for k in ["reverb", "space", "spacious", "hall", "room"]):
+            if any(k in q for k in ["reverb", "space", "spacious", "hall", "room", "preset"]):
                 suggested.extend([
                     "load reverb preset plate medium on return A",
                     "set track 1 send A to -12 dB",
@@ -1655,7 +1718,7 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
                 "suggested_intents": suggested,
                 "session_id": result.get('sessionId'),
                 "format": result.get('format', 'default'),
-                "mode": "rag-conversational"
+                "mode": "rag"
             }
         else:
             # Firebase returned error, fall back to local
