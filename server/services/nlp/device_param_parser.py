@@ -92,12 +92,9 @@ def parse_device_param(text: str, parse_index: Dict) -> DeviceParamMatch:
 
     parser = DeviceContextParser(parse_index)
     result = parser.parse_device_param(text)
-    print(f"[DEVICE_PARAM DEBUG] Input: '{text}'")
-    print(f"[DEVICE_PARAM DEBUG] Parser result: {result}")
 
     # STEP 2: If device found, return device parameter result
     if result.device and result.device != "mixer":
-        print(f"[DEVICE_PARAM DEBUG] Returning device parameter result")
         return result
 
     # STEP 3: If device="mixer" was returned, use it (parse_index already handled this)
@@ -106,10 +103,8 @@ def parse_device_param(text: str, parse_index: Dict) -> DeviceParamMatch:
 
     # STEP 4: No device found - check if parameter is a mixer parameter
     # This fixes the bug where mixer params return device=None
-    print(f"[DEVICE_PARAM DEBUG] result.param: {result.param}")
     if result.param:
         mixer_param = is_mixer_param(text)
-        print(f"[DEVICE_PARAM DEBUG] mixer_param check: {mixer_param}")
         if mixer_param:
             return DeviceParamMatch(
                 device="mixer",

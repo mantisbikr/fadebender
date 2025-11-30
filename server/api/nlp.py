@@ -439,18 +439,14 @@ def intent_parse(body: IntentParseBody) -> Dict[str, Any]:
         flags=re.IGNORECASE,
     )
     if m_dup_clip:
-        print(f"[DUPLICATE DEBUG] Matched text: '{text}'")
-        print(f"[DUPLICATE DEBUG] Groups: {m_dup_clip.groups()}")
         ti = int(m_dup_clip.group(2))
         si = int(m_dup_clip.group(3))
         if m_dup_clip.group(4) and m_dup_clip.group(5):
             tti = int(m_dup_clip.group(4))
             tsi = int(m_dup_clip.group(5))
-            print(f"[DUPLICATE DEBUG] Target specified: track={tti}, scene={tsi}")
         else:
             tti = ti
             tsi = si + 1
-            print(f"[DUPLICATE DEBUG] Target defaulted: track={tti}, scene={tsi}")
 
         # Optional new name (preserve casing via original_text):
         #   "duplicate clip 4 2 to 4 5 as Bongos"

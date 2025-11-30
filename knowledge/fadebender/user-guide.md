@@ -377,9 +377,12 @@ Scenes, Clips, and Views
    - `create clip 4 3` (creates a MIDI clip of default length at Track 4, Scene 3)
    - `create clip 4 3 8` (explicit length in beats)
    - `delete clip 4 3`
-   - `duplicate clip 4 3` (duplicates to Track 4, Scene 4 if empty)
-   - `duplicate clip 4 3 to 4 5`
-   - Note: Clip creation only works on MIDI tracks with empty slots
+   - `duplicate clip 4 3` (duplicates to the next scene on the same track)
+   - `duplicate clip 4 3 to 4 5` (duplicates to a specific position)
+   - `duplicate clip 3,1` (comma notation also supported)
+   - `duplicate clip 3,1 to 3,3` (comma notation with target)
+   - **Note**: Clip creation only works on MIDI tracks with empty slots
+   - **Note**: Duplicate clip requires both track and scene coordinates (e.g., `3,1` or `3 1`)
 - Fire/stop a single clip:
    - `fire clip 4 2`
    - `stop clip 4 2`

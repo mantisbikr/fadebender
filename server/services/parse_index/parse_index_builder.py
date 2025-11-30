@@ -271,6 +271,16 @@ class ParseIndexBuilder:
                     # Also create version with no space (for tight matching)
                     param_aliases.add(normalized.replace(" ", ""))
 
+            # Add short aliases for multi-word parameters
+            # "Decay-Time" → "decay", "Pre-Delay" → "predelay", "Room-Size" → "room"
+            # This allows fuzzy matching to succeed when user says just "decay" for "Decay-Time"
+            if "-" in param_name or " " in param_name:
+                # Get first word as short alias (lowercase for case-insensitive matching)
+                first_word = param_name.replace("-", " ").split()[0].lower()
+                # Only add if it's substantial enough (3+ chars) to avoid ambiguity
+                if len(first_word) >= 3:
+                    param_aliases.add(first_word)
+
             if param_aliases:
                 aliases[param_name] = sorted(list(param_aliases))
 
