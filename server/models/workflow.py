@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Literal, Union, Dict, Any
 
 class MarkerLink(BaseModel):
     taskId: Optional[str] = None
@@ -13,6 +13,7 @@ class Marker(BaseModel):
     beats: float   # Absolute beats
     barsFromHere: int = 4
     is_private: bool = Field(False, alias="private")
+    layer: str = "default"  # e.g. "structure", "notes", "automation"
     links: MarkerLink = Field(default_factory=MarkerLink)
     color: Optional[str] = None
     

@@ -366,8 +366,50 @@ export function useDAWControl() {
 
       // Check if this is an obvious informational/help query - route directly to help
       const lowerInput = rawInput.toLowerCase();
-      const helpKeywords = ['what is', 'what are', 'how to', 'how do', 'how many', 'explain', 'tell me about', 'describe'];
-      const isHelpQuery = helpKeywords.some(kw => lowerInput.includes(kw));
+
+      // Documentation/catalog query patterns (not current state queries)
+      const helpPatterns = [
+        'compare',
+        'difference between',
+        'differences between',
+        'list all',
+        'list the',
+        'which presets',
+        'which devices',
+        'which effects',
+        'available presets',
+        'available devices',
+        'available effects',
+        'what presets',
+        'what devices',
+        'what effects',
+        'what parameters',
+        'how many presets',
+        'how many devices',
+        'how many effects',
+        'show me presets',
+        'show me devices',
+        'show me effects',
+        'tell me about',
+        'explain'
+      ];
+
+      // Exclude DAW state queries (track volume, tempo, etc.)
+      const dawStatePatterns = [
+        'track',
+        'tempo',
+        'volume',
+        'pan',
+        'send',
+        'return',
+        'master',
+        'playing',
+        'bpm'
+      ];
+
+      const hasHelpPattern = helpPatterns.some(kw => lowerInput.includes(kw));
+      const hasDawStatePattern = dawStatePatterns.some(kw => lowerInput.includes(kw));
+      const isHelpQuery = hasHelpPattern && !hasDawStatePattern;
 
       if (isHelpQuery) {
         try {

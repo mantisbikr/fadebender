@@ -39,6 +39,7 @@ from server.volume_utils import (
 )
 from server.services.chat_models import ChatBody, HelpBody
 from server.services.chat_summarizer import generate_summary_from_canonical
+from server.services.rag_service import get_rag_service
 
 
 """Chat models moved to server.services.chat_models; summarizer moved to chat_summarizer."""
@@ -1551,188 +1552,109 @@ _help_sessions: Dict[str, str] = {}  # user_id -> session_id
 
 
 def handle_help(body: HelpBody) -> Dict[str, Any]:
-    """Handle help requests using conversational RAG via Firebase Functions.
+    """Handle help requests with configurable RAG backend.
 
-    Falls back to local implementation if Firebase Functions unavailable.
+    Supports three RAG modes (configured via RAG_MODE env var):
+    - assistants: OpenAI Assistants API (GPT-4o, 7s, $20-40/mo) - best quality
+    - hybrid: OpenAI embeddings + Gemini (1-2s, $2-5/mo) - fast, cheap, good quality
+    - vertex: Vertex AI Search (when quota available) - high quality
 
-    Supports:
-    - Conversational context (multi-turn)
-    - Format control (brief/detailed/bulleted/step-by-step)
-    - Project context integration
+    Features:
+    - Fully conversational with context awareness
+    - Grounding with citations
+    - Natural language queries (no specific phrasing required)
+    - Performance timing for benchmarking
     """
-    import requests
-    import os
+    import time
 
-    # Use deployed Cloud Functions (secure and fast)
-    functions_url = "https://us-central1-fadebender.cloudfunctions.net/help"
+    rag_mode = os.getenv('RAG_MODE', 'hybrid').lower()
+    user_id = getattr(body, 'userId', None) or (body.context or {}).get('userId', 'default')
 
-    # Get API key from environment
-    api_key = os.getenv('FADEBENDER_API_KEY')
-    if not api_key:
-        logger.error("FADEBENDER_API_KEY not set in environment")
-        # Fall back to local help
-        return handle_help_local(body)
+    logger.info(f"[RAG] Mode={rag_mode}, Query: {body.query[:50]}...")
+    start_time = time.time()
+
+    result = None
+    fallback_used = False
 
     try:
-        # Get or create session for this user
-        user_id = getattr(body, 'user_id', None) or 'default_user'
-        session_id = _help_sessions.get(user_id)
+        if rag_mode == 'assistants':
+            # OpenAI Assistants API (GPT-4o)
+            from server.services.assistant_rag_service import get_assistant_rag
+            assistant_rag = get_assistant_rag()
+            result = assistant_rag.query(user_id=user_id, question=body.query)
 
-        # Build request payload
-        # Use traditional RAG mode (search-only) to avoid LLM quota consumption
-        payload = {
-            "query": body.query,
-            "conversational": False,  # Use search-only mode with content extraction
-            "userId": user_id,
-        }
+        elif rag_mode == 'hybrid':
+            # Hybrid: OpenAI embeddings + Gemini generation
+            from server.services.hybrid_rag_service import get_hybrid_rag
+            hybrid_rag = get_hybrid_rag()
+            result = hybrid_rag.query(user_id=user_id, question=body.query)
 
-        # Session management and project context not used in search-only mode
-        # These features require conversational mode which consumes LLM quota
+        elif rag_mode == 'vertex':
+            # Vertex AI Search (not implemented yet - placeholder)
+            logger.warning("Vertex AI Search not implemented yet, falling back to hybrid")
+            from server.services.hybrid_rag_service import get_hybrid_rag
+            hybrid_rag = get_hybrid_rag()
+            result = hybrid_rag.query(user_id=user_id, question=body.query)
+            fallback_used = True
 
-        # Add project context if available (for future use)
-        if hasattr(body, 'context') and body.context:
-            payload["projectContext"] = body.context
-
-        # Call deployed Cloud Functions with API key authentication
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": api_key,
-        }
-
-        response = requests.post(
-            functions_url,
-            json=payload,
-            headers=headers,
-            timeout=30
-        )
-
-        if response.ok:
-            result = response.json()
-
-            # Check if response/answer is a JSON string (from search-only mode)
-            response_text = result.get('response') or result.get('answer', '')
-            try:
-                # Try to parse as JSON (new document-based format)
-                parsed_response = json.loads(response_text)
-                if 'documents' in parsed_response and isinstance(parsed_response.get('documents'), list):
-                    result = parsed_response  # Use parsed JSON instead
-            except (json.JSONDecodeError, TypeError):
-                # Not JSON, treat as regular text response
-                pass
-
-            # Check if this is the new document-based format (search-only mode)
-            if 'documents' in result and isinstance(result.get('documents'), list):
-                # New format: {"query": "...", "documents": [{"title": "...", "content": "...", "source": "..."}]}
-                documents = result.get('documents', [])
-
-                if not documents or all(not doc.get('content') for doc in documents):
-                    # No documents or no content found
-                    logger.warning(f"No document content found for query: {body.query}")
-                    return handle_help_local(body)
-
-                # Use Gemini to generate answer from document content
-                try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-                    model = genai.GenerativeModel('gemini-2.0-flash-exp')
-
-                    # Build context from documents
-                    context_parts = []
-                    sources = []
-                    for doc in documents:
-                        if doc.get('content'):
-                            title = doc.get('title', 'Untitled')
-                            content = doc.get('content', '')
-                            source = doc.get('source', '')
-
-                            context_parts.append(f"**{title}**\n{content}")
-
-                            # Extract readable source name
-                            source_name = source.split('/')[-1].replace('.html', '') if source else title
-                            sources.append({
-                                "source": source_name,
-                                "title": title
-                            })
-
-                    context = "\n\n---\n\n".join(context_parts)
-
-                    # Generate answer using Gemini
-                    prompt = f"""You are an expert audio engineer and Ableton Live instructor helping users understand audio production.
-
-Based on the following documentation excerpts, answer this question: {body.query}
-
-Documentation:
-{context}
-
-Provide a clear, concise answer that directly addresses the question. If the documentation doesn't contain enough information to fully answer the question, say so. Format your response in markdown."""
-
-                    gemini_response = model.generate_content(prompt)
-                    answer = gemini_response.text
-
-                    logger.info(f"Generated answer from {len(documents)} documents using Gemini")
-
-                except Exception as e:
-                    logger.error(f"Failed to generate answer with Gemini: {e}")
-                    # Fallback to local help
-                    return handle_help_local(body)
-
-            else:
-                # Old format: direct response text (legacy conversational mode)
-                answer = result.get('response', '')
-
-                # Extract sources from old format
-                sources = []
-                if 'sources' in result:
-                    for source in result['sources']:
-                        if isinstance(source, dict):
-                            sources.append({
-                                "source": source.get('title', ''),
-                                "title": source.get('title', '')
-                            })
-                        else:
-                            filename = source.split('/')[-1].replace('.html', '')
-                            sources.append({
-                                "source": filename,
-                                "title": filename
-                            })
-
-            # Build suggested intents (keep existing heuristics)
-            q = (body.query or "").lower()
-            suggested: list[str] = []
-            if any(k in q for k in ["vocal", "vocals", "singer", "voice", "weak", "soft", "quiet"]):
-                suggested.extend([
-                    "increase track 1 volume by 3 dB",
-                    "set track 1 volume to -6 dB",
-                    "load compressor preset gentle on track 1",
-                ])
-            if any(k in q for k in ["reverb", "space", "spacious", "hall", "room", "preset"]):
-                suggested.extend([
-                    "load reverb preset plate medium on return A",
-                    "set track 1 send A to -12 dB",
-                ])
-
-            return {
-                "ok": True,
-                "answer": answer,
-                "sources": sources,
-                "suggested_intents": suggested,
-                "session_id": result.get('sessionId'),
-                "format": result.get('format', 'default'),
-                "mode": "rag"
-            }
         else:
-            # Firebase returned error, fall back to local
-            logger.warning(f"Firebase Functions help failed: {response.status_code}, falling back to local")
+            logger.warning(f"Unknown RAG_MODE: {rag_mode}, falling back to hybrid")
+            from server.services.hybrid_rag_service import get_hybrid_rag
+            hybrid_rag = get_hybrid_rag()
+            result = hybrid_rag.query(user_id=user_id, question=body.query)
+            fallback_used = True
+
+        # If query failed, fall back to local help
+        if not result or not result.get('ok'):
+            logger.warning(f"{rag_mode} RAG failed: {result.get('error') if result else 'None'}, falling back to local help")
             return handle_help_local(body)
 
-    except requests.exceptions.ConnectionError:
-        # Firebase Functions not available (emulator not running or network issue)
-        logger.info("Firebase Functions not available, using local help")
-        return handle_help_local(body)
-    except requests.exceptions.Timeout:
-        logger.warning("Firebase Functions timeout, falling back to local help")
-        return handle_help_local(body)
+        total_time = time.time() - start_time
+        logger.info(f"[RAG] {rag_mode} completed in {total_time:.2f}s")
+
+        # Extract result data
+        answer = result.get('answer', '')
+        sources = result.get('sources', [])
+        mode = result.get('mode', rag_mode)
+        timing = result.get('timing', {'total': round(total_time, 2)})
+
+        # Build suggested intents based on query (keep existing heuristics)
+        q = (body.query or "").lower()
+        suggested: list[str] = []
+        if any(k in q for k in ["vocal", "vocals", "singer", "voice", "weak", "soft", "quiet"]):
+            suggested.extend([
+                "increase track 1 volume by 3 dB",
+                "set track 1 volume to -6 dB",
+                "load compressor preset gentle on track 1",
+            ])
+        if any(k in q for k in ["reverb", "space", "spacious", "hall", "room", "preset"]):
+            suggested.extend([
+                "load reverb preset plate medium on return A",
+                "set track 1 send A to -12 dB",
+            ])
+
+        response = {
+            "ok": True,
+            "answer": answer,
+            "sources": sources,
+            "suggested_intents": suggested,
+            "format": 'default',
+            "mode": mode,
+            "timing": timing,
+            "rag_mode": rag_mode
+        }
+
+        # Add thread_id for assistants mode (conversation continuity)
+        if 'thread_id' in result:
+            response['thread_id'] = result['thread_id']
+
+        # Add model complexity for hybrid mode (smart routing)
+        if 'model_complexity' in result:
+            response['model_complexity'] = result['model_complexity']
+
+        return response
+
     except Exception as e:
-        # Any other error, fall back to local
-        logger.error(f"Error calling Firebase Functions: {e}, falling back to local help")
+        logger.error(f"RAG query failed: {e}", exc_info=True)
+        logger.info("Falling back to local help")
         return handle_help_local(body)

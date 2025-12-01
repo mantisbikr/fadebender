@@ -408,6 +408,31 @@ Track Creation and Management
     - `delete track 3`
     - `duplicate track 2`
 
+Workflow & Task Management (API/Backend Only - UI Coming Soon)
+
+Fadebender includes a workflow management system for tracking project-specific metadata like mix notes, tasks, and virtual markers. These features are currently accessible via API endpoints and will have UI controls in a future update.
+
+**Virtual Markers:**
+- Create project-specific markers that coexist with Ableton's native locators
+- Stored in Firestore, persistent across sessions
+- `/workflow/markers` endpoint merges Live's read-only cues with writable virtual markers
+- Use cases: Mark problem sections, reference points, mix decisions
+
+**Task System:**
+- Track mix notes, action items, and priorities
+- Attach context references (track numbers, time positions, device names)
+- CRUD operations via `/workflow/tasks` endpoints
+- Use cases: "Vocals need de-essing at 2:15", "Add reverb to return B", "Check kick/bass balance"
+
+**API Endpoints:**
+- GET `/workflow/markers` - Returns merged list of Live cues + virtual markers
+- POST `/workflow/tasks` - Create new task
+- GET `/workflow/tasks` - List all tasks for current project
+- PUT `/workflow/tasks/{id}` - Update task
+- DELETE `/workflow/tasks/{id}` - Delete task
+
+This enables persistent, project-specific metadata tracking separate from system-wide device mappings.
+
 Common Workflows
 
 **Setting up a reverb send:**
