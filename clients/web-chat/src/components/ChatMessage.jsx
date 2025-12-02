@@ -10,7 +10,13 @@ import {
   Avatar,
   Alert,
   Button,
-  Chip
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -23,22 +29,163 @@ import {
   Check as CheckIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import ClickAwayAccordion from './ClickAwayAccordion.jsx';
 import ParamAccordion from './ParamAccordion.jsx';
 import SingleMixerParamEditor from './SingleMixerParamEditor.jsx';
 import SingleParamEditor from './SingleParamEditor.jsx';
 
 export default function ChatMessage({ message, onSuggestedIntent, showCapabilitiesInline = true }) {
+  // Custom markdown components for Material-UI styling
+  const markdownComponents = {
+    // Paragraphs
+    p: ({ children }) => (
+      <Typography variant="body1" sx={{ mb: 1.5, lineHeight: 1.6 }}>
+        {children}
+      </Typography>
+    ),
+    // Headings
+    h1: ({ children }) => (
+      <Typography variant="h5" fontWeight="bold" sx={{ mt: 2, mb: 1.5 }}>
+        {children}
+      </Typography>
+    ),
+    h2: ({ children }) => (
+      <Typography variant="h6" fontWeight="bold" sx={{ mt: 2, mb: 1 }}>
+        {children}
+      </Typography>
+    ),
+    h3: ({ children }) => (
+      <Typography variant="subtitle1" fontWeight="bold" sx={{ mt: 1.5, mb: 0.75 }}>
+        {children}
+      </Typography>
+    ),
+    // Lists
+    ul: ({ children }) => (
+      <Box component="ul" sx={{ pl: 3, my: 1 }}>
+        {children}
+      </Box>
+    ),
+    ol: ({ children }) => (
+      <Box component="ol" sx={{ pl: 3, my: 1 }}>
+        {children}
+      </Box>
+    ),
+    li: ({ children }) => (
+      <Typography component="li" variant="body1" sx={{ mb: 0.5 }}>
+        {children}
+      </Typography>
+    ),
+    // Tables
+    table: ({ children }) => (
+      <TableContainer component={Paper} variant="outlined" sx={{ my: 2, maxWidth: '100%' }}>
+        <Table size="small">
+          {children}
+        </Table>
+      </TableContainer>
+    ),
+    thead: ({ children }) => <TableHead>{children}</TableHead>,
+    tbody: ({ children }) => <TableBody>{children}</TableBody>,
+    tr: ({ children }) => <TableRow>{children}</TableRow>,
+    th: ({ children }) => (
+      <TableCell sx={{ fontWeight: 'bold', bgcolor: 'action.hover' }}>
+        {children}
+      </TableCell>
+    ),
+    td: ({ children }) => <TableCell>{children}</TableCell>,
+    // Code blocks
+    code: ({ inline, children }) => (
+      inline ? (
+        <Typography
+          component="code"
+          sx={{
+            px: 0.75,
+            py: 0.25,
+            bgcolor: 'action.hover',
+            borderRadius: 0.5,
+            fontFamily: 'monospace',
+            fontSize: '0.9em'
+          }}
+        >
+          {children}
+        </Typography>
+      ) : (
+        <Box
+          component="pre"
+          sx={{
+            p: 1.5,
+            bgcolor: 'action.hover',
+            borderRadius: 1,
+            overflow: 'auto',
+            my: 1.5
+          }}
+        >
+          <Typography component="code" sx={{ fontFamily: 'monospace', fontSize: '0.9em' }}>
+            {children}
+          </Typography>
+        </Box>
+      )
+    ),
+    // Strong/bold
+    strong: ({ children }) => (
+      <Typography component="strong" fontWeight="bold">
+        {children}
+      </Typography>
+    ),
+    // Emphasis/italic
+    em: ({ children }) => (
+      <Typography component="em" fontStyle="italic">
+        {children}
+      </Typography>
+    )
+  };
+
   const renderHelpResponse = (data) => {
     const answer = data.answer || data.intent?.answer || data.summary || data.content;
     const suggestedIntents = data.suggested_intents || data.intent?.suggested_intents || [];
+    const images = data.images || [];
 
     return (
       <Box>
-        <Typography variant="body1" fontWeight="medium" sx={{ mb: 2 }}>
-          {answer}
-        </Typography>
+        {/* Render markdown content */}
+        <Box sx={{ mb: 2, '& > *:first-of-type': { mt: 0 }, '& > *:last-child': { mb: 0 } }}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={markdownComponents}
+          >
+            {answer}
+          </ReactMarkdown>
+        </Box>
 
+        {/* Render preset images if available */}
+        {images.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            {images.map((img, index) => (
+              <Box key={index} sx={{ mb: 2 }}>
+                <Box
+                  component="img"
+                  src={img.url}
+                  alt={img.caption || 'Preset preview'}
+                  sx={{
+                    maxWidth: '100%',
+                    height: 'auto',
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}
+                />
+                {img.caption && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, textAlign: 'center' }}>
+                    {img.caption}
+                  </Typography>
+                )}
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        {/* Suggested intents */}
         {suggestedIntents.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>

@@ -14,6 +14,7 @@ Speed: ~1-2 seconds (3-5x faster than Assistants API)
 import os
 import logging
 import time
+import re
 from typing import Dict, Any, List
 from server.services.rag_service import get_rag_service
 
@@ -24,6 +25,12 @@ try:
 except ImportError:
     vertexai = None  # type: ignore
     GenerativeModel = None  # type: ignore
+
+# Import Firestore for preset image fetching
+try:
+    from google.cloud import firestore
+except ImportError:
+    firestore = None
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +52,21 @@ class HybridRAGService:
             except Exception as e:
                 logger.warning(f"Failed to initialize Vertex AI: {e}")
 
+        # Initialize Firestore for preset image fetching
+        self.db = None
+        if firestore is not None:
+            try:
+                database_id = os.getenv('FIRESTORE_DATABASE', 'dev-display-value')
+                self.db = firestore.Client(database=database_id)
+                logger.info(f"Initialized Firestore: database={database_id}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Firestore: {e}")
+
         # Conversation history (user_id -> list of messages)
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
+
+        # Cache of preset names to IDs for image lookup
+        self._preset_lookup_cache = None
 
     def _detect_query_complexity(self, query: str) -> str:
         """
@@ -83,6 +103,98 @@ class HybridRAGService:
 
         # Default to simple for unknown queries
         return 'simple'
+
+    def _build_preset_lookup(self) -> Dict[str, str]:
+        """Build a cache of preset names to IDs for quick lookup"""
+        if self._preset_lookup_cache is not None:
+            return self._preset_lookup_cache
+
+        if self.db is None:
+            return {}
+
+        try:
+            # Fetch all presets
+            presets = self.db.collection('presets').stream()
+            lookup = {}
+
+            for preset in presets:
+                data = preset.to_dict()
+                name = data.get('name', '').lower()
+                device_name = data.get('device_name', '').lower()
+
+                if name:
+                    # Map both plain name and "device preset" format
+                    lookup[name] = preset.id
+                    if device_name:
+                        lookup[f"{device_name}"] = preset.id
+
+            self._preset_lookup_cache = lookup
+            logger.info(f"Built preset lookup cache with {len(lookup)} entries")
+            return lookup
+
+        except Exception as e:
+            logger.error(f"Failed to build preset lookup: {e}")
+            return {}
+
+    def _extract_preset_images(self, answer: str, top_docs: List[Dict]) -> List[Dict[str, str]]:
+        """
+        Extract preset images mentioned in the answer
+
+        Args:
+            answer: The generated answer text
+            top_docs: Retrieved documents from RAG search
+
+        Returns:
+            List of {url, caption} dicts for preset images
+        """
+        if self.db is None:
+            return []
+
+        try:
+            images = []
+            lookup = self._build_preset_lookup()
+
+            if not lookup:
+                return []
+
+            # Extract preset IDs from top documents (most relevant)
+            preset_ids = set()
+            for doc in top_docs[:3]:  # Only check top 3 most relevant docs
+                title = doc.get('title', '').lower()
+                # Check if title matches preset pattern
+                for name, preset_id in lookup.items():
+                    if name in title and len(name) > 3:  # Avoid short spurious matches
+                        preset_ids.add(preset_id)
+
+            # Also scan answer text for preset mentions (case-insensitive)
+            answer_lower = answer.lower()
+            for name, preset_id in lookup.items():
+                # Use word boundaries to avoid partial matches
+                if len(name) > 3 and re.search(r'\b' + re.escape(name) + r'\b', answer_lower):
+                    preset_ids.add(preset_id)
+
+            # Limit to max 3 images to avoid overwhelming the UI
+            for preset_id in list(preset_ids)[:3]:
+                preset_doc = self.db.collection('presets').document(preset_id).get()
+                if preset_doc.exists:
+                    preset_data = preset_doc.to_dict()
+                    image_url = preset_data.get('image_url')
+                    preset_name = preset_data.get('name', preset_id)
+
+                    if image_url:
+                        images.append({
+                            'url': image_url,
+                            'caption': preset_name
+                        })
+
+            if images:
+                logger.info(f"Extracted {len(images)} preset images")
+
+            return images
+
+        except Exception as e:
+            logger.error(f"Failed to extract preset images: {e}")
+            return []
 
     def query(
         self,
@@ -162,16 +274,21 @@ Your role:
 {list_instruction}
 
 COMPARISON INSTRUCTIONS:
-When comparing presets or devices:
+When comparing 2-3 presets or devices:
 - Start with sonic character/purpose (1-2 sentences describing how they sound different)
-- List ONLY 2-3 KEY parameter differences that matter most
-- Use bullet points: "**Parameter**: Value A vs Value B"
+- Use a markdown table to show ONLY 2-3 KEY parameter differences that matter most
+- Table format: | Parameter | Preset A | Preset B | Notes |
 - NEVER dump all parameters - only the most important ones
 - User can ask for "full parameter details" or "all parameters" if they want more
 
+For longer lists or descriptions:
+- Use markdown numbered/bullet lists for clarity
+- Use **bold** for emphasis on key terms
+- Use `code` formatting for parameter names
+
 Communication style:
 - Professional but friendly
-- Use markdown formatting for clarity
+- Use markdown formatting (tables, lists, bold, code) for clarity
 - Cite sources when helpful
 - Keep comparisons concise - focus on what users need to make decisions
 
@@ -240,9 +357,12 @@ Retrieved Documentation:
                 for doc in top_docs
             ]
 
+            # Extract preset images
+            images = self._extract_preset_images(answer, top_docs)
+
             total_time = time.time() - start_time
 
-            return {
+            result = {
                 "ok": True,
                 "answer": answer,
                 "sources": sources,
@@ -254,6 +374,12 @@ Retrieved Documentation:
                     "generation": round(generation_time, 2)
                 }
             }
+
+            # Add images if any were found
+            if images:
+                result["images"] = images
+
+            return result
 
         except Exception as e:
             logger.error(f"Hybrid RAG query failed: {e}", exc_info=True)
