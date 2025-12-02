@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "last_updated": "2025-12-01",
   "author": "sunil",
   "description": "Tier-2 semantic search prompt system configuration",
@@ -34,6 +34,11 @@
   "confidence_threshold": 0.60,
   "handoff_keyword": "HANDOFF_TIER3",
   "changelog": [
+    {
+      "version": "1.0.1",
+      "date": "2025-12-01",
+      "changes": "Made prompts more concise - recommendations max 2 sentences, comparisons max 3 bullet points"
+    },
     {
       "version": "1.0.0",
       "date": "2025-12-01",

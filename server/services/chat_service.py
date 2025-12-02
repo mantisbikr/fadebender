@@ -340,6 +340,8 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
 
     This is the single source of truth for all command processing.
     Both WebUI and command-line tests use this same path.
+
+    Automatically routes help/question queries to handle_help for better quality.
     """
     # Generate unique request ID for tracking (used for capabilities history)
     request_id = str(int(time.time() * 1000))  # millisecond timestamp
@@ -350,6 +352,32 @@ def handle_chat(body: ChatBody) -> Dict[str, Any]:
         sys.path.insert(0, str(nlp_dir))
 
     text_lc = body.text.strip()
+
+    # AUTO-ROUTE HELP QUERIES: Detect help/question queries and route to handle_help
+    # This ensures web UI gets proper help responses without needing to call /help endpoint
+    from server.services.help_router import get_help_router, QueryType
+    help_router = get_help_router()
+    query_type, _ = help_router.classify_query(text_lc)
+
+    # If it's a help query (not a command), route to help system
+    help_query_types = {
+        QueryType.FACTUAL_COUNT,
+        QueryType.FACTUAL_LIST,
+        QueryType.FACTUAL_PARAMS,
+        QueryType.PARAMETER_SEARCH,
+        QueryType.SEMANTIC,
+        QueryType.COMPARISON,
+        QueryType.WORKFLOW
+    }
+
+    if query_type in help_query_types:
+        logger.info(f"[Chat→Help] Auto-routing help query (type={query_type.value}): {text_lc[:50]}...")
+        # Convert ChatBody to HelpBody and delegate to help handler
+        help_body = HelpBody(
+            query=body.text,
+            context={'userId': body.model} if body.model else None
+        )
+        return handle_help(help_body)
 
     intent: Dict[str, Any] = {}
 

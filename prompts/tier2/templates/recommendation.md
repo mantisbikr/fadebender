@@ -1,9 +1,9 @@
 <!--
-version: 1.0.0
+version: 1.0.1
 last_updated: 2025-12-01
 author: sunil
 description: Template for recommending presets based on use case
-changelog: Initial template for semantic recommendations
+changelog: Made more concise - max 2 sentences, focus on top 1-2 presets
 -->
 
 # Recommendation Template
@@ -12,18 +12,14 @@ USER QUESTION TYPE: RECOMMENDATION
 
 Provide preset recommendations using the semantically similar presets in the context.
 
-## Focus on:
-- WHY these presets match the user's query
-- Key characteristics that make them suitable
-- Brief parameter highlights (if relevant)
-- Use cases (only if parameter values suggest them)
+## Format:
+1. Recommend 1-2 top presets with ONE key reason each
+2. MAX 2 sentences total
+
+## Example:
+"For vocals, try **Cathedral** (long decay, warm character) or **Plate Medium** (balanced brightness)."
 
 ## Do NOT:
-- Recommend presets not in the provided context
-- Invent features or capabilities
-- Over-promise results
-
-## Keep it:
-- Conversational and friendly
-- 2-3 sentences max
-- Focused on the top 2-3 most relevant presets
+- List more than 2 presets
+- Explain parameters in detail
+- Write more than 2 sentences
