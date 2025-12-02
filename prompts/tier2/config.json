@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-12-01",
+  "author": "sunil",
+  "description": "Tier-2 semantic search prompt system configuration",
+  "classifier": {
+    "PRESET_COMPARISON": [
+      "compare",
+      "vs\\.?",
+      "versus",
+      "difference between",
+      "better",
+      "which is",
+      "what's the difference",
+      "what is the difference"
+    ],
+    "PARAMETER_EXPLANATION": [
+      "explain.*parameter",
+      "what does.*parameter",
+      "what is.*parameter",
+      "how does.*work",
+      "what's.*parameter"
+    ],
+    "RECOMMENDATION": [
+      "best for",
+      "recommend",
+      "suggest",
+      "good for",
+      "which.*should",
+      "what.*preset.*for"
+    ],
+    "GENERAL_SEMANTIC": []
+  },
+  "confidence_threshold": 0.60,
+  "handoff_keyword": "HANDOFF_TIER3",
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2025-12-01",
+      "changes": "Initial template-based prompt system with query classification"
+    }
+  ]
+}
