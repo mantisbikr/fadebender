@@ -1672,8 +1672,17 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
                 params = firestore_service.get_device_parameters(device)
 
                 if params:
-                    param_list = ', '.join(params)
-                    answer = f"The {device} has these controllable parameters: {param_list}"
+                    # Format as markdown table
+                    param_lines = ["| Parameter | Range | Unit |", "|-----------|-------|------|"]
+                    for p in params:
+                        name = p.get('name', 'Unknown')
+                        min_val = p.get('min', '')
+                        max_val = p.get('max', '')
+                        unit = p.get('unit', '')
+                        range_str = f"{min_val} to {max_val}" if min_val != '' and max_val != '' else "—"
+                        param_lines.append(f"| {name} | {range_str} | {unit} |")
+
+                    answer = f"**{device.title()} Parameters** ({len(params)} total)\n\n" + "\n".join(param_lines)
                     total_time = time.time() - start_time
                     logger.info(f"[Help] Firestore factual_params completed in {total_time:.3f}s")
 
@@ -1720,41 +1729,13 @@ def handle_help(body: HelpBody) -> Dict[str, Any]:
             logger.warning(f"[Help] Firestore query failed: {e}, falling back to RAG")
             # Fall through to RAG
 
-    # Step 2: Try semantic search for recommendation queries (Tier 2)
-    if router.should_use_vector_search(query_type):
-        from server.services.semantic_search_service import get_semantic_search_service
-        semantic_service = get_semantic_search_service()
-
-        try:
-            # Extract device name if present
-            device_name = metadata.get('device') if metadata else None
-
-            result_data = semantic_service.search_similar_presets(
-                query=body.query,
-                device_name=device_name,
-                top_k=5
-            )
-
-            if result_data:
-                answer = result_data.get('response', '')
-                presets = result_data.get('similar_presets', [])
-                total_time = time.time() - start_time
-                logger.info(f"[Help] Semantic search completed in {total_time:.3f}s")
-
-                return {
-                    "ok": True,
-                    "answer": answer,
-                    "sources": [],
-                    "suggested_intents": [],
-                    "format": 'default',
-                    "mode": "semantic-search",
-                    "timing": {"total": round(total_time, 3)},
-                    "query_type": query_type.value,
-                    "similar_presets": presets[:3]  # Top 3
-                }
-        except Exception as e:
-            logger.warning(f"[Help] Semantic search failed: {e}, falling back to RAG")
-            # Fall through to RAG
+    # Step 2: Semantic search (Tier 2) - DISABLED for better quality
+    # Using Vertex AI Search (Tier 3) for all non-factual queries
+    # Tier 2 code preserved for future optimization
+    #
+    # if router.should_use_vector_search(query_type):
+    #     semantic search code here...
+    #     ...disabled...
 
     # Step 3: Fall back to full RAG for complex queries or if earlier tiers failed (Tier 3)
     result = None

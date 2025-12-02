@@ -1,13 +1,9 @@
 # Fadebender Preset Catalog
 
-**Generated**: 2025-11-29 17:30:52
+**Generated**: 2025-12-02 08:41:35
 **Source**: Firestore `dev-display-value` database
 
-This catalog contains presets for all supported devices with:
-- Preset descriptions and sonic character
-- Use cases and best applications
-- All parameter values (display values)
-- When to use each preset
+This catalog contains preset configurations for Fadebender-supported Ableton Live devices.
 
 ---
 
@@ -15,8 +11,6 @@ This catalog contains presets for all supported devices with:
 
 **Device Signature**: `64ccfc236b79371d0b45e913f81bf0f3a55c6db9`
 **Preset Count**: 52
-
----
 
 ### Ambience
 
@@ -60,8 +54,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Ambience Medium
 
 **Device**: Reverb
@@ -103,8 +95,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 100.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 87.62000274658203
-
----
 
 ### Arena Tail
 
@@ -148,8 +138,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 115.23999786376953
 
----
-
 ### Backbone
 
 **Device**: Reverb
@@ -191,8 +179,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 92.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 85.70999908447266
-
----
 
 ### Ballad Reverb
 
@@ -236,8 +222,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Basement
 
 **Device**: Reverb
@@ -279,8 +263,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 90.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Big Room
 
@@ -324,8 +306,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Bright Long Verb
 
 **Device**: Reverb
@@ -368,16 +348,47 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Bright Reflections
 
 **Device**: Reverb
 **Preset ID**: `reverb_bright_reflections`
 **Category**: reverb
 
+**Parameter Settings**:
 
----
+- **Chorus Amount**: 0.6
+- **Chorus On**: 1.0
+- **Chorus Rate**: 3.6
+- **Cut On**: 1.0
+- **Decay Time**: 24340.9
+- **Density**: 3.0
+- **Device On**: 1.0
+- **Diffuse Level**: -1.5
+- **Diffusion**: 20.0
+- **Dry/Wet**: 100.0
+- **ER Shape**: 0.7
+- **ER Spin Amount**: 32.9
+- **ER Spin On**: 1.0
+- **ER Spin Rate**: 0.6
+- **Flat On**: 1.0
+- **Freeze On**: 0.0
+- **HiFilter Freq**: 16000.0
+- **HiFilter On**: 1.0
+- **HiFilter Type**: 0.0
+- **HiShelf Gain**: 1.0
+- **In Filter Freq**: 13104.5
+- **In Filter Width**: 4.0
+- **In HighCut On**: 0.0
+- **In LowCut On**: 0.0
+- **LowShelf Freq**: 4911.4
+- **LowShelf Gain**: 0.2
+- **LowShelf On**: 1.0
+- **Predelay**: 164.9
+- **Reflect Level**: -16.0
+- **Room Size**: 426.2
+- **Scale**: 30.0
+- **Size Smoothing**: 2.0
+- **Stereo Image**: 100.0
 
 ### Bright Room
 
@@ -421,8 +432,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Cathedral
 
 **Device**: Reverb
@@ -465,16 +474,47 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Church
 
 **Device**: Reverb
 **Preset ID**: `reverb_church`
 **Category**: reverb
 
+**Parameter Settings**:
 
----
+- **Chorus Amount**: 0.1
+- **Chorus On**: 0.0
+- **Chorus Rate**: 1.9
+- **Cut On**: 1.0
+- **Decay Time**: 32119.6
+- **Density**: 3.0
+- **Device On**: 1.0
+- **Diffuse Level**: -12.2
+- **Diffusion**: 30.0
+- **Dry/Wet**: 100.0
+- **ER Shape**: 1.0
+- **ER Spin Amount**: 32.9
+- **ER Spin On**: 0.0
+- **ER Spin Rate**: 0.6
+- **Flat On**: 1.0
+- **Freeze On**: 0.0
+- **HiFilter Freq**: 12249.6
+- **HiFilter On**: 1.0
+- **HiFilter Type**: 0.0
+- **HiShelf Gain**: 0.6
+- **In Filter Freq**: 13648.5
+- **In Filter Width**: 3.7
+- **In HighCut On**: 1.0
+- **In LowCut On**: 0.0
+- **LowShelf Freq**: 3423.4
+- **LowShelf Gain**: 0.8
+- **LowShelf On**: 0.0
+- **Predelay**: 195.9
+- **Reflect Level**: -21.4
+- **Room Size**: 426.2
+- **Scale**: 84.9
+- **Size Smoothing**: 2.0
+- **Stereo Image**: 100.0
 
 ### Concert Hall
 
@@ -482,8 +522,41 @@ This catalog contains presets for all supported devices with:
 **Preset ID**: `reverb_concert_hall`
 **Category**: reverb
 
+**Parameter Settings**:
 
----
+- **Chorus Amount**: 0.9
+- **Chorus On**: 0.0
+- **Chorus Rate**: 3.9
+- **Cut On**: 0.0
+- **Decay Time**: 26252.4
+- **Density**: 3.0
+- **Device On**: 1.0
+- **Diffuse Level**: -7.4
+- **Diffusion**: 50.0
+- **Dry/Wet**: 100.0
+- **ER Shape**: 1.0
+- **ER Spin Amount**: 32.9
+- **ER Spin On**: 0.0
+- **ER Spin Rate**: 0.6
+- **Flat On**: 0.0
+- **Freeze On**: 0.0
+- **HiFilter Freq**: 12575.7
+- **HiFilter On**: 1.0
+- **HiFilter Type**: 0.0
+- **HiShelf Gain**: 0.7
+- **In Filter Freq**: 12824.1
+- **In Filter Width**: 4.0
+- **In HighCut On**: 1.0
+- **In LowCut On**: 0.0
+- **LowShelf Freq**: 3423.4
+- **LowShelf Gain**: 0.8
+- **LowShelf On**: 0.0
+- **Predelay**: 185.4
+- **Reflect Level**: -12.2
+- **Room Size**: 389.0
+- **Scale**: 60.0
+- **Size Smoothing**: 2.0
+- **Stereo Image**: 100.0
 
 ### Corridor
 
@@ -491,8 +564,41 @@ This catalog contains presets for all supported devices with:
 **Preset ID**: `reverb_corridor`
 **Category**: reverb
 
+**Parameter Settings**:
 
----
+- **Chorus Amount**: 0.0
+- **Chorus On**: 0.0
+- **Chorus Rate**: 0.8
+- **Cut On**: 1.0
+- **Decay Time**: 15969.2
+- **Density**: 3.0
+- **Device On**: 1.0
+- **Diffuse Level**: -12.3
+- **Diffusion**: 19.9
+- **Dry/Wet**: 100.0
+- **ER Shape**: 0.7
+- **ER Spin Amount**: 39.5
+- **ER Spin On**: 1.0
+- **ER Spin Rate**: 0.4
+- **Flat On**: 1.0
+- **Freeze On**: 0.0
+- **HiFilter Freq**: 12249.6
+- **HiFilter On**: 1.0
+- **HiFilter Type**: 0.0
+- **HiShelf Gain**: 0.5
+- **In Filter Freq**: 13652.7
+- **In Filter Width**: 4.0
+- **In HighCut On**: 1.0
+- **In LowCut On**: 0.0
+- **LowShelf Freq**: 3423.4
+- **LowShelf Gain**: 0.8
+- **LowShelf On**: 0.0
+- **Predelay**: 120.8
+- **Reflect Level**: -4.7
+- **Room Size**: 142.5
+- **Scale**: 60.0
+- **Size Smoothing**: 2.0
+- **Stereo Image**: 100.0
 
 ### Dark Medium Room
 
@@ -500,8 +606,41 @@ This catalog contains presets for all supported devices with:
 **Preset ID**: `reverb_dark_medium_room`
 **Category**: reverb
 
+**Parameter Settings**:
 
----
+- **Chorus Amount**: 0.6
+- **Chorus On**: 0.0
+- **Chorus Rate**: 2.7
+- **Cut On**: 0.0
+- **Decay Time**: 22506.3
+- **Density**: 1.0
+- **Device On**: 1.0
+- **Diffuse Level**: -17.6
+- **Diffusion**: 77.3
+- **Dry/Wet**: 100.0
+- **ER Shape**: 1.0
+- **ER Spin Amount**: 45.1
+- **ER Spin On**: 0.0
+- **ER Spin Rate**: 1.0
+- **Flat On**: 0.0
+- **Freeze On**: 0.0
+- **HiFilter Freq**: 9803.7
+- **HiFilter On**: 1.0
+- **HiFilter Type**: 0.0
+- **HiShelf Gain**: 0.4
+- **In Filter Freq**: 3555.9
+- **In Filter Width**: 7.1
+- **In HighCut On**: 1.0
+- **In LowCut On**: 0.0
+- **LowShelf Freq**: 5217.1
+- **LowShelf Gain**: 0.7
+- **LowShelf On**: 1.0
+- **Predelay**: 111.8
+- **Reflect Level**: -17.6
+- **Room Size**: 309.6
+- **Scale**: 35.2
+- **Size Smoothing**: 2.0
+- **Stereo Image**: 95.2
 
 ### Dark Small Room
 
@@ -509,8 +648,41 @@ This catalog contains presets for all supported devices with:
 **Preset ID**: `reverb_dark_small_room`
 **Category**: reverb
 
+**Parameter Settings**:
 
----
+- **Chorus Amount**: 0.6
+- **Chorus On**: 0.0
+- **Chorus Rate**: 2.7
+- **Cut On**: 0.0
+- **Decay Time**: 14912.7
+- **Density**: 2.0
+- **Device On**: 1.0
+- **Diffuse Level**: -17.6
+- **Diffusion**: 69.4
+- **Dry/Wet**: 100.0
+- **ER Shape**: 1.0
+- **ER Spin Amount**: 45.1
+- **ER Spin On**: 0.0
+- **ER Spin Rate**: 1.0
+- **Flat On**: 0.0
+- **Freeze On**: 0.0
+- **HiFilter Freq**: 9314.5
+- **HiFilter On**: 1.0
+- **HiFilter Type**: 0.0
+- **HiShelf Gain**: 0.3
+- **In Filter Freq**: 2497.7
+- **In Filter Width**: 6.5
+- **In HighCut On**: 1.0
+- **In LowCut On**: 0.0
+- **LowShelf Freq**: 5217.1
+- **LowShelf Gain**: 0.7
+- **LowShelf On**: 1.0
+- **Predelay**: 129.2
+- **Reflect Level**: -17.6
+- **Room Size**: 24.0
+- **Scale**: 51.7
+- **Size Smoothing**: 2.0
+- **Stereo Image**: 90.5
 
 ### Empty Club
 
@@ -554,8 +726,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 120.0
 
----
-
 ### Foyer
 
 **Device**: Reverb
@@ -597,8 +767,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 80.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Frozen Build Up
 
@@ -642,8 +810,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 80.94999694824219
 
----
-
 ### Garage
 
 **Device**: Reverb
@@ -685,8 +851,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 100.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Guitar Room
 
@@ -730,8 +894,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Hall Damped
 
 **Device**: Reverb
@@ -773,8 +935,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 94.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 120.0
-
----
 
 ### Halluzinatione
 
@@ -818,8 +978,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 109.5199966430664
 
----
-
 ### High Verb
 
 **Device**: Reverb
@@ -861,8 +1019,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 40.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Large Chamber
 
@@ -906,8 +1062,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Large Factory
 
 **Device**: Reverb
@@ -949,8 +1103,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 100.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 113.33000183105469
-
----
 
 ### Large Space Chorus
 
@@ -994,8 +1146,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 120.0
 
----
-
 ### Late Wrapper
 
 **Device**: Reverb
@@ -1037,8 +1187,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 18.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 113.33000183105469
-
----
 
 ### Living Room
 
@@ -1082,8 +1230,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 120.0
 
----
-
 ### Main Hall
 
 **Device**: Reverb
@@ -1125,8 +1271,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 90.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Medium Concert
 
@@ -1170,8 +1314,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Medium Room
 
 **Device**: Reverb
@@ -1213,8 +1355,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 100.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Museum Lobby
 
@@ -1258,8 +1398,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 120.0
 
----
-
 ### Oil Barrel
 
 **Device**: Reverb
@@ -1301,8 +1439,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 35.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Parallel Walls
 
@@ -1346,8 +1482,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 120.0
 
----
-
 ### Plate Damped
 
 **Device**: Reverb
@@ -1389,8 +1523,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 36.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Reflections
 
@@ -1434,8 +1566,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 67.62000274658203
 
----
-
 ### Reverb
 
 **Device**: Reverb
@@ -1477,8 +1607,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 69.0
 - **Size Smoothing**: 1.0
 - **Stereo Image**: 75.0
-
----
 
 ### Short Ambience
 
@@ -1522,8 +1650,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 67.62000274658203
 
----
-
 ### Sixty Seconds
 
 **Device**: Reverb
@@ -1565,8 +1691,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 59.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Sizzle
 
@@ -1610,8 +1734,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Small Chamber
 
 **Device**: Reverb
@@ -1653,8 +1775,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 5.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Small Room
 
@@ -1698,8 +1818,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Snare Room
 
 **Device**: Reverb
@@ -1741,8 +1859,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 100.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Space Reverb
 
@@ -1786,8 +1902,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 106.7699966430664
 
----
-
 ### Stadium
 
 **Device**: Reverb
@@ -1829,8 +1943,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 90.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Standard Room
 
@@ -1874,8 +1986,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Tile Room
 
 **Device**: Reverb
@@ -1917,8 +2027,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 79.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Vocal Hall
 
@@ -1962,8 +2070,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
 
----
-
 ### Warm Reverb Long
 
 **Device**: Reverb
@@ -2006,8 +2112,6 @@ This catalog contains presets for all supported devices with:
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 37.13999938964844
 
----
-
 ### Wooden Hall
 
 **Device**: Reverb
@@ -2049,8 +2153,6 @@ This catalog contains presets for all supported devices with:
 - **Scale**: 40.0
 - **Size Smoothing**: 2.0
 - **Stereo Image**: 100.0
-
----
 
 ### Wooden Room
 
@@ -2101,8 +2203,6 @@ This catalog contains presets for all supported devices with:
 **Device Signature**: `9bfcc8b6e739d9675c03f6fe0664cfada9ef7df1`
 **Preset Count**: 32
 
----
-
 ### delay_16th_dub
 
 **Device**: Delay
@@ -2132,8 +2232,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: -33.0
 - **R Sync**: 1.0
 - **R Time**: 1.0700000524520874
-
----
 
 ### delay_16th_ping_pong
 
@@ -2165,8 +2263,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 1.0700000524520874
 
----
-
 ### delay_4th_bandpass
 
 **Device**: Delay
@@ -2196,8 +2292,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 1.0
 - **R Time**: 1.0
-
----
 
 ### delay_4th_distant
 
@@ -2229,8 +2323,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 1.0
 
----
-
 ### delay_8th_groove
 
 **Device**: Delay
@@ -2260,8 +2352,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: -33.0
 - **R Sync**: 1.0
 - **R Time**: 1.0700000524520874
-
----
 
 ### delay_chopped_delay
 
@@ -2293,8 +2383,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 1.0
 
----
-
 ### delay_delay
 
 **Device**: Delay
@@ -2324,8 +2412,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 1.0
 - **R Time**: 22.899999618530273
-
----
 
 ### delay_disharmonics
 
@@ -2357,8 +2443,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 0.0
 - **R Time**: 22.899999618530273
 
----
-
 ### delay_dotted_eighth_note
 
 **Device**: Delay
@@ -2388,8 +2472,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.20000000298023224
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_dotted_quarter_note
 
@@ -2421,8 +2503,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_eighth_note
 
 **Device**: Delay
@@ -2452,8 +2532,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.20000000298023224
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_fake_phaser
 
@@ -2485,8 +2563,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 0.0
 - **R Time**: 1.7599999904632568
 
----
-
 ### delay_flutter
 
 **Device**: Delay
@@ -2516,8 +2592,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_full_range_spatial
 
@@ -2549,8 +2623,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_glitch_delay
 
 **Device**: Delay
@@ -2580,8 +2652,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_groove
 
@@ -2613,8 +2683,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_harmonics
 
 **Device**: Delay
@@ -2644,8 +2712,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 0.0
 - **R Time**: 15.0
-
----
 
 ### delay_hi_buzz
 
@@ -2677,8 +2743,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 0.0
 - **R Time**: 375.0
 
----
-
 ### delay_high
 
 **Device**: Delay
@@ -2708,8 +2772,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_longest_ping_pong
 
@@ -2741,8 +2803,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_pan_left
 
 **Device**: Delay
@@ -2772,8 +2832,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 0.0
 - **R Time**: 2.0
-
----
 
 ### delay_pan_right
 
@@ -2805,8 +2863,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 0.0
 - **R Time**: 1.0
 
----
-
 ### delay_ping
 
 **Device**: Delay
@@ -2836,8 +2892,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_pong
 
@@ -2869,8 +2923,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_quarter_note
 
 **Device**: Delay
@@ -2900,8 +2952,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.20000000298023224
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_robot
 
@@ -2933,8 +2983,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_simple_chorus
 
 **Device**: Delay
@@ -2964,8 +3012,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.0
 - **R Sync**: 0.0
 - **R Time**: 29.799999237060547
-
----
 
 ### delay_simple_flanger
 
@@ -2997,8 +3043,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 0.0
 - **R Time**: 2.5
 
----
-
 ### delay_sixteenth_note
 
 **Device**: Delay
@@ -3028,8 +3072,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 0.20000000298023224
 - **R Sync**: 1.0
 - **R Time**: 375.0
-
----
 
 ### delay_slight_slap
 
@@ -3061,8 +3103,6 @@ This catalog contains presets for all supported devices with:
 - **R Sync**: 1.0
 - **R Time**: 375.0
 
----
-
 ### delay_sloppy_delay
 
 **Device**: Delay
@@ -3092,8 +3132,6 @@ This catalog contains presets for all supported devices with:
 - **R Offset**: 10.0
 - **R Sync**: 1.0
 - **R Time**: 402.0
-
----
 
 ### delay_uneven_two_beat
 
@@ -3132,8 +3170,6 @@ This catalog contains presets for all supported devices with:
 **Device Signature**: `82da8ccee34e85facb2a264e3110618dc199938e`
 **Preset Count**: 1
 
----
-
 ### delay_align_delay
 
 **Device**: Align Delay
@@ -3165,8 +3201,6 @@ This catalog contains presets for all supported devices with:
 **Device Signature**: `d554752f4be9eee62197c37b45b1c22237842c37`
 **Preset Count**: 11
 
----
-
 ### Bass Roundup
 
 **Device**: Amp
@@ -3188,8 +3222,6 @@ This catalog contains presets for all supported devices with:
 - **Presence**: 1.590000033378601
 - **Treble**: 4.130000114440918
 - **Volume**: 7.0
-
----
 
 ### Blues Drive
 
@@ -3213,8 +3245,6 @@ This catalog contains presets for all supported devices with:
 - **Treble**: 4.440000057220459
 - **Volume**: 8.25
 
----
-
 ### Boost and Crunch
 
 **Device**: Amp
@@ -3236,8 +3266,6 @@ This catalog contains presets for all supported devices with:
 - **Presence**: 10.0
 - **Treble**: 10.0
 - **Volume**: 6.0
-
----
 
 ### Clean
 
@@ -3261,8 +3289,6 @@ This catalog contains presets for all supported devices with:
 - **Treble**: 5.0
 - **Volume**: 6.190000057220459
 
----
-
 ### Discrete
 
 **Device**: Amp
@@ -3284,8 +3310,6 @@ This catalog contains presets for all supported devices with:
 - **Presence**: 6.429999828338623
 - **Treble**: 5.559999942779541
 - **Volume**: 7.619999885559082
-
----
 
 ### Key Crunch
 
@@ -3309,8 +3333,6 @@ This catalog contains presets for all supported devices with:
 - **Treble**: 6.75
 - **Volume**: 7.539999961853027
 
----
-
 ### Marsh Mellows
 
 **Device**: Amp
@@ -3332,8 +3354,6 @@ This catalog contains presets for all supported devices with:
 - **Presence**: 4.019999980926514
 - **Treble**: 5.0
 - **Volume**: 3.569999933242798
-
----
 
 ### Metalic
 
@@ -3357,8 +3377,6 @@ This catalog contains presets for all supported devices with:
 - **Treble**: 6.590000152587891
 - **Volume**: 7.059999942779541
 
----
-
 ### Rhythm Funk
 
 **Device**: Amp
@@ -3381,8 +3399,6 @@ This catalog contains presets for all supported devices with:
 - **Treble**: 4.289999961853027
 - **Volume**: 5.0
 
----
-
 ### Rock All 10
 
 **Device**: Amp
@@ -3404,8 +3420,6 @@ This catalog contains presets for all supported devices with:
 - **Presence**: 9.0
 - **Treble**: 10.0
 - **Volume**: 7.0
-
----
 
 ### Screamer
 
@@ -3435,8 +3449,6 @@ This catalog contains presets for all supported devices with:
 
 **Device Signature**: `9e906e0ab3f18c4688107553744914f9ef6b9ee7`
 **Preset Count**: 18
-
----
 
 ### compressor_acoustic
 
@@ -3469,8 +3481,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -17.5
 
----
-
 ### compressor_acoustic_kick_compressor
 
 **Device**: Compressor
@@ -3501,8 +3511,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -14.899999618530273
-
----
 
 ### compressor_basic_peak_compressor
 
@@ -3535,8 +3543,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: 0.0
 
----
-
 ### compressor_brick_wall
 
 **Device**: Compressor
@@ -3567,8 +3573,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -9.699999809265137
-
----
 
 ### compressor_brute_compression
 
@@ -3601,8 +3605,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -31.899999618530273
 
----
-
 ### compressor_classical_compression
 
 **Device**: Compressor
@@ -3633,8 +3635,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -9.699999809265137
-
----
 
 ### compressor_de-esser
 
@@ -3667,8 +3667,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -15.199999809265137
 
----
-
 ### compressor_flattenator
 
 **Device**: Compressor
@@ -3699,8 +3697,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -66.0
-
----
 
 ### compressor_generic_compressor
 
@@ -3733,8 +3729,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -21.5
 
----
-
 ### compressor_gentle-kneeless
 
 **Device**: Compressor
@@ -3765,8 +3759,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -16.899999618530273
-
----
 
 ### compressor_gentle_squeeze
 
@@ -3799,8 +3791,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -21.5
 
----
-
 ### compressor_kick_reducer
 
 **Device**: Compressor
@@ -3831,8 +3821,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -17.899999618530273
-
----
 
 ### compressor_loud-kneeless
 
@@ -3865,8 +3853,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -16.899999618530273
 
----
-
 ### compressor_mildly_aggresive
 
 **Device**: Compressor
@@ -3897,8 +3883,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -22.799999237060547
-
----
 
 ### compressor_mix_gel
 
@@ -3931,8 +3915,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -22.100000381469727
 
----
-
 ### compressor_precise
 
 **Device**: Compressor
@@ -3964,8 +3946,6 @@ This catalog contains presets for all supported devices with:
 - **S/C On**: 0.0
 - **Threshold**: -28.700000762939453
 
----
-
 ### compressor_soft_snare_compressor
 
 **Device**: Compressor
@@ -3996,8 +3976,6 @@ This catalog contains presets for all supported devices with:
 - **S/C Mix**: 100.0
 - **S/C On**: 0.0
 - **Threshold**: -19.200000762939453
-
----
 
 ### compressor_sustained_lead_vocal
 

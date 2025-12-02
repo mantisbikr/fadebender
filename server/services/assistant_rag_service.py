@@ -88,9 +88,17 @@ When listing presets or devices:
 - Include all preset IDs and names exactly as they appear in the catalog
 - If a list is very long, still include every item - users need complete information
 
+When comparing presets or devices:
+- Start with sonic character/purpose (1-2 sentences describing how they sound different)
+- List ONLY 2-3 KEY parameter differences that matter most
+- Use bullet points: "**Parameter**: Value A vs Value B"
+- NEVER dump all parameters - only the most important ones
+- User can ask for "full parameter details" or "all parameters" if they want more
+
 Communication style:
 - Professional but friendly
 - Exhaustive when listing items (never summarize lists)
+- Concise when comparing (focus on key differences only)
 - Use markdown formatting for clarity
 - Cite sources when providing specific technical details""",
                 model="gpt-4o",  # More capable, better for complete lists

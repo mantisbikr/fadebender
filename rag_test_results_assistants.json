@@ -1,0 +1,806 @@
+{
+  "test_date": "2025-12-01 09:11:56",
+  "total_queries": 23,
+  "successful": 23,
+  "failed": 0,
+  "results_by_category": {
+    "Simple Factual": [
+      {
+        "ok": true,
+        "category": "Simple Factual",
+        "query": "how many reverb presets are available?",
+        "expected": "Should return specific count (52 reverb presets)",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 32.35
+        },
+        "total_time": 32.356005907058716,
+        "model_complexity": null,
+        "answer": "There are a total of 52 reverb presets available in the Fadebender Preset Catalog\u30104:0\u2020preset-catalog.md\u3011.",
+        "answer_length": 105,
+        "sources_count": 1,
+        "thread_id": "thread_MlkRqzOec3ZPIdYH7PT9GL80"
+      },
+      {
+        "ok": true,
+        "category": "Simple Factual",
+        "query": "what parameters can I control on the compressor?",
+        "expected": "List of compressor parameters",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 27.33
+        },
+        "total_time": 27.331412315368652,
+        "model_complexity": null,
+        "answer": "The Compressor in Ableton Live has the following parameters you can control:\n\n1. **Threshold**\n   - **Control Type**: continuous\n   - **Range**: -70.0 to 6.0 dB\n\n2. **Ratio**\n   - **Control Type**: continuous\n   - **Range**: 1.0 to 100.0\n\n3. **Attack**\n   - **Control Type**: continuous\n   - **Range**: 0.01 to 100.0 ms\n\n4. **Release**\n   - **Control Type**: continuous\n   - **Range**: 1.0 to 3000.0 ms\n\n5. **Auto Release On/Off**\n   - **Control Type**: binary\n   - **Values**: Off / On\n\n6. **Knee**\n   - **Control Type**: continuous\n   - **Range**: 0.0 to 18.0 dB\n\n7. **Model**\n   - **Control Type**: quantized\n\n8. **Device On**\n   - **Control Type**: binary\n   - **Values**: Off / On\n\n9. **Expansion Ratio**\n   - **Control Type**: continuous\n   - **Range**: 1.0 to 2.0\n\n10. **Output Gain**\n    - **Control Type**: continuous\n    - **Range**: -36.0 to 36.0 dB\n\n11. **Makeup**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n12. **Dry/Wet**\n    - **Control Type**: continuous\n    - **Range**: 0.0 to 100.0 %\n\n13. **LookAhead**\n    - **Control Type**: quantized\n\n14. **S/C On**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n15. **S/C Gain**\n    - **Control Type**: continuous\n    - **Range**: -70.0 to 24.0 dB\n\n16. **S/C Mix**\n    - **Control Type**: continuous\n    - **Range**: 0.0 to 100.0 %\n\n17. **S/C Listen**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n18. **S/C EQ On**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n19. **S/C EQ Type**\n    - **Control Type**: quantized\n\n20. **S/C EQ Freq**\n    - **Control Type**: continuous\n    - **Range**: 30.0 to 15000.0 Hz\n\n21. **S/C EQ Q**\n    - **Control Type**: continuous\n    - **Range**: 0.1 to 18.0\n\n22. **S/C EQ Gain**\n    - **Control Type**: continuous\n    - **Range**: -15.0 to 15.0 dB\u30104:12\u2020device-catalog.md\u3011.",
+        "answer_length": 1815,
+        "sources_count": 1,
+        "thread_id": "thread_pvQ3Nrp9K2w1z3vXwF86b6sK"
+      },
+      {
+        "ok": true,
+        "category": "Simple Factual",
+        "query": "how do I load a reverb preset on track 1?",
+        "expected": "Command syntax and example",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 14.03
+        },
+        "total_time": 14.038548946380615,
+        "model_complexity": null,
+        "answer": "To load a reverb preset on Track 1 using Fadebender, you can use the following command:\n\n```plaintext\nload reverb preset [preset name] on track 1\n```\n\nHere is the list of reverb presets you can choose from:\n\n1. **Cathedral** - Preset ID: `reverb_cathedral`\n2. **Church** - Preset ID: `reverb_church`\n3. **Concert Hall** - Preset ID: `reverb_concert_hall`\n4. **Corridor** - Preset ID: `reverb_corridor`\n5. **Dark Medium Room** - Preset ID: `reverb_dark_medium_room`\n6. **Dark Small Room** - Preset ID: `reverb_dark_small_room`\n7. **Empty Club** - Preset ID: `reverb_empty_club`\n8. **Halluzinatione** - Preset ID: `reverb_halluzinatione`\n9. **High Verb** - Preset ID: `reverb_high_verb`\n10. **Backbone** - Preset ID: `reverb_backbone`\n11. **Ballad Reverb** - Preset ID: `reverb_ballad_reverb`\n12. **Basement** - Preset ID: `reverb_basement`\n13. **Large Chamber** - Preset ID: `reverb_large_chamber`\n14. **Large Factory** - Preset ID: `reverb_large_factory`\n15. **Vocal Hall** - Preset ID: `reverb_vocal_hall`\n16. **Warm Reverb Long** - Preset ID: `reverb_warm_reverb_long`\n17. **Hall Damped** - Preset ID: `reverb_hall_damped`\n18. **Large Space Chorus** - Preset ID: `reverb_large_space_chorus`\n19. **Late Wrapper** - Preset ID: `reverb_late_wrapper`\n20. **Living Room** - Preset ID: `reverb_living_room`\n\nFor instance, if you want to load the \"Cathedral\" reverb preset, you would type:\n\n```plaintext\nload reverb preset cathedral on track 1\n```\n\nThis command will load the specified reverb preset onto Track 1\u30104:1\u2020user-guide.md\u3011 .",
+        "answer_length": 1528,
+        "sources_count": 1,
+        "thread_id": "thread_NWjkgXrgK1gfUG6KsNC0sNuq"
+      }
+    ],
+    "Purpose-Based": [
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "what reverb presets are best for vocals?",
+        "expected": "Reverb presets suitable for vocal processing",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 33.86
+        },
+        "total_time": 33.86800265312195,
+        "model_complexity": null,
+        "answer": "Here is the complete list of reverb presets that could be used for vocals, along with their preset IDs. These are from the Fadebender preset catalog:\n\n1. **Ambience**\n   - Preset ID: `reverb_ambience`\n   - Description: Creates a sense of space with a rich yet clear ambience.\n\n2. **Ambience Medium**\n   - Preset ID: `reverb_ambience_medium`\n   - Description: Medium-sized ambience for a balanced sound environment.\n\n3. **Hall Damped**\n   - Preset ID: `reverb_hall_damped`\n   - Description: Provides a smooth, controlled reverb tail with a damped, reflective quality, suitable for maintaining vocal clarity in a mix.\n\n4. **Halluzinatione**\n   - Preset ID: `reverb_halluzinatione`\n   - Description: Offers a rich, enveloping reverb with a chorus effect for more experimental vocal tracks.\n\nEach of these presets highlights different characteristics in their usage. For instance, **Hall Damped** is particularly useful for vocals where clarity is crucial as it provides a reflective yet controlled reverb environment. Depending on the effect desired\u2014whether it is subtle ambience or a more lush, enveloping reverb\u2014these presets can help shade your vocals to sit well within a mix\u30104:0\u2020preset-catalog.md\u3011\u30104:1\u2020preset-catalog.md\u3011.",
+        "answer_length": 1223,
+        "sources_count": 2,
+        "thread_id": "thread_3vWQP6YE5JRocjCNAhJj1j6S"
+      },
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "which delay presets work well for drums?",
+        "expected": "Delay presets suitable for drums",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 38.94
+        },
+        "total_time": 38.948123931884766,
+        "model_complexity": null,
+        "answer": "Here are some delay presets you can consider using for drums:\n\n1. **delay_harmonics**\n   - Offers a very wet and feedback-heavy setting which could work well for experimental drum sounds\u30104:0\u2020preset-catalog.md\u3011.\n\n2. **delay_hi_buzz**\n   - Features a linked Ping Pong delay with high feedback, ideal for creating rhythmic spatial effects\u30104:0\u2020preset-catalog.md\u3011.\n\n3. **delay_high**\n   - Provides a strong Ping Pong effect with a high feedback level, suitable for wide stereo delay effects\u30104:5\u2020preset-catalog.md\u3011.\n\n4. **delay_longest_ping_pong**\n   - Designed for the longest possible Ping Pong delays, great for ambient drum tracks\u30104:5\u2020preset-catalog.md\u3011.\n\n5. **delay_simple_chorus**\n   - Adds a simple chorus effect, which can give drum sounds a thicker texture\u30104:15\u2020preset-catalog.md\u3011.\n\n6. **delay_simple_flanger**\n   - Can create flanger effects, adding movement and texture to drum hits\u30104:15\u2020preset-catalog.md\u3011.\n\n7. **delay_ping**\n   - Incorporates a strong Ping Pong effect, providing a wide stereo field for drum patterns\u30104:9\u2020preset-catalog.md\u3011.\n\nThese presets should provide a variety of textures and spatial effects to your drum tracks, ranging from subtle chorus and flanger to intense ping pong and feedback scenarios.",
+        "answer_length": 1225,
+        "sources_count": 7,
+        "thread_id": "thread_5W3gGul0j5zlAxQLW894da7P"
+      },
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "recommend reverb presets for acoustic guitar",
+        "expected": "Reverb presets suitable for acoustic guitar",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 13.92
+        },
+        "total_time": 13.921400785446167,
+        "model_complexity": null,
+        "answer": "Here are some reverb presets you can consider for enhancing the sound of an acoustic guitar in Ableton Live:\n\n1. **Halluzinatione**\n   - **Preset ID**: `reverb_halluzinatione`\n   - **Device**: Reverb\n   - **Category**: Reverb\u30104:0\u2020preset-catalog.md\u3011\n\n2. **High Verb**\n   - **Preset ID**: `reverb_high_verb`\n   - **Device**: Reverb\n   - **Category**: Reverb\u30104:0\u2020preset-catalog.md\u3011\n\n3. **Hall Damped**\n   - **Preset ID**: `reverb_hall_damped`\n   - **Device**: Reverb\n   - **Category**: Reverb\u30104:1\u2020preset-catalog.md\u3011\n\nThese presets offer varying levels of decay time, density, and overall reverb character which can be suitable for different acoustic guitar tones. You can apply these presets in Ableton to find which one best suits your needs and further tweak their parameters to match the specific ambiance and mood you aim to achieve in your track.",
+        "answer_length": 848,
+        "sources_count": 3,
+        "thread_id": "thread_3udfgtgIRJFFJJ7UJFO2u78I"
+      },
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "what compressor settings are good for mixing bass?",
+        "expected": "Compressor presets/settings for bass",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 26.2
+        },
+        "total_time": 26.206403970718384,
+        "model_complexity": null,
+        "answer": "When mixing bass using a compressor in Ableton Live, you want to focus on settings that allow you to control dynamic range without losing the natural sound of the bass. Here are a few compressor presets from your documentation that could be suitable for mixing bass, along with their settings:\n\n1. **`compressor_brute_compression`**:\n   - **Attack**: 0.01 ms\n   - **Release**: 10.2 ms\n   - **Ratio**: 12.6\n   - **Threshold**: -31.9 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 0.0 dB\u30104:0\u2020preset-catalog.md\u3011.\n\n2. **`compressor_classical_compression`**:\n   - **Attack**: 0.22 ms\n   - **Release**: 100 ms\n   - **Ratio**: 1.15\n   - **Threshold**: -9.7 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 6.0 dB\u30104:0\u2020preset-catalog.md\u3011.\n\n3. **`compressor_generic_compressor`**:\n   - **Attack**: 10.0 ms\n   - **Release**: 100 ms\n   - **Ratio**: 2.0\n   - **Threshold**: -21.5 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 0.7 dB\u30104:8\u2020preset-catalog.md\u3011.\n\n4. **`compressor_acoustic`**:\n   - **Attack**: 17.9 ms\n   - **Release**: 222 ms\n   - **Ratio**: 2.25\n   - **Threshold**: -17.5 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 7.7 dB\u30104:17\u2020preset-catalog.md\u3011.\n\nThe key to using compression on bass is to maintain the low-end punch while controlling peaks. Typically, a medium to slow attack and a medium release will help retain the bass's energy while smoothing out levels. Adjust the threshold and ratio to taste, ensuring you do not overly squash the dynamics unless specifically desired for creative reasons. \n\nThese presets provide a range of options, from more aggressive compression to more transparent, musical settings, which you can tailor to fit the rest of your mix.",
+        "answer_length": 1644,
+        "sources_count": 4,
+        "thread_id": "thread_taMlVwdhtTtgwaCruA8lStKA"
+      }
+    ],
+    "Parameter-Constrained": [
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "show me reverb presets with decay time less than 1 second",
+        "expected": "Reverb presets filtered by decay time < 1s",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 9.63
+        },
+        "total_time": 9.640207052230835,
+        "model_complexity": null,
+        "answer": "Here are the reverb presets with a decay time of less than 1 second:\n\n1. **Ambience**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_ambience`\n   - **Decay Time**: 600.0 ms\u30104:3\u2020preset-catalog.md\u3011\n\nIf you need detailed parameter settings or additional presets, feel free to ask!",
+        "answer_length": 282,
+        "sources_count": 1,
+        "thread_id": "thread_x7FYqsDs9ipARQQSbfP8lGP7"
+      },
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "which reverb presets have large room sizes?",
+        "expected": "Reverb presets with room size > certain threshold",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 12.7
+        },
+        "total_time": 12.705032110214233,
+        "model_complexity": null,
+        "answer": "Here are the reverb presets that feature large room sizes:\n\n1. **High Verb**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_high_verb`\n   - **Room Size**: 100.0\n\n2. **Large Space Chorus**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_large_space_chorus`\n   - **Room Size**: 95.62\n\n3. **Cathedral**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_cathedral`\n   - **Room Size**: 180.0\n\n4. **Space Reverb**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_space_reverb`\n   - **Room Size**: 500.0\n\nThese presets have varying uses and applications but are generally suited for expansive, immersive spaces like large halls, cathedrals, and concert venues\u30104:10\u2020source\u3011.",
+        "answer_length": 680,
+        "sources_count": 1,
+        "thread_id": "thread_VDz6nvHKx3OmcQJBe0k8SAN4"
+      },
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "find delay presets with feedback under 50%",
+        "expected": "Delay presets filtered by feedback parameter",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 21.78
+        },
+        "total_time": 21.780800104141235,
+        "model_complexity": null,
+        "answer": "Here is the list of delay presets with feedback under 50%:\n\n1. **delay_sloppy_delay**\n   - **Device**: Delay\n   - **Preset ID**: `delay_sloppy_delay`\n   - **Feedback**: 28.0\u30104:13\u2020preset-catalog.md\u3011\n\nThese presets are set with feedback levels below 50%, ensuring a quick decay and cleaner echoes. Let me know if you need more details or further assistance!",
+        "answer_length": 355,
+        "sources_count": 1,
+        "thread_id": "thread_0EV5KjOkr0d2XbDFekEXIlrQ"
+      },
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "what compressor presets have a ratio of 4:1 or higher?",
+        "expected": "Compressor presets filtered by ratio",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 23.79
+        },
+        "total_time": 23.79734492301941,
+        "model_complexity": null,
+        "answer": "Here is a list of compressor presets with a ratio of 4:1 or higher:\n\n1. **compressor_soft_snare_compressor**\n   - Ratio: 4.74\u30104:1\u2020source\u3011\n\n2. **compressor_sustained_lead_vocal**\n   - Ratio: 5.48\u30104:1\u2020source\u3011\n\n3. **compressor_acoustic_kick_compressor**\n   - Ratio: 4.0\u30104:2\u2020source\u3011\n\n4. **compressor_mildly_aggresive**\n   - Ratio: 4.0\u30104:4\u2020source\u3011\n\n5. **compressor_brick_wall**\n   - Ratio: 3.4028232635611926e+38 (a representation of infinity, effectively high ratio)\u30104:6\u2020source\u3011\n\n6. **compressor_brute_compression**\n   - Ratio: 12.6\u30104:16\u2020source\u3011\n\n7. **compressor_kick_reducer**\n   - Ratio: 3.4028232635611926e+38\u30104:8\u2020source\u3011 \n\nThese presets will provide you with the higher compression ratios you need for stronger compression effects.",
+        "answer_length": 731,
+        "sources_count": 7,
+        "thread_id": "thread_VGj7YRzwUeuVtg2eY2R6Mh8n"
+      }
+    ],
+    "Comparison": [
+      {
+        "ok": true,
+        "category": "Comparison",
+        "query": "compare Cathedral and Church reverb presets",
+        "expected": "Detailed parameter comparison with key differences",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 38.79
+        },
+        "total_time": 38.79961109161377,
+        "model_complexity": null,
+        "answer": "Here's a comparison between the \"Cathedral\" and \"Church\" reverb presets based on their settings:\n\n### **Cathedral Reverb Preset**\n- **Device**: Reverb\n- **Preset ID**: `reverb_cathedral`\n- **Category**: Reverb\n- **Parameter Settings**:\n  - **Chorus Amount**: 0.2\n  - **Chorus On**: 0.0\n  - **Chorus Rate**: 0.08\n  - **Cut On**: 0.0\n  - **Decay Time**: 5000.0 ms\n  - **Density**: 3.0\n  - **Device On**: 1.0\n  - **Diffuse Level**: 0.0\n  - **Diffusion**: 20.0%\n  - **Dry/Wet**: 100.0%\n  - **ER Shape**: 1.0\n  - **ER Spin Amount**: 13.82\n  - **ER Spin On**: 0.0\n  - **ER Spin Rate**: 0.24\n  - **Flat On**: 0.0\n  - **Freeze On**: 0.0\n  - **HiFilter Freq**: 5372 Hz\n  - **HiFilter On**: 1.0\n  - **HiFilter Type**: 0.0\n  - **HiShelf Gain**: 0.4\n  - **In Filter Freq**: 3306 Hz\n  - **In Filter Width**: 4.22\n  - **In HighCut On**: 1.0\n  - **In LowCut On**: 0.0\n  - **LowShelf Freq**: 90 Hz\n  - **LowShelf Gain**: 0.75\n  - **LowShelf On**: 0.0\n  - **Predelay**: 60.0 ms\n  - **Reflect Level**: -6.0 dB\n  - **Room Size**: 180.0\n  - **Scale**: 20.0\n  - **Size Smoothing**: 2.0\n  - **Stereo Image**: 100.0%\n\n### **Church Reverb Preset**\n- **Device**: Reverb\n- **Preset ID**: `reverb_church`\n- **Category**: Reverb\n- Due to a lack of detailed parameters in the available documentation for the Church preset, we cannot provide exact settings like those of the Cathedral preset\u30104:0\u2020source\u3011.\n\nIf there are any specific parameter settings for the Church preset you've encountered elsewhere or would like to inquire about further, feel free to ask!",
+        "answer_length": 1529,
+        "sources_count": 1,
+        "thread_id": "thread_qVz2QMoDULKF4czqfzyFtjqj"
+      },
+      {
+        "ok": true,
+        "category": "Comparison",
+        "query": "what's the difference between Tape Delay and Filter Delay?",
+        "expected": "Technical differences and use cases",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 14.62
+        },
+        "total_time": 14.627143859863281,
+        "model_complexity": null,
+        "answer": "The primary difference between the Tape Delay and Filter Delay lies in their modulation and filter functionalities:\n\n1. **Tape Delay:**\n   - **Modulation:**\n     - Emphasizes analog/tape-style delay character using LFO (Low-Frequency Oscillator) modulation on delay time, resulting in chorus-like effects and variations in delay time\u30104:0\u2020device-catalog.md\u3011.\n   - **Delay Mode:**\n     - The \"Repitch\" mode often used here mimics the doppler effect you get when changing tape speed, causing tape-style pitch shifts\u30104:4\u2020device-catalog.md\u3011.\n   \n2. **Filter Delay:**\n   - **Filter:**\n     - Incorporates a band-pass filter in the feedback loop to shape the repeating echoes, allowing for tone shaping and preventing low-end or harsh high-frequency buildup\u30104:1\u2020device-catalog.md\u3011.\n   - **Modulation:**\n     - Allows for LFO modulation to be applied not only to delay time but also significantly to filter frequency to create dynamic frequency sweeping or auto-wah effects\u30104:2\u2020device-catalog.md\u3011\u30104:3\u2020device-catalog.md\u3011.\n\nIn summary, Tape Delay is characterized by its analog warmth and pitch modulation effects similar to tape machines, while Filter Delay focuses more on precise frequency shaping with adjustable filtering in the feedback path.",
+        "answer_length": 1238,
+        "sources_count": 5,
+        "thread_id": "thread_CTZRKRLpAKCjudfwoJcym7SI"
+      },
+      {
+        "ok": true,
+        "category": "Comparison",
+        "query": "compare Plate and Hall reverb types",
+        "expected": "Differences in reverb types and characteristics",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 19.84
+        },
+        "total_time": 19.8470561504364,
+        "model_complexity": null,
+        "answer": "Let's compare the **Plate** and **Hall** reverb types based on their presets in your Ableton Live system.\n\n### Plate Reverb\n- **Plate Damped**\n  - **Decay Time**: 891.0 ms\n  - **Density**: 0.0\n  - **Diffuse Level**: 3.0\n  - **Diffusion**: 96.0\n  - **Dry/Wet**: 22.0%\n  - **Reflect Level**: -30.0\n  - **Room Size**: 1.78\n  - **Predelay**: 2.5 ms\u30104:0\u2020preset-catalog.md\u3011\n\n### Hall Reverb\n- **Hall Damped**\n  - **Decay Time**: 2587.0 ms\n  - **Density**: 0.0\n  - **Diffuse Level**: 5.6\n  - **Diffusion**: 60.0\n  - **Dry/Wet**: 20.0%\n  - **Reflect Level**: 4.8\n  - **Room Size**: 289.32\n  - **Predelay**: 27.2 ms\u30104:1\u2020preset-catalog.md\u3011\n\n### Key Differences\n- **Decay Time**: Hall reverb has a significantly longer decay time (2587 ms) as compared to Plate reverb (891 ms), indicating a more lingering reverb tail.\n- **Reflect Level**: Hall reverb has a more pronounced reflect level (4.8) compared to the negative reflect level of Plate (-30.0), which may make rooms sound more prominent with Hall.\n- **Room Size**: Substantial difference in perceived space with Hall reverb simulating much larger rooms (Room Size of 289.32) than Plate (Room Size of 1.78).\n- **Predelay**: Hall reverb's predelay (27.2 ms) is much longer than Plate's (2.5 ms), creating a more distinct delay between the dry sound and the onset of reverb\u30104:0\u2020preset-catalog.md\u3011\u30104:1\u2020preset-catalog.md\u3011.\n\nThese parameters influence the overall character and use-case scenarios for each reverb type, with Hall reverb typically suited for larger, more open soundstages and Plate for tighter, more controlled reverberation settings.",
+        "answer_length": 1588,
+        "sources_count": 4,
+        "thread_id": "thread_44AyD6XYzkfKY9haEk7jeSFn"
+      }
+    ],
+    "Complete List": [
+      {
+        "ok": true,
+        "category": "Complete List",
+        "query": "list all reverb presets with their IDs",
+        "expected": "All 52 reverb presets with preset IDs",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 30.45
+        },
+        "total_time": 30.45629572868347,
+        "model_complexity": null,
+        "answer": "Here is the complete list of reverb presets along with their IDs:\n\n1. **Ambience**  \n   Preset ID: `reverb_ambience`\n\n2. **Ambience Medium**  \n   Preset ID: `reverb_ambience_medium`\n\n3. **Ballad Reverb**  \n   Preset ID: `reverb_ballad_reverb`\n\n4. **Basement**  \n   Preset ID: `reverb_basement`\n\n5. **Cathedral**  \n   Preset ID: `reverb_cathedral`\n\n6. **Church**  \n   Preset ID: `reverb_church`\n\n7. **Concert Hall**  \n   Preset ID: `reverb_concert_hall`\n\n8. **Corridor**  \n   Preset ID: `reverb_corridor`\n\n9. **Dark Medium Room**  \n   Preset ID: `reverb_dark_medium_room`\n\n10. **Dark Small Room**  \n    Preset ID: `reverb_dark_small_room`\n\n11. **Empty Club**  \n    Preset ID: `reverb_empty_club`\n\n12. **Foyer**  \n    Preset ID: `reverb_foyer`\n\n13. **Hall Damped**  \n    Preset ID: `reverb_hall_damped`\n\n14. **Halluzinatione**  \n    Preset ID: `reverb_halluzinatione`\n\n15. **High Verb**  \n    Preset ID: `reverb_high_verb`\n\n16. **Large Chamber**  \n    Preset ID: `reverb_large_chamber`\n\n17. **Large Factory**  \n    Preset ID: `reverb_large_factory`\n\n18. **Large Space Chorus**  \n    Preset ID: `reverb_large_space_chorus`\n\n19. **Late Wrapper**  \n    Preset ID: `reverb_late_wrapper`\n\n20. **Living Room**  \n    Preset ID: `reverb_living_room`\n\n21. **Medium Room**  \n    Preset ID: `reverb_medium_room`\n\n22. **Plate**  \n    Preset ID: `reverb_plate`\n\n23. **Rich Plate**  \n    Preset ID: `reverb_rich_plate`\n\n24. **Room**  \n    Preset ID: `reverb_room`\n\n25. **Room Acoustic**  \n    Preset ID: `reverb_room_acoustic`\n\n26. **Room Studio**  \n    Preset ID: `reverb_room_studio`\n\n27. **Sauna**  \n    Preset ID: `reverb_sauna`\n\n28. **Shimmer Reverb**  \n    Preset ID: `reverb_shimmer_reverb`\n\n29. **Short Reflexion**  \n    Preset ID: `reverb_short_reflexion`\n\n30. **Small Room**  \n    Preset ID: `reverb_small_room`\n\n31. **Snare Room**  \n    Preset ID: `reverb_snare_room`\n\n32. **Space Reverb**  \n    Preset ID: `reverb_space_reverb`\n\n33. **Stereo**  \n    Preset ID: `reverb_stereo`\n\n34. **Studio Club**  \n    Preset ID: `reverb_studio_club`\n\n35. **Studio Plate**  \n    Preset ID: `reverb_studio_plate`\n\n36. **Surround**  \n    Preset ID: `reverb_surround`\n\n37. **Taj Mahal**  \n    Preset ID: `reverb_taj_mahal`\n\n38. **Talking Reverb**  \n    Preset ID: `reverb_talking_reverb`\n\n39. **Tea House**  \n    Preset ID: `reverb_tea_house`\n\n40. **Thin Plate**  \n    Preset ID: `reverb_thin_plate`\n\n41. **Tight Room**  \n    Preset ID: `reverb_tight_room`\n\n42. **Underwater**  \n    Preset ID: `reverb_underwater`\n\n43. **Vocal Reverb**  \n    Preset ID: `reverb_vocal_reverb`\n\n44. **Volcano**  \n    Preset ID: `reverb_volcano`\n\n45. **Warehouse**  \n    Preset ID: `reverb_warehouse`\n\n46. **Wide Plate**  \n    Preset ID: `reverb_wide_plate`\n\n47. **Wood Room**  \n    Preset ID: `reverb_wood_room`\n\n48. **Wooden Church**  \n    Preset ID: `reverb_wooden_church`\n\n49. **Wooden Stage**  \n    Preset ID: `reverb_wooden_stage`\n\n50. **X1 Hall**  \n    Preset ID: `reverb_x1_hall`\n\n51. **X2 Hall**  \n    Preset ID: `reverb_x2_hall`\n\n52. **X3 Hall**  \n    Preset ID: `reverb_x3_hall`\n\nThese presets are part of the Fadebender Reverb device, which has a total of 52 presets\u30104:0\u2020preset-catalog.md\u3011.",
+        "answer_length": 3160,
+        "sources_count": 1,
+        "thread_id": "thread_s3qSBvbGtOqGhnnO2FKlfHDf"
+      },
+      {
+        "ok": true,
+        "category": "Complete List",
+        "query": "show me every delay preset available",
+        "expected": "Complete list of all delay presets",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 14.49
+        },
+        "total_time": 14.495960712432861,
+        "model_complexity": null,
+        "answer": "Here is the complete list of delay presets available:\n\n1. **delay_16th_dub**\n2. **delay_16th_ping_pong**\n3. **delay_ping**\n4. **delay_pong**\n5. **delay_quarter_note**\n6. **delay_robot**\n7. **delay_sloppy_delay**\n8. **delay_uneven_two_beat**\n\nThese presets cover a range of styles and effects applicable for various delay-based sound processing\u30104:13\u2020preset-catalog.md\u3011\u30104:15\u2020preset-catalog.md\u3011\u30104:16\u2020preset-catalog.md\u3011.",
+        "answer_length": 416,
+        "sources_count": 3,
+        "thread_id": "thread_wPGEXgUE2MJomCW06mTWFQGH"
+      },
+      {
+        "ok": true,
+        "category": "Complete List",
+        "query": "list all compressor presets",
+        "expected": "Complete list of compressor presets",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 48.78
+        },
+        "total_time": 48.78517818450928,
+        "model_complexity": null,
+        "answer": "Here is a complete list of all the compressor presets available:\n\n1. **compressor_generic_compressor**\n   - **Preset ID**: `compressor_generic_compressor`\n   \n2. **compressor_gentle-kneeless**\n   - **Preset ID**: `compressor_gentle-kneeless`\n\n3. **compressor_gentle_squeeze**\n   - **Preset ID**: `compressor_gentle_squeeze`\n\n4. **compressor_kick_reducer**\n   - **Preset ID**: `compressor_kick_reducer`\n\n5. **compressor_acoustic_kick_compressor**\n   - **Preset ID**: `compressor_acoustic_kick_compressor`\n\n6. **compressor_basic_peak_compressor**\n   - **Preset ID**: `compressor_basic_peak_compressor`\n\n7. **compressor_brick_wall**\n   - **Preset ID**: `compressor_brick_wall`\n\n8. **compressor_brute_compression**\n   - **Preset ID**: `compressor_brute_compression`\n\n9. **compressor_classical_compression**\n   - **Preset ID**: `compressor_classical_compression`\n\n10. **compressor_mix_gel**\n    - **Preset ID**: `compressor_mix_gel`\n\n11. **compressor_precise**\n    - **Preset ID**: `compressor_precise`\n\n12. **compressor_soft_snare_compressor**\n    - **Preset ID**: `compressor_soft_snare_compressor`\n\n13. **compressor_sustained_lead_vocal**\n    - **Preset ID**: `compressor_sustained_lead_vocal`\n\n14. **compressor_loud-kneeless**\n    - **Preset ID**: `compressor_loud-kneeless`\n\n15. **compressor_mildly_aggresive**\n    - **Preset ID**: `compressor_mildly_aggresive`\n\n16. **compressor_de-esser**\n    - **Preset ID**: `compressor_de-esser`\n\n17. **compressor_flattenator**\n    - **Preset ID**: `compressor_flattenator`\n\nThis list provides all available presets within the compressor category in the provided documentation      .",
+        "answer_length": 1621,
+        "sources_count": 0,
+        "thread_id": "thread_O3uKALIWO6d1G3yEbmKfDiYS"
+      }
+    ],
+    "Semantic Understanding": [
+      {
+        "ok": true,
+        "category": "Semantic Understanding",
+        "query": "I need a subtle reverb for intimate vocals, what should I use?",
+        "expected": "Context-aware recommendation based on 'subtle' and 'intimate'",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 17.66
+        },
+        "total_time": 17.667881965637207,
+        "model_complexity": null,
+        "answer": "For a subtle reverb effect suitable for intimate vocals, consider using the \"Vocal Hall\" preset from the Ableton Live reverb device. Here are its settings:\n\n1. **Preset Name**: Vocal Hall\n2. **Preset ID**: `reverb_vocal_hall`\n3. **Category**: Reverb\n\n**Parameter Settings**:\n- Chorus Amount: 0.62\n- Chorus On: 1.0\n- Chorus Rate: 0.28\n- Cut On: 1.0\n- Decay Time: 3000 ms\n- Density: 3.0\n- Device On: 1.0\n- Diffuse Level: 0.0\n- Diffusion: 45.0\n- Dry/Wet: 100.0\n- ER Shape: 1.0\n- ER Spin Amount: 13.82\n- ER Spin On: 0.0\n- ER Spin Rate: 0.24\n- Flat On: 1.0\n- Freeze On: 0.0\n- HiFilter Freq: 4687.0 Hz\n- HiFilter On: 1.0\n- HiFilter Type: 0.0\n- HiShelf Gain: 0.73\n- In Filter Freq: 3952.0 Hz\n- In Filter Width: 4.4\n- In HighCut On: 1.0\n- In LowCut On: 0.0\n- LowShelf Freq: 133.0 Hz\n- LowShelf Gain: 0.6\n- LowShelf On: 1.0\n- Predelay: 90.0 ms\n- Reflect Level: -3.0 dB\n- Room Size: 100.0\n- Scale: 100.0\n- Size Smoothing: 2.0\n- Stereo Image: 100.0\n\nThis preset is designed to give vocals a warm and enveloping reverb ambiance without overwhelming the clarity of the vocal line\u30104:16\u2020source\u3011.",
+        "answer_length": 1080,
+        "sources_count": 1,
+        "thread_id": "thread_N8jScexpxClTVJvUcyLIntTt"
+      },
+      {
+        "ok": true,
+        "category": "Semantic Understanding",
+        "query": "suggest a big, spacious reverb for orchestral strings",
+        "expected": "Large hall/cathedral type reverbs",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 16.61
+        },
+        "total_time": 16.79231095314026,
+        "model_complexity": null,
+        "answer": "For a big, spacious reverb suitable for orchestral strings, you might want to consider the following presets from the Fadebender's preset catalog:\n\n1. **Space Reverb**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_space_reverb`\n   - Characteristics: Offers a spacious, lush reverb ideal for creating a large, expansive soundstage, particularly suitable for orchestral arrangements. \n   - Parameter Settings:\n     - **Decay Time**: 19522.0 ms\n     - **Room Size**: 500.0\n     - **Stereo Image**: 106.7699966430664 degrees\u30104:3\u2020preset-catalog.md\u3011.\n\n2. **Large Space Chorus**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_large_space_chorus`\n   - Characteristics: This preset adds a chorus effect on top of a large space reverb, enhancing the spaciousness and depth of orchestral strings.\n   - Parameter Settings:\n     - **Decay Time**: 12304.0 ms\n     - **Room Size**: 95.62000274658203\n     - **Stereo Image**: 120.0 degrees\u30104:1\u2020preset-catalog.md\u3011.\n\n3. **Halluzinatione**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_halluzinatione`\n   - Characteristics: Provides a deep, hall-like reverb with a moderately long decay time, perfect for achieving a realistic orchestral hall ambiance.\n   - Parameter Settings:\n     - **Decay Time**: 1757.0 ms\n     - **Room Size**: 45.84000015258789\n     - **Stereo Image**: 109.5199966430664\u30104:2\u2020preset-catalog.md\u3011.\n\nThese presets are crafted to deliver different aspects of a large and immersive reverb experience for orchestral strings, emphasizing size, decay, and stereo imaging, which are essential for realistic orchestral soundscapes in music production.",
+        "answer_length": 1611,
+        "sources_count": 3,
+        "thread_id": "thread_2U4xwmx4I1dhM08A1nSaNxL7"
+      },
+      {
+        "ok": true,
+        "category": "Semantic Understanding",
+        "query": "what delay creates a vintage tape echo sound?",
+        "expected": "Tape delay presets with character description",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 16.73
+        },
+        "total_time": 16.826292991638184,
+        "model_complexity": null,
+        "answer": "To create a vintage tape echo sound, you would typically aim for a delay setting that emulates the characteristics of an analog tape delay, often utilizing the \"Repitch\" mode in Ableton Live, which emulates tape-style pitch shifts. Here are some details that help in setting up a vintage tape echo sound:\n\n1. **Delay Mode Setting**: Use the \"Repitch\" setting, which emulates tape mechanics with a Doppler shift, providing a tape-style analog delay effect .\n\n2. **Delay Time**: \n   - For slapback echo (a classic tape delay effect), you might set the delay time between 50-120 ms .\n   - Medium delays for more echo and vintage vibe might range from 150-300 ms .\n\n3. **Feedback**: Adjust feedback to control the number of repeats:\n   - Ranges between 40-60% for multiple distinct echoes which can offer a more pronounced vintage tape sound without going into a reverb-like wash .\n\n4. **LFO Modulation**:\n   - Use a lower LFO modulation rate (e.g., 0.01-0.5 Hz) for slight tape-like drift .\n   - Increase the modulation depth (Dly < Mod) to add pitch warble, typically around 5-15% for a subtle analog warmth .\n\n5. **Filter Settings**:\n   - Utilize a band-pass filter to shape the echo, reducing harsh highs or booming lows, which can be adjusted using the Filter section .\n\nThese settings combined will help create a warm, oscillating delay reminiscent of the classic tape echo units like the Roland RE-201 Space Echo. Adjustments should be made based on the specific instrument and the context within the mix.",
+        "answer_length": 1508,
+        "sources_count": 0,
+        "thread_id": "thread_RNWyN77A6aPuXVasKeGsr7xP"
+      }
+    ],
+    "Workflow": [
+      {
+        "ok": true,
+        "category": "Workflow",
+        "query": "how do I automate the reverb decay time?",
+        "expected": "Instructions for parameter automation",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 16.46
+        },
+        "total_time": 16.819551944732666,
+        "model_complexity": null,
+        "answer": "To automate the reverb decay time in Ableton Live using Fadebender, you'll want to use the parameter controls for the reverb effect. Here's how you can automate the decay time:\n\n1. **Open Device Controls**: Ensure you have the device panel open for the reverb effect you wish to automate. For instance, you can use a command like `open track 1 reverb` or `view track 1 reverb` to bring up the controls if it's on track 1 .\n\n2. **Adjust Decay Time Manually**: The decay time is a continuous control parameter in the reverb settings, with a range from 200 to 60,000 milliseconds. This parameter controls how long the reverb tail takes to decay to -60 dB, influencing the perceived space size and density\u30104:0\u2020source\u3011\u30104:3\u2020source\u3011.\n\n3. **Automate in Ableton**: Enter automation mode in Live by clicking the 'A' key or selecting it from the menu. Then, in the arrangement view, click on the track containing your reverb device. Look for the \"Decay Time\" parameter as an option in the envelope editor. You can then draw automation curves to change this parameter over time.\n\n4. **Using Commands**: You can use commands like `set return A reverb decay to 2 s` to set an absolute decay time using Fadebender control methods .\n\n5. **Creative Use**: Automation of the decay time can dramatically change the texture and space of your mix, going from tight, controlled spaces to expansive halls as the decay time is increased\u30104:3\u2020source\u3011.\n\nBy following these steps, you can effectively automate the reverb decay time to enhance the dynamics and space in your music production within Ableton Live. If you need more detailed instructions or assistance, feel free to ask!",
+        "answer_length": 1655,
+        "sources_count": 3,
+        "thread_id": "thread_fbY2ijBs2melPYNYEZ8ziBRQ"
+      },
+      {
+        "ok": true,
+        "category": "Workflow",
+        "query": "can I load multiple effects on the same track?",
+        "expected": "Device chain explanation",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 6.36
+        },
+        "total_time": 6.735362768173218,
+        "model_complexity": null,
+        "answer": "Yes, you can load multiple effects on the same track in Ableton Live. You can do this by placing different audio or MIDI effects in the device chain of the track. Each effect processes the signal in sequence, allowing for complex sound design and processing. You simply drag and drop the effects into the track's device view, and they will be applied in the order they appear. If you have any more specific questions or need assistance with certain effects or commands, feel free to ask!",
+        "answer_length": 487,
+        "sources_count": 0,
+        "thread_id": "thread_t511BywcBkCbIXu3SzaVzX4f"
+      },
+      {
+        "ok": true,
+        "category": "Workflow",
+        "query": "what's the command to set send level to a return track?",
+        "expected": "Command syntax for send levels",
+        "mode": "openai-assistants",
+        "rag_mode": "assistants",
+        "timing": {
+          "total": 14.75
+        },
+        "total_time": 14.749061822891235,
+        "model_complexity": null,
+        "answer": "To set the send level to a return track using Fadebender, you would use a command formatted in natural language like this:\n\n```\nset track [track_number] send [return_track] to [dB or %]\n```\n\nFor example, if you want to set Track 1's send level to Return Track A to -12 dB, you would type:\n\n```\nset track 1 send A to -12 dB\n```\n\nThis command adjusts the send level of a specified track to a specific return in decibels\u30104:0\u2020user-guide.md\u3011.",
+        "answer_length": 437,
+        "sources_count": 1,
+        "thread_id": "thread_XxlS4uD2dLUcEP0W02X5vqX4"
+      }
+    ]
+  },
+  "all_results": [
+    {
+      "ok": true,
+      "category": "Simple Factual",
+      "query": "how many reverb presets are available?",
+      "expected": "Should return specific count (52 reverb presets)",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 32.35
+      },
+      "total_time": 32.356005907058716,
+      "model_complexity": null,
+      "answer": "There are a total of 52 reverb presets available in the Fadebender Preset Catalog\u30104:0\u2020preset-catalog.md\u3011.",
+      "answer_length": 105,
+      "sources_count": 1,
+      "thread_id": "thread_MlkRqzOec3ZPIdYH7PT9GL80"
+    },
+    {
+      "ok": true,
+      "category": "Simple Factual",
+      "query": "what parameters can I control on the compressor?",
+      "expected": "List of compressor parameters",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 27.33
+      },
+      "total_time": 27.331412315368652,
+      "model_complexity": null,
+      "answer": "The Compressor in Ableton Live has the following parameters you can control:\n\n1. **Threshold**\n   - **Control Type**: continuous\n   - **Range**: -70.0 to 6.0 dB\n\n2. **Ratio**\n   - **Control Type**: continuous\n   - **Range**: 1.0 to 100.0\n\n3. **Attack**\n   - **Control Type**: continuous\n   - **Range**: 0.01 to 100.0 ms\n\n4. **Release**\n   - **Control Type**: continuous\n   - **Range**: 1.0 to 3000.0 ms\n\n5. **Auto Release On/Off**\n   - **Control Type**: binary\n   - **Values**: Off / On\n\n6. **Knee**\n   - **Control Type**: continuous\n   - **Range**: 0.0 to 18.0 dB\n\n7. **Model**\n   - **Control Type**: quantized\n\n8. **Device On**\n   - **Control Type**: binary\n   - **Values**: Off / On\n\n9. **Expansion Ratio**\n   - **Control Type**: continuous\n   - **Range**: 1.0 to 2.0\n\n10. **Output Gain**\n    - **Control Type**: continuous\n    - **Range**: -36.0 to 36.0 dB\n\n11. **Makeup**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n12. **Dry/Wet**\n    - **Control Type**: continuous\n    - **Range**: 0.0 to 100.0 %\n\n13. **LookAhead**\n    - **Control Type**: quantized\n\n14. **S/C On**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n15. **S/C Gain**\n    - **Control Type**: continuous\n    - **Range**: -70.0 to 24.0 dB\n\n16. **S/C Mix**\n    - **Control Type**: continuous\n    - **Range**: 0.0 to 100.0 %\n\n17. **S/C Listen**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n18. **S/C EQ On**\n    - **Control Type**: binary\n    - **Values**: Off / On\n\n19. **S/C EQ Type**\n    - **Control Type**: quantized\n\n20. **S/C EQ Freq**\n    - **Control Type**: continuous\n    - **Range**: 30.0 to 15000.0 Hz\n\n21. **S/C EQ Q**\n    - **Control Type**: continuous\n    - **Range**: 0.1 to 18.0\n\n22. **S/C EQ Gain**\n    - **Control Type**: continuous\n    - **Range**: -15.0 to 15.0 dB\u30104:12\u2020device-catalog.md\u3011.",
+      "answer_length": 1815,
+      "sources_count": 1,
+      "thread_id": "thread_pvQ3Nrp9K2w1z3vXwF86b6sK"
+    },
+    {
+      "ok": true,
+      "category": "Simple Factual",
+      "query": "how do I load a reverb preset on track 1?",
+      "expected": "Command syntax and example",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 14.03
+      },
+      "total_time": 14.038548946380615,
+      "model_complexity": null,
+      "answer": "To load a reverb preset on Track 1 using Fadebender, you can use the following command:\n\n```plaintext\nload reverb preset [preset name] on track 1\n```\n\nHere is the list of reverb presets you can choose from:\n\n1. **Cathedral** - Preset ID: `reverb_cathedral`\n2. **Church** - Preset ID: `reverb_church`\n3. **Concert Hall** - Preset ID: `reverb_concert_hall`\n4. **Corridor** - Preset ID: `reverb_corridor`\n5. **Dark Medium Room** - Preset ID: `reverb_dark_medium_room`\n6. **Dark Small Room** - Preset ID: `reverb_dark_small_room`\n7. **Empty Club** - Preset ID: `reverb_empty_club`\n8. **Halluzinatione** - Preset ID: `reverb_halluzinatione`\n9. **High Verb** - Preset ID: `reverb_high_verb`\n10. **Backbone** - Preset ID: `reverb_backbone`\n11. **Ballad Reverb** - Preset ID: `reverb_ballad_reverb`\n12. **Basement** - Preset ID: `reverb_basement`\n13. **Large Chamber** - Preset ID: `reverb_large_chamber`\n14. **Large Factory** - Preset ID: `reverb_large_factory`\n15. **Vocal Hall** - Preset ID: `reverb_vocal_hall`\n16. **Warm Reverb Long** - Preset ID: `reverb_warm_reverb_long`\n17. **Hall Damped** - Preset ID: `reverb_hall_damped`\n18. **Large Space Chorus** - Preset ID: `reverb_large_space_chorus`\n19. **Late Wrapper** - Preset ID: `reverb_late_wrapper`\n20. **Living Room** - Preset ID: `reverb_living_room`\n\nFor instance, if you want to load the \"Cathedral\" reverb preset, you would type:\n\n```plaintext\nload reverb preset cathedral on track 1\n```\n\nThis command will load the specified reverb preset onto Track 1\u30104:1\u2020user-guide.md\u3011 .",
+      "answer_length": 1528,
+      "sources_count": 1,
+      "thread_id": "thread_NWjkgXrgK1gfUG6KsNC0sNuq"
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "what reverb presets are best for vocals?",
+      "expected": "Reverb presets suitable for vocal processing",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 33.86
+      },
+      "total_time": 33.86800265312195,
+      "model_complexity": null,
+      "answer": "Here is the complete list of reverb presets that could be used for vocals, along with their preset IDs. These are from the Fadebender preset catalog:\n\n1. **Ambience**\n   - Preset ID: `reverb_ambience`\n   - Description: Creates a sense of space with a rich yet clear ambience.\n\n2. **Ambience Medium**\n   - Preset ID: `reverb_ambience_medium`\n   - Description: Medium-sized ambience for a balanced sound environment.\n\n3. **Hall Damped**\n   - Preset ID: `reverb_hall_damped`\n   - Description: Provides a smooth, controlled reverb tail with a damped, reflective quality, suitable for maintaining vocal clarity in a mix.\n\n4. **Halluzinatione**\n   - Preset ID: `reverb_halluzinatione`\n   - Description: Offers a rich, enveloping reverb with a chorus effect for more experimental vocal tracks.\n\nEach of these presets highlights different characteristics in their usage. For instance, **Hall Damped** is particularly useful for vocals where clarity is crucial as it provides a reflective yet controlled reverb environment. Depending on the effect desired\u2014whether it is subtle ambience or a more lush, enveloping reverb\u2014these presets can help shade your vocals to sit well within a mix\u30104:0\u2020preset-catalog.md\u3011\u30104:1\u2020preset-catalog.md\u3011.",
+      "answer_length": 1223,
+      "sources_count": 2,
+      "thread_id": "thread_3vWQP6YE5JRocjCNAhJj1j6S"
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "which delay presets work well for drums?",
+      "expected": "Delay presets suitable for drums",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 38.94
+      },
+      "total_time": 38.948123931884766,
+      "model_complexity": null,
+      "answer": "Here are some delay presets you can consider using for drums:\n\n1. **delay_harmonics**\n   - Offers a very wet and feedback-heavy setting which could work well for experimental drum sounds\u30104:0\u2020preset-catalog.md\u3011.\n\n2. **delay_hi_buzz**\n   - Features a linked Ping Pong delay with high feedback, ideal for creating rhythmic spatial effects\u30104:0\u2020preset-catalog.md\u3011.\n\n3. **delay_high**\n   - Provides a strong Ping Pong effect with a high feedback level, suitable for wide stereo delay effects\u30104:5\u2020preset-catalog.md\u3011.\n\n4. **delay_longest_ping_pong**\n   - Designed for the longest possible Ping Pong delays, great for ambient drum tracks\u30104:5\u2020preset-catalog.md\u3011.\n\n5. **delay_simple_chorus**\n   - Adds a simple chorus effect, which can give drum sounds a thicker texture\u30104:15\u2020preset-catalog.md\u3011.\n\n6. **delay_simple_flanger**\n   - Can create flanger effects, adding movement and texture to drum hits\u30104:15\u2020preset-catalog.md\u3011.\n\n7. **delay_ping**\n   - Incorporates a strong Ping Pong effect, providing a wide stereo field for drum patterns\u30104:9\u2020preset-catalog.md\u3011.\n\nThese presets should provide a variety of textures and spatial effects to your drum tracks, ranging from subtle chorus and flanger to intense ping pong and feedback scenarios.",
+      "answer_length": 1225,
+      "sources_count": 7,
+      "thread_id": "thread_5W3gGul0j5zlAxQLW894da7P"
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "recommend reverb presets for acoustic guitar",
+      "expected": "Reverb presets suitable for acoustic guitar",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 13.92
+      },
+      "total_time": 13.921400785446167,
+      "model_complexity": null,
+      "answer": "Here are some reverb presets you can consider for enhancing the sound of an acoustic guitar in Ableton Live:\n\n1. **Halluzinatione**\n   - **Preset ID**: `reverb_halluzinatione`\n   - **Device**: Reverb\n   - **Category**: Reverb\u30104:0\u2020preset-catalog.md\u3011\n\n2. **High Verb**\n   - **Preset ID**: `reverb_high_verb`\n   - **Device**: Reverb\n   - **Category**: Reverb\u30104:0\u2020preset-catalog.md\u3011\n\n3. **Hall Damped**\n   - **Preset ID**: `reverb_hall_damped`\n   - **Device**: Reverb\n   - **Category**: Reverb\u30104:1\u2020preset-catalog.md\u3011\n\nThese presets offer varying levels of decay time, density, and overall reverb character which can be suitable for different acoustic guitar tones. You can apply these presets in Ableton to find which one best suits your needs and further tweak their parameters to match the specific ambiance and mood you aim to achieve in your track.",
+      "answer_length": 848,
+      "sources_count": 3,
+      "thread_id": "thread_3udfgtgIRJFFJJ7UJFO2u78I"
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "what compressor settings are good for mixing bass?",
+      "expected": "Compressor presets/settings for bass",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 26.2
+      },
+      "total_time": 26.206403970718384,
+      "model_complexity": null,
+      "answer": "When mixing bass using a compressor in Ableton Live, you want to focus on settings that allow you to control dynamic range without losing the natural sound of the bass. Here are a few compressor presets from your documentation that could be suitable for mixing bass, along with their settings:\n\n1. **`compressor_brute_compression`**:\n   - **Attack**: 0.01 ms\n   - **Release**: 10.2 ms\n   - **Ratio**: 12.6\n   - **Threshold**: -31.9 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 0.0 dB\u30104:0\u2020preset-catalog.md\u3011.\n\n2. **`compressor_classical_compression`**:\n   - **Attack**: 0.22 ms\n   - **Release**: 100 ms\n   - **Ratio**: 1.15\n   - **Threshold**: -9.7 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 6.0 dB\u30104:0\u2020preset-catalog.md\u3011.\n\n3. **`compressor_generic_compressor`**:\n   - **Attack**: 10.0 ms\n   - **Release**: 100 ms\n   - **Ratio**: 2.0\n   - **Threshold**: -21.5 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 0.7 dB\u30104:8\u2020preset-catalog.md\u3011.\n\n4. **`compressor_acoustic`**:\n   - **Attack**: 17.9 ms\n   - **Release**: 222 ms\n   - **Ratio**: 2.25\n   - **Threshold**: -17.5 dB\n   - **Dry/Wet**: 100%\n   - **Knee**: 7.7 dB\u30104:17\u2020preset-catalog.md\u3011.\n\nThe key to using compression on bass is to maintain the low-end punch while controlling peaks. Typically, a medium to slow attack and a medium release will help retain the bass's energy while smoothing out levels. Adjust the threshold and ratio to taste, ensuring you do not overly squash the dynamics unless specifically desired for creative reasons. \n\nThese presets provide a range of options, from more aggressive compression to more transparent, musical settings, which you can tailor to fit the rest of your mix.",
+      "answer_length": 1644,
+      "sources_count": 4,
+      "thread_id": "thread_taMlVwdhtTtgwaCruA8lStKA"
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "show me reverb presets with decay time less than 1 second",
+      "expected": "Reverb presets filtered by decay time < 1s",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 9.63
+      },
+      "total_time": 9.640207052230835,
+      "model_complexity": null,
+      "answer": "Here are the reverb presets with a decay time of less than 1 second:\n\n1. **Ambience**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_ambience`\n   - **Decay Time**: 600.0 ms\u30104:3\u2020preset-catalog.md\u3011\n\nIf you need detailed parameter settings or additional presets, feel free to ask!",
+      "answer_length": 282,
+      "sources_count": 1,
+      "thread_id": "thread_x7FYqsDs9ipARQQSbfP8lGP7"
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "which reverb presets have large room sizes?",
+      "expected": "Reverb presets with room size > certain threshold",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 12.7
+      },
+      "total_time": 12.705032110214233,
+      "model_complexity": null,
+      "answer": "Here are the reverb presets that feature large room sizes:\n\n1. **High Verb**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_high_verb`\n   - **Room Size**: 100.0\n\n2. **Large Space Chorus**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_large_space_chorus`\n   - **Room Size**: 95.62\n\n3. **Cathedral**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_cathedral`\n   - **Room Size**: 180.0\n\n4. **Space Reverb**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_space_reverb`\n   - **Room Size**: 500.0\n\nThese presets have varying uses and applications but are generally suited for expansive, immersive spaces like large halls, cathedrals, and concert venues\u30104:10\u2020source\u3011.",
+      "answer_length": 680,
+      "sources_count": 1,
+      "thread_id": "thread_VDz6nvHKx3OmcQJBe0k8SAN4"
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "find delay presets with feedback under 50%",
+      "expected": "Delay presets filtered by feedback parameter",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 21.78
+      },
+      "total_time": 21.780800104141235,
+      "model_complexity": null,
+      "answer": "Here is the list of delay presets with feedback under 50%:\n\n1. **delay_sloppy_delay**\n   - **Device**: Delay\n   - **Preset ID**: `delay_sloppy_delay`\n   - **Feedback**: 28.0\u30104:13\u2020preset-catalog.md\u3011\n\nThese presets are set with feedback levels below 50%, ensuring a quick decay and cleaner echoes. Let me know if you need more details or further assistance!",
+      "answer_length": 355,
+      "sources_count": 1,
+      "thread_id": "thread_0EV5KjOkr0d2XbDFekEXIlrQ"
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "what compressor presets have a ratio of 4:1 or higher?",
+      "expected": "Compressor presets filtered by ratio",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 23.79
+      },
+      "total_time": 23.79734492301941,
+      "model_complexity": null,
+      "answer": "Here is a list of compressor presets with a ratio of 4:1 or higher:\n\n1. **compressor_soft_snare_compressor**\n   - Ratio: 4.74\u30104:1\u2020source\u3011\n\n2. **compressor_sustained_lead_vocal**\n   - Ratio: 5.48\u30104:1\u2020source\u3011\n\n3. **compressor_acoustic_kick_compressor**\n   - Ratio: 4.0\u30104:2\u2020source\u3011\n\n4. **compressor_mildly_aggresive**\n   - Ratio: 4.0\u30104:4\u2020source\u3011\n\n5. **compressor_brick_wall**\n   - Ratio: 3.4028232635611926e+38 (a representation of infinity, effectively high ratio)\u30104:6\u2020source\u3011\n\n6. **compressor_brute_compression**\n   - Ratio: 12.6\u30104:16\u2020source\u3011\n\n7. **compressor_kick_reducer**\n   - Ratio: 3.4028232635611926e+38\u30104:8\u2020source\u3011 \n\nThese presets will provide you with the higher compression ratios you need for stronger compression effects.",
+      "answer_length": 731,
+      "sources_count": 7,
+      "thread_id": "thread_VGj7YRzwUeuVtg2eY2R6Mh8n"
+    },
+    {
+      "ok": true,
+      "category": "Comparison",
+      "query": "compare Cathedral and Church reverb presets",
+      "expected": "Detailed parameter comparison with key differences",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 38.79
+      },
+      "total_time": 38.79961109161377,
+      "model_complexity": null,
+      "answer": "Here's a comparison between the \"Cathedral\" and \"Church\" reverb presets based on their settings:\n\n### **Cathedral Reverb Preset**\n- **Device**: Reverb\n- **Preset ID**: `reverb_cathedral`\n- **Category**: Reverb\n- **Parameter Settings**:\n  - **Chorus Amount**: 0.2\n  - **Chorus On**: 0.0\n  - **Chorus Rate**: 0.08\n  - **Cut On**: 0.0\n  - **Decay Time**: 5000.0 ms\n  - **Density**: 3.0\n  - **Device On**: 1.0\n  - **Diffuse Level**: 0.0\n  - **Diffusion**: 20.0%\n  - **Dry/Wet**: 100.0%\n  - **ER Shape**: 1.0\n  - **ER Spin Amount**: 13.82\n  - **ER Spin On**: 0.0\n  - **ER Spin Rate**: 0.24\n  - **Flat On**: 0.0\n  - **Freeze On**: 0.0\n  - **HiFilter Freq**: 5372 Hz\n  - **HiFilter On**: 1.0\n  - **HiFilter Type**: 0.0\n  - **HiShelf Gain**: 0.4\n  - **In Filter Freq**: 3306 Hz\n  - **In Filter Width**: 4.22\n  - **In HighCut On**: 1.0\n  - **In LowCut On**: 0.0\n  - **LowShelf Freq**: 90 Hz\n  - **LowShelf Gain**: 0.75\n  - **LowShelf On**: 0.0\n  - **Predelay**: 60.0 ms\n  - **Reflect Level**: -6.0 dB\n  - **Room Size**: 180.0\n  - **Scale**: 20.0\n  - **Size Smoothing**: 2.0\n  - **Stereo Image**: 100.0%\n\n### **Church Reverb Preset**\n- **Device**: Reverb\n- **Preset ID**: `reverb_church`\n- **Category**: Reverb\n- Due to a lack of detailed parameters in the available documentation for the Church preset, we cannot provide exact settings like those of the Cathedral preset\u30104:0\u2020source\u3011.\n\nIf there are any specific parameter settings for the Church preset you've encountered elsewhere or would like to inquire about further, feel free to ask!",
+      "answer_length": 1529,
+      "sources_count": 1,
+      "thread_id": "thread_qVz2QMoDULKF4czqfzyFtjqj"
+    },
+    {
+      "ok": true,
+      "category": "Comparison",
+      "query": "what's the difference between Tape Delay and Filter Delay?",
+      "expected": "Technical differences and use cases",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 14.62
+      },
+      "total_time": 14.627143859863281,
+      "model_complexity": null,
+      "answer": "The primary difference between the Tape Delay and Filter Delay lies in their modulation and filter functionalities:\n\n1. **Tape Delay:**\n   - **Modulation:**\n     - Emphasizes analog/tape-style delay character using LFO (Low-Frequency Oscillator) modulation on delay time, resulting in chorus-like effects and variations in delay time\u30104:0\u2020device-catalog.md\u3011.\n   - **Delay Mode:**\n     - The \"Repitch\" mode often used here mimics the doppler effect you get when changing tape speed, causing tape-style pitch shifts\u30104:4\u2020device-catalog.md\u3011.\n   \n2. **Filter Delay:**\n   - **Filter:**\n     - Incorporates a band-pass filter in the feedback loop to shape the repeating echoes, allowing for tone shaping and preventing low-end or harsh high-frequency buildup\u30104:1\u2020device-catalog.md\u3011.\n   - **Modulation:**\n     - Allows for LFO modulation to be applied not only to delay time but also significantly to filter frequency to create dynamic frequency sweeping or auto-wah effects\u30104:2\u2020device-catalog.md\u3011\u30104:3\u2020device-catalog.md\u3011.\n\nIn summary, Tape Delay is characterized by its analog warmth and pitch modulation effects similar to tape machines, while Filter Delay focuses more on precise frequency shaping with adjustable filtering in the feedback path.",
+      "answer_length": 1238,
+      "sources_count": 5,
+      "thread_id": "thread_CTZRKRLpAKCjudfwoJcym7SI"
+    },
+    {
+      "ok": true,
+      "category": "Comparison",
+      "query": "compare Plate and Hall reverb types",
+      "expected": "Differences in reverb types and characteristics",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 19.84
+      },
+      "total_time": 19.8470561504364,
+      "model_complexity": null,
+      "answer": "Let's compare the **Plate** and **Hall** reverb types based on their presets in your Ableton Live system.\n\n### Plate Reverb\n- **Plate Damped**\n  - **Decay Time**: 891.0 ms\n  - **Density**: 0.0\n  - **Diffuse Level**: 3.0\n  - **Diffusion**: 96.0\n  - **Dry/Wet**: 22.0%\n  - **Reflect Level**: -30.0\n  - **Room Size**: 1.78\n  - **Predelay**: 2.5 ms\u30104:0\u2020preset-catalog.md\u3011\n\n### Hall Reverb\n- **Hall Damped**\n  - **Decay Time**: 2587.0 ms\n  - **Density**: 0.0\n  - **Diffuse Level**: 5.6\n  - **Diffusion**: 60.0\n  - **Dry/Wet**: 20.0%\n  - **Reflect Level**: 4.8\n  - **Room Size**: 289.32\n  - **Predelay**: 27.2 ms\u30104:1\u2020preset-catalog.md\u3011\n\n### Key Differences\n- **Decay Time**: Hall reverb has a significantly longer decay time (2587 ms) as compared to Plate reverb (891 ms), indicating a more lingering reverb tail.\n- **Reflect Level**: Hall reverb has a more pronounced reflect level (4.8) compared to the negative reflect level of Plate (-30.0), which may make rooms sound more prominent with Hall.\n- **Room Size**: Substantial difference in perceived space with Hall reverb simulating much larger rooms (Room Size of 289.32) than Plate (Room Size of 1.78).\n- **Predelay**: Hall reverb's predelay (27.2 ms) is much longer than Plate's (2.5 ms), creating a more distinct delay between the dry sound and the onset of reverb\u30104:0\u2020preset-catalog.md\u3011\u30104:1\u2020preset-catalog.md\u3011.\n\nThese parameters influence the overall character and use-case scenarios for each reverb type, with Hall reverb typically suited for larger, more open soundstages and Plate for tighter, more controlled reverberation settings.",
+      "answer_length": 1588,
+      "sources_count": 4,
+      "thread_id": "thread_44AyD6XYzkfKY9haEk7jeSFn"
+    },
+    {
+      "ok": true,
+      "category": "Complete List",
+      "query": "list all reverb presets with their IDs",
+      "expected": "All 52 reverb presets with preset IDs",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 30.45
+      },
+      "total_time": 30.45629572868347,
+      "model_complexity": null,
+      "answer": "Here is the complete list of reverb presets along with their IDs:\n\n1. **Ambience**  \n   Preset ID: `reverb_ambience`\n\n2. **Ambience Medium**  \n   Preset ID: `reverb_ambience_medium`\n\n3. **Ballad Reverb**  \n   Preset ID: `reverb_ballad_reverb`\n\n4. **Basement**  \n   Preset ID: `reverb_basement`\n\n5. **Cathedral**  \n   Preset ID: `reverb_cathedral`\n\n6. **Church**  \n   Preset ID: `reverb_church`\n\n7. **Concert Hall**  \n   Preset ID: `reverb_concert_hall`\n\n8. **Corridor**  \n   Preset ID: `reverb_corridor`\n\n9. **Dark Medium Room**  \n   Preset ID: `reverb_dark_medium_room`\n\n10. **Dark Small Room**  \n    Preset ID: `reverb_dark_small_room`\n\n11. **Empty Club**  \n    Preset ID: `reverb_empty_club`\n\n12. **Foyer**  \n    Preset ID: `reverb_foyer`\n\n13. **Hall Damped**  \n    Preset ID: `reverb_hall_damped`\n\n14. **Halluzinatione**  \n    Preset ID: `reverb_halluzinatione`\n\n15. **High Verb**  \n    Preset ID: `reverb_high_verb`\n\n16. **Large Chamber**  \n    Preset ID: `reverb_large_chamber`\n\n17. **Large Factory**  \n    Preset ID: `reverb_large_factory`\n\n18. **Large Space Chorus**  \n    Preset ID: `reverb_large_space_chorus`\n\n19. **Late Wrapper**  \n    Preset ID: `reverb_late_wrapper`\n\n20. **Living Room**  \n    Preset ID: `reverb_living_room`\n\n21. **Medium Room**  \n    Preset ID: `reverb_medium_room`\n\n22. **Plate**  \n    Preset ID: `reverb_plate`\n\n23. **Rich Plate**  \n    Preset ID: `reverb_rich_plate`\n\n24. **Room**  \n    Preset ID: `reverb_room`\n\n25. **Room Acoustic**  \n    Preset ID: `reverb_room_acoustic`\n\n26. **Room Studio**  \n    Preset ID: `reverb_room_studio`\n\n27. **Sauna**  \n    Preset ID: `reverb_sauna`\n\n28. **Shimmer Reverb**  \n    Preset ID: `reverb_shimmer_reverb`\n\n29. **Short Reflexion**  \n    Preset ID: `reverb_short_reflexion`\n\n30. **Small Room**  \n    Preset ID: `reverb_small_room`\n\n31. **Snare Room**  \n    Preset ID: `reverb_snare_room`\n\n32. **Space Reverb**  \n    Preset ID: `reverb_space_reverb`\n\n33. **Stereo**  \n    Preset ID: `reverb_stereo`\n\n34. **Studio Club**  \n    Preset ID: `reverb_studio_club`\n\n35. **Studio Plate**  \n    Preset ID: `reverb_studio_plate`\n\n36. **Surround**  \n    Preset ID: `reverb_surround`\n\n37. **Taj Mahal**  \n    Preset ID: `reverb_taj_mahal`\n\n38. **Talking Reverb**  \n    Preset ID: `reverb_talking_reverb`\n\n39. **Tea House**  \n    Preset ID: `reverb_tea_house`\n\n40. **Thin Plate**  \n    Preset ID: `reverb_thin_plate`\n\n41. **Tight Room**  \n    Preset ID: `reverb_tight_room`\n\n42. **Underwater**  \n    Preset ID: `reverb_underwater`\n\n43. **Vocal Reverb**  \n    Preset ID: `reverb_vocal_reverb`\n\n44. **Volcano**  \n    Preset ID: `reverb_volcano`\n\n45. **Warehouse**  \n    Preset ID: `reverb_warehouse`\n\n46. **Wide Plate**  \n    Preset ID: `reverb_wide_plate`\n\n47. **Wood Room**  \n    Preset ID: `reverb_wood_room`\n\n48. **Wooden Church**  \n    Preset ID: `reverb_wooden_church`\n\n49. **Wooden Stage**  \n    Preset ID: `reverb_wooden_stage`\n\n50. **X1 Hall**  \n    Preset ID: `reverb_x1_hall`\n\n51. **X2 Hall**  \n    Preset ID: `reverb_x2_hall`\n\n52. **X3 Hall**  \n    Preset ID: `reverb_x3_hall`\n\nThese presets are part of the Fadebender Reverb device, which has a total of 52 presets\u30104:0\u2020preset-catalog.md\u3011.",
+      "answer_length": 3160,
+      "sources_count": 1,
+      "thread_id": "thread_s3qSBvbGtOqGhnnO2FKlfHDf"
+    },
+    {
+      "ok": true,
+      "category": "Complete List",
+      "query": "show me every delay preset available",
+      "expected": "Complete list of all delay presets",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 14.49
+      },
+      "total_time": 14.495960712432861,
+      "model_complexity": null,
+      "answer": "Here is the complete list of delay presets available:\n\n1. **delay_16th_dub**\n2. **delay_16th_ping_pong**\n3. **delay_ping**\n4. **delay_pong**\n5. **delay_quarter_note**\n6. **delay_robot**\n7. **delay_sloppy_delay**\n8. **delay_uneven_two_beat**\n\nThese presets cover a range of styles and effects applicable for various delay-based sound processing\u30104:13\u2020preset-catalog.md\u3011\u30104:15\u2020preset-catalog.md\u3011\u30104:16\u2020preset-catalog.md\u3011.",
+      "answer_length": 416,
+      "sources_count": 3,
+      "thread_id": "thread_wPGEXgUE2MJomCW06mTWFQGH"
+    },
+    {
+      "ok": true,
+      "category": "Complete List",
+      "query": "list all compressor presets",
+      "expected": "Complete list of compressor presets",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 48.78
+      },
+      "total_time": 48.78517818450928,
+      "model_complexity": null,
+      "answer": "Here is a complete list of all the compressor presets available:\n\n1. **compressor_generic_compressor**\n   - **Preset ID**: `compressor_generic_compressor`\n   \n2. **compressor_gentle-kneeless**\n   - **Preset ID**: `compressor_gentle-kneeless`\n\n3. **compressor_gentle_squeeze**\n   - **Preset ID**: `compressor_gentle_squeeze`\n\n4. **compressor_kick_reducer**\n   - **Preset ID**: `compressor_kick_reducer`\n\n5. **compressor_acoustic_kick_compressor**\n   - **Preset ID**: `compressor_acoustic_kick_compressor`\n\n6. **compressor_basic_peak_compressor**\n   - **Preset ID**: `compressor_basic_peak_compressor`\n\n7. **compressor_brick_wall**\n   - **Preset ID**: `compressor_brick_wall`\n\n8. **compressor_brute_compression**\n   - **Preset ID**: `compressor_brute_compression`\n\n9. **compressor_classical_compression**\n   - **Preset ID**: `compressor_classical_compression`\n\n10. **compressor_mix_gel**\n    - **Preset ID**: `compressor_mix_gel`\n\n11. **compressor_precise**\n    - **Preset ID**: `compressor_precise`\n\n12. **compressor_soft_snare_compressor**\n    - **Preset ID**: `compressor_soft_snare_compressor`\n\n13. **compressor_sustained_lead_vocal**\n    - **Preset ID**: `compressor_sustained_lead_vocal`\n\n14. **compressor_loud-kneeless**\n    - **Preset ID**: `compressor_loud-kneeless`\n\n15. **compressor_mildly_aggresive**\n    - **Preset ID**: `compressor_mildly_aggresive`\n\n16. **compressor_de-esser**\n    - **Preset ID**: `compressor_de-esser`\n\n17. **compressor_flattenator**\n    - **Preset ID**: `compressor_flattenator`\n\nThis list provides all available presets within the compressor category in the provided documentation      .",
+      "answer_length": 1621,
+      "sources_count": 0,
+      "thread_id": "thread_O3uKALIWO6d1G3yEbmKfDiYS"
+    },
+    {
+      "ok": true,
+      "category": "Semantic Understanding",
+      "query": "I need a subtle reverb for intimate vocals, what should I use?",
+      "expected": "Context-aware recommendation based on 'subtle' and 'intimate'",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 17.66
+      },
+      "total_time": 17.667881965637207,
+      "model_complexity": null,
+      "answer": "For a subtle reverb effect suitable for intimate vocals, consider using the \"Vocal Hall\" preset from the Ableton Live reverb device. Here are its settings:\n\n1. **Preset Name**: Vocal Hall\n2. **Preset ID**: `reverb_vocal_hall`\n3. **Category**: Reverb\n\n**Parameter Settings**:\n- Chorus Amount: 0.62\n- Chorus On: 1.0\n- Chorus Rate: 0.28\n- Cut On: 1.0\n- Decay Time: 3000 ms\n- Density: 3.0\n- Device On: 1.0\n- Diffuse Level: 0.0\n- Diffusion: 45.0\n- Dry/Wet: 100.0\n- ER Shape: 1.0\n- ER Spin Amount: 13.82\n- ER Spin On: 0.0\n- ER Spin Rate: 0.24\n- Flat On: 1.0\n- Freeze On: 0.0\n- HiFilter Freq: 4687.0 Hz\n- HiFilter On: 1.0\n- HiFilter Type: 0.0\n- HiShelf Gain: 0.73\n- In Filter Freq: 3952.0 Hz\n- In Filter Width: 4.4\n- In HighCut On: 1.0\n- In LowCut On: 0.0\n- LowShelf Freq: 133.0 Hz\n- LowShelf Gain: 0.6\n- LowShelf On: 1.0\n- Predelay: 90.0 ms\n- Reflect Level: -3.0 dB\n- Room Size: 100.0\n- Scale: 100.0\n- Size Smoothing: 2.0\n- Stereo Image: 100.0\n\nThis preset is designed to give vocals a warm and enveloping reverb ambiance without overwhelming the clarity of the vocal line\u30104:16\u2020source\u3011.",
+      "answer_length": 1080,
+      "sources_count": 1,
+      "thread_id": "thread_N8jScexpxClTVJvUcyLIntTt"
+    },
+    {
+      "ok": true,
+      "category": "Semantic Understanding",
+      "query": "suggest a big, spacious reverb for orchestral strings",
+      "expected": "Large hall/cathedral type reverbs",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 16.61
+      },
+      "total_time": 16.79231095314026,
+      "model_complexity": null,
+      "answer": "For a big, spacious reverb suitable for orchestral strings, you might want to consider the following presets from the Fadebender's preset catalog:\n\n1. **Space Reverb**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_space_reverb`\n   - Characteristics: Offers a spacious, lush reverb ideal for creating a large, expansive soundstage, particularly suitable for orchestral arrangements. \n   - Parameter Settings:\n     - **Decay Time**: 19522.0 ms\n     - **Room Size**: 500.0\n     - **Stereo Image**: 106.7699966430664 degrees\u30104:3\u2020preset-catalog.md\u3011.\n\n2. **Large Space Chorus**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_large_space_chorus`\n   - Characteristics: This preset adds a chorus effect on top of a large space reverb, enhancing the spaciousness and depth of orchestral strings.\n   - Parameter Settings:\n     - **Decay Time**: 12304.0 ms\n     - **Room Size**: 95.62000274658203\n     - **Stereo Image**: 120.0 degrees\u30104:1\u2020preset-catalog.md\u3011.\n\n3. **Halluzinatione**\n   - **Device**: Reverb\n   - **Preset ID**: `reverb_halluzinatione`\n   - Characteristics: Provides a deep, hall-like reverb with a moderately long decay time, perfect for achieving a realistic orchestral hall ambiance.\n   - Parameter Settings:\n     - **Decay Time**: 1757.0 ms\n     - **Room Size**: 45.84000015258789\n     - **Stereo Image**: 109.5199966430664\u30104:2\u2020preset-catalog.md\u3011.\n\nThese presets are crafted to deliver different aspects of a large and immersive reverb experience for orchestral strings, emphasizing size, decay, and stereo imaging, which are essential for realistic orchestral soundscapes in music production.",
+      "answer_length": 1611,
+      "sources_count": 3,
+      "thread_id": "thread_2U4xwmx4I1dhM08A1nSaNxL7"
+    },
+    {
+      "ok": true,
+      "category": "Semantic Understanding",
+      "query": "what delay creates a vintage tape echo sound?",
+      "expected": "Tape delay presets with character description",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 16.73
+      },
+      "total_time": 16.826292991638184,
+      "model_complexity": null,
+      "answer": "To create a vintage tape echo sound, you would typically aim for a delay setting that emulates the characteristics of an analog tape delay, often utilizing the \"Repitch\" mode in Ableton Live, which emulates tape-style pitch shifts. Here are some details that help in setting up a vintage tape echo sound:\n\n1. **Delay Mode Setting**: Use the \"Repitch\" setting, which emulates tape mechanics with a Doppler shift, providing a tape-style analog delay effect .\n\n2. **Delay Time**: \n   - For slapback echo (a classic tape delay effect), you might set the delay time between 50-120 ms .\n   - Medium delays for more echo and vintage vibe might range from 150-300 ms .\n\n3. **Feedback**: Adjust feedback to control the number of repeats:\n   - Ranges between 40-60% for multiple distinct echoes which can offer a more pronounced vintage tape sound without going into a reverb-like wash .\n\n4. **LFO Modulation**:\n   - Use a lower LFO modulation rate (e.g., 0.01-0.5 Hz) for slight tape-like drift .\n   - Increase the modulation depth (Dly < Mod) to add pitch warble, typically around 5-15% for a subtle analog warmth .\n\n5. **Filter Settings**:\n   - Utilize a band-pass filter to shape the echo, reducing harsh highs or booming lows, which can be adjusted using the Filter section .\n\nThese settings combined will help create a warm, oscillating delay reminiscent of the classic tape echo units like the Roland RE-201 Space Echo. Adjustments should be made based on the specific instrument and the context within the mix.",
+      "answer_length": 1508,
+      "sources_count": 0,
+      "thread_id": "thread_RNWyN77A6aPuXVasKeGsr7xP"
+    },
+    {
+      "ok": true,
+      "category": "Workflow",
+      "query": "how do I automate the reverb decay time?",
+      "expected": "Instructions for parameter automation",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 16.46
+      },
+      "total_time": 16.819551944732666,
+      "model_complexity": null,
+      "answer": "To automate the reverb decay time in Ableton Live using Fadebender, you'll want to use the parameter controls for the reverb effect. Here's how you can automate the decay time:\n\n1. **Open Device Controls**: Ensure you have the device panel open for the reverb effect you wish to automate. For instance, you can use a command like `open track 1 reverb` or `view track 1 reverb` to bring up the controls if it's on track 1 .\n\n2. **Adjust Decay Time Manually**: The decay time is a continuous control parameter in the reverb settings, with a range from 200 to 60,000 milliseconds. This parameter controls how long the reverb tail takes to decay to -60 dB, influencing the perceived space size and density\u30104:0\u2020source\u3011\u30104:3\u2020source\u3011.\n\n3. **Automate in Ableton**: Enter automation mode in Live by clicking the 'A' key or selecting it from the menu. Then, in the arrangement view, click on the track containing your reverb device. Look for the \"Decay Time\" parameter as an option in the envelope editor. You can then draw automation curves to change this parameter over time.\n\n4. **Using Commands**: You can use commands like `set return A reverb decay to 2 s` to set an absolute decay time using Fadebender control methods .\n\n5. **Creative Use**: Automation of the decay time can dramatically change the texture and space of your mix, going from tight, controlled spaces to expansive halls as the decay time is increased\u30104:3\u2020source\u3011.\n\nBy following these steps, you can effectively automate the reverb decay time to enhance the dynamics and space in your music production within Ableton Live. If you need more detailed instructions or assistance, feel free to ask!",
+      "answer_length": 1655,
+      "sources_count": 3,
+      "thread_id": "thread_fbY2ijBs2melPYNYEZ8ziBRQ"
+    },
+    {
+      "ok": true,
+      "category": "Workflow",
+      "query": "can I load multiple effects on the same track?",
+      "expected": "Device chain explanation",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 6.36
+      },
+      "total_time": 6.735362768173218,
+      "model_complexity": null,
+      "answer": "Yes, you can load multiple effects on the same track in Ableton Live. You can do this by placing different audio or MIDI effects in the device chain of the track. Each effect processes the signal in sequence, allowing for complex sound design and processing. You simply drag and drop the effects into the track's device view, and they will be applied in the order they appear. If you have any more specific questions or need assistance with certain effects or commands, feel free to ask!",
+      "answer_length": 487,
+      "sources_count": 0,
+      "thread_id": "thread_t511BywcBkCbIXu3SzaVzX4f"
+    },
+    {
+      "ok": true,
+      "category": "Workflow",
+      "query": "what's the command to set send level to a return track?",
+      "expected": "Command syntax for send levels",
+      "mode": "openai-assistants",
+      "rag_mode": "assistants",
+      "timing": {
+        "total": 14.75
+      },
+      "total_time": 14.749061822891235,
+      "model_complexity": null,
+      "answer": "To set the send level to a return track using Fadebender, you would use a command formatted in natural language like this:\n\n```\nset track [track_number] send [return_track] to [dB or %]\n```\n\nFor example, if you want to set Track 1's send level to Return Track A to -12 dB, you would type:\n\n```\nset track 1 send A to -12 dB\n```\n\nThis command adjusts the send level of a specified track to a specific return in decibels\u30104:0\u2020user-guide.md\u3011.",
+      "answer_length": 437,
+      "sources_count": 1,
+      "thread_id": "thread_XxlS4uD2dLUcEP0W02X5vqX4"
+    }
+  ]
+}

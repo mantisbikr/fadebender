@@ -1,0 +1,898 @@
+{
+  "test_date": "2025-12-01 09:01:12",
+  "total_queries": 23,
+  "successful": 23,
+  "failed": 0,
+  "results_by_category": {
+    "Simple Factual": [
+      {
+        "ok": true,
+        "category": "Simple Factual",
+        "query": "how many reverb presets are available?",
+        "expected": "Should return specific count (52 reverb presets)",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 4.69,
+          "search": 0.68,
+          "generation": 4.0
+        },
+        "total_time": 4.694632053375244,
+        "model_complexity": "simple",
+        "answer": "Hello there! As an expert audio engineer and Ableton Live instructor, I can tell you that Fadebender offers a good selection of reverb presets.\n\nAccording to the documentation, there are **52** reverb presets available. [Source 1]",
+        "answer_length": 230,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Simple Factual",
+        "query": "what parameters can I control on the compressor?",
+        "expected": "List of compressor parameters",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 5.07,
+          "search": 0.29,
+          "generation": 4.78
+        },
+        "total_time": 5.070609092712402,
+        "model_complexity": "simple",
+        "answer": "That's a great question! You're asking about the specific parameters you can control on a compressor device using Fadebender.\n\nBased on the documentation I have, I can provide details on various Reverb presets and their parameters (like \"Ambience\" [Source 2], \"Ambience Medium\" [Source 3], \"Arena Tail\" [Source 4], and \"Backbone\" [Source 5]). However, the provided documentation does not currently list the specific parameters available for controlling a compressor device.\n\nFadebender is designed to allow control over many Ableton Live devices using natural language commands, as mentioned in the user guide (e.g., \"open track 2 compressor\" [Source 1]). While the general capability to open and control devices is there, the detailed list of compressor parameters isn't in the current documentation.\n\nIf you open a compressor using a command like `open track X compressor`, Fadebender will likely display the available controls in the capabilities drawer, where you can then adjust them.",
+        "answer_length": 989,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Simple Factual",
+        "query": "how do I load a reverb preset on track 1?",
+        "expected": "Command syntax and example",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 10.72,
+          "search": 0.25,
+          "generation": 10.47
+        },
+        "total_time": 10.72899580001831,
+        "model_complexity": "simple",
+        "answer": "Hello there! I can certainly help you with that. Loading a reverb preset onto a track in Ableton Live using Fadebender is quite straightforward.\n\nTo load a reverb preset, you'll use a natural language command. For example, if you want to load the \"Ambience\" reverb preset onto Track 1, you would type:\n\n`load Ambience reverb on track 1`\n\nHere's how it works and what to expect:\n\n1.  **Command Structure**: You specify the action (`load`), the preset name (e.g., `Ambience`), the device type (`reverb`), and the target (`on track 1`).\n2.  **Preset Availability**: Fadebender has a catalog of presets. For instance, some available reverb presets include \"Ambience\" [Source 2], \"Ambience Medium\" [Source 4], and \"Arena Tail\" [Source 5].\n3.  **Capabilities Drawer**: After you execute the command, the Capabilities drawer on the right side of your screen will open automatically. This drawer will display the controls for the newly loaded reverb device, allowing you to fine-tune its parameters visually [Source 1]. You can click the pin icon in the drawer to keep it open while you work.\n\nGive it a try with \"Ambience\" or any other reverb preset you'd like to explore! Let me know if you have any other questions.",
+        "answer_length": 1210,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ],
+    "Purpose-Based": [
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "what reverb presets are best for vocals?",
+        "expected": "Reverb presets suitable for vocal processing",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 8.82,
+          "search": 0.86,
+          "generation": 7.96
+        },
+        "total_time": 8.827728033065796,
+        "model_complexity": "simple",
+        "answer": "That's a great question! Finding the right reverb for vocals can really make them shine.\n\nBased on the documentation, Fadebender offers a substantial collection of **52 reverb presets** [Source 1]. While the documentation doesn't list specific preset names or categorize them by application (like \"best for vocals\"), Fadebender is designed to help you explore and apply these effects effectively.\n\nHere's how you can approach finding the best reverb preset for your vocals using Fadebender:\n\n1.  **Load a Reverb Device:** You can start by asking Fadebender to load a reverb onto your vocal track. For example, you might say:\n    *   `load reverb on track [your vocal track name/number]`\n2.  **Explore Presets:** Once the reverb device is loaded, Fadebender's capabilities drawer will open, showing you the device controls. You can then:\n    *   Manually browse through the 52 available presets within the device interface.\n    *   Experiment with different presets and listen to how they interact with your vocal track.\n3.  **Get Context-Aware Guidance:** If you're unsure which type of reverb might suit your vocals, you can ask Fadebender for advice. For instance:\n    *   `what kind of reverb would sound good on my vocals?`\n    *   `my vocals sound dry, how can I add space?`\n\nFadebender's **Audio Engineering Guidance** and **Context-Aware Help** features [Source 2] mean it can provide specific advice tailored to your project, helping you narrow down your choices and understand the characteristics of different reverb types.\n\nI recommend trying out a few different presets and trusting your ears! You can always adjust the parameters of any loaded preset to fine-tune it to your liking.",
+        "answer_length": 1694,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "which delay presets work well for drums?",
+        "expected": "Delay presets suitable for drums",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 6.85,
+          "search": 1.11,
+          "generation": 5.74
+        },
+        "total_time": 6.856985092163086,
+        "model_complexity": "simple",
+        "answer": "That's a great question! Using delay effectively on drums can really add depth and groove to your tracks.\n\nLooking at the Fadebender documentation, I can see that there are **32 Delay Presets** available ([Source 2]) and an additional **1 Align Delay Preset** ([Source 3]).\n\nHowever, the documentation doesn't specify which of these presets are particularly suited for drums or describe their individual characteristics.\n\nAs an audio engineer, I can tell you that when applying delay to drums, you'll often want to consider:\n\n*   **Short Delays (Slapback):** These can add a sense of space and thickness to individual drum hits, especially snares or claps, without making them sound distant. Think of a very quick, single repeat.\n*   **Rhythmic Delays:** Delays timed to your track's tempo (e.g., 1/8th notes, 1/16th notes) can create interesting rhythmic patterns and fills, particularly on percussion or hi-hats.\n*   **Subtle Ambiance:** A very low-mix, short delay with a few repeats can create a sense of room or ambiance around your drum bus, making the whole kit sound more cohesive.\n*   **Creative Effects:** Longer, more pronounced delays can be used for special effects on individual elements like a tom fill, a crash cymbal, or even a vocal-like effect on a snare.\n\nMy recommendation would be to:\n\n1.  **Start with the \"Delay Presets\"** within Fadebender. With 32 options, you'll likely find a good starting point.\n2.  **Experiment:** Load different presets onto an individual drum track (like a snare or percussion loop) or even a drum bus.\n3.  **Adjust the Mix/Dry-Wet:** This is crucial for drums. You often want the delay to be felt rather than heard overtly, so keep the mix low.\n4.  **Consider Feedback and Time:** Play with the feedback (number of repeats) and the delay time to see how it interacts with your drum pattern.\n\nDon't hesitate to dive in and audition those 32 presets \u2013 you'll quickly discover which ones resonate with your drum sounds!",
+        "answer_length": 1966,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "recommend reverb presets for acoustic guitar",
+        "expected": "Reverb presets suitable for acoustic guitar",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 7.52,
+          "search": 0.49,
+          "generation": 7.03
+        },
+        "total_time": 7.5268659591674805,
+        "model_complexity": "simple",
+        "answer": "Hello there! As an expert audio engineer and Ableton Live instructor, I'd be happy to help you find some great reverb sounds for your acoustic guitar.\n\nFadebender does indeed offer a collection of reverb presets. According to our documentation, there are **52 reverb presets** available for you to explore [Source 1].\n\nHowever, the current documentation doesn't provide specific descriptions for each individual reverb preset, nor does it recommend particular ones for acoustic guitar.\n\nMy best advice for finding the perfect reverb for your acoustic guitar would be to:\n\n1.  **Load up Fadebender** in Ableton Live.\n2.  **Navigate to the Reverb section** of the presets.\n3.  **Audition the presets** one by one with your acoustic guitar track. Listen for what complements the natural tone of your instrument \u2013 perhaps something that adds space without muddying the sound, or a plate reverb for a classic studio sound.\n\nWhile I can't point you to a specific \"acoustic guitar reverb\" preset by name from the documentation, I encourage you to experiment! You might find that a \"Hall\" preset gives you a beautiful, natural space, or a \"Plate\" preset adds a lovely shimmer.\n\nLet me know if you have any other questions about Fadebender's features or if you're looking for presets for other effects!",
+        "answer_length": 1293,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Purpose-Based",
+        "query": "what compressor settings are good for mixing bass?",
+        "expected": "Compressor presets/settings for bass",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 7.88,
+          "search": 0.24,
+          "generation": 7.63
+        },
+        "total_time": 7.972792863845825,
+        "model_complexity": "simple",
+        "answer": "That's a great question! Getting the bass right with compression is crucial for a solid mix. While Fadebender can give you specific advice tailored to your Live set if you ask it directly (e.g., \"how can I compress my bass track?\"), I can provide some general expert guidance on compressor settings for mixing bass.\n\nThe goal with bass compression is usually to even out dynamics, add sustain, and help it sit consistently in the mix without losing its punch or becoming muddy.\n\nHere are some common starting points and considerations for bass compression:\n\n### **Key Compressor Parameters for Bass**\n\n1.  **Threshold:**\n    *   **What it does:** Determines the level at which the compressor starts to reduce the signal's gain.\n    *   **For Bass:** Set the threshold so that the compressor is primarily reacting to the louder peaks of the bass signal. You want to catch the transients without squashing the entire performance. A good starting point is often around **-15 dB to -25 dB**, but this will vary greatly depending on the input level of your bass track.\n\n2.  **Ratio:**\n    *   **What it does:** Defines how much the signal is reduced once it crosses the threshold. A 4:1 ratio means that for every 4 dB the signal goes over the threshold, only 1 dB will pass through.\n    *   **For Bass:**\n        *   **Subtle Control:** A **2:1 to 4:1** ratio is good for gentle dynamic control and adding sustain without making the bass sound overly compressed.\n        *   **More Aggressive/Punchy:** A **4:1 to 8:1** ratio can be used for more consistent, punchy bass, especially in denser mixes. Be careful not to overdo it, as it can make the bass sound lifeless.\n\n3.  **Attack:**\n    *   **What it does:** How quickly the compressor reacts to the signal once it crosses the threshold.\n    *   **For Bass:**\n        *   **Slow Attack (20-50ms+):** Allows the initial transient (the \"pluck\" or \"thump\") of the bass note to pass through uncompressed, preserving its punch and definition. This is often preferred for bass.\n        *   **Fast Attack (0-10ms):** Will catch and reduce the initial transient, making the bass sound smoother but potentially less punchy. Use with caution if you want to retain attack.\n\n4.  **Release:**\n    *   **What it does:** How quickly the compressor returns to its uncompressed state after the signal drops below the threshold.\n    *   **For Bass:**\n        *   **Medium to Slow Release (80-250ms+):** This is often ideal for bass. You want the release to be long enough to smooth out the sustain of the notes but not so long that it pumps or clamps down on subsequent notes. A good trick is to set the release time to roughly match the rhythm or tempo of the song, or to release just before the next bass note hits.\n        *   **Too Fast:** Can cause pumping or distortion, especially on sustained notes.\n        *   **Too Slow:** Can make the bass sound constantly compressed and lose dynamic movement.\n\n5.  **Make-up Gain / Output:**\n    *   **What it does:** Compensates for the gain reduction applied by the compressor, bringing the overall level back up.\n    *   **For Bass:** Adjust this to match the perceived loudness of the uncompressed signal, or to sit well within your mix.\n\n### **General Tips for Bass Compression:**\n\n*   **Listen in Context:** Always adjust compressor settings while listening to the bass within the full mix. What sounds good soloed might not work with other instruments.\n*   **Subtle is Key:** Often, less is more. Aim for consistent dynamics rather than extreme squashing.\n*   **Parallel Compression:** For more aggressive control without losing dynamics, consider parallel compression. Send your bass to an auxiliary track, heavily compress that auxiliary track, and then blend it in with the uncompressed bass track.\n*   **EQ Before/After:** Sometimes, a little EQ before or after the compressor can help. For example, a high-pass filter before compression can prevent the compressor from overreacting to sub-harmonic rumble.\n\nRemember, these are starting points. Every bass sound and every mix is unique, so trust your ears and experiment! If you're working in Ableton Live, you can always ask Fadebender specific questions like \"how can I compress my bass track?\" and it will provide advice tailored to your current project [Source 1].",
+        "answer_length": 4307,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ],
+    "Parameter-Constrained": [
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "show me reverb presets with decay time less than 1 second",
+        "expected": "Reverb presets filtered by decay time < 1s",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 8.62,
+          "search": 0.24,
+          "generation": 8.38
+        },
+        "total_time": 8.628751993179321,
+        "model_complexity": "simple",
+        "answer": "That's a great question! While I can tell you that Fadebender has access to a total of **52 Reverb Presets** [Source 3], the current documentation doesn't provide a way to filter these presets based on specific parameters like \"decay time.\"\n\nThe preset catalog lists the device signatures and the total count of presets for each device, but it doesn't detail the individual settings of each preset.\n\nIf you're looking for a reverb with a short decay, you might need to load a few different reverb presets and adjust the decay time manually within the device's controls in Ableton Live.",
+        "answer_length": 585,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "which reverb presets have large room sizes?",
+        "expected": "Reverb presets with room size > certain threshold",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 3.63,
+          "search": 0.92,
+          "generation": 2.71
+        },
+        "total_time": 3.6369547843933105,
+        "model_complexity": "simple",
+        "answer": "Hello there! As an expert audio engineer and Ableton Live instructor, I can definitely help you navigate Fadebender's reverb presets.\n\nBased on the available documentation, two reverb presets explicitly designed for large room sizes are:\n\n*   **Large Chamber** (Source 4)\n*   **Large Factory** (Source 5)\n\nLet's look at their `Room Size` parameters:\n\n*   The **Large Chamber** preset has a `Room Size` of `12.0`.\n*   The **Large Factory** preset features a slightly larger `Room Size` of `12.66`.\n\nThese presets are excellent starting points when you're looking to create a sense of expansive space in your mix.\n\nDo you have a particular sound or application in mind for these large reverbs? Knowing that might help me provide even more tailored advice!",
+        "answer_length": 753,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "find delay presets with feedback under 50%",
+        "expected": "Delay presets filtered by feedback parameter",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 6.8,
+          "search": 0.9,
+          "generation": 5.9
+        },
+        "total_time": 6.810563087463379,
+        "model_complexity": "simple",
+        "answer": "Hello there! I'd be happy to help you with Fadebender.\n\nYou're looking for delay presets with feedback under 50%. That's a great way to narrow down your sound choices!\n\nBased on the documentation I have, I can tell you that Fadebender includes:\n*   **Delay Presets**: There are 32 presets available for the standard Delay device (Source 2).\n*   **Align Delay Presets**: There is 1 preset available for the Align Delay device (Source 3).\n\nHowever, the provided documentation lists the total count of presets for each device but doesn't detail the specific parameters (like feedback percentage) for individual presets within those categories.\n\nTherefore, I can't directly filter for presets with feedback under 50% using the information available to me. You would need to load the delay presets in Ableton Live and check their feedback settings manually to find ones that meet your criteria.\n\nIs there anything else I can help you with regarding Fadebender's features or other preset categories?",
+        "answer_length": 993,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Parameter-Constrained",
+        "query": "what compressor presets have a ratio of 4:1 or higher?",
+        "expected": "Compressor presets filtered by ratio",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 2.97,
+          "search": 0.57,
+          "generation": 2.39
+        },
+        "total_time": 2.9738879203796387,
+        "model_complexity": "simple",
+        "answer": "That's a great question! You're looking to find compressor presets that meet a specific ratio requirement.\n\nWhile the documentation confirms that Fadebender has **18 compressor presets** available ([Source 3]), it doesn't currently provide a detailed breakdown of the individual parameter settings (like the Ratio) for each preset.\n\nTherefore, I can't directly tell you which compressor presets have a ratio of 4:1 or higher based on the information I have.\n\nTo find this out, you would typically need to:\n1.  Load a compressor device in Ableton Live.\n2.  Browse through the available presets within Fadebender's interface or Ableton's device browser.\n3.  Check the Ratio parameter for each preset as you load them.\n\nI hope this clarifies why I can't provide that specific list right now! Let me know if you have any other questions about Fadebender's features or how to use it.",
+        "answer_length": 878,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ],
+    "Comparison": [
+      {
+        "ok": true,
+        "category": "Comparison",
+        "query": "compare Cathedral and Church reverb presets",
+        "expected": "Detailed parameter comparison with key differences",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 6.39,
+          "search": 0.76,
+          "generation": 5.63
+        },
+        "total_time": 6.543450832366943,
+        "model_complexity": "complex",
+        "answer": "Hello there! I can certainly help you compare the \"Cathedral\" and \"Church\" reverb presets in Fadebender.\n\nBoth \"Cathedral\" and \"Church\" are presets for the Reverb device, designed to emulate large, resonant spaces.\n\nBased on the provided documentation:\n\n### Cathedral Reverb Preset\nThe \"Cathedral\" preset (ID: `reverb_cathedral`) has the following detailed parameter settings [Source 3]:\n\n*   **Chorus Amount**: 0.20000000298023224\n*   **Chorus On**: 0.0\n*   **Chorus Rate**: 0.07999999821186066\n*   **Cut On**: 0.0\n*   **Decay Time**: 5000.0\n*   **Density**: 3.0\n*   **Device On**: 1.0\n*   **Diffuse Level**: 0.0\n*   **Diffusion**: 20.0\n*   **Dry/Wet**: 100.0\n*   **ER Shape**: 1.0\n*   **ER Spin Amount**: 13.819999694824219\n*   **ER Spin On**: 0.0\n*   **ER Spin Rate**: 0.23999999463558197\n*   **Flat On**: 0.0\n*   **Freeze On**: 0.0\n*   **HiFilter Freq**: 5372.0\n*   **HiFilter On**: 1.0\n*   **HiFilter Type**: 0.0\n*   **HiShelf Gain**: 0.4000000059604645\n*   **In Filter Freq**: 3306.0\n*   **In Filter Width**: 4.21999979019165\n*   **In HighCut On**: 1.0\n*   **In LowCut On**: 0.0\n*   **LowShelf Freq**: 90.0\n*   **LowShelf Gain**: 0.75\n*   **LowShelf On**: 0.0\n*   **Predelay**: 60.0\n*   **Reflect Level**: -6.0\n*   **Room Size**: 180.0\n*   **Scale**: 20.0\n*   **Size Smoothing**: 2.0\n*   **Stereo Image**: 100.0\n\n### Church Reverb Preset\nThe \"Church\" preset (ID: `reverb_church`) is also a Reverb category preset [Source 2].\n\n**Comparison:**\nWhile I can provide the full parameter details for the \"Cathedral\" preset, the provided documentation for the \"Church\" preset only lists its name and ID, without the specific parameter settings [Source 2]. Therefore, I cannot offer a direct, parameter-by-parameter comparison of their internal settings at this time.\n\nTypically, a \"Cathedral\" preset might aim for an even longer, more diffuse decay with potentially higher pre-delay to simulate a massive space, while a \"Church\" preset might be slightly less vast but still very resonant. However, without the specific parameters for \"Church,\" this remains an educated guess based on common audio engineering practices.\n\nI recommend loading both presets in Fadebender and listening to them to discern their sonic differences!",
+        "answer_length": 2223,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Comparison",
+        "query": "what's the difference between Tape Delay and Filter Delay?",
+        "expected": "Technical differences and use cases",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 5.35,
+          "search": 0.17,
+          "generation": 5.17
+        },
+        "total_time": 5.35302209854126,
+        "model_complexity": "complex",
+        "answer": "Hello there! That's a great question about different delay types.\n\nBased on the documentation provided, I don't have explicit descriptions of \"Tape Delay\" and \"Filter Delay\" as separate, distinct devices within Fadebender's catalog. It's possible these are common terms for specific delay characteristics rather than unique device names in this context.\n\nHowever, the documentation *does* describe a \"Delay Mode\" called **Repitch** which is very much aligned with what one would expect from a \"Tape Delay\" effect:\n\n### Delay Mode: Repitch (Tape-like Characteristics)\n\n*   **Function**: This mode determines how the delay buffer responds when you change the delay time while audio is playing.\n*   **Technical Description**: \"Repitch emulates tape mechanics with doppler shift.\" This means that when you adjust the delay time, the pitch of the delayed audio will shift, similar to how a physical tape delay machine would behave if you sped up or slowed down the tape.\n*   **Use Cases**: It's specifically mentioned for \"Tape-style analog delay emulation\" and \"creative pitch effects.\"\n*   **Interaction with Modulation**: When combined with modulation (e.g., `Dly < Mod`), the Repitch mode can create \"pitch shifting like tape wow/flutter,\" adding to that classic analog tape delay sound.\n\n[Source 1, Source 4]\n\nRegarding \"Filter Delay,\" the provided documentation does not contain any information about a delay mode or device specifically named or described as such.\n\nSo, while I can't give you a direct comparison of two distinct devices from the provided materials, I can tell you that the \"Repitch\" Delay Mode is the feature in Fadebender that provides the characteristic \"tape-like\" pitch shifts and emulation of analog tape delays.",
+        "answer_length": 1735,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Comparison",
+        "query": "compare Plate and Hall reverb types",
+        "expected": "Differences in reverb types and characteristics",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 21.88,
+          "search": 0.66,
+          "generation": 21.22
+        },
+        "total_time": 22.0157527923584,
+        "model_complexity": "complex",
+        "answer": "Hello there! I can certainly help you understand the differences between Plate and Hall reverb types, drawing from the Fadebender presets available.\n\nIn general, Plate reverbs are known for their bright, dense, and smooth sound, often used to add shimmer and sustain without necessarily creating a deep sense of physical space. Hall reverbs, on the other hand, aim to emulate the sound of large acoustic environments like concert halls, providing a spacious, natural, and often more realistic sense of depth and environment.\n\nLet's compare them based on the characteristics observed in the provided Fadebender presets:\n\n### Plate Reverb Characteristics (based on `reverb_plate_damped`)\n\nPlate reverbs in Fadebender, as exemplified by the \"Plate Damped\" preset, tend to have these characteristics:\n\n*   **Decay Time:** Often shorter to moderate, providing a dense but not overly long tail. For \"Plate Damped,\" the Decay Time is `891.0` ms.\n*   **Predelay:** Very short, contributing to an immediate and dense sound without much initial delay. \"Plate Damped\" has a Predelay of `2.5` ms.\n*   **Room Size:** Typically very small or not directly simulating a large physical room, as plates are mechanical devices. \"Plate Damped\" shows a Room Size of `1.7799...`.\n*   **Diffusion:** Very high, which creates a smooth, lush, and dense reverb tail. \"Plate Damped\" has a Diffusion of `96.0`.\n*   **Reflect Level:** Often lower, meaning less emphasis on distinct early reflections. \"Plate Damped\" has a Reflect Level of `-30.0`.\n*   **Frequency Response:** Can be tailored, but plates are often associated with a brighter sound. The \"Plate Damped\" preset has a HiFilter Freq of `233.0` Hz, which would roll off higher frequencies in the reverb tail, making it darker, and an In Filter Freq of `794.0` Hz.\n*   **Overall Sound:** Dense, smooth, and often used to add shimmer and depth to individual elements like vocals or drums without making them sound like they are in a huge room.\n\n### Hall Reverb Characteristics (based on \"Concert Hall,\" \"Hall Damped,\" \"Main Hall,\" and \"Vocal Hall\")\n\nHall reverbs in Fadebender, as seen in the various hall presets, are designed to mimic large spaces and typically exhibit:\n\n*   **Decay Time:** Significantly longer, creating a sense of vastness and sustained ambiance. Examples: \"Hall Damped\" (`2587.0` ms), \"Main Hall\" (`2600.0` ms), \"Vocal Hall\" (`3000.0` ms).\n*   **Predelay:** Longer, simulating the time it takes for sound to travel to the distant walls of a large room before reflections return. Examples: \"Hall Damped\" (`27.20...` ms), \"Main Hall\" (`55.0` ms), \"Vocal Hall\" (`90.0` ms).\n*   **Room Size:** Explicitly larger, directly modeling the dimensions of a large acoustic space. Examples: \"Hall Damped\" (`289.32...`), \"Main Hall\" (`60.0`), \"Vocal Hall\" (`100.0`).\n*   **Diffusion:** Varies, but often less extreme than plate reverbs, allowing for a more natural and sometimes slightly less uniform sound. Examples: \"Hall Damped\" (`60.0`), \"Main Hall\" (`30.0`), \"Vocal Hall\" (`45.0`).\n*   **Reflect Level:** Often higher, with more prominent early reflections that help define the perceived shape and size of the space. Examples: \"Hall Damped\" (`4.80...`), \"Main Hall\" (`0.0`), \"Vocal Hall\" (`-3.0`).\n*   **Frequency Response:** Generally allows more high-frequency content in the reverb tail, contributing to an open and airy sound. Examples: HiFilter Freq for \"Hall Damped\" (`3333.0` Hz), \"Main Hall\" (`3820.0` Hz), \"Vocal Hall\" (`4687.0` Hz). Input filter frequencies also vary to shape the sound entering the reverb.\n*   **Overall Sound:** Spacious, natural, and realistic, ideal for creating a sense of environment, blending instruments, or adding grandeur to orchestral elements and pads.\n\n### Summary Comparison\n\n| Feature         | Plate Reverb (e.g., Plate Damped)                               | Hall Reverb (e.g., Hall Damped, Main Hall, Vocal Hall)                               |\n| :-------------- | :-------------------------------------------------------------- | :----------------------------------------------------------------------------------- |\n| **Decay Time**  | Shorter to moderate (e.g., 891 ms)                              | Longer to very long (e.g., 2587 ms - 3000 ms)                                        |\n| **Predelay**    | Very short (e.g., 2.5 ms)                                       | Longer (e.g., 27 ms - 90 ms)                                                         |\n| **Room Size**   | Very small, not simulating a physical room (e.g., 1.78)         | Large to very large, simulating acoustic spaces (e.g., 60 - 289)                     |\n| **Diffusion**   | Very high, dense and smooth (e.g., 96%)                         | Moderate to high, more natural (e.g., 30% - 60%)                                     |\n| **Reflect Level** | Very low, less distinct early reflections (e.g., -30 dB)         | Higher, more prominent early reflections (e.g., -3 dB to +4.8 dB)                    |\n| **Sound**       | Bright, dense, smooth, shimmery; good for individual elements.  | Spacious, natural, realistic, open; good for creating environments and blending.     |\n\n### Available Reverb Presets\n\nHere are the specific Reverb presets from the documentation that fall under these categories:\n\n**Plate Reverb Presets:**\n\n1.  `reverb_plate_damped` (Plate Damped) - [Source 2]\n\n**Hall Reverb Presets:**\n\n1.  `reverb_concert_hall` (Concert Hall) - [Source 1]\n2.  `reverb_hall_damped` (Hall Damped) - [Source 3]\n3.  `reverb_main_hall` (Main Hall) - [Source 4]\n4.  `reverb_vocal_hall` (Vocal Hall) - [Source 5]\n\nWhen choosing between a plate and a hall reverb, consider the desired effect: if you want a lush, dense, and bright sustain without a strong sense of physical space, a plate might be ideal. If you're aiming for a realistic, expansive, and natural ambiance that places your sound in a large environment, a hall reverb would be more suitable.\n\nFeel free to ask if you have more questions about specific parameters or other reverb types!",
+        "answer_length": 6021,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ],
+    "Complete List": [
+      {
+        "ok": true,
+        "category": "Complete List",
+        "query": "list all reverb presets with their IDs",
+        "expected": "All 52 reverb presets with preset IDs",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 5.21,
+          "search": 0.71,
+          "generation": 4.51
+        },
+        "total_time": 5.222304821014404,
+        "model_complexity": "complex",
+        "answer": "Hello! I can certainly help you with information about Fadebender's presets.\n\nYou're asking for a list of all reverb presets with their IDs.\n\nBased on the provided documentation, Fadebender does indeed have a collection of reverb presets. [Source 1] indicates:\n\n*   **Device Signature**: `64ccfc236b79371d0b45e913f81bf0f3a55c6db9`\n*   **Preset Count**: 52\n\nHowever, the specific names and IDs for each of these 52 reverb presets are not detailed in the documentation I have access to. Therefore, I cannot provide a complete list of their individual names and IDs at this moment.\n\nIf you have any other questions about Fadebender's features or how to use its capabilities, feel free to ask!",
+        "answer_length": 689,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Complete List",
+        "query": "show me every delay preset available",
+        "expected": "Complete list of all delay presets",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 4.27,
+          "search": 0.41,
+          "generation": 3.86
+        },
+        "total_time": 4.273360013961792,
+        "model_complexity": "simple",
+        "answer": "That's a great question! I can certainly help you with available presets.\n\nBased on the documentation I have, I can see a comprehensive list of **Reverb Presets**. For example, there are 52 different reverb presets available, including options like:\n\n*   **Bright Reflections** (reverb_bright_reflections) [Source 3]\n*   **Church** (reverb_church) [Source 4]\n*   **Concert Hall** (reverb_concert_hall) [Source 5]\n\nHowever, I don't currently have a list of specific **Delay Presets** in my catalog. My documentation primarily details reverb presets at this moment.\n\nIf you're looking to apply a delay, you can still control delay devices in your Live set using natural language commands, for example: \"open track 1 delay\" or \"set delay feedback to 50%\".\n\nIs there anything else I can help you with regarding reverbs or other device controls?",
+        "answer_length": 840,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Complete List",
+        "query": "list all compressor presets",
+        "expected": "Complete list of compressor presets",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 10.89,
+          "search": 0.17,
+          "generation": 10.72
+        },
+        "total_time": 10.99189019203186,
+        "model_complexity": "complex",
+        "answer": "I can certainly help you with that!\n\nBased on the available documentation, Fadebender recognizes 18 compressor presets. However, the documentation provides the total count but does not list the individual names of these presets.\n\nHere's the information I have:\n\n*   **Device Signature:** `9e906e0ab3f18c4688107553744914f9ef6b9ee7`\n*   **Preset Count:** 18\n\nIf you'd like to explore other types of presets, just let me know!",
+        "answer_length": 423,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ],
+    "Semantic Understanding": [
+      {
+        "ok": true,
+        "category": "Semantic Understanding",
+        "query": "I need a subtle reverb for intimate vocals, what should I use?",
+        "expected": "Context-aware recommendation based on 'subtle' and 'intimate'",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 7.78,
+          "search": 0.28,
+          "generation": 7.5
+        },
+        "total_time": 8.071784257888794,
+        "model_complexity": "simple",
+        "answer": "For an intimate vocal sound with a subtle reverb, we want to create the impression of a small, controlled space without overwhelming the vocal. Here\u2019s how you can achieve that using Fadebender:\n\n### Reverb Settings for Intimate Vocals\n\n1.  **Size**:\n    *   **Recommendation**: Set the `Size` parameter to a **small** value.\n    *   **Why**: A small size simulates tight, intimate spaces like vocal booths or small rooms, which is perfect for an intimate vocal sound.\n    *   **Fadebender Command Example**: `set reverb size to small`\n    *   **Source**: [Source 3]\n\n2.  **Decay Time**:\n    *   **Recommendation**: Use a **short** `Decay Time`, typically in the range of **0.5 to 1.5 seconds**.\n    *   **Why**: A shorter decay time results in a tighter, more controlled reverb tail, making the space feel smaller and cleaner. This prevents the reverb from muddying the vocal or making it sound distant.\n    *   **Fadebender Command Example**: `set reverb decay time to 1.2s`\n    *   **Source**: [Source 3], [Source 5]\n\n3.  **Stereo Image**:\n    *   **Recommendation**: Keep the `Stereo Image` relatively **narrow** or at a moderate setting. Avoid excessively wide settings.\n    *   **Why**: While a wide stereo field can create a spacious feel, for intimacy, you generally want the vocal to remain focused. A slightly narrower image helps keep the vocal centered and present.\n    *   **Source**: [Source 5]\n\n### How to Apply These Settings with Fadebender:\n\nYou can use natural language commands to adjust these parameters directly. For example:\n\n*   \"Set the reverb's size to small.\"\n*   \"Change the reverb decay time to 1.2 seconds.\"\n*   \"Adjust the reverb stereo image to 45 degrees.\" (You might need to experiment with the exact value here to find what sounds best for your mix.)\n\nFadebender will then adjust the parameters in your Ableton Live set and open the capabilities drawer, allowing you to fine-tune them visually if needed.",
+        "answer_length": 1938,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Semantic Understanding",
+        "query": "suggest a big, spacious reverb for orchestral strings",
+        "expected": "Large hall/cathedral type reverbs",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 8.19,
+          "search": 0.2,
+          "generation": 7.99
+        },
+        "total_time": 8.205743074417114,
+        "model_complexity": "simple",
+        "answer": "Hello there! I can certainly help you craft a big, spacious reverb for orchestral strings using Fadebender. For a lush, expansive sound that complements the richness of strings, we'll focus on parameters that control the size, decay, and density of the reverb.\n\nHere are some recommended settings to get you started:\n\n### Big, Spacious Reverb for Orchestral Strings\n\n*   **Decay (Reverb Time):**\n    *   **Setting:** `3.0s - 6.0s` (or even higher for dramatic effect)\n    *   **Why:** A longer decay time is fundamental for creating a large, sustained ambience and a larger perceived space, which is perfect for orchestral strings. [Source 3]\n*   **Size:**\n    *   **Setting:** `High (e.g., 80-100%)`\n    *   **Why:** The Size parameter directly controls the room's volume. A very large size will lend a shifting, diffused delay effect, contributing significantly to the spacious feel. [Source 4]\n*   **Stereo Image:**\n    *   **Setting:** `120 degrees (Maximum)`\n    *   **Why:** Maximizing the Stereo Image will create the widest possible stereo field, enhancing the spaciousness and immersive character of the reverb. [Source 3, 4]\n*   **Diffusion Network - Scale:**\n    *   **Setting:** `70-90%`\n    *   **Why:** A high percentage here will increase the reflection density, creating a denser, more complex, and richer reverb pattern that suits the intricate sound of orchestral strings. [Source 1, 2]\n*   **Diffusion Network - HiFilter Freq:**\n    *   **Setting:** `8kHz - 12kHz`\n    *   **Why:** This range will provide a natural to slightly bright and airy reverb tail, preventing the strings from sounding muddy while retaining their shimmer. It filters less treble, allowing the high frequencies to breathe. [Source 2]\n\n**Tips for Fine-Tuning:**\n\n*   **Predelay:** Experiment with a small amount of predelay (e.g., 20-50ms) to allow the dry strings to be heard clearly before the reverb washes in, enhancing intelligibility while maintaining the sense of space.\n*   **EQ:** Use the built-in EQ or an external EQ to further shape the reverb's tone, perhaps rolling off some low-mids to prevent muddiness, especially in a dense mix.\n*   **Listen in Context:** Always adjust the reverb settings while listening to the strings within the full mix to ensure it sits well and doesn't overwhelm other elements.\n\nGive these settings a try and let me know how they work for your orchestral strings!",
+        "answer_length": 2397,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Semantic Understanding",
+        "query": "what delay creates a vintage tape echo sound?",
+        "expected": "Tape delay presets with character description",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 8.17,
+          "search": 0.35,
+          "generation": 7.82
+        },
+        "total_time": 10.025159358978271,
+        "model_complexity": "simple",
+        "answer": "To achieve a vintage tape echo sound, you'll want to focus on introducing subtle, organic modulation to your delay. This emulates the slight inconsistencies and \"wow and flutter\" inherent in old tape machines.\n\nThe key parameters to adjust for this are **`Dly < Mod`** (Delay Modulation Amount) and **`Mod Freq`** (Modulation Frequency).\n\nHere's how you can approach it:\n\n1.  **`Dly < Mod` (Delay Modulation Amount):**\n    *   This parameter controls the amount of LFO modulation applied to the delay time.\n    *   **For a subtle, analog warmth or tape-like drift:** Set `Dly < Mod` to **0-10%**.\n    *   **To emulate tape wow/flutter:** Combine `Dly < Mod` with a slow `Mod Freq`.\n    *   Increasing this value will introduce more delay time variation, creating stronger chorus/vibrato effects and pitch warble, which is characteristic of vintage tape delays.\n\n2.  **`Mod Freq` (Modulation Frequency):**\n    *   This controls the speed of the LFO modulating the delay time.\n    *   **For slow, tape-like drift and subtle movement:** Set `Mod Freq` to **0.01-0.3Hz**. This slow rate is crucial for the characteristic \"wow and flutter\" of tape.\n\nBy using these settings, especially with `Repitch` mode enabled (if available on your specific delay device), you can create the pitch shifting and time-stretch-like effects that are hallmarks of vintage tape echoes.\n\n**In summary, aim for:**\n*   **`Dly < Mod`:** Low values (e.g., 5-15%) for subtle analog warmth and tape-like drift.\n*   **`Mod Freq`:** Very low values (e.g., 0.01-0.3Hz) for slow, organic movement.\n\nThis approach will help you capture that sought-after vintage character!\n\n*(Source: [Source 1] - device-catalog, Modulation section)*",
+        "answer_length": 1697,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ],
+    "Workflow": [
+      {
+        "ok": true,
+        "category": "Workflow",
+        "query": "how do I automate the reverb decay time?",
+        "expected": "Instructions for parameter automation",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 13.71,
+          "search": 0.33,
+          "generation": 13.37
+        },
+        "total_time": 13.720678091049194,
+        "model_complexity": "simple",
+        "answer": "That's a great question about shaping your reverb!\n\nWhile the documentation doesn't explicitly list a single \"reverb decay time\" parameter, the **Diffusion Network** controls in Fadebender are key to shaping how your reverb tail evolves and ultimately decays.\n\nThe primary control for this is often referred to as **Scale** within the Diffusion Network.\n\nHere's how it works and how you can automate it:\n\n### Understanding the Diffusion Network and \"Scale\"\n\nThe Diffusion Network simulates how surfaces scatter sound, affecting the density and smoothness of your reverb. The \"Scale\" parameter directly adjusts the reflection density in conjunction with the room size.\n\n*   **Increasing Scale:**\n    *   Creates more reflections at a given room size.\n    *   Results in a denser, more complex reflection pattern.\n    *   Can lead to a smoother, silkier reverb tail with less distinct echoes, making the decay feel longer and more lush.\n    *   *Use Cases:* For smooth, lush reverb character, or to simulate denser room types.\n    *   *Typical Values:* 85-100% for very smooth and dense reverb.\n\n*   **Decreasing Scale:**\n    *   Results in fewer reflections.\n    *   Creates a sparser, more open reflection pattern.\n    *   Can lead to a more granular texture with potentially more distinct echoes, making the decay feel shorter or more \"bouncy.\"\n    *   *Use Cases:* For discrete, rhythmic reflections, or to simulate sparser room types.\n    *   *Typical Values:* Low percentages for a more open, spacious character.\n\n*(Sources: [1], [2])*\n\n### How to Automate in Ableton Live (via Fadebender)\n\nYou can automate the \"Scale\" parameter (or any other relevant Diffusion Network control) directly within Ableton Live. While Fadebender provides control over parameters, the actual automation is handled by Live's automation lanes.\n\n1.  **Identify the Parameter:** Locate the \"Scale\" control within the Diffusion Network section of your reverb device in Ableton Live.\n2.  **Enable Automation:** In Live, you can click the parameter you want to automate, then press `A` to show the automation lane for that parameter on the track.\n3.  **Draw Automation:** Draw in your desired automation curve to dynamically change the \"Scale\" over time.\n\n**Creative Automation Ideas:**\n\n*   **Dynamic Decay:** Automate \"Scale\" to increase during a chorus for a more expansive sound, and decrease during a verse for a tighter feel.\n*   **Special Effects:** As mentioned in the documentation, automating \"Scale\" with small room sizes can even create interesting flanger-like effects! *(Source: [1])*\n\nBy automating the \"Scale\" parameter, you gain precise control over the perceived decay and texture of your reverb, allowing for dynamic and expressive sound design.",
+        "answer_length": 2741,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Workflow",
+        "query": "can I load multiple effects on the same track?",
+        "expected": "Device chain explanation",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 4.56,
+          "search": 0.22,
+          "generation": 4.34
+        },
+        "total_time": 4.567470073699951,
+        "model_complexity": "simple",
+        "answer": "Yes, absolutely! In Ableton Live, you can load multiple effects onto a single track. This is a fundamental aspect of how you build complex sounds and process your audio.\n\nWhen you add multiple effects to a track, they form a \"device chain.\" The audio signal flows through these devices sequentially, from left to right in the Device View. Each effect processes the sound, and then passes its output to the next effect in the chain.\n\nFor example, you might have a compressor followed by an EQ, then a delay, and finally a reverb, all on the same vocal track.\n\nFadebender can help you manage and interact with these effects. While the documentation doesn't explicitly state \"load multiple effects,\" it does show that Fadebender can:\n*   **Load individual effects:** \"load reverb on return A\" [Source 1]\n*   **Open specific effects:** \"open track 2 compressor\" [Source 1]\n*   **Control parameters within effects:** Once an effect is open in the capabilities drawer, you can use sliders, toggles, and dropdowns to adjust its parameters visually [Source 1].\n\nSo, you can build your effect chains in Ableton Live, and then use Fadebender to quickly access, open, and control the individual devices within that chain.",
+        "answer_length": 1210,
+        "sources_count": 5,
+        "thread_id": null
+      },
+      {
+        "ok": true,
+        "category": "Workflow",
+        "query": "what's the command to set send level to a return track?",
+        "expected": "Command syntax for send levels",
+        "mode": "hybrid-rag",
+        "rag_mode": "hybrid",
+        "timing": {
+          "total": 30.78,
+          "search": 0.34,
+          "generation": 30.44
+        },
+        "total_time": 30.907785892486572,
+        "model_complexity": "simple",
+        "answer": "To set a send level from a track to a return track in Fadebender, you can use a command similar to how you'd adjust other parameters. The general structure is `set [track name/number] send [return track name/letter] to [value]`.\n\nFor example, if you want to set the send level from \"Track 1\" to \"Return A\" to -12 dB, you would type:\n\n`set track 1 send A to -12 dB`\n\nThis follows the natural language command structure for DAW control as outlined in the documentation [Source 1].",
+        "answer_length": 478,
+        "sources_count": 5,
+        "thread_id": null
+      }
+    ]
+  },
+  "all_results": [
+    {
+      "ok": true,
+      "category": "Simple Factual",
+      "query": "how many reverb presets are available?",
+      "expected": "Should return specific count (52 reverb presets)",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 4.69,
+        "search": 0.68,
+        "generation": 4.0
+      },
+      "total_time": 4.694632053375244,
+      "model_complexity": "simple",
+      "answer": "Hello there! As an expert audio engineer and Ableton Live instructor, I can tell you that Fadebender offers a good selection of reverb presets.\n\nAccording to the documentation, there are **52** reverb presets available. [Source 1]",
+      "answer_length": 230,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Simple Factual",
+      "query": "what parameters can I control on the compressor?",
+      "expected": "List of compressor parameters",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 5.07,
+        "search": 0.29,
+        "generation": 4.78
+      },
+      "total_time": 5.070609092712402,
+      "model_complexity": "simple",
+      "answer": "That's a great question! You're asking about the specific parameters you can control on a compressor device using Fadebender.\n\nBased on the documentation I have, I can provide details on various Reverb presets and their parameters (like \"Ambience\" [Source 2], \"Ambience Medium\" [Source 3], \"Arena Tail\" [Source 4], and \"Backbone\" [Source 5]). However, the provided documentation does not currently list the specific parameters available for controlling a compressor device.\n\nFadebender is designed to allow control over many Ableton Live devices using natural language commands, as mentioned in the user guide (e.g., \"open track 2 compressor\" [Source 1]). While the general capability to open and control devices is there, the detailed list of compressor parameters isn't in the current documentation.\n\nIf you open a compressor using a command like `open track X compressor`, Fadebender will likely display the available controls in the capabilities drawer, where you can then adjust them.",
+      "answer_length": 989,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Simple Factual",
+      "query": "how do I load a reverb preset on track 1?",
+      "expected": "Command syntax and example",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 10.72,
+        "search": 0.25,
+        "generation": 10.47
+      },
+      "total_time": 10.72899580001831,
+      "model_complexity": "simple",
+      "answer": "Hello there! I can certainly help you with that. Loading a reverb preset onto a track in Ableton Live using Fadebender is quite straightforward.\n\nTo load a reverb preset, you'll use a natural language command. For example, if you want to load the \"Ambience\" reverb preset onto Track 1, you would type:\n\n`load Ambience reverb on track 1`\n\nHere's how it works and what to expect:\n\n1.  **Command Structure**: You specify the action (`load`), the preset name (e.g., `Ambience`), the device type (`reverb`), and the target (`on track 1`).\n2.  **Preset Availability**: Fadebender has a catalog of presets. For instance, some available reverb presets include \"Ambience\" [Source 2], \"Ambience Medium\" [Source 4], and \"Arena Tail\" [Source 5].\n3.  **Capabilities Drawer**: After you execute the command, the Capabilities drawer on the right side of your screen will open automatically. This drawer will display the controls for the newly loaded reverb device, allowing you to fine-tune its parameters visually [Source 1]. You can click the pin icon in the drawer to keep it open while you work.\n\nGive it a try with \"Ambience\" or any other reverb preset you'd like to explore! Let me know if you have any other questions.",
+      "answer_length": 1210,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "what reverb presets are best for vocals?",
+      "expected": "Reverb presets suitable for vocal processing",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 8.82,
+        "search": 0.86,
+        "generation": 7.96
+      },
+      "total_time": 8.827728033065796,
+      "model_complexity": "simple",
+      "answer": "That's a great question! Finding the right reverb for vocals can really make them shine.\n\nBased on the documentation, Fadebender offers a substantial collection of **52 reverb presets** [Source 1]. While the documentation doesn't list specific preset names or categorize them by application (like \"best for vocals\"), Fadebender is designed to help you explore and apply these effects effectively.\n\nHere's how you can approach finding the best reverb preset for your vocals using Fadebender:\n\n1.  **Load a Reverb Device:** You can start by asking Fadebender to load a reverb onto your vocal track. For example, you might say:\n    *   `load reverb on track [your vocal track name/number]`\n2.  **Explore Presets:** Once the reverb device is loaded, Fadebender's capabilities drawer will open, showing you the device controls. You can then:\n    *   Manually browse through the 52 available presets within the device interface.\n    *   Experiment with different presets and listen to how they interact with your vocal track.\n3.  **Get Context-Aware Guidance:** If you're unsure which type of reverb might suit your vocals, you can ask Fadebender for advice. For instance:\n    *   `what kind of reverb would sound good on my vocals?`\n    *   `my vocals sound dry, how can I add space?`\n\nFadebender's **Audio Engineering Guidance** and **Context-Aware Help** features [Source 2] mean it can provide specific advice tailored to your project, helping you narrow down your choices and understand the characteristics of different reverb types.\n\nI recommend trying out a few different presets and trusting your ears! You can always adjust the parameters of any loaded preset to fine-tune it to your liking.",
+      "answer_length": 1694,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "which delay presets work well for drums?",
+      "expected": "Delay presets suitable for drums",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 6.85,
+        "search": 1.11,
+        "generation": 5.74
+      },
+      "total_time": 6.856985092163086,
+      "model_complexity": "simple",
+      "answer": "That's a great question! Using delay effectively on drums can really add depth and groove to your tracks.\n\nLooking at the Fadebender documentation, I can see that there are **32 Delay Presets** available ([Source 2]) and an additional **1 Align Delay Preset** ([Source 3]).\n\nHowever, the documentation doesn't specify which of these presets are particularly suited for drums or describe their individual characteristics.\n\nAs an audio engineer, I can tell you that when applying delay to drums, you'll often want to consider:\n\n*   **Short Delays (Slapback):** These can add a sense of space and thickness to individual drum hits, especially snares or claps, without making them sound distant. Think of a very quick, single repeat.\n*   **Rhythmic Delays:** Delays timed to your track's tempo (e.g., 1/8th notes, 1/16th notes) can create interesting rhythmic patterns and fills, particularly on percussion or hi-hats.\n*   **Subtle Ambiance:** A very low-mix, short delay with a few repeats can create a sense of room or ambiance around your drum bus, making the whole kit sound more cohesive.\n*   **Creative Effects:** Longer, more pronounced delays can be used for special effects on individual elements like a tom fill, a crash cymbal, or even a vocal-like effect on a snare.\n\nMy recommendation would be to:\n\n1.  **Start with the \"Delay Presets\"** within Fadebender. With 32 options, you'll likely find a good starting point.\n2.  **Experiment:** Load different presets onto an individual drum track (like a snare or percussion loop) or even a drum bus.\n3.  **Adjust the Mix/Dry-Wet:** This is crucial for drums. You often want the delay to be felt rather than heard overtly, so keep the mix low.\n4.  **Consider Feedback and Time:** Play with the feedback (number of repeats) and the delay time to see how it interacts with your drum pattern.\n\nDon't hesitate to dive in and audition those 32 presets \u2013 you'll quickly discover which ones resonate with your drum sounds!",
+      "answer_length": 1966,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "recommend reverb presets for acoustic guitar",
+      "expected": "Reverb presets suitable for acoustic guitar",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 7.52,
+        "search": 0.49,
+        "generation": 7.03
+      },
+      "total_time": 7.5268659591674805,
+      "model_complexity": "simple",
+      "answer": "Hello there! As an expert audio engineer and Ableton Live instructor, I'd be happy to help you find some great reverb sounds for your acoustic guitar.\n\nFadebender does indeed offer a collection of reverb presets. According to our documentation, there are **52 reverb presets** available for you to explore [Source 1].\n\nHowever, the current documentation doesn't provide specific descriptions for each individual reverb preset, nor does it recommend particular ones for acoustic guitar.\n\nMy best advice for finding the perfect reverb for your acoustic guitar would be to:\n\n1.  **Load up Fadebender** in Ableton Live.\n2.  **Navigate to the Reverb section** of the presets.\n3.  **Audition the presets** one by one with your acoustic guitar track. Listen for what complements the natural tone of your instrument \u2013 perhaps something that adds space without muddying the sound, or a plate reverb for a classic studio sound.\n\nWhile I can't point you to a specific \"acoustic guitar reverb\" preset by name from the documentation, I encourage you to experiment! You might find that a \"Hall\" preset gives you a beautiful, natural space, or a \"Plate\" preset adds a lovely shimmer.\n\nLet me know if you have any other questions about Fadebender's features or if you're looking for presets for other effects!",
+      "answer_length": 1293,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Purpose-Based",
+      "query": "what compressor settings are good for mixing bass?",
+      "expected": "Compressor presets/settings for bass",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 7.88,
+        "search": 0.24,
+        "generation": 7.63
+      },
+      "total_time": 7.972792863845825,
+      "model_complexity": "simple",
+      "answer": "That's a great question! Getting the bass right with compression is crucial for a solid mix. While Fadebender can give you specific advice tailored to your Live set if you ask it directly (e.g., \"how can I compress my bass track?\"), I can provide some general expert guidance on compressor settings for mixing bass.\n\nThe goal with bass compression is usually to even out dynamics, add sustain, and help it sit consistently in the mix without losing its punch or becoming muddy.\n\nHere are some common starting points and considerations for bass compression:\n\n### **Key Compressor Parameters for Bass**\n\n1.  **Threshold:**\n    *   **What it does:** Determines the level at which the compressor starts to reduce the signal's gain.\n    *   **For Bass:** Set the threshold so that the compressor is primarily reacting to the louder peaks of the bass signal. You want to catch the transients without squashing the entire performance. A good starting point is often around **-15 dB to -25 dB**, but this will vary greatly depending on the input level of your bass track.\n\n2.  **Ratio:**\n    *   **What it does:** Defines how much the signal is reduced once it crosses the threshold. A 4:1 ratio means that for every 4 dB the signal goes over the threshold, only 1 dB will pass through.\n    *   **For Bass:**\n        *   **Subtle Control:** A **2:1 to 4:1** ratio is good for gentle dynamic control and adding sustain without making the bass sound overly compressed.\n        *   **More Aggressive/Punchy:** A **4:1 to 8:1** ratio can be used for more consistent, punchy bass, especially in denser mixes. Be careful not to overdo it, as it can make the bass sound lifeless.\n\n3.  **Attack:**\n    *   **What it does:** How quickly the compressor reacts to the signal once it crosses the threshold.\n    *   **For Bass:**\n        *   **Slow Attack (20-50ms+):** Allows the initial transient (the \"pluck\" or \"thump\") of the bass note to pass through uncompressed, preserving its punch and definition. This is often preferred for bass.\n        *   **Fast Attack (0-10ms):** Will catch and reduce the initial transient, making the bass sound smoother but potentially less punchy. Use with caution if you want to retain attack.\n\n4.  **Release:**\n    *   **What it does:** How quickly the compressor returns to its uncompressed state after the signal drops below the threshold.\n    *   **For Bass:**\n        *   **Medium to Slow Release (80-250ms+):** This is often ideal for bass. You want the release to be long enough to smooth out the sustain of the notes but not so long that it pumps or clamps down on subsequent notes. A good trick is to set the release time to roughly match the rhythm or tempo of the song, or to release just before the next bass note hits.\n        *   **Too Fast:** Can cause pumping or distortion, especially on sustained notes.\n        *   **Too Slow:** Can make the bass sound constantly compressed and lose dynamic movement.\n\n5.  **Make-up Gain / Output:**\n    *   **What it does:** Compensates for the gain reduction applied by the compressor, bringing the overall level back up.\n    *   **For Bass:** Adjust this to match the perceived loudness of the uncompressed signal, or to sit well within your mix.\n\n### **General Tips for Bass Compression:**\n\n*   **Listen in Context:** Always adjust compressor settings while listening to the bass within the full mix. What sounds good soloed might not work with other instruments.\n*   **Subtle is Key:** Often, less is more. Aim for consistent dynamics rather than extreme squashing.\n*   **Parallel Compression:** For more aggressive control without losing dynamics, consider parallel compression. Send your bass to an auxiliary track, heavily compress that auxiliary track, and then blend it in with the uncompressed bass track.\n*   **EQ Before/After:** Sometimes, a little EQ before or after the compressor can help. For example, a high-pass filter before compression can prevent the compressor from overreacting to sub-harmonic rumble.\n\nRemember, these are starting points. Every bass sound and every mix is unique, so trust your ears and experiment! If you're working in Ableton Live, you can always ask Fadebender specific questions like \"how can I compress my bass track?\" and it will provide advice tailored to your current project [Source 1].",
+      "answer_length": 4307,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "show me reverb presets with decay time less than 1 second",
+      "expected": "Reverb presets filtered by decay time < 1s",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 8.62,
+        "search": 0.24,
+        "generation": 8.38
+      },
+      "total_time": 8.628751993179321,
+      "model_complexity": "simple",
+      "answer": "That's a great question! While I can tell you that Fadebender has access to a total of **52 Reverb Presets** [Source 3], the current documentation doesn't provide a way to filter these presets based on specific parameters like \"decay time.\"\n\nThe preset catalog lists the device signatures and the total count of presets for each device, but it doesn't detail the individual settings of each preset.\n\nIf you're looking for a reverb with a short decay, you might need to load a few different reverb presets and adjust the decay time manually within the device's controls in Ableton Live.",
+      "answer_length": 585,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "which reverb presets have large room sizes?",
+      "expected": "Reverb presets with room size > certain threshold",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 3.63,
+        "search": 0.92,
+        "generation": 2.71
+      },
+      "total_time": 3.6369547843933105,
+      "model_complexity": "simple",
+      "answer": "Hello there! As an expert audio engineer and Ableton Live instructor, I can definitely help you navigate Fadebender's reverb presets.\n\nBased on the available documentation, two reverb presets explicitly designed for large room sizes are:\n\n*   **Large Chamber** (Source 4)\n*   **Large Factory** (Source 5)\n\nLet's look at their `Room Size` parameters:\n\n*   The **Large Chamber** preset has a `Room Size` of `12.0`.\n*   The **Large Factory** preset features a slightly larger `Room Size` of `12.66`.\n\nThese presets are excellent starting points when you're looking to create a sense of expansive space in your mix.\n\nDo you have a particular sound or application in mind for these large reverbs? Knowing that might help me provide even more tailored advice!",
+      "answer_length": 753,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "find delay presets with feedback under 50%",
+      "expected": "Delay presets filtered by feedback parameter",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 6.8,
+        "search": 0.9,
+        "generation": 5.9
+      },
+      "total_time": 6.810563087463379,
+      "model_complexity": "simple",
+      "answer": "Hello there! I'd be happy to help you with Fadebender.\n\nYou're looking for delay presets with feedback under 50%. That's a great way to narrow down your sound choices!\n\nBased on the documentation I have, I can tell you that Fadebender includes:\n*   **Delay Presets**: There are 32 presets available for the standard Delay device (Source 2).\n*   **Align Delay Presets**: There is 1 preset available for the Align Delay device (Source 3).\n\nHowever, the provided documentation lists the total count of presets for each device but doesn't detail the specific parameters (like feedback percentage) for individual presets within those categories.\n\nTherefore, I can't directly filter for presets with feedback under 50% using the information available to me. You would need to load the delay presets in Ableton Live and check their feedback settings manually to find ones that meet your criteria.\n\nIs there anything else I can help you with regarding Fadebender's features or other preset categories?",
+      "answer_length": 993,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Parameter-Constrained",
+      "query": "what compressor presets have a ratio of 4:1 or higher?",
+      "expected": "Compressor presets filtered by ratio",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 2.97,
+        "search": 0.57,
+        "generation": 2.39
+      },
+      "total_time": 2.9738879203796387,
+      "model_complexity": "simple",
+      "answer": "That's a great question! You're looking to find compressor presets that meet a specific ratio requirement.\n\nWhile the documentation confirms that Fadebender has **18 compressor presets** available ([Source 3]), it doesn't currently provide a detailed breakdown of the individual parameter settings (like the Ratio) for each preset.\n\nTherefore, I can't directly tell you which compressor presets have a ratio of 4:1 or higher based on the information I have.\n\nTo find this out, you would typically need to:\n1.  Load a compressor device in Ableton Live.\n2.  Browse through the available presets within Fadebender's interface or Ableton's device browser.\n3.  Check the Ratio parameter for each preset as you load them.\n\nI hope this clarifies why I can't provide that specific list right now! Let me know if you have any other questions about Fadebender's features or how to use it.",
+      "answer_length": 878,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Comparison",
+      "query": "compare Cathedral and Church reverb presets",
+      "expected": "Detailed parameter comparison with key differences",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 6.39,
+        "search": 0.76,
+        "generation": 5.63
+      },
+      "total_time": 6.543450832366943,
+      "model_complexity": "complex",
+      "answer": "Hello there! I can certainly help you compare the \"Cathedral\" and \"Church\" reverb presets in Fadebender.\n\nBoth \"Cathedral\" and \"Church\" are presets for the Reverb device, designed to emulate large, resonant spaces.\n\nBased on the provided documentation:\n\n### Cathedral Reverb Preset\nThe \"Cathedral\" preset (ID: `reverb_cathedral`) has the following detailed parameter settings [Source 3]:\n\n*   **Chorus Amount**: 0.20000000298023224\n*   **Chorus On**: 0.0\n*   **Chorus Rate**: 0.07999999821186066\n*   **Cut On**: 0.0\n*   **Decay Time**: 5000.0\n*   **Density**: 3.0\n*   **Device On**: 1.0\n*   **Diffuse Level**: 0.0\n*   **Diffusion**: 20.0\n*   **Dry/Wet**: 100.0\n*   **ER Shape**: 1.0\n*   **ER Spin Amount**: 13.819999694824219\n*   **ER Spin On**: 0.0\n*   **ER Spin Rate**: 0.23999999463558197\n*   **Flat On**: 0.0\n*   **Freeze On**: 0.0\n*   **HiFilter Freq**: 5372.0\n*   **HiFilter On**: 1.0\n*   **HiFilter Type**: 0.0\n*   **HiShelf Gain**: 0.4000000059604645\n*   **In Filter Freq**: 3306.0\n*   **In Filter Width**: 4.21999979019165\n*   **In HighCut On**: 1.0\n*   **In LowCut On**: 0.0\n*   **LowShelf Freq**: 90.0\n*   **LowShelf Gain**: 0.75\n*   **LowShelf On**: 0.0\n*   **Predelay**: 60.0\n*   **Reflect Level**: -6.0\n*   **Room Size**: 180.0\n*   **Scale**: 20.0\n*   **Size Smoothing**: 2.0\n*   **Stereo Image**: 100.0\n\n### Church Reverb Preset\nThe \"Church\" preset (ID: `reverb_church`) is also a Reverb category preset [Source 2].\n\n**Comparison:**\nWhile I can provide the full parameter details for the \"Cathedral\" preset, the provided documentation for the \"Church\" preset only lists its name and ID, without the specific parameter settings [Source 2]. Therefore, I cannot offer a direct, parameter-by-parameter comparison of their internal settings at this time.\n\nTypically, a \"Cathedral\" preset might aim for an even longer, more diffuse decay with potentially higher pre-delay to simulate a massive space, while a \"Church\" preset might be slightly less vast but still very resonant. However, without the specific parameters for \"Church,\" this remains an educated guess based on common audio engineering practices.\n\nI recommend loading both presets in Fadebender and listening to them to discern their sonic differences!",
+      "answer_length": 2223,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Comparison",
+      "query": "what's the difference between Tape Delay and Filter Delay?",
+      "expected": "Technical differences and use cases",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 5.35,
+        "search": 0.17,
+        "generation": 5.17
+      },
+      "total_time": 5.35302209854126,
+      "model_complexity": "complex",
+      "answer": "Hello there! That's a great question about different delay types.\n\nBased on the documentation provided, I don't have explicit descriptions of \"Tape Delay\" and \"Filter Delay\" as separate, distinct devices within Fadebender's catalog. It's possible these are common terms for specific delay characteristics rather than unique device names in this context.\n\nHowever, the documentation *does* describe a \"Delay Mode\" called **Repitch** which is very much aligned with what one would expect from a \"Tape Delay\" effect:\n\n### Delay Mode: Repitch (Tape-like Characteristics)\n\n*   **Function**: This mode determines how the delay buffer responds when you change the delay time while audio is playing.\n*   **Technical Description**: \"Repitch emulates tape mechanics with doppler shift.\" This means that when you adjust the delay time, the pitch of the delayed audio will shift, similar to how a physical tape delay machine would behave if you sped up or slowed down the tape.\n*   **Use Cases**: It's specifically mentioned for \"Tape-style analog delay emulation\" and \"creative pitch effects.\"\n*   **Interaction with Modulation**: When combined with modulation (e.g., `Dly < Mod`), the Repitch mode can create \"pitch shifting like tape wow/flutter,\" adding to that classic analog tape delay sound.\n\n[Source 1, Source 4]\n\nRegarding \"Filter Delay,\" the provided documentation does not contain any information about a delay mode or device specifically named or described as such.\n\nSo, while I can't give you a direct comparison of two distinct devices from the provided materials, I can tell you that the \"Repitch\" Delay Mode is the feature in Fadebender that provides the characteristic \"tape-like\" pitch shifts and emulation of analog tape delays.",
+      "answer_length": 1735,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Comparison",
+      "query": "compare Plate and Hall reverb types",
+      "expected": "Differences in reverb types and characteristics",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 21.88,
+        "search": 0.66,
+        "generation": 21.22
+      },
+      "total_time": 22.0157527923584,
+      "model_complexity": "complex",
+      "answer": "Hello there! I can certainly help you understand the differences between Plate and Hall reverb types, drawing from the Fadebender presets available.\n\nIn general, Plate reverbs are known for their bright, dense, and smooth sound, often used to add shimmer and sustain without necessarily creating a deep sense of physical space. Hall reverbs, on the other hand, aim to emulate the sound of large acoustic environments like concert halls, providing a spacious, natural, and often more realistic sense of depth and environment.\n\nLet's compare them based on the characteristics observed in the provided Fadebender presets:\n\n### Plate Reverb Characteristics (based on `reverb_plate_damped`)\n\nPlate reverbs in Fadebender, as exemplified by the \"Plate Damped\" preset, tend to have these characteristics:\n\n*   **Decay Time:** Often shorter to moderate, providing a dense but not overly long tail. For \"Plate Damped,\" the Decay Time is `891.0` ms.\n*   **Predelay:** Very short, contributing to an immediate and dense sound without much initial delay. \"Plate Damped\" has a Predelay of `2.5` ms.\n*   **Room Size:** Typically very small or not directly simulating a large physical room, as plates are mechanical devices. \"Plate Damped\" shows a Room Size of `1.7799...`.\n*   **Diffusion:** Very high, which creates a smooth, lush, and dense reverb tail. \"Plate Damped\" has a Diffusion of `96.0`.\n*   **Reflect Level:** Often lower, meaning less emphasis on distinct early reflections. \"Plate Damped\" has a Reflect Level of `-30.0`.\n*   **Frequency Response:** Can be tailored, but plates are often associated with a brighter sound. The \"Plate Damped\" preset has a HiFilter Freq of `233.0` Hz, which would roll off higher frequencies in the reverb tail, making it darker, and an In Filter Freq of `794.0` Hz.\n*   **Overall Sound:** Dense, smooth, and often used to add shimmer and depth to individual elements like vocals or drums without making them sound like they are in a huge room.\n\n### Hall Reverb Characteristics (based on \"Concert Hall,\" \"Hall Damped,\" \"Main Hall,\" and \"Vocal Hall\")\n\nHall reverbs in Fadebender, as seen in the various hall presets, are designed to mimic large spaces and typically exhibit:\n\n*   **Decay Time:** Significantly longer, creating a sense of vastness and sustained ambiance. Examples: \"Hall Damped\" (`2587.0` ms), \"Main Hall\" (`2600.0` ms), \"Vocal Hall\" (`3000.0` ms).\n*   **Predelay:** Longer, simulating the time it takes for sound to travel to the distant walls of a large room before reflections return. Examples: \"Hall Damped\" (`27.20...` ms), \"Main Hall\" (`55.0` ms), \"Vocal Hall\" (`90.0` ms).\n*   **Room Size:** Explicitly larger, directly modeling the dimensions of a large acoustic space. Examples: \"Hall Damped\" (`289.32...`), \"Main Hall\" (`60.0`), \"Vocal Hall\" (`100.0`).\n*   **Diffusion:** Varies, but often less extreme than plate reverbs, allowing for a more natural and sometimes slightly less uniform sound. Examples: \"Hall Damped\" (`60.0`), \"Main Hall\" (`30.0`), \"Vocal Hall\" (`45.0`).\n*   **Reflect Level:** Often higher, with more prominent early reflections that help define the perceived shape and size of the space. Examples: \"Hall Damped\" (`4.80...`), \"Main Hall\" (`0.0`), \"Vocal Hall\" (`-3.0`).\n*   **Frequency Response:** Generally allows more high-frequency content in the reverb tail, contributing to an open and airy sound. Examples: HiFilter Freq for \"Hall Damped\" (`3333.0` Hz), \"Main Hall\" (`3820.0` Hz), \"Vocal Hall\" (`4687.0` Hz). Input filter frequencies also vary to shape the sound entering the reverb.\n*   **Overall Sound:** Spacious, natural, and realistic, ideal for creating a sense of environment, blending instruments, or adding grandeur to orchestral elements and pads.\n\n### Summary Comparison\n\n| Feature         | Plate Reverb (e.g., Plate Damped)                               | Hall Reverb (e.g., Hall Damped, Main Hall, Vocal Hall)                               |\n| :-------------- | :-------------------------------------------------------------- | :----------------------------------------------------------------------------------- |\n| **Decay Time**  | Shorter to moderate (e.g., 891 ms)                              | Longer to very long (e.g., 2587 ms - 3000 ms)                                        |\n| **Predelay**    | Very short (e.g., 2.5 ms)                                       | Longer (e.g., 27 ms - 90 ms)                                                         |\n| **Room Size**   | Very small, not simulating a physical room (e.g., 1.78)         | Large to very large, simulating acoustic spaces (e.g., 60 - 289)                     |\n| **Diffusion**   | Very high, dense and smooth (e.g., 96%)                         | Moderate to high, more natural (e.g., 30% - 60%)                                     |\n| **Reflect Level** | Very low, less distinct early reflections (e.g., -30 dB)         | Higher, more prominent early reflections (e.g., -3 dB to +4.8 dB)                    |\n| **Sound**       | Bright, dense, smooth, shimmery; good for individual elements.  | Spacious, natural, realistic, open; good for creating environments and blending.     |\n\n### Available Reverb Presets\n\nHere are the specific Reverb presets from the documentation that fall under these categories:\n\n**Plate Reverb Presets:**\n\n1.  `reverb_plate_damped` (Plate Damped) - [Source 2]\n\n**Hall Reverb Presets:**\n\n1.  `reverb_concert_hall` (Concert Hall) - [Source 1]\n2.  `reverb_hall_damped` (Hall Damped) - [Source 3]\n3.  `reverb_main_hall` (Main Hall) - [Source 4]\n4.  `reverb_vocal_hall` (Vocal Hall) - [Source 5]\n\nWhen choosing between a plate and a hall reverb, consider the desired effect: if you want a lush, dense, and bright sustain without a strong sense of physical space, a plate might be ideal. If you're aiming for a realistic, expansive, and natural ambiance that places your sound in a large environment, a hall reverb would be more suitable.\n\nFeel free to ask if you have more questions about specific parameters or other reverb types!",
+      "answer_length": 6021,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Complete List",
+      "query": "list all reverb presets with their IDs",
+      "expected": "All 52 reverb presets with preset IDs",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 5.21,
+        "search": 0.71,
+        "generation": 4.51
+      },
+      "total_time": 5.222304821014404,
+      "model_complexity": "complex",
+      "answer": "Hello! I can certainly help you with information about Fadebender's presets.\n\nYou're asking for a list of all reverb presets with their IDs.\n\nBased on the provided documentation, Fadebender does indeed have a collection of reverb presets. [Source 1] indicates:\n\n*   **Device Signature**: `64ccfc236b79371d0b45e913f81bf0f3a55c6db9`\n*   **Preset Count**: 52\n\nHowever, the specific names and IDs for each of these 52 reverb presets are not detailed in the documentation I have access to. Therefore, I cannot provide a complete list of their individual names and IDs at this moment.\n\nIf you have any other questions about Fadebender's features or how to use its capabilities, feel free to ask!",
+      "answer_length": 689,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Complete List",
+      "query": "show me every delay preset available",
+      "expected": "Complete list of all delay presets",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 4.27,
+        "search": 0.41,
+        "generation": 3.86
+      },
+      "total_time": 4.273360013961792,
+      "model_complexity": "simple",
+      "answer": "That's a great question! I can certainly help you with available presets.\n\nBased on the documentation I have, I can see a comprehensive list of **Reverb Presets**. For example, there are 52 different reverb presets available, including options like:\n\n*   **Bright Reflections** (reverb_bright_reflections) [Source 3]\n*   **Church** (reverb_church) [Source 4]\n*   **Concert Hall** (reverb_concert_hall) [Source 5]\n\nHowever, I don't currently have a list of specific **Delay Presets** in my catalog. My documentation primarily details reverb presets at this moment.\n\nIf you're looking to apply a delay, you can still control delay devices in your Live set using natural language commands, for example: \"open track 1 delay\" or \"set delay feedback to 50%\".\n\nIs there anything else I can help you with regarding reverbs or other device controls?",
+      "answer_length": 840,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Complete List",
+      "query": "list all compressor presets",
+      "expected": "Complete list of compressor presets",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 10.89,
+        "search": 0.17,
+        "generation": 10.72
+      },
+      "total_time": 10.99189019203186,
+      "model_complexity": "complex",
+      "answer": "I can certainly help you with that!\n\nBased on the available documentation, Fadebender recognizes 18 compressor presets. However, the documentation provides the total count but does not list the individual names of these presets.\n\nHere's the information I have:\n\n*   **Device Signature:** `9e906e0ab3f18c4688107553744914f9ef6b9ee7`\n*   **Preset Count:** 18\n\nIf you'd like to explore other types of presets, just let me know!",
+      "answer_length": 423,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Semantic Understanding",
+      "query": "I need a subtle reverb for intimate vocals, what should I use?",
+      "expected": "Context-aware recommendation based on 'subtle' and 'intimate'",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 7.78,
+        "search": 0.28,
+        "generation": 7.5
+      },
+      "total_time": 8.071784257888794,
+      "model_complexity": "simple",
+      "answer": "For an intimate vocal sound with a subtle reverb, we want to create the impression of a small, controlled space without overwhelming the vocal. Here\u2019s how you can achieve that using Fadebender:\n\n### Reverb Settings for Intimate Vocals\n\n1.  **Size**:\n    *   **Recommendation**: Set the `Size` parameter to a **small** value.\n    *   **Why**: A small size simulates tight, intimate spaces like vocal booths or small rooms, which is perfect for an intimate vocal sound.\n    *   **Fadebender Command Example**: `set reverb size to small`\n    *   **Source**: [Source 3]\n\n2.  **Decay Time**:\n    *   **Recommendation**: Use a **short** `Decay Time`, typically in the range of **0.5 to 1.5 seconds**.\n    *   **Why**: A shorter decay time results in a tighter, more controlled reverb tail, making the space feel smaller and cleaner. This prevents the reverb from muddying the vocal or making it sound distant.\n    *   **Fadebender Command Example**: `set reverb decay time to 1.2s`\n    *   **Source**: [Source 3], [Source 5]\n\n3.  **Stereo Image**:\n    *   **Recommendation**: Keep the `Stereo Image` relatively **narrow** or at a moderate setting. Avoid excessively wide settings.\n    *   **Why**: While a wide stereo field can create a spacious feel, for intimacy, you generally want the vocal to remain focused. A slightly narrower image helps keep the vocal centered and present.\n    *   **Source**: [Source 5]\n\n### How to Apply These Settings with Fadebender:\n\nYou can use natural language commands to adjust these parameters directly. For example:\n\n*   \"Set the reverb's size to small.\"\n*   \"Change the reverb decay time to 1.2 seconds.\"\n*   \"Adjust the reverb stereo image to 45 degrees.\" (You might need to experiment with the exact value here to find what sounds best for your mix.)\n\nFadebender will then adjust the parameters in your Ableton Live set and open the capabilities drawer, allowing you to fine-tune them visually if needed.",
+      "answer_length": 1938,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Semantic Understanding",
+      "query": "suggest a big, spacious reverb for orchestral strings",
+      "expected": "Large hall/cathedral type reverbs",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 8.19,
+        "search": 0.2,
+        "generation": 7.99
+      },
+      "total_time": 8.205743074417114,
+      "model_complexity": "simple",
+      "answer": "Hello there! I can certainly help you craft a big, spacious reverb for orchestral strings using Fadebender. For a lush, expansive sound that complements the richness of strings, we'll focus on parameters that control the size, decay, and density of the reverb.\n\nHere are some recommended settings to get you started:\n\n### Big, Spacious Reverb for Orchestral Strings\n\n*   **Decay (Reverb Time):**\n    *   **Setting:** `3.0s - 6.0s` (or even higher for dramatic effect)\n    *   **Why:** A longer decay time is fundamental for creating a large, sustained ambience and a larger perceived space, which is perfect for orchestral strings. [Source 3]\n*   **Size:**\n    *   **Setting:** `High (e.g., 80-100%)`\n    *   **Why:** The Size parameter directly controls the room's volume. A very large size will lend a shifting, diffused delay effect, contributing significantly to the spacious feel. [Source 4]\n*   **Stereo Image:**\n    *   **Setting:** `120 degrees (Maximum)`\n    *   **Why:** Maximizing the Stereo Image will create the widest possible stereo field, enhancing the spaciousness and immersive character of the reverb. [Source 3, 4]\n*   **Diffusion Network - Scale:**\n    *   **Setting:** `70-90%`\n    *   **Why:** A high percentage here will increase the reflection density, creating a denser, more complex, and richer reverb pattern that suits the intricate sound of orchestral strings. [Source 1, 2]\n*   **Diffusion Network - HiFilter Freq:**\n    *   **Setting:** `8kHz - 12kHz`\n    *   **Why:** This range will provide a natural to slightly bright and airy reverb tail, preventing the strings from sounding muddy while retaining their shimmer. It filters less treble, allowing the high frequencies to breathe. [Source 2]\n\n**Tips for Fine-Tuning:**\n\n*   **Predelay:** Experiment with a small amount of predelay (e.g., 20-50ms) to allow the dry strings to be heard clearly before the reverb washes in, enhancing intelligibility while maintaining the sense of space.\n*   **EQ:** Use the built-in EQ or an external EQ to further shape the reverb's tone, perhaps rolling off some low-mids to prevent muddiness, especially in a dense mix.\n*   **Listen in Context:** Always adjust the reverb settings while listening to the strings within the full mix to ensure it sits well and doesn't overwhelm other elements.\n\nGive these settings a try and let me know how they work for your orchestral strings!",
+      "answer_length": 2397,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Semantic Understanding",
+      "query": "what delay creates a vintage tape echo sound?",
+      "expected": "Tape delay presets with character description",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 8.17,
+        "search": 0.35,
+        "generation": 7.82
+      },
+      "total_time": 10.025159358978271,
+      "model_complexity": "simple",
+      "answer": "To achieve a vintage tape echo sound, you'll want to focus on introducing subtle, organic modulation to your delay. This emulates the slight inconsistencies and \"wow and flutter\" inherent in old tape machines.\n\nThe key parameters to adjust for this are **`Dly < Mod`** (Delay Modulation Amount) and **`Mod Freq`** (Modulation Frequency).\n\nHere's how you can approach it:\n\n1.  **`Dly < Mod` (Delay Modulation Amount):**\n    *   This parameter controls the amount of LFO modulation applied to the delay time.\n    *   **For a subtle, analog warmth or tape-like drift:** Set `Dly < Mod` to **0-10%**.\n    *   **To emulate tape wow/flutter:** Combine `Dly < Mod` with a slow `Mod Freq`.\n    *   Increasing this value will introduce more delay time variation, creating stronger chorus/vibrato effects and pitch warble, which is characteristic of vintage tape delays.\n\n2.  **`Mod Freq` (Modulation Frequency):**\n    *   This controls the speed of the LFO modulating the delay time.\n    *   **For slow, tape-like drift and subtle movement:** Set `Mod Freq` to **0.01-0.3Hz**. This slow rate is crucial for the characteristic \"wow and flutter\" of tape.\n\nBy using these settings, especially with `Repitch` mode enabled (if available on your specific delay device), you can create the pitch shifting and time-stretch-like effects that are hallmarks of vintage tape echoes.\n\n**In summary, aim for:**\n*   **`Dly < Mod`:** Low values (e.g., 5-15%) for subtle analog warmth and tape-like drift.\n*   **`Mod Freq`:** Very low values (e.g., 0.01-0.3Hz) for slow, organic movement.\n\nThis approach will help you capture that sought-after vintage character!\n\n*(Source: [Source 1] - device-catalog, Modulation section)*",
+      "answer_length": 1697,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Workflow",
+      "query": "how do I automate the reverb decay time?",
+      "expected": "Instructions for parameter automation",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 13.71,
+        "search": 0.33,
+        "generation": 13.37
+      },
+      "total_time": 13.720678091049194,
+      "model_complexity": "simple",
+      "answer": "That's a great question about shaping your reverb!\n\nWhile the documentation doesn't explicitly list a single \"reverb decay time\" parameter, the **Diffusion Network** controls in Fadebender are key to shaping how your reverb tail evolves and ultimately decays.\n\nThe primary control for this is often referred to as **Scale** within the Diffusion Network.\n\nHere's how it works and how you can automate it:\n\n### Understanding the Diffusion Network and \"Scale\"\n\nThe Diffusion Network simulates how surfaces scatter sound, affecting the density and smoothness of your reverb. The \"Scale\" parameter directly adjusts the reflection density in conjunction with the room size.\n\n*   **Increasing Scale:**\n    *   Creates more reflections at a given room size.\n    *   Results in a denser, more complex reflection pattern.\n    *   Can lead to a smoother, silkier reverb tail with less distinct echoes, making the decay feel longer and more lush.\n    *   *Use Cases:* For smooth, lush reverb character, or to simulate denser room types.\n    *   *Typical Values:* 85-100% for very smooth and dense reverb.\n\n*   **Decreasing Scale:**\n    *   Results in fewer reflections.\n    *   Creates a sparser, more open reflection pattern.\n    *   Can lead to a more granular texture with potentially more distinct echoes, making the decay feel shorter or more \"bouncy.\"\n    *   *Use Cases:* For discrete, rhythmic reflections, or to simulate sparser room types.\n    *   *Typical Values:* Low percentages for a more open, spacious character.\n\n*(Sources: [1], [2])*\n\n### How to Automate in Ableton Live (via Fadebender)\n\nYou can automate the \"Scale\" parameter (or any other relevant Diffusion Network control) directly within Ableton Live. While Fadebender provides control over parameters, the actual automation is handled by Live's automation lanes.\n\n1.  **Identify the Parameter:** Locate the \"Scale\" control within the Diffusion Network section of your reverb device in Ableton Live.\n2.  **Enable Automation:** In Live, you can click the parameter you want to automate, then press `A` to show the automation lane for that parameter on the track.\n3.  **Draw Automation:** Draw in your desired automation curve to dynamically change the \"Scale\" over time.\n\n**Creative Automation Ideas:**\n\n*   **Dynamic Decay:** Automate \"Scale\" to increase during a chorus for a more expansive sound, and decrease during a verse for a tighter feel.\n*   **Special Effects:** As mentioned in the documentation, automating \"Scale\" with small room sizes can even create interesting flanger-like effects! *(Source: [1])*\n\nBy automating the \"Scale\" parameter, you gain precise control over the perceived decay and texture of your reverb, allowing for dynamic and expressive sound design.",
+      "answer_length": 2741,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Workflow",
+      "query": "can I load multiple effects on the same track?",
+      "expected": "Device chain explanation",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 4.56,
+        "search": 0.22,
+        "generation": 4.34
+      },
+      "total_time": 4.567470073699951,
+      "model_complexity": "simple",
+      "answer": "Yes, absolutely! In Ableton Live, you can load multiple effects onto a single track. This is a fundamental aspect of how you build complex sounds and process your audio.\n\nWhen you add multiple effects to a track, they form a \"device chain.\" The audio signal flows through these devices sequentially, from left to right in the Device View. Each effect processes the sound, and then passes its output to the next effect in the chain.\n\nFor example, you might have a compressor followed by an EQ, then a delay, and finally a reverb, all on the same vocal track.\n\nFadebender can help you manage and interact with these effects. While the documentation doesn't explicitly state \"load multiple effects,\" it does show that Fadebender can:\n*   **Load individual effects:** \"load reverb on return A\" [Source 1]\n*   **Open specific effects:** \"open track 2 compressor\" [Source 1]\n*   **Control parameters within effects:** Once an effect is open in the capabilities drawer, you can use sliders, toggles, and dropdowns to adjust its parameters visually [Source 1].\n\nSo, you can build your effect chains in Ableton Live, and then use Fadebender to quickly access, open, and control the individual devices within that chain.",
+      "answer_length": 1210,
+      "sources_count": 5,
+      "thread_id": null
+    },
+    {
+      "ok": true,
+      "category": "Workflow",
+      "query": "what's the command to set send level to a return track?",
+      "expected": "Command syntax for send levels",
+      "mode": "hybrid-rag",
+      "rag_mode": "hybrid",
+      "timing": {
+        "total": 30.78,
+        "search": 0.34,
+        "generation": 30.44
+      },
+      "total_time": 30.907785892486572,
+      "model_complexity": "simple",
+      "answer": "To set a send level from a track to a return track in Fadebender, you can use a command similar to how you'd adjust other parameters. The general structure is `set [track name/number] send [return track name/letter] to [value]`.\n\nFor example, if you want to set the send level from \"Track 1\" to \"Return A\" to -12 dB, you would type:\n\n`set track 1 send A to -12 dB`\n\nThis follows the natural language command structure for DAW control as outlined in the documentation [Source 1].",
+      "answer_length": 478,
+      "sources_count": 5,
+      "thread_id": null
+    }
+  ]
+}
